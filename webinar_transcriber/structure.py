@@ -52,6 +52,8 @@ def _build_sections_from_blocks(blocks: list[AlignmentBlock]) -> list[ReportSect
 
     for index, block in enumerate(blocks, start=1):
         title = _title_from_text(block.transcript_text, fallback=f"Slide {index}")
+        if block.title_hint:
+            title = _title_from_text(block.title_hint, fallback=title)
         sections.append(
             ReportSection(
                 id=f"section-{index}",

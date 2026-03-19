@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
 
-from webinar_transcriber.align import align_by_time
+from webinar_transcriber.align import align_by_time, align_with_ocr
 from webinar_transcriber.asr import Transcriber, WhisperTranscriber
 from webinar_transcriber.export import (
     write_docx_report,
@@ -17,10 +17,12 @@ from webinar_transcriber.models import (
     AlignmentBlock,
     Diagnostics,
     MediaAsset,
+    OcrResult,
     ReportDocument,
     SlideFrame,
     TranscriptionResult,
 )
+from webinar_transcriber.ocr import extract_ocr_results
 from webinar_transcriber.paths import RunLayout, create_run_layout
 from webinar_transcriber.structure import build_report
 from webinar_transcriber.video import detect_scenes, extract_representative_frames
@@ -50,6 +52,7 @@ def process_input(
     warnings: list[str] = []
     alignment_blocks: list[AlignmentBlock] | None = None
     slide_frames: list[SlideFrame] = []
+    ocr_results: list[OcrResult] = []
 
     start = perf_counter()
     layout = create_run_layout(input_path=input_path, output_dir=output_dir)
@@ -84,7 +87,24 @@ def process_input(
         start = perf_counter()
         slide_frames = extract_representative_frames(input_path, scenes, layout.frames_dir)
         stage_timings["extract_frames"] = perf_counter() - start
-        alignment_blocks = align_by_time(transcription.segments, scenes, slide_frames)
+        if ocr_enabled:
+            start = perf_counter()
+            ocr_results = extract_ocr_results(
+                slide_frames,
+                detected_language=transcription.detected_language,
+            )
+            stage_timings["ocr"] = perf_counter() - start
+            _write_json(
+                layout.ocr_path,
+                {"results": [result.model_dump(mode="json") for result in ocr_results]},
+            )
+            alignment_blocks = align_with_ocr(
+                transcription.segments, scenes, slide_frames, ocr_results
+            )
+            if not any((result.text or "").strip() for result in ocr_results):
+                warnings.append("OCR did not extract readable text; alignment stayed time-based.")
+        else:
+            alignment_blocks = align_by_time(transcription.segments, scenes, slide_frames)
     else:
         scenes = []
 
@@ -123,6 +143,7 @@ def process_input(
             "report_sections": len(report.sections),
             "scenes": len(scenes),
             "frames": len(slide_frames),
+            "ocr_results": len(ocr_results),
         },
         warnings=warnings,
     )

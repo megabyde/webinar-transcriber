@@ -89,6 +89,7 @@ class AlignmentBlock(BaseModel):
     transcript_text: str
     scene_id: str | None = None
     frame_id: str | None = None
+    title_hint: str | None = None
     scores: dict[str, float] = Field(default_factory=dict)
     notes: list[str] = Field(default_factory=list)
 

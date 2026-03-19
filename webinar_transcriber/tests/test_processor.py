@@ -58,10 +58,31 @@ def test_process_input_writes_reports_and_metadata(tmp_path) -> None:
 
 
 def test_process_input_writes_video_scene_artifacts(tmp_path) -> None:
+    class VideoTranscriber(FakeTranscriber):
+        def transcribe(self, audio_path: Path) -> TranscriptionResult:
+            assert audio_path.exists()
+            return TranscriptionResult(
+                detected_language="en",
+                segments=[
+                    TranscriptSegment(
+                        id="segment-1",
+                        text="Agenda overview and open questions.",
+                        start_sec=0.0,
+                        end_sec=0.9,
+                    ),
+                    TranscriptSegment(
+                        id="segment-2",
+                        text="Timeline planning and next step review.",
+                        start_sec=0.9,
+                        end_sec=1.8,
+                    ),
+                ],
+            )
+
     artifacts = process_input(
         FIXTURE_DIR / "sample-video.mp4",
         output_dir=tmp_path / "video-run",
-        transcriber=FakeTranscriber(),
+        transcriber=VideoTranscriber(),
     )
 
     assert artifacts.media_asset.media_type.value == "video"
@@ -70,3 +91,37 @@ def test_process_input_writes_video_scene_artifacts(tmp_path) -> None:
     assert any(artifacts.layout.frames_dir.iterdir())
     assert artifacts.report.sections
     assert artifacts.report.sections[0].image_path
+
+
+def test_process_input_writes_ocr_results_for_video(tmp_path) -> None:
+    class VideoTranscriber(FakeTranscriber):
+        def transcribe(self, audio_path: Path) -> TranscriptionResult:
+            assert audio_path.exists()
+            return TranscriptionResult(
+                detected_language="en",
+                segments=[
+                    TranscriptSegment(
+                        id="segment-1",
+                        text="Agenda overview and key points.",
+                        start_sec=0.0,
+                        end_sec=0.9,
+                    ),
+                    TranscriptSegment(
+                        id="segment-2",
+                        text="Timeline planning and milestones.",
+                        start_sec=0.9,
+                        end_sec=1.8,
+                    ),
+                ],
+            )
+
+    artifacts = process_input(
+        FIXTURE_DIR / "sample-video.mp4",
+        output_dir=tmp_path / "video-ocr-run",
+        ocr_enabled=True,
+        transcriber=VideoTranscriber(),
+    )
+
+    assert artifacts.layout.ocr_path.exists()
+    assert artifacts.report.ocr_enabled is True
+    assert any(section.title for section in artifacts.report.sections)
