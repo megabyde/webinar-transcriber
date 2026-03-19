@@ -55,3 +55,18 @@ def test_process_input_writes_reports_and_metadata(tmp_path) -> None:
 
     document = Document(str(artifacts.layout.docx_report_path))
     assert "Sample Audio" in "\n".join(paragraph.text for paragraph in document.paragraphs)
+
+
+def test_process_input_writes_video_scene_artifacts(tmp_path) -> None:
+    artifacts = process_input(
+        FIXTURE_DIR / "sample-video.mp4",
+        output_dir=tmp_path / "video-run",
+        transcriber=FakeTranscriber(),
+    )
+
+    assert artifacts.media_asset.media_type.value == "video"
+    assert artifacts.layout.scenes_path.exists()
+    assert artifacts.layout.frames_dir.exists()
+    assert any(artifacts.layout.frames_dir.iterdir())
+    assert artifacts.report.sections
+    assert artifacts.report.sections[0].image_path

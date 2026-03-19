@@ -103,6 +103,7 @@ class ReportSection(BaseModel):
     transcript_text: str
     bullet_points: list[str] = Field(default_factory=list)
     frame_id: str | None = None
+    image_path: str | None = None
 
 
 class ReportDocument(BaseModel):

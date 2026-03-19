@@ -29,6 +29,8 @@ def write_markdown_report(report: ReportDocument, output_path: Path) -> Path:
             [
                 f"### {section.title}",
                 "",
+                f"![{section.title}]({section.image_path})" if section.image_path else "",
+                "",
                 section.transcript_text,
                 "",
             ]

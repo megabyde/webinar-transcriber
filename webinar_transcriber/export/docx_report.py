@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from docx import Document
+from docx.shared import Inches
 
 from webinar_transcriber.models import ReportDocument
 
@@ -28,6 +29,8 @@ def write_docx_report(report: ReportDocument, output_path: Path) -> Path:
     document.add_heading("Sections", level=1)
     for section in report.sections:
         document.add_heading(section.title, level=2)
+        if section.image_path:
+            document.add_picture(section.image_path, width=Inches(6))
         document.add_paragraph(section.transcript_text)
 
     document.save(str(output_path))

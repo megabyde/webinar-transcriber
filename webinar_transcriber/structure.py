@@ -3,6 +3,7 @@
 import re
 
 from webinar_transcriber.models import (
+    AlignmentBlock,
     MediaAsset,
     ReportDocument,
     ReportSection,
@@ -21,10 +22,15 @@ def build_report(
     transcription: TranscriptionResult,
     *,
     ocr_enabled: bool,
+    alignment_blocks: list[AlignmentBlock] | None = None,
     warnings: list[str] | None = None,
 ) -> ReportDocument:
     """Build a report document from media metadata and transcript segments."""
-    sections = _build_sections(transcription.segments)
+    sections = (
+        _build_sections_from_blocks(alignment_blocks)
+        if alignment_blocks is not None
+        else _build_sections(transcription.segments)
+    )
     summary = _build_summary(transcription.segments)
     action_items = _extract_action_items(transcription.segments)
 
@@ -39,6 +45,25 @@ def build_report(
         sections=sections,
         warnings=warnings or [],
     )
+
+
+def _build_sections_from_blocks(blocks: list[AlignmentBlock]) -> list[ReportSection]:
+    sections: list[ReportSection] = []
+
+    for index, block in enumerate(blocks, start=1):
+        title = _title_from_text(block.transcript_text, fallback=f"Slide {index}")
+        sections.append(
+            ReportSection(
+                id=f"section-{index}",
+                title=title,
+                start_sec=block.start_sec,
+                end_sec=block.end_sec,
+                transcript_text=block.transcript_text,
+                frame_id=block.frame_id,
+            )
+        )
+
+    return sections
 
 
 def _build_sections(segments: list[TranscriptSegment]) -> list[ReportSection]:
