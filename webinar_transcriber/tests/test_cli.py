@@ -36,6 +36,29 @@ def test_process_command_echoes_bootstrap_state(tmp_path) -> None:
     assert result.exit_code == 0
     assert "ocr=True" in result.output
     assert "format=json" in result.output
+    assert "Prepared run directory" in result.output
+
+
+def test_process_command_rejects_missing_input(tmp_path) -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(main, ["process", str(tmp_path / "missing.wav")])
+
+    assert result.exit_code != 0
+    assert "Input file does not exist" in result.output
+
+
+def test_process_command_rejects_existing_output_directory(tmp_path) -> None:
+    runner = CliRunner()
+    input_path = tmp_path / "demo.wav"
+    output_dir = tmp_path / "run"
+    input_path.write_text("stub", encoding="utf-8")
+    output_dir.mkdir()
+
+    result = runner.invoke(main, ["process", str(input_path), "--output-dir", str(output_dir)])
+
+    assert result.exit_code != 0
+    assert "Output directory already exists" in result.output
 
 
 def test_module_entrypoint_reports_version() -> None:

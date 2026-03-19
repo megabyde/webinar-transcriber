@@ -5,6 +5,7 @@ from pathlib import Path
 import click
 
 from webinar_transcriber import __version__
+from webinar_transcriber.paths import OutputDirectoryExistsError, create_run_layout
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -32,7 +33,18 @@ def main() -> None:
 )
 def process(input_path: Path, ocr: bool, output_dir: Path | None, output_format: str) -> None:
     """Process an audio or video input file."""
+    if not input_path.exists():
+        raise click.ClickException(f"Input file does not exist: {input_path}")
+
+    if not input_path.is_file():
+        raise click.ClickException(f"Input path is not a file: {input_path}")
+
+    try:
+        layout = create_run_layout(input_path=input_path, output_dir=output_dir)
+    except OutputDirectoryExistsError as error:
+        raise click.ClickException(str(error)) from error
+
     click.echo(
-        "Bootstrap command ready for "
-        f"{input_path} (ocr={ocr}, output_dir={output_dir}, format={output_format})."
+        "Prepared run directory "
+        f"{layout.run_dir} for {input_path} (ocr={ocr}, format={output_format})."
     )
