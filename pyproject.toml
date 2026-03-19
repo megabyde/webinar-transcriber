@@ -1,0 +1,130 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "webinar-transcriber"
+version = "0.1.0"
+description = "Local-first CLI for transcribing webinar videos and audio recordings."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Megabyde" },
+]
+keywords = ["transcription", "webinar", "ocr", "whisper", "audio", "video"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "click>=8.1.8",
+    "faster-whisper>=1.1.1",
+    "imagehash>=4.3.2",
+    "numpy>=2.2.3",
+    "opencv-python>=4.11.0.86",
+    "pillow>=11.1.0",
+    "pydantic>=2.10.6",
+    "python-docx>=1.1.2",
+    "rapidfuzz>=3.12.2",
+    "rich>=13.9.4",
+    "scenedetect[opencv]>=0.6.5.2",
+]
+
+[project.optional-dependencies]
+ocr = [
+    "pytesseract>=0.3.13",
+]
+dev = [
+    "coverage[toml]>=7.8.0",
+    "pytest>=8.3.5",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.11.2",
+    "ty>=0.0.1a17",
+]
+
+[project.scripts]
+webinar-transcriber = "webinar_transcriber.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["webinar_transcriber"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-config --strict-markers"
+testpaths = ["webinar_transcriber"]
+
+[tool.coverage.run]
+branch = true
+source = ["webinar_transcriber"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 90
+exclude_also = [
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "F",
+    "E",
+    "W",
+    "D2",
+    "D3",
+    "D4",
+    "I",
+    "N",
+    "UP",
+    "YTT",
+    "ASYNC",
+    "B",
+    "C4",
+    "EXE",
+    "PIE",
+    "PYI",
+    "RSE",
+    "RET",
+    "SIM",
+    "TCH",
+    "C90",
+    "ERA",
+    "FLY",
+    "PLC",
+    "PLE",
+    "TID",
+    "PERF",
+    "RUF",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"webinar_transcriber/**/tests/*.py" = ["D", "PLC0415"]
+
+[tool.ty.src]
+include = ["webinar_transcriber"]
