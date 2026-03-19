@@ -45,6 +45,7 @@ def test_process_command_runs_pipeline(tmp_path, monkeypatch) -> None:
         assert kwargs["input_path"] == input_path
         assert kwargs["ocr_enabled"] is True
         assert kwargs["output_format"] == "json"
+        assert kwargs["reporter"].__class__.__name__ == "RichStageReporter"
         return ProcessArtifacts(
             layout=RunLayout(run_dir=run_dir),
             media_asset=MediaAsset(

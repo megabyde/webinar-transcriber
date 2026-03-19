@@ -8,6 +8,7 @@ from webinar_transcriber import __version__
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.processor import process_input
+from webinar_transcriber.ui import RichStageReporter
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -47,6 +48,7 @@ def process(input_path: Path, ocr: bool, output_dir: Path | None, output_format:
             output_dir=output_dir,
             output_format=output_format,
             ocr_enabled=ocr,
+            reporter=RichStageReporter(),
         )
     except (MediaProcessingError, OutputDirectoryExistsError) as error:
         raise click.ClickException(str(error)) from error

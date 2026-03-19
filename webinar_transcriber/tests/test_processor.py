@@ -6,6 +6,7 @@ from docx import Document
 
 from webinar_transcriber.models import TranscriptionResult, TranscriptSegment
 from webinar_transcriber.processor import process_input
+from webinar_transcriber.ui import NullStageReporter
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 
@@ -34,11 +35,38 @@ class FakeTranscriber:
         )
 
 
+class RecordingReporter(NullStageReporter):
+    """Collect stage updates for assertions."""
+
+    def __init__(self) -> None:
+        self.events: list[tuple[str, str, str]] = []
+        self.warnings: list[str] = []
+
+    def begin_run(self, input_path: Path, *, ocr_enabled: bool, output_format: str) -> None:
+        self.events.append(("begin", input_path.name, output_format))
+
+    def stage_started(self, stage_key: str, label: str) -> None:
+        self.events.append(("start", stage_key, label))
+
+    def stage_finished(self, stage_key: str, label: str, *, detail: str | None = None) -> None:
+        self.events.append(("finish", stage_key, detail or ""))
+
+    def warn(self, message: str) -> None:
+        self.warnings.append(message)
+
+    def complete_run(self, artifacts) -> None:
+        self.events.append(
+            ("complete", artifacts.layout.run_dir.name, artifacts.report.source_file)
+        )
+
+
 def test_process_input_writes_reports_and_metadata(tmp_path) -> None:
+    reporter = RecordingReporter()
     artifacts = process_input(
         FIXTURE_DIR / "sample-audio.mp3",
         output_dir=tmp_path / "run",
         transcriber=FakeTranscriber(),
+        reporter=reporter,
     )
 
     assert artifacts.layout.metadata_path.exists()
@@ -52,6 +80,8 @@ def test_process_input_writes_reports_and_metadata(tmp_path) -> None:
     markdown = artifacts.layout.markdown_report_path.read_text(encoding="utf-8")
     assert "# Sample Audio" in markdown
     assert "Agenda review and project status update." in markdown
+    assert ("start", "probe_media", "Probing media") in reporter.events
+    assert any(event[0] == "complete" for event in reporter.events)
 
     document = Document(str(artifacts.layout.docx_report_path))
     assert "Sample Audio" in "\n".join(paragraph.text for paragraph in document.paragraphs)
@@ -125,3 +155,18 @@ def test_process_input_writes_ocr_results_for_video(tmp_path) -> None:
     assert artifacts.layout.ocr_path.exists()
     assert artifacts.report.ocr_enabled is True
     assert any(section.title for section in artifacts.report.sections)
+
+
+def test_process_input_reports_audio_ocr_warning(tmp_path) -> None:
+    reporter = RecordingReporter()
+
+    artifacts = process_input(
+        FIXTURE_DIR / "sample-audio.mp3",
+        output_dir=tmp_path / "audio-ocr-run",
+        ocr_enabled=True,
+        transcriber=FakeTranscriber(),
+        reporter=reporter,
+    )
+
+    assert artifacts.report.ocr_enabled is False
+    assert reporter.warnings == ["OCR was requested for audio-only input and has been ignored."]
