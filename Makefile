@@ -13,7 +13,7 @@ help:
 	@printf "  clean      Remove caches and build artifacts\n"
 
 sync:
-	uv sync --extra dev --extra ocr
+	uv sync --group dev --extra ocr
 
 format:
 	uv run ruff format .
@@ -37,4 +37,3 @@ ci: check
 clean:
 	rm -rf .coverage .mypy_cache .pytest_cache .ruff_cache .venv coverage.xml dist build
 	find webinar_transcriber -type d -name __pycache__ -prune -exec rm -rf {} +
-

@@ -45,19 +45,18 @@ dependencies = [
 ocr = [
     "pytesseract>=0.3.13",
 ]
-dev = [
-    "coverage[toml]>=7.8.0",
-    "pytest>=8.3.5",
-    "pytest-cov>=6.0.0",
-    "ruff>=0.11.2",
-    "ty>=0.0.1a17",
-]
 
 [project.scripts]
 webinar-transcriber = "webinar_transcriber.cli:main"
 
-[tool.hatch.build.targets.wheel]
-packages = ["webinar_transcriber"]
+[dependency-groups]
+dev = [
+    "coverage[toml]>=7.8.0",
+    "pytest>=8.1.1,<9",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.11.2",
+    "ty>=0.0.1a17",
+]
 
 [tool.pytest.ini_options]
 addopts = "--strict-config --strict-markers"
@@ -128,3 +127,6 @@ convention = "google"
 
 [tool.ty.src]
 include = ["webinar_transcriber"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["webinar_transcriber"]
