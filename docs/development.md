@@ -31,3 +31,6 @@ make typecheck
 make test
 make coverage
 ```
+
+The repository keeps tiny committed media fixtures so the pipeline tests can run without network
+fetches or giant binary blobs.

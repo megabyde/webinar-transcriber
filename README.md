@@ -13,15 +13,44 @@ detection, and can optionally improve slide alignment with OCR.
 
 ## Status
 
-The project is under active development. The repository currently contains the bootstrap
-tooling, CLI shell, docs, and CI wiring for the first implementation milestone.
+The project now includes a working local pipeline for:
 
-## Planned CLI
+- audio-only inputs
+- video inputs with scene detection and representative slide frames
+- optional OCR-enhanced slide alignment for video
+- Markdown, DOCX, and JSON outputs
+
+The implementation is still intentionally conservative: it is local-first, CLI-only, and
+heuristic-driven for structuring and summaries.
+
+## CLI
 
 ```bash
 webinar-transcriber process INPUT
 webinar-transcriber process INPUT --ocr
+webinar-transcriber process INPUT --format docx
 webinar-transcriber process INPUT --output-dir runs/custom-demo
+```
+
+The first ASR run will download the configured `faster-whisper` model if it is not already
+available locally.
+
+## Output Layout
+
+Each run writes a fresh directory under `runs/` unless `--output-dir` is supplied:
+
+```text
+runs/<timestamp>_<basename>/
+├─ audio.wav
+├─ metadata.json
+├─ transcript.json
+├─ scenes.json          # video only
+├─ ocr.json             # when --ocr is enabled
+├─ diagnostics.json
+├─ report.md
+├─ report.docx
+├─ report.json
+└─ frames/              # video only
 ```
 
 ## Local Setup

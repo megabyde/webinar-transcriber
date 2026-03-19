@@ -18,8 +18,14 @@ jobs:
         with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@v5
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg tesseract-ocr tesseract-ocr-eng tesseract-ocr-rus
       - name: Sync dependencies
         run: make sync
+      - name: Run release checks
+        run: make ci
       - name: Build package
         run: uv build
       - name: Upload artifacts
@@ -27,3 +33,9 @@ jobs:
         with:
           name: dist
           path: dist/*
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
