@@ -23,9 +23,14 @@ class WhisperTranscriber:
         model_name: str = "tiny",
         *,
         device: str = "auto",
-        compute_type: str = "default",
+        compute_type: str | None = None,
     ) -> None:
-        self._model = WhisperModel(model_name, device=device, compute_type=compute_type)
+        resolved_compute_type = compute_type or _default_compute_type(device)
+        self._model = WhisperModel(
+            model_name,
+            device=device,
+            compute_type=resolved_compute_type,
+        )
 
     def transcribe(self, audio_path: Path) -> TranscriptionResult:
         segments, info = self._model.transcribe(
@@ -58,3 +63,8 @@ class WhisperTranscriber:
             detected_language=getattr(info, "language", None),
             segments=normalized_segments,
         )
+
+
+def _default_compute_type(device: str) -> str:
+    """Choose a less noisy default compute type for the current device."""
+    return "float32" if device in {"auto", "cpu"} else "default"

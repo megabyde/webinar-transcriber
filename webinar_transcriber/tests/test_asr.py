@@ -51,3 +51,19 @@ def test_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_path) -> N
     assert result.detected_language == "en"
     assert result.segments[0].text == "agenda review"
     assert [word.text for word in result.segments[0].words] == ["agenda", "review"]
+
+
+def test_default_compute_type_prefers_float32_for_auto_device(monkeypatch) -> None:
+    captured: dict[str, str] = {}
+
+    class RecordingModel:
+        def __init__(self, model_name: str, *, device: str, compute_type: str) -> None:
+            captured["model_name"] = model_name
+            captured["device"] = device
+            captured["compute_type"] = compute_type
+
+    monkeypatch.setattr("webinar_transcriber.asr.WhisperModel", RecordingModel)
+
+    WhisperTranscriber(model_name="tiny", device="auto")
+
+    assert captured["compute_type"] == "float32"

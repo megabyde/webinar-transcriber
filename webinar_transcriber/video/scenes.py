@@ -2,28 +2,47 @@
 
 from pathlib import Path
 
-from scenedetect import ContentDetector, SceneManager, open_video
+import av
+import numpy as np
 
 from webinar_transcriber.models import Scene
 
 
 def detect_scenes(video_path: Path) -> list[Scene]:
-    """Detect scenes in a video file using content changes."""
-    scene_manager = SceneManager()
-    scene_manager.add_detector(ContentDetector(threshold=12.0, min_scene_len=3))
-    video = open_video(str(video_path))
-    scene_manager.detect_scenes(video=video)
-    scene_boundaries = scene_manager.get_scene_list()
+    """Detect scenes in a video file using simple frame-difference scoring."""
+    with av.open(str(video_path)) as container:
+        stream = container.streams.video[0]
+        duration_sec = (
+            float(stream.duration) * float(stream.time_base)
+            if stream.duration is not None and stream.time_base is not None
+            else 0.0
+        )
+        scene_starts = [0.0]
+        previous_frame: np.ndarray | None = None
+        previous_time = 0.0
 
-    if not scene_boundaries:
-        duration = video.duration.get_seconds() if video.duration is not None else 0.0
-        return [Scene(id="scene-1", start_sec=0.0, end_sec=float(duration))]
+        for frame in container.decode(stream):
+            current_time = float(frame.time or 0.0)
+            current_rgb = frame.to_ndarray(format="rgb24").astype(np.float32)
+
+            if previous_frame is not None:
+                difference = np.abs(current_rgb - previous_frame).mean()
+                long_enough = (current_time - scene_starts[-1]) >= 0.5
+                if difference >= 18.0 and long_enough:
+                    scene_starts.append(current_time)
+
+            previous_frame = current_rgb
+            previous_time = current_time
+
+        if duration_sec <= 0.0:
+            duration_sec = previous_time
+
+    if not scene_starts:
+        scene_starts = [0.0]
+
+    scene_bounds = list(zip(scene_starts, [*scene_starts[1:], duration_sec], strict=False))
 
     return [
-        Scene(
-            id=f"scene-{index}",
-            start_sec=float(start.get_seconds()),
-            end_sec=float(end.get_seconds()),
-        )
-        for index, (start, end) in enumerate(scene_boundaries, start=1)
+        Scene(id=f"scene-{index}", start_sec=float(start), end_sec=float(end))
+        for index, (start, end) in enumerate(scene_bounds, start=1)
     ]
