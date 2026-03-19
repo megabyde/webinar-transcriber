@@ -5,7 +5,9 @@ from pathlib import Path
 import click
 
 from webinar_transcriber import __version__
-from webinar_transcriber.paths import OutputDirectoryExistsError, create_run_layout
+from webinar_transcriber.media import MediaProcessingError
+from webinar_transcriber.paths import OutputDirectoryExistsError
+from webinar_transcriber.processor import process_input
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -40,11 +42,17 @@ def process(input_path: Path, ocr: bool, output_dir: Path | None, output_format:
         raise click.ClickException(f"Input path is not a file: {input_path}")
 
     try:
-        layout = create_run_layout(input_path=input_path, output_dir=output_dir)
-    except OutputDirectoryExistsError as error:
+        artifacts = process_input(
+            input_path=input_path,
+            output_dir=output_dir,
+            output_format=output_format,
+            ocr_enabled=ocr,
+        )
+    except (MediaProcessingError, OutputDirectoryExistsError) as error:
         raise click.ClickException(str(error)) from error
 
     click.echo(
-        "Prepared run directory "
-        f"{layout.run_dir} for {input_path} (ocr={ocr}, format={output_format})."
+        "Processed "
+        f"{input_path} into {artifacts.layout.run_dir} "
+        f"(ocr={artifacts.report.ocr_enabled}, format={output_format})."
     )

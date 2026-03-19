@@ -44,6 +44,13 @@ class TranscriptSegment(BaseModel):
     words: list[TranscriptWord] = Field(default_factory=list)
 
 
+class TranscriptionResult(BaseModel):
+    """Full normalized transcription output."""
+
+    detected_language: str | None = None
+    segments: list[TranscriptSegment] = Field(default_factory=list)
+
+
 class Scene(BaseModel):
     """Time-bounded scene for video processing."""
 
