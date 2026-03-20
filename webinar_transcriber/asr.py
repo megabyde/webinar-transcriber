@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 DEFAULT_FASTER_WHISPER_MODEL = "small"
-DEFAULT_MLX_WHISPER_MODEL = "mlx-community/whisper-small"
+DEFAULT_MLX_WHISPER_MODEL = "mlx-community/whisper-large-v3-turbo"
 
 
 class Transcriber(Protocol):
