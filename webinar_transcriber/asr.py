@@ -1,5 +1,6 @@
 """ASR adapter built around faster-whisper."""
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
@@ -11,7 +12,12 @@ from webinar_transcriber.models import TranscriptionResult, TranscriptSegment, T
 class Transcriber(Protocol):
     """Protocol for components that convert audio to transcript text."""
 
-    def transcribe(self, audio_path: Path) -> TranscriptionResult:
+    def transcribe(
+        self,
+        audio_path: Path,
+        *,
+        progress_callback: Callable[[float], None] | None = None,
+    ) -> TranscriptionResult:
         """Return a normalized transcription for the provided audio file."""
 
 
@@ -32,7 +38,12 @@ class WhisperTranscriber:
             compute_type=resolved_compute_type,
         )
 
-    def transcribe(self, audio_path: Path) -> TranscriptionResult:
+    def transcribe(
+        self,
+        audio_path: Path,
+        *,
+        progress_callback: Callable[[float], None] | None = None,
+    ) -> TranscriptionResult:
         segments, info = self._model.transcribe(
             str(audio_path),
             beam_size=5,
@@ -58,6 +69,8 @@ class WhisperTranscriber:
                     ],
                 )
             )
+            if progress_callback is not None:
+                progress_callback(float(segment.end))
 
         return TranscriptionResult(
             detected_language=getattr(info, "language", None),

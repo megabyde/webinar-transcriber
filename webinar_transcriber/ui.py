@@ -44,10 +44,10 @@ class NullStageReporter:
     def stage_started(self, stage_key: str, label: str) -> None:
         """Record that a stage has started."""
 
-    def progress_started(self, stage_key: str, label: str, *, total: int) -> None:
+    def progress_started(self, stage_key: str, label: str, *, total: float) -> None:
         """Record that a determinate stage has started."""
 
-    def progress_advanced(self, stage_key: str, *, advance: int = 1) -> None:
+    def progress_advanced(self, stage_key: str, *, advance: float = 1.0) -> None:
         """Record that a determinate stage has advanced."""
 
     def stage_finished(self, stage_key: str, label: str, *, detail: str | None = None) -> None:
@@ -92,7 +92,7 @@ class RichStageReporter(NullStageReporter):
         )
         self._active_status.start()
 
-    def progress_started(self, stage_key: str, label: str, *, total: int) -> None:
+    def progress_started(self, stage_key: str, label: str, *, total: float) -> None:
         self._stop_active_display()
         self._stage_count += 1
         self._active_event = StageEvent(
@@ -110,9 +110,9 @@ class RichStageReporter(NullStageReporter):
             transient=True,
         )
         self._active_progress.start()
-        self._active_task_id = self._active_progress.add_task(label, total=max(total, 1))
+        self._active_task_id = self._active_progress.add_task(label, total=max(total, 1.0))
 
-    def progress_advanced(self, stage_key: str, *, advance: int = 1) -> None:
+    def progress_advanced(self, stage_key: str, *, advance: float = 1.0) -> None:
         if self._active_event is None or self._active_event.stage_key != stage_key:
             return
         if self._active_progress is None or self._active_task_id is None:

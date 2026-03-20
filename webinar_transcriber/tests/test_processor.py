@@ -1,5 +1,6 @@
 """Tests for the end-to-end processor flow."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 from docx import Document
@@ -14,8 +15,16 @@ FIXTURE_DIR = Path(__file__).parent / "fixtures"
 class FakeTranscriber:
     """Stable test double for deterministic transcripts."""
 
-    def transcribe(self, audio_path: Path) -> TranscriptionResult:
+    def transcribe(
+        self,
+        audio_path: Path,
+        *,
+        progress_callback: Callable[[float], None] | None = None,
+    ) -> TranscriptionResult:
         assert audio_path.exists()
+        if progress_callback is not None:
+            progress_callback(0.75)
+            progress_callback(1.5)
         return TranscriptionResult(
             detected_language="en",
             segments=[
@@ -41,7 +50,7 @@ class RecordingReporter(NullStageReporter):
     def __init__(self) -> None:
         self.events: list[tuple[str, str, str]] = []
         self.warnings: list[str] = []
-        self.progress_events: list[tuple[str, str, int]] = []
+        self.progress_events: list[tuple[str, str, float]] = []
 
     def begin_run(self, input_path: Path, *, ocr_enabled: bool, output_format: str) -> None:
         self.events.append(("begin", input_path.name, output_format))
@@ -49,10 +58,10 @@ class RecordingReporter(NullStageReporter):
     def stage_started(self, stage_key: str, label: str) -> None:
         self.events.append(("start", stage_key, label))
 
-    def progress_started(self, stage_key: str, label: str, *, total: int) -> None:
+    def progress_started(self, stage_key: str, label: str, *, total: float) -> None:
         self.progress_events.append(("start", stage_key, total))
 
-    def progress_advanced(self, stage_key: str, *, advance: int = 1) -> None:
+    def progress_advanced(self, stage_key: str, *, advance: float = 1.0) -> None:
         self.progress_events.append(("advance", stage_key, advance))
 
     def stage_finished(self, stage_key: str, label: str, *, detail: str | None = None) -> None:
@@ -89,6 +98,10 @@ def test_process_input_writes_reports_and_metadata(tmp_path) -> None:
     assert "Agenda review and project status update." in markdown
     assert ("start", "probe_media", "Probing media") in reporter.events
     assert any(event[0] == "complete" for event in reporter.events)
+    assert any(event == ("start", "transcribe", 1.5) for event in reporter.progress_events)
+    assert any(
+        event[0] == "advance" and event[1] == "transcribe" for event in reporter.progress_events
+    )
 
     document = Document(str(artifacts.layout.docx_report_path))
     assert "Sample Audio" in "\n".join(paragraph.text for paragraph in document.paragraphs)
@@ -98,8 +111,16 @@ def test_process_input_writes_video_scene_artifacts(tmp_path) -> None:
     reporter = RecordingReporter()
 
     class VideoTranscriber(FakeTranscriber):
-        def transcribe(self, audio_path: Path) -> TranscriptionResult:
+        def transcribe(
+            self,
+            audio_path: Path,
+            *,
+            progress_callback: Callable[[float], None] | None = None,
+        ) -> TranscriptionResult:
             assert audio_path.exists()
+            if progress_callback is not None:
+                progress_callback(0.9)
+                progress_callback(1.8)
             return TranscriptionResult(
                 detected_language="en",
                 segments=[
@@ -145,8 +166,16 @@ def test_process_input_writes_ocr_results_for_video(tmp_path) -> None:
     reporter = RecordingReporter()
 
     class VideoTranscriber(FakeTranscriber):
-        def transcribe(self, audio_path: Path) -> TranscriptionResult:
+        def transcribe(
+            self,
+            audio_path: Path,
+            *,
+            progress_callback: Callable[[float], None] | None = None,
+        ) -> TranscriptionResult:
             assert audio_path.exists()
+            if progress_callback is not None:
+                progress_callback(0.9)
+                progress_callback(1.8)
             return TranscriptionResult(
                 detected_language="en",
                 segments=[

@@ -94,10 +94,19 @@ def process_input(
     stage_timings["extract_audio"] = perf_counter() - start
     active_reporter.stage_finished("extract_audio", "Extracting audio", detail=str(audio_path.name))
 
-    active_reporter.stage_started("transcribe", "Transcribing audio")
+    active_reporter.progress_started(
+        "transcribe",
+        "Transcribing audio",
+        total=media_asset.duration_sec,
+    )
     start = perf_counter()
     active_transcriber = transcriber or WhisperTranscriber()
-    transcription = active_transcriber.transcribe(audio_path)
+    transcription = _transcribe_with_progress(
+        active_transcriber,
+        audio_path,
+        total_duration_sec=media_asset.duration_sec,
+        reporter=active_reporter,
+    )
     stage_timings["transcribe"] = perf_counter() - start
     active_reporter.stage_finished(
         "transcribe",
@@ -252,3 +261,29 @@ def _write_requested_reports(report: ReportDocument, layout: RunLayout, output_f
 
 def _write_json(output_path: Path, payload: dict[str, object]) -> None:
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _transcribe_with_progress(
+    transcriber: Transcriber,
+    audio_path: Path,
+    *,
+    total_duration_sec: float,
+    reporter: NullStageReporter,
+) -> TranscriptionResult:
+    transcribed_until_sec = 0.0
+
+    def _update_transcription_progress(completed_sec: float) -> None:
+        nonlocal transcribed_until_sec
+        advance = max(0.0, completed_sec - transcribed_until_sec)
+        if advance > 0:
+            reporter.progress_advanced("transcribe", advance=advance)
+            transcribed_until_sec = completed_sec
+
+    transcription = transcriber.transcribe(
+        audio_path,
+        progress_callback=_update_transcription_progress,
+    )
+    remaining_progress = max(0.0, total_duration_sec - transcribed_until_sec)
+    if remaining_progress > 0:
+        reporter.progress_advanced("transcribe", advance=remaining_progress)
+    return transcription

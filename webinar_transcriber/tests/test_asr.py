@@ -46,11 +46,16 @@ def test_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_path) -> N
     monkeypatch.setattr("webinar_transcriber.asr.WhisperModel", lambda *args, **kwargs: FakeModel())
 
     transcriber = WhisperTranscriber(model_name="small")
-    result = transcriber.transcribe(tmp_path / "audio.wav")
+    progress_updates: list[float] = []
+    result = transcriber.transcribe(
+        tmp_path / "audio.wav",
+        progress_callback=lambda completed_sec: progress_updates.append(completed_sec),
+    )
 
     assert result.detected_language == "en"
     assert result.segments[0].text == "agenda review"
     assert [word.text for word in result.segments[0].words] == ["agenda", "review"]
+    assert progress_updates == [1.5]
 
 
 def test_default_model_and_compute_type_use_quality_focused_defaults(monkeypatch) -> None:
