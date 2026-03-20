@@ -20,7 +20,7 @@ class WhisperTranscriber:
 
     def __init__(
         self,
-        model_name: str = "tiny",
+        model_name: str = "small",
         *,
         device: str = "auto",
         compute_type: str | None = None,
@@ -67,4 +67,4 @@ class WhisperTranscriber:
 
 def _default_compute_type(device: str) -> str:
     """Choose a less noisy default compute type for the current device."""
-    return "float32" if device in {"auto", "cpu"} else "default"
+    return "int8" if device in {"auto", "cpu"} else "default"

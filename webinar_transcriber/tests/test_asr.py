@@ -45,7 +45,7 @@ class FakeModel:
 def test_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("webinar_transcriber.asr.WhisperModel", lambda *args, **kwargs: FakeModel())
 
-    transcriber = WhisperTranscriber(model_name="tiny")
+    transcriber = WhisperTranscriber(model_name="small")
     result = transcriber.transcribe(tmp_path / "audio.wav")
 
     assert result.detected_language == "en"
@@ -53,7 +53,7 @@ def test_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_path) -> N
     assert [word.text for word in result.segments[0].words] == ["agenda", "review"]
 
 
-def test_default_compute_type_prefers_float32_for_auto_device(monkeypatch) -> None:
+def test_default_model_and_compute_type_use_quality_focused_defaults(monkeypatch) -> None:
     captured: dict[str, str] = {}
 
     class RecordingModel:
@@ -64,6 +64,7 @@ def test_default_compute_type_prefers_float32_for_auto_device(monkeypatch) -> No
 
     monkeypatch.setattr("webinar_transcriber.asr.WhisperModel", RecordingModel)
 
-    WhisperTranscriber(model_name="tiny", device="auto")
+    WhisperTranscriber(device="auto")
 
-    assert captured["compute_type"] == "float32"
+    assert captured["model_name"] == "small"
+    assert captured["compute_type"] == "int8"
