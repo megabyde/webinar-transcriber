@@ -15,7 +15,6 @@ For local development on macOS, use Homebrew:
 
 ```bash
 brew install ffmpeg
-brew install tesseract
 ```
 
 Ubuntu CI uses platform-native packages to keep runner setup simple.

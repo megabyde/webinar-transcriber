@@ -13,7 +13,7 @@ help:
 	@printf "  clean      Remove caches and build artifacts\n"
 
 sync:
-	uv sync --group dev --extra ocr
+	uv sync --group dev
 
 format:
 	uv run ruff format .

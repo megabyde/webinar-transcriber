@@ -70,15 +70,6 @@ class SlideFrame(BaseModel):
     dedupe_hash: str | None = None
 
 
-class OcrResult(BaseModel):
-    """OCR output associated with a frame."""
-
-    frame_id: str
-    text: str
-    confidence: float | None = Field(default=None, ge=0, le=1)
-    language: str | None = None
-
-
 class AlignmentBlock(BaseModel):
     """Alignment between transcript content and media sections."""
 
@@ -114,7 +105,6 @@ class ReportDocument(BaseModel):
     source_file: str
     media_type: MediaType
     detected_language: str | None = None
-    ocr_enabled: bool = False
     summary: list[str] = Field(default_factory=list)
     action_items: list[str] = Field(default_factory=list)
     sections: list[ReportSection] = Field(default_factory=list)

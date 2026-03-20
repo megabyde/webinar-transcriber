@@ -3,8 +3,10 @@
 from pathlib import Path
 
 import numpy as np
+from PIL import Image
 
 from webinar_transcriber.video import detect_scenes, extract_representative_frames
+from webinar_transcriber.video.frames import _normalize_extracted_frame
 from webinar_transcriber.video.scenes import _detect_scene_start_times
 
 FIXTURE_DIR = Path(__file__).parents[2] / "tests" / "fixtures"
@@ -71,3 +73,17 @@ def test_detect_scene_start_times_respects_min_scene_length() -> None:
     )
 
     assert scene_starts == [0.0, 4.0]
+
+
+def test_normalize_extracted_frame_applies_exif_orientation(tmp_path) -> None:
+    image_path = tmp_path / "rotated.jpg"
+    image = Image.new("RGB", (4, 2), color="white")
+    exif = Image.Exif()
+    exif[274] = 6
+    image.save(image_path, exif=exif)
+
+    _normalize_extracted_frame(image_path)
+
+    with Image.open(image_path) as normalized_image:
+        assert normalized_image.size == (2, 4)
+        assert normalized_image.getexif().get(274) is None

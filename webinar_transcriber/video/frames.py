@@ -6,7 +6,7 @@ from pathlib import Path
 
 import imagehash
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 from webinar_transcriber.models import Scene, SlideFrame
 
@@ -30,6 +30,7 @@ def extract_representative_frames(
                 progress_callback()
             continue
 
+        _normalize_extracted_frame(output_path)
         image = Image.open(output_path).convert("RGB")
         grayscale = image.convert("L")
         sharpness = _sharpness_score(np.asarray(grayscale, dtype=np.float32))
@@ -69,6 +70,12 @@ def _extract_frame(video_path: Path, timestamp_sec: float, output_path: Path) ->
         text=True,
     )
     return result.returncode == 0 and output_path.exists()
+
+
+def _normalize_extracted_frame(output_path: Path) -> None:
+    with Image.open(output_path) as image:
+        normalized_image = ImageOps.exif_transpose(image).convert("RGB")
+        normalized_image.save(output_path)
 
 
 def _sharpness_score(grayscale_pixels: np.ndarray) -> float:

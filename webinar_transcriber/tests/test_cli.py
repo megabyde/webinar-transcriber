@@ -43,7 +43,6 @@ def test_process_command_runs_pipeline(tmp_path, monkeypatch) -> None:
 
     def fake_process_input(**kwargs) -> ProcessArtifacts:
         assert kwargs["input_path"] == input_path
-        assert kwargs["ocr_enabled"] is True
         assert kwargs["output_format"] == "json"
         assert kwargs["reporter"].__class__.__name__ == "RichStageReporter"
         return ProcessArtifacts(
@@ -58,17 +57,15 @@ def test_process_command_runs_pipeline(tmp_path, monkeypatch) -> None:
                 title="Demo",
                 source_file=str(input_path),
                 media_type=MediaType.VIDEO,
-                ocr_enabled=True,
             ),
             diagnostics=Diagnostics(),
         )
 
     monkeypatch.setattr("webinar_transcriber.cli.process_input", fake_process_input)
 
-    result = runner.invoke(main, ["process", str(input_path), "--ocr", "--format", "json"])
+    result = runner.invoke(main, ["process", str(input_path), "--format", "json"])
 
     assert result.exit_code == 0
-    assert "ocr=True" in result.output
     assert "format=json" in result.output
     assert str(run_dir) in result.output
 

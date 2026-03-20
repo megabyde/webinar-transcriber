@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
 
-from webinar_transcriber.align import align_by_time, align_with_ocr
+from webinar_transcriber.align import align_by_time
 from webinar_transcriber.asr import Transcriber, WhisperTranscriber
 from webinar_transcriber.export import (
     write_docx_report,
@@ -17,12 +17,10 @@ from webinar_transcriber.models import (
     AlignmentBlock,
     Diagnostics,
     MediaAsset,
-    OcrResult,
     ReportDocument,
     SlideFrame,
     TranscriptionResult,
 )
-from webinar_transcriber.ocr import extract_ocr_results
 from webinar_transcriber.paths import RunLayout, create_run_layout
 from webinar_transcriber.structure import build_report
 from webinar_transcriber.ui import NullStageReporter
@@ -49,7 +47,6 @@ def process_input(
     *,
     output_dir: Path | None = None,
     output_format: str = "all",
-    ocr_enabled: bool = False,
     transcriber: Transcriber | None = None,
     reporter: NullStageReporter | None = None,
 ) -> ProcessArtifacts:
@@ -59,9 +56,8 @@ def process_input(
     warnings: list[str] = []
     alignment_blocks: list[AlignmentBlock] | None = None
     slide_frames: list[SlideFrame] = []
-    ocr_results: list[OcrResult] = []
 
-    active_reporter.begin_run(input_path, ocr_enabled=ocr_enabled, output_format=output_format)
+    active_reporter.begin_run(input_path, output_format=output_format)
 
     active_reporter.stage_started("prepare_run_dir", "Preparing run directory")
     start = perf_counter()
@@ -80,12 +76,6 @@ def process_input(
         "Probing media",
         detail=f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s",
     )
-
-    if media_asset.media_type.value == "audio" and ocr_enabled:
-        warning = "OCR was requested for audio-only input and has been ignored."
-        warnings.append(warning)
-        active_reporter.warn(warning)
-        ocr_enabled = False
 
     audio_path = layout.run_dir / "audio.wav"
     active_reporter.stage_started("extract_audio", "Extracting audio")
@@ -155,37 +145,7 @@ def process_input(
             "Extracting slide frames",
             detail=f"{len(slide_frames)} frames",
         )
-        if ocr_enabled:
-            active_reporter.progress_started(
-                "ocr",
-                "Running OCR",
-                total=len(slide_frames),
-            )
-            start = perf_counter()
-            ocr_results = extract_ocr_results(
-                slide_frames,
-                detected_language=transcription.detected_language,
-                progress_callback=lambda: active_reporter.progress_advanced("ocr"),
-            )
-            stage_timings["ocr"] = perf_counter() - start
-            _write_json(
-                layout.ocr_path,
-                {"results": [result.model_dump(mode="json") for result in ocr_results]},
-            )
-            alignment_blocks = align_with_ocr(
-                transcription.segments, scenes, slide_frames, ocr_results
-            )
-            active_reporter.stage_finished(
-                "ocr",
-                "Running OCR",
-                detail=f"{len(ocr_results)} OCR results",
-            )
-            if not any((result.text or "").strip() for result in ocr_results):
-                warning = "OCR did not extract readable text; alignment stayed time-based."
-                warnings.append(warning)
-                active_reporter.warn(warning)
-        else:
-            alignment_blocks = align_by_time(transcription.segments, scenes, slide_frames)
+        alignment_blocks = align_by_time(transcription.segments, scenes, slide_frames)
     else:
         scenes = []
 
@@ -194,7 +154,6 @@ def process_input(
     report = build_report(
         media_asset,
         transcription,
-        ocr_enabled=ocr_enabled,
         alignment_blocks=alignment_blocks,
         warnings=warnings,
     )
@@ -232,7 +191,6 @@ def process_input(
             "report_sections": len(report.sections),
             "scenes": len(scenes),
             "frames": len(slide_frames),
-            "ocr_results": len(ocr_results),
         },
         warnings=warnings,
     )

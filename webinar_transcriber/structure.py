@@ -21,7 +21,6 @@ def build_report(
     media_asset: MediaAsset,
     transcription: TranscriptionResult,
     *,
-    ocr_enabled: bool,
     alignment_blocks: list[AlignmentBlock] | None = None,
     warnings: list[str] | None = None,
 ) -> ReportDocument:
@@ -39,7 +38,6 @@ def build_report(
         source_file=media_asset.path,
         media_type=media_asset.media_type,
         detected_language=transcription.detected_language,
-        ocr_enabled=ocr_enabled,
         summary=summary,
         action_items=action_items,
         sections=sections,

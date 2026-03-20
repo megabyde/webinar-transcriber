@@ -17,7 +17,7 @@ jobs:
       - name: Install native dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg tesseract-ocr tesseract-ocr-eng tesseract-ocr-rus
+          sudo apt-get install -y ffmpeg
       - name: Sync dependencies
         run: make sync
       - name: Run CI
@@ -40,7 +40,6 @@ jobs:
       - name: Install native dependencies
         run: |
           brew install ffmpeg
-          brew install tesseract
       - name: Sync dependencies
         run: make sync
       - name: Run smoke tests

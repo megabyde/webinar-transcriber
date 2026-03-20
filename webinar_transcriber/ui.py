@@ -38,7 +38,7 @@ class StageEvent:
 class NullStageReporter:
     """No-op reporter used by tests and non-interactive code paths."""
 
-    def begin_run(self, input_path: Path, *, ocr_enabled: bool, output_format: str) -> None:
+    def begin_run(self, input_path: Path, *, output_format: str) -> None:
         """Record the start of a processing run."""
 
     def stage_started(self, stage_key: str, label: str) -> None:
@@ -75,11 +75,8 @@ class RichStageReporter(NullStageReporter):
         self._warnings: list[str] = []
         self._stage_count = 0
 
-    def begin_run(self, input_path: Path, *, ocr_enabled: bool, output_format: str) -> None:
-        mode_label = "with OCR" if ocr_enabled else "without OCR"
-        self._console.print(
-            f"[bold cyan]Starting[/] {input_path.name} ({mode_label}, format={output_format})"
-        )
+    def begin_run(self, input_path: Path, *, output_format: str) -> None:
+        self._console.print(f"[bold cyan]Starting[/] {input_path.name} (format={output_format})")
 
     def stage_started(self, stage_key: str, label: str) -> None:
         self._stop_active_display()

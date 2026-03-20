@@ -8,8 +8,8 @@
 ![License MIT](https://img.shields.io/badge/license-MIT-green.svg)
 
 `webinar-transcriber` is a local-first CLI for transcribing webinar videos with slides and
-audio-only recordings. The tool exports Markdown, DOCX, and JSON, supports automatic language
-detection, and can optionally improve slide alignment with OCR.
+audio-only recordings. The tool exports Markdown, DOCX, and JSON and supports automatic language
+detection.
 
 ## Status
 
@@ -17,7 +17,6 @@ The project now includes a working local pipeline for:
 
 - audio-only inputs
 - video inputs with scene detection and representative slide frames
-- optional OCR-enhanced slide alignment for video
 - Markdown, DOCX, and JSON outputs
 
 The implementation is still intentionally conservative: it is local-first, CLI-only, and
@@ -27,7 +26,6 @@ heuristic-driven for structuring and summaries.
 
 ```bash
 webinar-transcriber process INPUT
-webinar-transcriber process INPUT --ocr
 webinar-transcriber process INPUT --format docx
 webinar-transcriber process INPUT --output-dir runs/custom-demo
 ```
@@ -46,7 +44,6 @@ runs/<timestamp>_<basename>/
 ├─ metadata.json
 ├─ transcript.json
 ├─ scenes.json          # video only
-├─ ocr.json             # when --ocr is enabled
 ├─ diagnostics.json
 ├─ report.md
 ├─ report.docx
@@ -59,7 +56,6 @@ runs/<timestamp>_<basename>/
 1. Install Python 3.12 and `uv`.
 2. Install native dependencies with Homebrew on macOS:
    - `brew install ffmpeg`
-   - `brew install tesseract`
 3. Install the project:
 
 ```bash

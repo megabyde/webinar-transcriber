@@ -34,14 +34,6 @@ class RunLayout:
         return self.run_dir / "scenes.json"
 
     @property
-    def ocr_path(self) -> Path:
-        return self.run_dir / "ocr.json"
-
-    @property
-    def alignment_path(self) -> Path:
-        return self.run_dir / "alignment.json"
-
-    @property
     def diagnostics_path(self) -> Path:
         return self.run_dir / "diagnostics.json"
 
