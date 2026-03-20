@@ -129,7 +129,7 @@ class MlxWhisperTranscriber:
             str(audio_path),
             path_or_hf_repo=self._model_name,
             verbose=False,
-            word_timestamps=True,
+            word_timestamps=False,
         )
         normalized_segments: list[TranscriptSegment] = []
 

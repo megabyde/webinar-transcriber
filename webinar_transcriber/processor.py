@@ -217,7 +217,7 @@ def process_input(
             "media": media_asset.model_dump(mode="json"),
         },
     )
-    _write_json(layout.transcript_path, transcription.model_dump(mode="json"))
+    _write_json(layout.transcript_path, _transcription_payload(transcription))
 
     active_reporter.stage_started("export", "Writing reports")
     start = perf_counter()
@@ -262,6 +262,13 @@ def _write_requested_reports(report: ReportDocument, layout: RunLayout, output_f
 
 def _write_json(output_path: Path, payload: dict[str, object]) -> None:
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _transcription_payload(transcription: TranscriptionResult) -> dict[str, object]:
+    return transcription.model_dump(
+        mode="json",
+        exclude={"segments": {"__all__": {"words"}}},
+    )
 
 
 def _transcribe_with_progress(

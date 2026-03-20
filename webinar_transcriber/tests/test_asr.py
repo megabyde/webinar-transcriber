@@ -99,7 +99,7 @@ def test_mlx_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_path) 
         assert audio_path.endswith(".wav")
         assert path_or_hf_repo == DEFAULT_MLX_WHISPER_MODEL
         assert verbose is False
-        assert word_timestamps is True
+        assert word_timestamps is False
         return {
             "language": "en",
             "segments": [
@@ -107,20 +107,6 @@ def test_mlx_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_path) 
                     "text": " agenda review ",
                     "start": 0.0,
                     "end": 1.5,
-                    "words": [
-                        {
-                            "word": " agenda ",
-                            "start": 0.0,
-                            "end": 0.6,
-                            "probability": 0.91,
-                        },
-                        {
-                            "word": " review ",
-                            "start": 0.7,
-                            "end": 1.5,
-                            "probability": 0.95,
-                        },
-                    ],
                 }
             ],
         }
@@ -139,7 +125,7 @@ def test_mlx_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_path) 
 
     assert result.detected_language == "en"
     assert result.segments[0].text == "agenda review"
-    assert [word.text for word in result.segments[0].words] == ["agenda", "review"]
+    assert result.segments[0].words == []
     assert progress_updates == []
     assert transcriber.supports_live_progress is False
     assert transcriber.uses_native_progress is True

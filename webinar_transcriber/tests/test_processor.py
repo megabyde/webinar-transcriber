@@ -1,5 +1,6 @@
 """Tests for the end-to-end processor flow."""
 
+import json
 from collections.abc import Callable
 from pathlib import Path
 
@@ -98,10 +99,12 @@ def test_process_input_writes_reports_and_metadata(tmp_path) -> None:
     assert artifacts.layout.json_report_path.exists()
     assert artifacts.report.detected_language == "en"
     assert artifacts.report.action_items == ["Next step please send the draft by Friday."]
+    transcript_payload = json.loads(artifacts.layout.transcript_path.read_text(encoding="utf-8"))
 
     markdown = artifacts.layout.markdown_report_path.read_text(encoding="utf-8")
     assert "# Sample Audio" in markdown
     assert "Agenda review and project status update." in markdown
+    assert all("words" not in segment for segment in transcript_payload["segments"])
     assert ("start", "probe_media", "Probing media") in reporter.events
     assert ("start", "prepare_asr", "Preparing ASR model") in reporter.events
     assert any(event[0] == "complete" for event in reporter.events)
