@@ -32,8 +32,9 @@ webinar-transcriber process INPUT --format docx
 webinar-transcriber process INPUT --output-dir runs/custom-demo
 ```
 
-The first ASR run will download the configured `faster-whisper` model if it is not already
-available locally.
+On Apple Silicon, the CLI now prefers the `mlx-whisper` backend when it is installed and falls
+back to `faster-whisper` everywhere else. The first ASR run will download the configured backend
+model if it is not already available locally.
 
 ## Output Layout
 

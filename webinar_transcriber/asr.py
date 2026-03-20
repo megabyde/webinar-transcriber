@@ -1,12 +1,22 @@
-"""ASR adapter built around faster-whisper."""
+"""ASR adapters for faster-whisper and MLX Whisper."""
 
-from collections.abc import Callable
-from pathlib import Path
-from typing import Protocol
+from __future__ import annotations
+
+import importlib
+import importlib.util
+import platform
+from typing import TYPE_CHECKING, Any, Protocol
 
 from faster_whisper import WhisperModel
 
 from webinar_transcriber.models import TranscriptionResult, TranscriptSegment, TranscriptWord
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+DEFAULT_FASTER_WHISPER_MODEL = "small"
+DEFAULT_MLX_WHISPER_MODEL = "mlx-community/whisper-small"
 
 
 class Transcriber(Protocol):
@@ -21,12 +31,12 @@ class Transcriber(Protocol):
         """Return a normalized transcription for the provided audio file."""
 
 
-class WhisperTranscriber:
-    """Default ASR implementation using faster-whisper."""
+class FasterWhisperTranscriber:
+    """ASR implementation using faster-whisper."""
 
     def __init__(
         self,
-        model_name: str = "small",
+        model_name: str = DEFAULT_FASTER_WHISPER_MODEL,
         *,
         device: str = "auto",
         compute_type: str | None = None,
@@ -78,6 +88,126 @@ class WhisperTranscriber:
         )
 
 
+class MlxWhisperTranscriber:
+    """ASR implementation using MLX Whisper on Apple Silicon."""
+
+    def __init__(self, model_name: str = DEFAULT_MLX_WHISPER_MODEL) -> None:
+        self._model_name = model_name
+
+    def transcribe(
+        self,
+        audio_path: Path,
+        *,
+        progress_callback: Callable[[float], None] | None = None,
+    ) -> TranscriptionResult:
+        mlx_whisper = _import_mlx_whisper()
+        result = mlx_whisper.transcribe(
+            str(audio_path),
+            path_or_hf_repo=self._model_name,
+            word_timestamps=True,
+        )
+        normalized_segments: list[TranscriptSegment] = []
+
+        for index, segment in enumerate(result.get("segments", []), start=1):
+            end_sec = float(segment.get("end", 0.0))
+            normalized_segments.append(
+                TranscriptSegment(
+                    id=f"segment-{index}",
+                    text=str(segment.get("text", "")).strip(),
+                    start_sec=float(segment.get("start", 0.0)),
+                    end_sec=end_sec,
+                    words=_normalize_mlx_words(segment.get("words", [])),
+                )
+            )
+            if progress_callback is not None:
+                progress_callback(end_sec)
+
+        return TranscriptionResult(
+            detected_language=_mlx_detected_language(result),
+            segments=normalized_segments,
+        )
+
+
+class WhisperTranscriber:
+    """Default ASR wrapper that selects the best local backend."""
+
+    def __init__(
+        self,
+        model_name: str | None = None,
+        *,
+        backend: str = "auto",
+        device: str = "auto",
+        compute_type: str | None = None,
+    ) -> None:
+        self.backend = _resolve_backend_name(backend)
+        if self.backend == "mlx":
+            self._delegate: Transcriber = MlxWhisperTranscriber(
+                model_name=model_name or DEFAULT_MLX_WHISPER_MODEL
+            )
+        else:
+            self._delegate = FasterWhisperTranscriber(
+                model_name=model_name or DEFAULT_FASTER_WHISPER_MODEL,
+                device=device,
+                compute_type=compute_type,
+            )
+
+    def transcribe(
+        self,
+        audio_path: Path,
+        *,
+        progress_callback: Callable[[float], None] | None = None,
+    ) -> TranscriptionResult:
+        return self._delegate.transcribe(audio_path, progress_callback=progress_callback)
+
+
 def _default_compute_type(device: str) -> str:
     """Choose a less noisy default compute type for the current device."""
     return "int8" if device in {"auto", "cpu"} else "default"
+
+
+def _resolve_backend_name(backend: str) -> str:
+    normalized_backend = backend.lower()
+    if normalized_backend not in {"auto", "faster-whisper", "mlx"}:
+        raise ValueError(f"Unsupported ASR backend: {backend}")
+    if normalized_backend == "auto":
+        return "mlx" if _mlx_backend_available() else "faster-whisper"
+    if normalized_backend == "mlx" and not _mlx_backend_available():
+        raise RuntimeError("MLX Whisper requires macOS arm64 with mlx-whisper installed.")
+    return normalized_backend
+
+
+def _mlx_backend_available() -> bool:
+    return _is_apple_silicon_mac() and importlib.util.find_spec("mlx_whisper") is not None
+
+
+def _is_apple_silicon_mac() -> bool:
+    return platform.system() == "Darwin" and platform.machine() == "arm64"
+
+
+def _import_mlx_whisper() -> Any:
+    return importlib.import_module("mlx_whisper")
+
+
+def _mlx_detected_language(result: dict[str, Any]) -> str | None:
+    detected_language = result.get("language")
+    if isinstance(detected_language, str):
+        return detected_language
+    return None
+
+
+def _normalize_mlx_words(words: list[dict[str, Any]]) -> list[TranscriptWord]:
+    normalized_words: list[TranscriptWord] = []
+    for word in words:
+        raw_text = str(word.get("word", word.get("text", ""))).strip()
+        if not raw_text:
+            continue
+        confidence = word.get("probability", word.get("confidence"))
+        normalized_words.append(
+            TranscriptWord(
+                text=raw_text,
+                start_sec=float(word.get("start", 0.0)),
+                end_sec=float(word.get("end", 0.0)),
+                confidence=float(confidence) if confidence is not None else None,
+            )
+        )
+    return normalized_words

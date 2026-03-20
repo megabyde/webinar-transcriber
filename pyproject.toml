@@ -32,6 +32,7 @@ dependencies = [
     "click>=8.1.8",
     "faster-whisper>=1.1.1",
     "imagehash>=4.3.2",
+    "mlx-whisper>=0.4.3; platform_system == 'Darwin' and platform_machine == 'arm64'",
     "numpy>=2.2.3",
     "pillow>=11.1.0",
     "pydantic>=2.10.6",
