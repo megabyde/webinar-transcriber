@@ -44,6 +44,9 @@ class NullStageReporter:
     def stage_started(self, stage_key: str, label: str) -> None:
         """Record that a stage has started."""
 
+    def stage_timing_started(self, stage_key: str, label: str) -> None:
+        """Record timing for a stage without rendering an active display."""
+
     def progress_started(self, stage_key: str, label: str, *, total: float) -> None:
         """Record that a determinate stage has started."""
 
@@ -81,25 +84,22 @@ class RichStageReporter(NullStageReporter):
     def stage_started(self, stage_key: str, label: str) -> None:
         self._stop_active_display()
         self._stage_count += 1
-        self._active_event = StageEvent(
-            stage_key=stage_key,
-            label=label,
-            started_at=perf_counter(),
-        )
+        self._active_event = self._new_stage_event(stage_key, label)
         self._active_status = self._console.status(
             f"[bold blue][{self._stage_count}][/bold blue] {label}",
             spinner="dots",
         )
         self._active_status.start()
 
+    def stage_timing_started(self, stage_key: str, label: str) -> None:
+        self._stop_active_display()
+        self._stage_count += 1
+        self._active_event = self._new_stage_event(stage_key, label)
+
     def progress_started(self, stage_key: str, label: str, *, total: float) -> None:
         self._stop_active_display()
         self._stage_count += 1
-        self._active_event = StageEvent(
-            stage_key=stage_key,
-            label=label,
-            started_at=perf_counter(),
-        )
+        self._active_event = self._new_stage_event(stage_key, label)
         self._active_progress = Progress(
             SpinnerColumn(),
             TextColumn(f"[bold blue][{self._stage_count}][/bold blue] {label}"),
@@ -155,3 +155,10 @@ class RichStageReporter(NullStageReporter):
             self._active_progress.stop()
             self._active_progress = None
             self._active_task_id = None
+
+    def _new_stage_event(self, stage_key: str, label: str) -> StageEvent:
+        return StageEvent(
+            stage_key=stage_key,
+            label=label,
+            started_at=perf_counter(),
+        )

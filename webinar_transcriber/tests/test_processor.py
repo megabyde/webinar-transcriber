@@ -16,6 +16,7 @@ class FakeTranscriber:
     """Stable test double for deterministic transcripts."""
 
     supports_live_progress = True
+    uses_native_progress = False
 
     def prepare_model(self) -> None:
         """No-op test hook for the ASR preparation stage."""
@@ -235,6 +236,7 @@ def test_process_input_uses_spinner_for_non_streaming_transcriber(tmp_path) -> N
 
     class BlockingTranscriber:
         supports_live_progress = False
+        uses_native_progress = False
 
         def __init__(self) -> None:
             self.prepared = False
@@ -274,4 +276,53 @@ def test_process_input_uses_spinner_for_non_streaming_transcriber(tmp_path) -> N
     assert transcriber.prepared is True
     assert ("start", "prepare_asr", "Preparing ASR model") in reporter.events
     assert ("start", "transcribe", "Transcribing audio") in reporter.events
+    assert not any(event[1] == "transcribe" for event in reporter.progress_events)
+
+
+def test_process_input_allows_native_transcriber_progress(tmp_path) -> None:
+    reporter = RecordingReporter()
+
+    class NativeProgressTranscriber:
+        supports_live_progress = False
+        uses_native_progress = True
+
+        def __init__(self) -> None:
+            self.prepared = False
+
+        def prepare_model(self) -> None:
+            self.prepared = True
+
+        def transcribe(
+            self,
+            audio_path: Path,
+            *,
+            progress_callback: Callable[[float], None] | None = None,
+        ) -> TranscriptionResult:
+            assert audio_path.exists()
+            assert progress_callback is None
+            return TranscriptionResult(
+                detected_language="en",
+                segments=[
+                    TranscriptSegment(
+                        id="segment-1",
+                        text="Agenda review and project status update.",
+                        start_sec=0.0,
+                        end_sec=1.5,
+                    )
+                ],
+            )
+
+    transcriber = NativeProgressTranscriber()
+    artifacts = process_input(
+        FIXTURE_DIR / "sample-audio.mp3",
+        output_dir=tmp_path / "native-progress-run",
+        transcriber=transcriber,
+        reporter=reporter,
+    )
+
+    assert artifacts.report.detected_language == "en"
+    assert transcriber.prepared is True
+    assert ("start", "prepare_asr", "Preparing ASR model") in reporter.events
+    assert ("start", "transcribe", "Transcribing audio") not in reporter.events
+    assert any(event[0] == "finish" and event[1] == "transcribe" for event in reporter.events)
     assert not any(event[1] == "transcribe" for event in reporter.progress_events)

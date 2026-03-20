@@ -26,6 +26,10 @@ class Transcriber(Protocol):
     def supports_live_progress(self) -> bool:
         """Whether transcription emits incremental progress during inference."""
 
+    @property
+    def uses_native_progress(self) -> bool:
+        """Whether the backend renders its own user-visible progress output."""
+
     def prepare_model(self) -> None:
         """Warm or download model assets before transcription starts."""
 
@@ -99,6 +103,11 @@ class FasterWhisperTranscriber:
         """faster-whisper yields segments incrementally during inference."""
         return True
 
+    @property
+    def uses_native_progress(self) -> bool:
+        """faster-whisper relies on the caller to render progress."""
+        return False
+
     def prepare_model(self) -> None:
         """No-op because the model is prepared during construction."""
 
@@ -119,6 +128,7 @@ class MlxWhisperTranscriber:
         result = mlx_whisper.transcribe(
             str(audio_path),
             path_or_hf_repo=self._model_name,
+            verbose=False,
             word_timestamps=True,
         )
         normalized_segments: list[TranscriptSegment] = []
@@ -144,6 +154,11 @@ class MlxWhisperTranscriber:
     def supports_live_progress(self) -> bool:
         """MLX returns the full transcription result at the end."""
         return False
+
+    @property
+    def uses_native_progress(self) -> bool:
+        """mlx-whisper renders its own tqdm progress bar when verbose is False."""
+        return True
 
     def prepare_model(self) -> None:
         """Preload model weights so downloads happen outside the transcript stage."""
@@ -185,6 +200,11 @@ class WhisperTranscriber:
     def supports_live_progress(self) -> bool:
         """Expose whether the selected backend can stream inference progress."""
         return self._delegate.supports_live_progress
+
+    @property
+    def uses_native_progress(self) -> bool:
+        """Expose whether the selected backend renders its own progress output."""
+        return self._delegate.uses_native_progress
 
     def prepare_model(self) -> None:
         """Prepare the selected backend before transcription starts."""

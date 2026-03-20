@@ -68,6 +68,7 @@ def test_faster_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_pat
     assert [word.text for word in result.segments[0].words] == ["agenda", "review"]
     assert progress_updates == [1.5]
     assert transcriber.supports_live_progress is True
+    assert transcriber.uses_native_progress is False
 
 
 def test_default_model_and_compute_type_use_quality_focused_defaults(monkeypatch) -> None:
@@ -92,10 +93,12 @@ def test_mlx_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_path) 
         audio_path: str,
         *,
         path_or_hf_repo: str,
+        verbose: bool,
         word_timestamps: bool,
     ) -> dict[str, object]:
         assert audio_path.endswith(".wav")
         assert path_or_hf_repo == DEFAULT_MLX_WHISPER_MODEL
+        assert verbose is False
         assert word_timestamps is True
         return {
             "language": "en",
@@ -139,6 +142,7 @@ def test_mlx_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_path) 
     assert [word.text for word in result.segments[0].words] == ["agenda", "review"]
     assert progress_updates == []
     assert transcriber.supports_live_progress is False
+    assert transcriber.uses_native_progress is True
 
 
 def test_mlx_whisper_transcriber_preloads_model(monkeypatch) -> None:
@@ -167,6 +171,10 @@ def test_whisper_transcriber_prefers_mlx_when_available(monkeypatch, tmp_path) -
         def supports_live_progress(self) -> bool:
             return False
 
+        @property
+        def uses_native_progress(self) -> bool:
+            return True
+
         def prepare_model(self) -> None:
             captured["prepared"] = True
 
@@ -183,6 +191,7 @@ def test_whisper_transcriber_prefers_mlx_when_available(monkeypatch, tmp_path) -
 
     assert transcriber.backend == "mlx"
     assert transcriber.supports_live_progress is False
+    assert transcriber.uses_native_progress is True
     assert captured["prepared"] is True
     assert str(captured["audio_path"]).endswith("audio.wav")
 
@@ -201,6 +210,10 @@ def test_whisper_transcriber_falls_back_to_faster_whisper(monkeypatch, tmp_path)
         def supports_live_progress(self) -> bool:
             return True
 
+        @property
+        def uses_native_progress(self) -> bool:
+            return False
+
         def prepare_model(self) -> None:
             captured["prepared"] = True
 
@@ -217,6 +230,7 @@ def test_whisper_transcriber_falls_back_to_faster_whisper(monkeypatch, tmp_path)
 
     assert transcriber.backend == "faster-whisper"
     assert transcriber.supports_live_progress is True
+    assert transcriber.uses_native_progress is False
     assert captured["prepared"] is True
     assert str(captured["audio_path"]).endswith("audio.wav")
 

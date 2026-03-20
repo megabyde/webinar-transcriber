@@ -310,5 +310,9 @@ def _run_transcription_stage(
             reporter=reporter,
         )
 
+    if transcriber.uses_native_progress:
+        reporter.stage_timing_started("transcribe", "Transcribing audio")
+        return transcriber.transcribe(audio_path)
+
     reporter.stage_started("transcribe", "Transcribing audio")
     return transcriber.transcribe(audio_path)
