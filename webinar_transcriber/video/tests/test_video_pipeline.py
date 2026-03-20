@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image
 
 from webinar_transcriber.video import detect_scenes, extract_representative_frames
-from webinar_transcriber.video.frames import _normalize_extracted_frame
+from webinar_transcriber.video.frames import _frame_extract_command, _normalize_extracted_frame
 from webinar_transcriber.video.scenes import _detect_scene_start_times
 
 FIXTURE_DIR = Path(__file__).parents[2] / "tests" / "fixtures"
@@ -87,3 +87,14 @@ def test_normalize_extracted_frame_applies_exif_orientation(tmp_path) -> None:
     with Image.open(image_path) as normalized_image:
         assert normalized_image.size == (2, 4)
         assert normalized_image.getexif().get(274) is None
+
+
+def test_frame_extract_command_disables_ffmpeg_autorotate(tmp_path) -> None:
+    command = _frame_extract_command(
+        FIXTURE_DIR / "sample-video.mp4",
+        12.345,
+        tmp_path / "scene-1.png",
+    )
+
+    assert command[:3] == ["ffmpeg", "-y", "-noautorotate"]
+    assert "-i" in command

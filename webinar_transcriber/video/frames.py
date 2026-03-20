@@ -54,22 +54,27 @@ def extract_representative_frames(
 
 def _extract_frame(video_path: Path, timestamp_sec: float, output_path: Path) -> bool:
     result = subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-ss",
-            f"{timestamp_sec:.3f}",
-            "-i",
-            str(video_path),
-            "-frames:v",
-            "1",
-            str(output_path),
-        ],
+        _frame_extract_command(video_path, timestamp_sec, output_path),
         capture_output=True,
         check=False,
         text=True,
     )
     return result.returncode == 0 and output_path.exists()
+
+
+def _frame_extract_command(video_path: Path, timestamp_sec: float, output_path: Path) -> list[str]:
+    return [
+        "ffmpeg",
+        "-y",
+        "-noautorotate",
+        "-ss",
+        f"{timestamp_sec:.3f}",
+        "-i",
+        str(video_path),
+        "-frames:v",
+        "1",
+        str(output_path),
+    ]
 
 
 def _normalize_extracted_frame(output_path: Path) -> None:
