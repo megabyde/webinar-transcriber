@@ -94,14 +94,15 @@ def process_input(
     stage_timings["extract_audio"] = perf_counter() - start
     active_reporter.stage_finished("extract_audio", "Extracting audio", detail=str(audio_path.name))
 
-    active_reporter.progress_started(
-        "transcribe",
-        "Transcribing audio",
-        total=media_asset.duration_sec,
-    )
-    start = perf_counter()
     active_transcriber = transcriber or WhisperTranscriber()
-    transcription = _transcribe_with_progress(
+    active_reporter.stage_started("prepare_asr", "Preparing ASR model")
+    start = perf_counter()
+    active_transcriber.prepare_model()
+    stage_timings["prepare_asr"] = perf_counter() - start
+    active_reporter.stage_finished("prepare_asr", "Preparing ASR model")
+
+    start = perf_counter()
+    transcription = _run_transcription_stage(
         active_transcriber,
         audio_path,
         total_duration_sec=media_asset.duration_sec,
@@ -287,3 +288,27 @@ def _transcribe_with_progress(
     if remaining_progress > 0:
         reporter.progress_advanced("transcribe", advance=remaining_progress)
     return transcription
+
+
+def _run_transcription_stage(
+    transcriber: Transcriber,
+    audio_path: Path,
+    *,
+    total_duration_sec: float,
+    reporter: NullStageReporter,
+) -> TranscriptionResult:
+    if transcriber.supports_live_progress:
+        reporter.progress_started(
+            "transcribe",
+            "Transcribing audio",
+            total=total_duration_sec,
+        )
+        return _transcribe_with_progress(
+            transcriber,
+            audio_path,
+            total_duration_sec=total_duration_sec,
+            reporter=reporter,
+        )
+
+    reporter.stage_started("transcribe", "Transcribing audio")
+    return transcriber.transcribe(audio_path)

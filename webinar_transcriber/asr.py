@@ -22,6 +22,13 @@ DEFAULT_MLX_WHISPER_MODEL = "mlx-community/whisper-large-v3-turbo"
 class Transcriber(Protocol):
     """Protocol for components that convert audio to transcript text."""
 
+    @property
+    def supports_live_progress(self) -> bool:
+        """Whether transcription emits incremental progress during inference."""
+
+    def prepare_model(self) -> None:
+        """Warm or download model assets before transcription starts."""
+
     def transcribe(
         self,
         audio_path: Path,
@@ -87,6 +94,14 @@ class FasterWhisperTranscriber:
             segments=normalized_segments,
         )
 
+    @property
+    def supports_live_progress(self) -> bool:
+        """faster-whisper yields segments incrementally during inference."""
+        return True
+
+    def prepare_model(self) -> None:
+        """No-op because the model is prepared during construction."""
+
 
 class MlxWhisperTranscriber:
     """ASR implementation using MLX Whisper on Apple Silicon."""
@@ -119,13 +134,20 @@ class MlxWhisperTranscriber:
                     words=_normalize_mlx_words(segment.get("words", [])),
                 )
             )
-            if progress_callback is not None:
-                progress_callback(end_sec)
 
         return TranscriptionResult(
             detected_language=_mlx_detected_language(result),
             segments=normalized_segments,
         )
+
+    @property
+    def supports_live_progress(self) -> bool:
+        """MLX returns the full transcription result at the end."""
+        return False
+
+    def prepare_model(self) -> None:
+        """Preload model weights so downloads happen outside the transcript stage."""
+        _preload_mlx_model(self._model_name)
 
 
 class WhisperTranscriber:
@@ -159,6 +181,15 @@ class WhisperTranscriber:
     ) -> TranscriptionResult:
         return self._delegate.transcribe(audio_path, progress_callback=progress_callback)
 
+    @property
+    def supports_live_progress(self) -> bool:
+        """Expose whether the selected backend can stream inference progress."""
+        return self._delegate.supports_live_progress
+
+    def prepare_model(self) -> None:
+        """Prepare the selected backend before transcription starts."""
+        self._delegate.prepare_model()
+
 
 def _default_compute_type(device: str) -> str:
     """Choose a less noisy default compute type for the current device."""
@@ -186,6 +217,12 @@ def _is_apple_silicon_mac() -> bool:
 
 def _import_mlx_whisper() -> Any:
     return importlib.import_module("mlx_whisper")
+
+
+def _preload_mlx_model(model_name: str) -> None:
+    transcribe_module = importlib.import_module("mlx_whisper.transcribe")
+    mlx_core = importlib.import_module("mlx.core")
+    transcribe_module.ModelHolder.get_model(model_name, mlx_core.float16)
 
 
 def _mlx_detected_language(result: dict[str, Any]) -> str | None:

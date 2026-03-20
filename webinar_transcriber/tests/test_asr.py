@@ -67,6 +67,7 @@ def test_faster_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_pat
     assert result.segments[0].text == "agenda review"
     assert [word.text for word in result.segments[0].words] == ["agenda", "review"]
     assert progress_updates == [1.5]
+    assert transcriber.supports_live_progress is True
 
 
 def test_default_model_and_compute_type_use_quality_focused_defaults(monkeypatch) -> None:
@@ -136,7 +137,22 @@ def test_mlx_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_path) 
     assert result.detected_language == "en"
     assert result.segments[0].text == "agenda review"
     assert [word.text for word in result.segments[0].words] == ["agenda", "review"]
-    assert progress_updates == [1.5]
+    assert progress_updates == []
+    assert transcriber.supports_live_progress is False
+
+
+def test_mlx_whisper_transcriber_preloads_model(monkeypatch) -> None:
+    captured: dict[str, str] = {}
+
+    def fake_preload(model_name: str) -> None:
+        captured["model_name"] = model_name
+
+    monkeypatch.setattr("webinar_transcriber.asr._preload_mlx_model", fake_preload)
+
+    transcriber = MlxWhisperTranscriber(model_name=DEFAULT_MLX_WHISPER_MODEL)
+    transcriber.prepare_model()
+
+    assert captured["model_name"] == DEFAULT_MLX_WHISPER_MODEL
 
 
 def test_whisper_transcriber_prefers_mlx_when_available(monkeypatch, tmp_path) -> None:
@@ -147,6 +163,13 @@ def test_whisper_transcriber_prefers_mlx_when_available(monkeypatch, tmp_path) -
         def __init__(self, model_name: str) -> None:
             assert model_name == DEFAULT_MLX_WHISPER_MODEL
 
+        @property
+        def supports_live_progress(self) -> bool:
+            return False
+
+        def prepare_model(self) -> None:
+            captured["prepared"] = True
+
         def transcribe(self, audio_path, *, progress_callback=None):
             captured["audio_path"] = audio_path
             captured["callback"] = progress_callback
@@ -155,9 +178,12 @@ def test_whisper_transcriber_prefers_mlx_when_available(monkeypatch, tmp_path) -
     monkeypatch.setattr("webinar_transcriber.asr.MlxWhisperTranscriber", FakeMlxDelegate)
 
     transcriber = WhisperTranscriber()
+    transcriber.prepare_model()
     transcriber.transcribe(tmp_path / "audio.wav")
 
     assert transcriber.backend == "mlx"
+    assert transcriber.supports_live_progress is False
+    assert captured["prepared"] is True
     assert str(captured["audio_path"]).endswith("audio.wav")
 
 
@@ -171,6 +197,13 @@ def test_whisper_transcriber_falls_back_to_faster_whisper(monkeypatch, tmp_path)
             assert device == "auto"
             assert compute_type is None
 
+        @property
+        def supports_live_progress(self) -> bool:
+            return True
+
+        def prepare_model(self) -> None:
+            captured["prepared"] = True
+
         def transcribe(self, audio_path, *, progress_callback=None):
             captured["audio_path"] = audio_path
             captured["callback"] = progress_callback
@@ -179,9 +212,12 @@ def test_whisper_transcriber_falls_back_to_faster_whisper(monkeypatch, tmp_path)
     monkeypatch.setattr("webinar_transcriber.asr.FasterWhisperTranscriber", FakeFasterDelegate)
 
     transcriber = WhisperTranscriber()
+    transcriber.prepare_model()
     transcriber.transcribe(tmp_path / "audio.wav")
 
     assert transcriber.backend == "faster-whisper"
+    assert transcriber.supports_live_progress is True
+    assert captured["prepared"] is True
     assert str(captured["audio_path"]).endswith("audio.wav")
 
 
