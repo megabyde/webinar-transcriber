@@ -26,7 +26,11 @@ from webinar_transcriber.ocr import extract_ocr_results
 from webinar_transcriber.paths import RunLayout, create_run_layout
 from webinar_transcriber.structure import build_report
 from webinar_transcriber.ui import NullStageReporter
-from webinar_transcriber.video import detect_scenes, extract_representative_frames
+from webinar_transcriber.video import (
+    detect_scenes,
+    estimate_sample_count,
+    extract_representative_frames,
+)
 
 
 @dataclass(frozen=True)
@@ -102,9 +106,17 @@ def process_input(
     )
 
     if media_asset.media_type.value == "video":
-        active_reporter.stage_started("detect_scenes", "Detecting scenes")
+        active_reporter.progress_started(
+            "detect_scenes",
+            "Detecting scenes",
+            total=estimate_sample_count(media_asset.duration_sec),
+        )
         start = perf_counter()
-        scenes = detect_scenes(input_path)
+        scenes = detect_scenes(
+            input_path,
+            duration_sec=media_asset.duration_sec,
+            progress_callback=lambda: active_reporter.progress_advanced("detect_scenes"),
+        )
         stage_timings["detect_scenes"] = perf_counter() - start
         _write_json(
             layout.scenes_path, {"scenes": [scene.model_dump(mode="json") for scene in scenes]}
@@ -115,9 +127,18 @@ def process_input(
             detail=f"{len(scenes)} scenes",
         )
 
-        active_reporter.stage_started("extract_frames", "Extracting slide frames")
+        active_reporter.progress_started(
+            "extract_frames",
+            "Extracting slide frames",
+            total=len(scenes),
+        )
         start = perf_counter()
-        slide_frames = extract_representative_frames(input_path, scenes, layout.frames_dir)
+        slide_frames = extract_representative_frames(
+            input_path,
+            scenes,
+            layout.frames_dir,
+            progress_callback=lambda: active_reporter.progress_advanced("extract_frames"),
+        )
         stage_timings["extract_frames"] = perf_counter() - start
         active_reporter.stage_finished(
             "extract_frames",
@@ -125,11 +146,16 @@ def process_input(
             detail=f"{len(slide_frames)} frames",
         )
         if ocr_enabled:
-            active_reporter.stage_started("ocr", "Running OCR")
+            active_reporter.progress_started(
+                "ocr",
+                "Running OCR",
+                total=len(slide_frames),
+            )
             start = perf_counter()
             ocr_results = extract_ocr_results(
                 slide_frames,
                 detected_language=transcription.detected_language,
+                progress_callback=lambda: active_reporter.progress_advanced("ocr"),
             )
             stage_timings["ocr"] = perf_counter() - start
             _write_json(

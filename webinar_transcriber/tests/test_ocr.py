@@ -15,6 +15,7 @@ def test_resolve_tesseract_languages_defaults_to_english_and_russian() -> None:
 
 
 def test_extract_ocr_results_reads_fixture_text() -> None:
+    progress_ticks: list[int] = []
     results = extract_ocr_results(
         [
             SlideFrame(
@@ -25,7 +26,9 @@ def test_extract_ocr_results_reads_fixture_text() -> None:
             )
         ],
         detected_language="en",
+        progress_callback=lambda: progress_ticks.append(1),
     )
 
     assert results[0].text
     assert "Agenda" in results[0].text or "AGENDA" in results[0].text
+    assert len(progress_ticks) == 1

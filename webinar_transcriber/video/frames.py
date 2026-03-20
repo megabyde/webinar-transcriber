@@ -1,6 +1,7 @@
 """Representative frame extraction for detected scenes."""
 
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 import imagehash
@@ -11,7 +12,11 @@ from webinar_transcriber.models import Scene, SlideFrame
 
 
 def extract_representative_frames(
-    video_path: Path, scenes: list[Scene], frames_dir: Path
+    video_path: Path,
+    scenes: list[Scene],
+    frames_dir: Path,
+    *,
+    progress_callback: Callable[[], None] | None = None,
 ) -> list[SlideFrame]:
     """Extract one representative frame near the midpoint of each scene."""
     frames_dir.mkdir(parents=True, exist_ok=True)
@@ -21,6 +26,8 @@ def extract_representative_frames(
         midpoint_sec = (scene.start_sec + scene.end_sec) / 2
         output_path = frames_dir / f"{scene.id}.png"
         if not _extract_frame(video_path, midpoint_sec, output_path):
+            if progress_callback is not None:
+                progress_callback()
             continue
 
         image = Image.open(output_path).convert("RGB")
@@ -38,6 +45,8 @@ def extract_representative_frames(
                 dedupe_hash=dedupe_hash,
             )
         )
+        if progress_callback is not None:
+            progress_callback()
 
     return frames
 

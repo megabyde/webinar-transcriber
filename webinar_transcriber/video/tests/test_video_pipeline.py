@@ -11,20 +11,33 @@ FIXTURE_DIR = Path(__file__).parents[2] / "tests" / "fixtures"
 
 
 def test_detect_scenes_finds_multiple_segments() -> None:
-    scenes = detect_scenes(FIXTURE_DIR / "sample-video.mp4", min_scene_length_sec=1.0)
+    progress_ticks: list[int] = []
+    scenes = detect_scenes(
+        FIXTURE_DIR / "sample-video.mp4",
+        min_scene_length_sec=1.0,
+        progress_callback=lambda: progress_ticks.append(1),
+    )
 
     assert len(scenes) >= 2
     assert scenes[0].start_sec == 0.0
+    assert len(progress_ticks) == 2
 
 
 def test_extract_representative_frames_creates_images(tmp_path) -> None:
     video_path = FIXTURE_DIR / "sample-video.mp4"
     scenes = detect_scenes(video_path, min_scene_length_sec=1.0)
+    progress_ticks: list[int] = []
 
-    frames = extract_representative_frames(video_path, scenes, tmp_path / "frames")
+    frames = extract_representative_frames(
+        video_path,
+        scenes,
+        tmp_path / "frames",
+        progress_callback=lambda: progress_ticks.append(1),
+    )
 
     assert len(frames) >= 2
     assert all(Path(frame.image_path).exists() for frame in frames)
+    assert len(progress_ticks) == len(scenes)
 
 
 def test_detect_scene_start_times_uses_last_accepted_frame() -> None:

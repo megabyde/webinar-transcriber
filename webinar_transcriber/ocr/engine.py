@@ -1,5 +1,6 @@
 """Tesseract OCR helpers."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytesseract
@@ -25,6 +26,7 @@ def extract_ocr_results(
     slide_frames: list[SlideFrame],
     *,
     detected_language: str | None,
+    progress_callback: Callable[[], None] | None = None,
 ) -> list[OcrResult]:
     """Run OCR on the provided slide frame images."""
     language = resolve_tesseract_languages(detected_language)
@@ -48,5 +50,7 @@ def extract_ocr_results(
                 language=language,
             )
         )
+        if progress_callback is not None:
+            progress_callback()
 
     return results

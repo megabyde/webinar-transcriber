@@ -41,12 +41,19 @@ class RecordingReporter(NullStageReporter):
     def __init__(self) -> None:
         self.events: list[tuple[str, str, str]] = []
         self.warnings: list[str] = []
+        self.progress_events: list[tuple[str, str, int]] = []
 
     def begin_run(self, input_path: Path, *, ocr_enabled: bool, output_format: str) -> None:
         self.events.append(("begin", input_path.name, output_format))
 
     def stage_started(self, stage_key: str, label: str) -> None:
         self.events.append(("start", stage_key, label))
+
+    def progress_started(self, stage_key: str, label: str, *, total: int) -> None:
+        self.progress_events.append(("start", stage_key, total))
+
+    def progress_advanced(self, stage_key: str, *, advance: int = 1) -> None:
+        self.progress_events.append(("advance", stage_key, advance))
 
     def stage_finished(self, stage_key: str, label: str, *, detail: str | None = None) -> None:
         self.events.append(("finish", stage_key, detail or ""))
@@ -88,6 +95,8 @@ def test_process_input_writes_reports_and_metadata(tmp_path) -> None:
 
 
 def test_process_input_writes_video_scene_artifacts(tmp_path) -> None:
+    reporter = RecordingReporter()
+
     class VideoTranscriber(FakeTranscriber):
         def transcribe(self, audio_path: Path) -> TranscriptionResult:
             assert audio_path.exists()
@@ -113,6 +122,7 @@ def test_process_input_writes_video_scene_artifacts(tmp_path) -> None:
         FIXTURE_DIR / "sample-video.mp4",
         output_dir=tmp_path / "video-run",
         transcriber=VideoTranscriber(),
+        reporter=reporter,
     )
 
     assert artifacts.media_asset.media_type.value == "video"
@@ -121,9 +131,19 @@ def test_process_input_writes_video_scene_artifacts(tmp_path) -> None:
     assert any(artifacts.layout.frames_dir.iterdir())
     assert artifacts.report.sections
     assert artifacts.report.sections[0].image_path
+    assert any(event == ("start", "detect_scenes", 2) for event in reporter.progress_events)
+    assert any(
+        event[0] == "advance" and event[1] == "detect_scenes" for event in reporter.progress_events
+    )
+    assert any(
+        event == ("start", "extract_frames", artifacts.diagnostics.item_counts["scenes"])
+        for event in reporter.progress_events
+    )
 
 
 def test_process_input_writes_ocr_results_for_video(tmp_path) -> None:
+    reporter = RecordingReporter()
+
     class VideoTranscriber(FakeTranscriber):
         def transcribe(self, audio_path: Path) -> TranscriptionResult:
             assert audio_path.exists()
@@ -150,11 +170,14 @@ def test_process_input_writes_ocr_results_for_video(tmp_path) -> None:
         output_dir=tmp_path / "video-ocr-run",
         ocr_enabled=True,
         transcriber=VideoTranscriber(),
+        reporter=reporter,
     )
 
     assert artifacts.layout.ocr_path.exists()
     assert artifacts.report.ocr_enabled is True
     assert any(section.title for section in artifacts.report.sections)
+    assert any(event[0] == "start" and event[1] == "ocr" for event in reporter.progress_events)
+    assert any(event[0] == "advance" and event[1] == "ocr" for event in reporter.progress_events)
 
 
 def test_process_input_reports_audio_ocr_warning(tmp_path) -> None:
