@@ -6,6 +6,7 @@ import pytest
 
 from webinar_transcriber.asr import (
     DEFAULT_FASTER_WHISPER_MODEL,
+    DEFAULT_INITIAL_PROMPT,
     DEFAULT_MLX_WHISPER_MODEL,
     FasterWhisperTranscriber,
     MlxWhisperTranscriber,
@@ -46,10 +47,18 @@ class FakeInfo:
 class FakeModel:
     """Simple stand-in for a WhisperModel instance."""
 
-    def transcribe(self, audio_path: str, *, beam_size: int, vad_filter: bool):
+    def transcribe(
+        self,
+        audio_path: str,
+        *,
+        beam_size: int,
+        vad_filter: bool,
+        initial_prompt: str,
+    ):
         assert audio_path.endswith(".wav")
         assert beam_size == 5
         assert vad_filter is True
+        assert initial_prompt == DEFAULT_INITIAL_PROMPT
         return [FakeSegment()], FakeInfo()
 
 
@@ -95,11 +104,13 @@ def test_mlx_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_path) 
         path_or_hf_repo: str,
         verbose: bool,
         word_timestamps: bool,
+        initial_prompt: str,
     ) -> dict[str, object]:
         assert audio_path.endswith(".wav")
         assert path_or_hf_repo == DEFAULT_MLX_WHISPER_MODEL
         assert verbose is False
         assert word_timestamps is False
+        assert initial_prompt == DEFAULT_INITIAL_PROMPT
         return {
             "language": "en",
             "segments": [
@@ -150,8 +161,9 @@ def test_whisper_transcriber_prefers_mlx_when_available(monkeypatch, tmp_path) -
     captured: dict[str, object] = {}
 
     class FakeMlxDelegate:
-        def __init__(self, model_name: str) -> None:
+        def __init__(self, model_name: str, *, initial_prompt: str) -> None:
             assert model_name == DEFAULT_MLX_WHISPER_MODEL
+            assert initial_prompt == DEFAULT_INITIAL_PROMPT
 
         @property
         def supports_live_progress(self) -> bool:
@@ -187,10 +199,18 @@ def test_whisper_transcriber_falls_back_to_faster_whisper(monkeypatch, tmp_path)
     captured: dict[str, object] = {}
 
     class FakeFasterDelegate:
-        def __init__(self, model_name: str, *, device: str, compute_type: str | None) -> None:
+        def __init__(
+            self,
+            model_name: str,
+            *,
+            device: str,
+            compute_type: str | None,
+            initial_prompt: str,
+        ) -> None:
             assert model_name == DEFAULT_FASTER_WHISPER_MODEL
             assert device == "auto"
             assert compute_type is None
+            assert initial_prompt == DEFAULT_INITIAL_PROMPT
 
         @property
         def supports_live_progress(self) -> bool:

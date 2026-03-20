@@ -17,6 +17,11 @@ if TYPE_CHECKING:
 
 DEFAULT_FASTER_WHISPER_MODEL = "small"
 DEFAULT_MLX_WHISPER_MODEL = "mlx-community/whisper-large-v3-turbo"
+DEFAULT_INITIAL_PROMPT = (
+    "This is a webinar or slideshow presentation with one or more speakers. "
+    "Use normal punctuation and capitalization. "
+    "Preserve terminology, names, and technical terms as spoken."
+)
 
 
 class Transcriber(Protocol):
@@ -51,7 +56,9 @@ class FasterWhisperTranscriber:
         *,
         device: str = "auto",
         compute_type: str | None = None,
+        initial_prompt: str = DEFAULT_INITIAL_PROMPT,
     ) -> None:
+        self._initial_prompt = initial_prompt
         resolved_compute_type = compute_type or _default_compute_type(device)
         self._model = WhisperModel(
             model_name,
@@ -69,6 +76,7 @@ class FasterWhisperTranscriber:
             str(audio_path),
             beam_size=5,
             vad_filter=True,
+            initial_prompt=self._initial_prompt,
         )
         normalized_segments: list[TranscriptSegment] = []
 
@@ -115,8 +123,14 @@ class FasterWhisperTranscriber:
 class MlxWhisperTranscriber:
     """ASR implementation using MLX Whisper on Apple Silicon."""
 
-    def __init__(self, model_name: str = DEFAULT_MLX_WHISPER_MODEL) -> None:
+    def __init__(
+        self,
+        model_name: str = DEFAULT_MLX_WHISPER_MODEL,
+        *,
+        initial_prompt: str = DEFAULT_INITIAL_PROMPT,
+    ) -> None:
         self._model_name = model_name
+        self._initial_prompt = initial_prompt
 
     def transcribe(
         self,
@@ -130,6 +144,7 @@ class MlxWhisperTranscriber:
             path_or_hf_repo=self._model_name,
             verbose=False,
             word_timestamps=False,
+            initial_prompt=self._initial_prompt,
         )
         normalized_segments: list[TranscriptSegment] = []
 
@@ -175,17 +190,20 @@ class WhisperTranscriber:
         backend: str = "auto",
         device: str = "auto",
         compute_type: str | None = None,
+        initial_prompt: str = DEFAULT_INITIAL_PROMPT,
     ) -> None:
         self.backend = _resolve_backend_name(backend)
         if self.backend == "mlx":
             self._delegate: Transcriber = MlxWhisperTranscriber(
-                model_name=model_name or DEFAULT_MLX_WHISPER_MODEL
+                model_name=model_name or DEFAULT_MLX_WHISPER_MODEL,
+                initial_prompt=initial_prompt,
             )
         else:
             self._delegate = FasterWhisperTranscriber(
                 model_name=model_name or DEFAULT_FASTER_WHISPER_MODEL,
                 device=device,
                 compute_type=compute_type,
+                initial_prompt=initial_prompt,
             )
 
     def transcribe(
