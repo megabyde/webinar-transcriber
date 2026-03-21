@@ -73,6 +73,9 @@ class NullStageReporter:
     def warn(self, message: str) -> None:
         """Record a warning."""
 
+    def interrupted(self) -> None:
+        """Record an interrupted run."""
+
     def complete_run(self, artifacts: ProcessArtifacts) -> None:
         """Record run completion."""
 
@@ -179,6 +182,14 @@ class RichStageReporter(NullStageReporter):
         self._stop_active_display()
         self._warnings.append(message)
         self._console.print(f"[yellow]![/] {message}")
+
+    def interrupted(self) -> None:
+        self._stop_active_display()
+        stage_suffix = ""
+        if self._active_event is not None:
+            stage_suffix = f" during {self._active_event.label.lower()}"
+        self._console.print(f"[red]\u2717[/] Interrupted{stage_suffix}.")
+        self._active_event = None
 
     def complete_run(self, artifacts: ProcessArtifacts) -> None:
         table = Table(show_header=False, box=None, padding=(0, 1))

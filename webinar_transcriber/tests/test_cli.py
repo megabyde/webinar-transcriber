@@ -160,6 +160,22 @@ def test_process_command_rejects_existing_output_directory(tmp_path, monkeypatch
     assert "Output directory already exists" in result.output
 
 
+def test_process_command_handles_ctrl_c(tmp_path, monkeypatch) -> None:
+    runner = CliRunner()
+    input_path = tmp_path / "demo.wav"
+    input_path.write_text("stub", encoding="utf-8")
+
+    def interrupted_process_input(**_: object) -> ProcessArtifacts:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("webinar_transcriber.cli.process_input", interrupted_process_input)
+
+    result = runner.invoke(main, ["process", str(input_path)])
+
+    assert result.exit_code == 130
+    assert "Interrupted" in result.output
+
+
 def test_extract_frames_command_writes_scene_artifacts(tmp_path, monkeypatch) -> None:
     runner = CliRunner()
     input_path = tmp_path / "demo.mp4"
@@ -233,6 +249,38 @@ def test_extract_frames_command_rejects_audio_input(tmp_path, monkeypatch) -> No
 
     assert result.exit_code != 0
     assert "only supported for video input" in result.output
+
+
+def test_extract_frames_command_handles_ctrl_c(tmp_path, monkeypatch) -> None:
+    runner = CliRunner()
+    input_path = tmp_path / "demo.mp4"
+    input_path.write_text("stub", encoding="utf-8")
+    run_dir = tmp_path / "frames-run"
+    run_dir.mkdir()
+
+    monkeypatch.setattr(
+        "webinar_transcriber.cli.create_run_layout",
+        lambda **kwargs: RunLayout(run_dir=run_dir),
+    )
+    monkeypatch.setattr(
+        "webinar_transcriber.cli.probe_media",
+        lambda _path: MediaAsset(
+            path=str(input_path),
+            media_type=MediaType.VIDEO,
+            duration_sec=2.0,
+        ),
+    )
+    monkeypatch.setattr("webinar_transcriber.cli.estimate_sample_count", lambda _duration: 2)
+
+    def interrupted_detect_scenes(*_args, **_kwargs) -> list[Scene]:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("webinar_transcriber.cli.detect_scenes", interrupted_detect_scenes)
+
+    result = runner.invoke(main, ["extract-frames", str(input_path)])
+
+    assert result.exit_code == 130
+    assert "Interrupted" in result.output
 
 
 def test_module_entrypoint_reports_version() -> None:

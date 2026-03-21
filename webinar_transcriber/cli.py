@@ -66,6 +66,8 @@ def process(
     if not input_path.is_file():
         raise click.ClickException(f"Input path is not a file: {input_path}")
 
+    reporter = RichStageReporter()
+
     try:
         artifacts = process_input(
             input_path=input_path,
@@ -73,8 +75,11 @@ def process(
             output_format=output_format,
             asr_backend=asr_backend,
             asr_model=asr_model,
-            reporter=RichStageReporter(),
+            reporter=reporter,
         )
+    except KeyboardInterrupt:
+        reporter.interrupted()
+        raise click.exceptions.Exit(130) from None
     except (MediaProcessingError, OutputDirectoryExistsError) as error:
         raise click.ClickException(str(error)) from error
 
@@ -150,6 +155,9 @@ def extract_frames(input_path: Path, output_dir: Path | None) -> None:
             json.dumps({"scenes": [scene.model_dump(mode="json") for scene in scenes]}, indent=2),
             encoding="utf-8",
         )
+    except KeyboardInterrupt:
+        reporter.interrupted()
+        raise click.exceptions.Exit(130) from None
     except (MediaProcessingError, OutputDirectoryExistsError) as error:
         raise click.ClickException(str(error)) from error
 
