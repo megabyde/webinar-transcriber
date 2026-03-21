@@ -12,7 +12,7 @@ from webinar_transcriber.export import (
     write_json_report,
     write_markdown_report,
 )
-from webinar_transcriber.media import extract_audio, probe_media
+from webinar_transcriber.media import prepared_transcription_audio, probe_media
 from webinar_transcriber.models import (
     AlignmentBlock,
     Diagnostics,
@@ -84,36 +84,39 @@ def process_input(
         detail=f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s",
     )
 
-    audio_path = layout.run_dir / "audio.wav"
-    active_reporter.stage_started("extract_audio", "Extracting audio")
+    active_reporter.stage_started("extract_audio", "Preparing audio")
     start = perf_counter()
-    extract_audio(input_path, audio_path)
-    stage_timings["extract_audio"] = perf_counter() - start
-    active_reporter.stage_finished("extract_audio", "Extracting audio", detail=str(audio_path.name))
+    with prepared_transcription_audio(input_path, media_asset) as audio_path:
+        stage_timings["extract_audio"] = perf_counter() - start
+        active_reporter.stage_finished(
+            "extract_audio",
+            "Preparing audio",
+            detail=str(audio_path.name),
+        )
 
-    active_reporter.stage_started("prepare_asr", "Preparing ASR model")
-    start = perf_counter()
-    active_transcriber.prepare_model()
-    stage_timings["prepare_asr"] = perf_counter() - start
-    active_reporter.stage_finished(
-        "prepare_asr",
-        "Preparing ASR model",
-        detail=_asr_runtime_detail(active_transcriber),
-    )
+        active_reporter.stage_started("prepare_asr", "Preparing ASR model")
+        start = perf_counter()
+        active_transcriber.prepare_model()
+        stage_timings["prepare_asr"] = perf_counter() - start
+        active_reporter.stage_finished(
+            "prepare_asr",
+            "Preparing ASR model",
+            detail=_asr_runtime_detail(active_transcriber),
+        )
 
-    start = perf_counter()
-    transcription = _run_transcription_stage(
-        active_transcriber,
-        audio_path,
-        total_duration_sec=media_asset.duration_sec,
-        reporter=active_reporter,
-    )
-    stage_timings["transcribe"] = perf_counter() - start
-    active_reporter.stage_finished(
-        "transcribe",
-        "Transcribing audio",
-        detail=f"{len(transcription.segments)} segments",
-    )
+        start = perf_counter()
+        transcription = _run_transcription_stage(
+            active_transcriber,
+            audio_path,
+            total_duration_sec=media_asset.duration_sec,
+            reporter=active_reporter,
+        )
+        stage_timings["transcribe"] = perf_counter() - start
+        active_reporter.stage_finished(
+            "transcribe",
+            "Transcribing audio",
+            detail=f"{len(transcription.segments)} segments",
+        )
 
     if media_asset.media_type.value == "video":
         active_reporter.progress_started(

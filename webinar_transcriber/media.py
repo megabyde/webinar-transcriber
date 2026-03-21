@@ -2,6 +2,9 @@
 
 import json
 import subprocess
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from fractions import Fraction
 from pathlib import Path
 
@@ -81,3 +84,16 @@ def extract_audio(input_path: Path, output_path: Path) -> Path:
         str(output_path),
     )
     return output_path
+
+
+@contextmanager
+def prepared_transcription_audio(input_path: Path, media_asset: MediaAsset) -> Iterator[Path]:
+    """Yield a transcription-ready audio path and clean up temp files when needed."""
+    if media_asset.media_type is MediaType.AUDIO:
+        yield input_path
+        return
+
+    with tempfile.TemporaryDirectory(prefix="webinar-transcriber-audio-") as temp_dir:
+        audio_path = Path(temp_dir) / f"{input_path.stem}.wav"
+        extract_audio(input_path, audio_path)
+        yield audio_path

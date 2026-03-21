@@ -3,7 +3,7 @@
 import subprocess
 from pathlib import Path
 
-from webinar_transcriber.media import extract_audio, probe_media
+from webinar_transcriber.media import extract_audio, prepared_transcription_audio, probe_media
 from webinar_transcriber.models import MediaType
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
@@ -40,3 +40,20 @@ def test_extract_audio_creates_wav(tmp_path) -> None:
 
     assert probe.returncode == 0
     assert "pcm_s16le" in probe.stdout
+
+
+def test_prepared_transcription_audio_reuses_audio_input() -> None:
+    asset = probe_media(FIXTURE_DIR / "sample-audio.mp3")
+
+    with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3", asset) as audio_path:
+        assert audio_path == FIXTURE_DIR / "sample-audio.mp3"
+
+
+def test_prepared_transcription_audio_cleans_up_temp_wav() -> None:
+    asset = probe_media(FIXTURE_DIR / "sample-video.mp4")
+
+    with prepared_transcription_audio(FIXTURE_DIR / "sample-video.mp4", asset) as audio_path:
+        assert audio_path.exists()
+        assert audio_path.suffix == ".wav"
+
+    assert not audio_path.exists()

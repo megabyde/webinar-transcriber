@@ -109,6 +109,7 @@ def test_process_input_writes_reports_and_metadata(tmp_path) -> None:
     assert artifacts.layout.markdown_report_path.exists()
     assert artifacts.layout.docx_report_path.exists()
     assert artifacts.layout.json_report_path.exists()
+    assert not (artifacts.layout.run_dir / "audio.wav").exists()
     assert artifacts.report.detected_language == "en"
     assert artifacts.report.action_items == ["Next step please send the draft by Friday."]
     assert artifacts.diagnostics.asr_backend == "test-backend"
@@ -118,6 +119,8 @@ def test_process_input_writes_reports_and_metadata(tmp_path) -> None:
     markdown = artifacts.layout.markdown_report_path.read_text(encoding="utf-8")
     assert "# Sample Audio" in markdown
     assert "Agenda review and project status update." in markdown
+    assert ("start", "extract_audio", "Preparing audio") in reporter.events
+    assert ("finish", "extract_audio", "sample-audio.mp3") in reporter.events
     assert ("start", "probe_media", "Probing media") in reporter.events
     assert ("start", "prepare_asr", "Preparing ASR model") in reporter.events
     assert (
@@ -139,6 +142,7 @@ def test_process_input_writes_reports_and_metadata(tmp_path) -> None:
 
 def test_process_input_writes_video_scene_artifacts(tmp_path) -> None:
     reporter = RecordingReporter()
+    transcription_audio_path: Path | None = None
 
     class VideoTranscriber(FakeTranscriber):
         def transcribe(
@@ -147,6 +151,8 @@ def test_process_input_writes_video_scene_artifacts(tmp_path) -> None:
             *,
             progress_callback: Callable[[float], None] | None = None,
         ) -> TranscriptionResult:
+            nonlocal transcription_audio_path
+            transcription_audio_path = audio_path
             assert audio_path.exists()
             if progress_callback is not None:
                 progress_callback(0.9)
@@ -177,6 +183,9 @@ def test_process_input_writes_video_scene_artifacts(tmp_path) -> None:
     )
 
     assert artifacts.media_asset.media_type.value == "video"
+    assert not (artifacts.layout.run_dir / "audio.wav").exists()
+    assert transcription_audio_path is not None
+    assert not transcription_audio_path.exists()
     assert artifacts.layout.scenes_path.exists()
     assert artifacts.layout.frames_dir.exists()
     assert any(artifacts.layout.frames_dir.iterdir())
