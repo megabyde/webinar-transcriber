@@ -23,7 +23,7 @@ def main() -> None:
     """Run the webinar-transcriber CLI."""
 
 
-@main.command()
+@main.command(short_help="Process an audio or video input.")
 @click.argument("input_path", type=click.Path(path_type=Path))
 @click.option(
     "--output-dir",
@@ -81,7 +81,7 @@ def process(
     click.echo(f"Processed {input_path} into {artifacts.layout.run_dir} (format={output_format}).")
 
 
-@main.command("extract-frames")
+@main.command("extract-frames", short_help="Extract representative frames from a video.")
 @click.argument("input_path", type=click.Path(path_type=Path))
 @click.option(
     "--output-dir",

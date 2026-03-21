@@ -28,6 +28,9 @@ def test_main_help_shows_process_command() -> None:
     assert result.exit_code == 0
     assert "process" in result.output
     assert "extract-frames" in result.output
+    assert "Process an audio or video input." in result.output
+    assert "Extract representative frames from a video." in result.output
+    assert "representative frames from a..." not in result.output
 
 
 def test_main_version_prints_package_version() -> None:
