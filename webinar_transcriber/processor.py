@@ -47,6 +47,8 @@ def process_input(
     *,
     output_dir: Path | None = None,
     output_format: str = "all",
+    asr_backend: str = "auto",
+    asr_model: str | None = None,
     transcriber: Transcriber | None = None,
     reporter: NullStageReporter | None = None,
 ) -> ProcessArtifacts:
@@ -56,6 +58,11 @@ def process_input(
     warnings: list[str] = []
     alignment_blocks: list[AlignmentBlock] | None = None
     slide_frames: list[SlideFrame] = []
+
+    active_transcriber = transcriber or WhisperTranscriber(
+        model_name=asr_model,
+        backend=asr_backend,
+    )
 
     active_reporter.begin_run(input_path, output_format=output_format)
 
@@ -84,12 +91,15 @@ def process_input(
     stage_timings["extract_audio"] = perf_counter() - start
     active_reporter.stage_finished("extract_audio", "Extracting audio", detail=str(audio_path.name))
 
-    active_transcriber = transcriber or WhisperTranscriber()
     active_reporter.stage_started("prepare_asr", "Preparing ASR model")
     start = perf_counter()
     active_transcriber.prepare_model()
     stage_timings["prepare_asr"] = perf_counter() - start
-    active_reporter.stage_finished("prepare_asr", "Preparing ASR model")
+    active_reporter.stage_finished(
+        "prepare_asr",
+        "Preparing ASR model",
+        detail=_asr_runtime_detail(active_transcriber),
+    )
 
     start = perf_counter()
     transcription = _run_transcription_stage(
@@ -185,6 +195,8 @@ def process_input(
     active_reporter.stage_finished("export", "Writing reports", detail=output_format)
 
     diagnostics = Diagnostics(
+        asr_backend=active_transcriber.backend_name,
+        asr_model=active_transcriber.model_name,
         stage_durations_sec={key: round(value, 6) for key, value in stage_timings.items()},
         item_counts={
             "transcript_segments": len(transcription.segments),
@@ -264,6 +276,10 @@ def _run_transcription_stage(
             "transcribe",
             "Transcribing audio",
             total=total_duration_sec,
+            count_label="frames",
+            count_multiplier=100.0,
+            rate_label="frames/s",
+            rate_multiplier=100.0,
         )
         return _transcribe_with_progress(
             transcriber,
@@ -278,3 +294,7 @@ def _run_transcription_stage(
 
     reporter.stage_started("transcribe", "Transcribing audio")
     return transcriber.transcribe(audio_path)
+
+
+def _asr_runtime_detail(transcriber: Transcriber) -> str:
+    return f"{transcriber.backend_name} | {transcriber.model_name}"

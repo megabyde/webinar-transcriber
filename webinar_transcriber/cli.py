@@ -39,7 +39,26 @@ def main() -> None:
     show_default=True,
     help="Select which report format to write.",
 )
-def process(input_path: Path, output_dir: Path | None, output_format: str) -> None:
+@click.option(
+    "--asr-backend",
+    type=click.Choice(["auto", "faster-whisper", "mlx"], case_sensitive=False),
+    default="auto",
+    show_default=True,
+    help="Select the ASR backend.",
+)
+@click.option(
+    "--asr-model",
+    type=str,
+    default=None,
+    help="Override the ASR model identifier, for example 'small' or an MLX repo name.",
+)
+def process(
+    input_path: Path,
+    output_dir: Path | None,
+    output_format: str,
+    asr_backend: str,
+    asr_model: str | None,
+) -> None:
     """Process an audio or video input file."""
     if not input_path.exists():
         raise click.ClickException(f"Input file does not exist: {input_path}")
@@ -52,6 +71,8 @@ def process(input_path: Path, output_dir: Path | None, output_format: str) -> No
             input_path=input_path,
             output_dir=output_dir,
             output_format=output_format,
+            asr_backend=asr_backend,
+            asr_model=asr_model,
             reporter=RichStageReporter(),
         )
     except (MediaProcessingError, OutputDirectoryExistsError) as error:

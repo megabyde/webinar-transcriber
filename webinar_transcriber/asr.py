@@ -23,6 +23,14 @@ class Transcriber(Protocol):
     """Protocol for components that convert audio to transcript text."""
 
     @property
+    def backend_name(self) -> str:
+        """Stable backend name for diagnostics and logging."""
+
+    @property
+    def model_name(self) -> str:
+        """Effective model name for diagnostics and logging."""
+
+    @property
     def supports_live_progress(self) -> bool:
         """Whether transcription emits incremental progress during inference."""
 
@@ -50,15 +58,14 @@ class FasterWhisperTranscriber:
         model_name: str = DEFAULT_FASTER_WHISPER_MODEL,
         *,
         device: str = "auto",
-        compute_type: str | None = None,
         initial_prompt: str | None = None,
     ) -> None:
         self._initial_prompt = initial_prompt
-        resolved_compute_type = compute_type or _default_compute_type(device)
+        self._model_name = model_name
         self._model = WhisperModel(
             model_name,
             device=device,
-            compute_type=resolved_compute_type,
+            compute_type="default",
         )
 
     def transcribe(
@@ -96,6 +103,16 @@ class FasterWhisperTranscriber:
     def supports_live_progress(self) -> bool:
         """faster-whisper yields segments incrementally during inference."""
         return True
+
+    @property
+    def backend_name(self) -> str:
+        """Stable backend name for diagnostics and logging."""
+        return "faster-whisper"
+
+    @property
+    def model_name(self) -> str:
+        """Effective model name for diagnostics and logging."""
+        return self._model_name
 
     @property
     def uses_native_progress(self) -> bool:
@@ -156,6 +173,16 @@ class MlxWhisperTranscriber:
         return False
 
     @property
+    def backend_name(self) -> str:
+        """Stable backend name for diagnostics and logging."""
+        return "mlx"
+
+    @property
+    def model_name(self) -> str:
+        """Effective model name for diagnostics and logging."""
+        return self._model_name
+
+    @property
     def uses_native_progress(self) -> bool:
         """mlx-whisper renders its own tqdm progress bar when verbose is False."""
         return True
@@ -174,7 +201,6 @@ class WhisperTranscriber:
         *,
         backend: str = "auto",
         device: str = "auto",
-        compute_type: str | None = None,
         initial_prompt: str | None = None,
     ) -> None:
         self.backend = _resolve_backend_name(backend)
@@ -187,7 +213,6 @@ class WhisperTranscriber:
             self._delegate = FasterWhisperTranscriber(
                 model_name=model_name or DEFAULT_FASTER_WHISPER_MODEL,
                 device=device,
-                compute_type=compute_type,
                 initial_prompt=initial_prompt,
             )
 
@@ -205,6 +230,16 @@ class WhisperTranscriber:
         return self._delegate.supports_live_progress
 
     @property
+    def backend_name(self) -> str:
+        """Expose the selected backend name."""
+        return self._delegate.backend_name
+
+    @property
+    def model_name(self) -> str:
+        """Expose the selected model name."""
+        return self._delegate.model_name
+
+    @property
     def uses_native_progress(self) -> bool:
         """Expose whether the selected backend renders its own progress output."""
         return self._delegate.uses_native_progress
@@ -212,11 +247,6 @@ class WhisperTranscriber:
     def prepare_model(self) -> None:
         """Prepare the selected backend before transcription starts."""
         self._delegate.prepare_model()
-
-
-def _default_compute_type(device: str) -> str:
-    """Choose a less noisy default compute type for the current device."""
-    return "int8" if device in {"auto", "cpu"} else "default"
 
 
 def _resolve_backend_name(backend: str) -> str:

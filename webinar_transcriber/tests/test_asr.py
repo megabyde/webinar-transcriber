@@ -65,7 +65,7 @@ def test_faster_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_pat
     assert transcriber.uses_native_progress is False
 
 
-def test_default_model_and_compute_type_use_quality_focused_defaults(monkeypatch) -> None:
+def test_default_model_uses_faster_whisper_backend_defaults(monkeypatch) -> None:
     captured: dict[str, str] = {}
 
     class RecordingModel:
@@ -79,7 +79,7 @@ def test_default_model_and_compute_type_use_quality_focused_defaults(monkeypatch
     FasterWhisperTranscriber(device="auto")
 
     assert captured["model_name"] == DEFAULT_FASTER_WHISPER_MODEL
-    assert captured["compute_type"] == "int8"
+    assert captured["compute_type"] == "default"
 
 
 def test_mlx_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_path) -> None:
@@ -188,12 +188,10 @@ def test_whisper_transcriber_falls_back_to_faster_whisper(monkeypatch, tmp_path)
             model_name: str,
             *,
             device: str,
-            compute_type: str | None,
             initial_prompt: str | None,
         ) -> None:
             assert model_name == DEFAULT_FASTER_WHISPER_MODEL
             assert device == "auto"
-            assert compute_type is None
             assert initial_prompt is None
 
         @property

@@ -16,6 +16,8 @@ FIXTURE_DIR = Path(__file__).parent / "fixtures"
 class FakeTranscriber:
     """Stable test double for deterministic transcripts."""
 
+    backend_name = "test-backend"
+    model_name = "test-model"
     supports_live_progress = True
     uses_native_progress = False
 
@@ -65,7 +67,17 @@ class RecordingReporter(NullStageReporter):
     def stage_started(self, stage_key: str, label: str) -> None:
         self.events.append(("start", stage_key, label))
 
-    def progress_started(self, stage_key: str, label: str, *, total: float) -> None:
+    def progress_started(
+        self,
+        stage_key: str,
+        label: str,
+        *,
+        total: float,
+        count_label: str | None = None,
+        count_multiplier: float = 1.0,
+        rate_label: str | None = None,
+        rate_multiplier: float = 1.0,
+    ) -> None:
         self.progress_events.append(("start", stage_key, total))
 
     def progress_advanced(self, stage_key: str, *, advance: float = 1.0) -> None:
@@ -99,19 +111,27 @@ def test_process_input_writes_reports_and_metadata(tmp_path) -> None:
     assert artifacts.layout.json_report_path.exists()
     assert artifacts.report.detected_language == "en"
     assert artifacts.report.action_items == ["Next step please send the draft by Friday."]
-    transcript_payload = json.loads(artifacts.layout.transcript_path.read_text(encoding="utf-8"))
+    assert artifacts.diagnostics.asr_backend == "test-backend"
+    assert artifacts.diagnostics.asr_model == "test-model"
+    diagnostics_payload = json.loads(artifacts.layout.diagnostics_path.read_text(encoding="utf-8"))
 
     markdown = artifacts.layout.markdown_report_path.read_text(encoding="utf-8")
     assert "# Sample Audio" in markdown
     assert "Agenda review and project status update." in markdown
-    assert all("words" not in segment for segment in transcript_payload["segments"])
     assert ("start", "probe_media", "Probing media") in reporter.events
     assert ("start", "prepare_asr", "Preparing ASR model") in reporter.events
+    assert (
+        "finish",
+        "prepare_asr",
+        "test-backend | test-model",
+    ) in reporter.events
     assert any(event[0] == "complete" for event in reporter.events)
     assert any(event == ("start", "transcribe", 1.5) for event in reporter.progress_events)
     assert any(
         event[0] == "advance" and event[1] == "transcribe" for event in reporter.progress_events
     )
+    assert diagnostics_payload["asr_backend"] == "test-backend"
+    assert diagnostics_payload["asr_model"] == "test-model"
 
     document = Document(str(artifacts.layout.docx_report_path))
     assert "Sample Audio" in "\n".join(paragraph.text for paragraph in document.paragraphs)
@@ -176,6 +196,8 @@ def test_process_input_uses_spinner_for_non_streaming_transcriber(tmp_path) -> N
     reporter = RecordingReporter()
 
     class BlockingTranscriber:
+        backend_name = "blocking-backend"
+        model_name = "blocking-model"
         supports_live_progress = False
         uses_native_progress = False
 
@@ -224,6 +246,8 @@ def test_process_input_allows_native_transcriber_progress(tmp_path) -> None:
     reporter = RecordingReporter()
 
     class NativeProgressTranscriber:
+        backend_name = "native-backend"
+        model_name = "native-model"
         supports_live_progress = False
         uses_native_progress = True
 

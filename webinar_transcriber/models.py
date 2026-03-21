@@ -102,6 +102,8 @@ class ReportDocument(BaseModel):
 class Diagnostics(BaseModel):
     """Execution metadata recorded for a processing run."""
 
+    asr_backend: str | None = None
+    asr_model: str | None = None
     stage_durations_sec: dict[str, float] = Field(default_factory=dict)
     item_counts: dict[str, int] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)

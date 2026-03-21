@@ -48,6 +48,8 @@ def test_process_command_runs_pipeline(tmp_path, monkeypatch) -> None:
     def fake_process_input(**kwargs) -> ProcessArtifacts:
         assert kwargs["input_path"] == input_path
         assert kwargs["output_format"] == "json"
+        assert kwargs["asr_backend"] == "auto"
+        assert kwargs["asr_model"] is None
         assert kwargs["reporter"].__class__.__name__ == "RichStageReporter"
         return ProcessArtifacts(
             layout=RunLayout(run_dir=run_dir),
@@ -72,6 +74,60 @@ def test_process_command_runs_pipeline(tmp_path, monkeypatch) -> None:
     assert result.exit_code == 0
     assert "format=json" in result.output
     assert str(run_dir) in result.output
+
+
+def test_process_command_forwards_asr_options(tmp_path, monkeypatch) -> None:
+    runner = CliRunner()
+    input_path = tmp_path / "demo.mp4"
+    input_path.write_text("stub", encoding="utf-8")
+    run_dir = tmp_path / "run-dir"
+
+    def fake_process_input(**kwargs) -> ProcessArtifacts:
+        assert kwargs["asr_backend"] == "faster-whisper"
+        assert kwargs["asr_model"] == "small"
+        return ProcessArtifacts(
+            layout=RunLayout(run_dir=run_dir),
+            media_asset=MediaAsset(
+                path=str(input_path),
+                media_type=MediaType.VIDEO,
+                duration_sec=1.0,
+            ),
+            transcription=TranscriptionResult(detected_language="en"),
+            report=ReportDocument(
+                title="Demo",
+                source_file=str(input_path),
+                media_type=MediaType.VIDEO,
+            ),
+            diagnostics=Diagnostics(),
+        )
+
+    monkeypatch.setattr("webinar_transcriber.cli.process_input", fake_process_input)
+
+    result = runner.invoke(
+        main,
+        [
+            "process",
+            str(input_path),
+            "--asr-backend",
+            "faster-whisper",
+            "--asr-model",
+            "small",
+        ],
+    )
+
+    assert result.exit_code == 0
+
+
+def test_process_help_describes_asr_options() -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(main, ["process", "--help"])
+
+    assert result.exit_code == 0
+    assert "--asr-backend" in result.output
+    assert "--asr-model" in result.output
+    assert "MLX repo name" in result.output
+    assert "--asr-compute-type" not in result.output
 
 
 def test_process_command_rejects_missing_input(tmp_path) -> None:
