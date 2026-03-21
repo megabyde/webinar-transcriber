@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from faster_whisper import WhisperModel
 
-from webinar_transcriber.models import TranscriptionResult, TranscriptSegment, TranscriptWord
+from webinar_transcriber.models import TranscriptionResult, TranscriptSegment
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -82,15 +82,6 @@ class FasterWhisperTranscriber:
                     text=segment.text.strip(),
                     start_sec=float(segment.start),
                     end_sec=float(segment.end),
-                    words=[
-                        TranscriptWord(
-                            text=word.word.strip(),
-                            start_sec=float(word.start),
-                            end_sec=float(word.end),
-                            confidence=float(word.probability),
-                        )
-                        for word in (segment.words or [])
-                    ],
                 )
             )
             if progress_callback is not None:
@@ -151,7 +142,6 @@ class MlxWhisperTranscriber:
                     text=str(segment.get("text", "")).strip(),
                     start_sec=float(segment.get("start", 0.0)),
                     end_sec=end_sec,
-                    words=_normalize_mlx_words(segment.get("words", [])),
                 )
             )
 
@@ -263,21 +253,3 @@ def _mlx_detected_language(result: dict[str, Any]) -> str | None:
     if isinstance(detected_language, str):
         return detected_language
     return None
-
-
-def _normalize_mlx_words(words: list[dict[str, Any]]) -> list[TranscriptWord]:
-    normalized_words: list[TranscriptWord] = []
-    for word in words:
-        raw_text = str(word.get("word", word.get("text", ""))).strip()
-        if not raw_text:
-            continue
-        confidence = word.get("probability", word.get("confidence"))
-        normalized_words.append(
-            TranscriptWord(
-                text=raw_text,
-                start_sec=float(word.get("start", 0.0)),
-                end_sec=float(word.get("end", 0.0)),
-                confidence=float(confidence) if confidence is not None else None,
-            )
-        )
-    return normalized_words

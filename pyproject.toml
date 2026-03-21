@@ -28,16 +28,13 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
-    "av>=17.0.0",
     "click>=8.1.8",
     "faster-whisper>=1.1.1",
-    "imagehash>=4.3.2",
     "mlx-whisper>=0.4.3; platform_system == 'Darwin' and platform_machine == 'arm64'",
     "numpy>=2.2.3",
     "pillow>=11.1.0",
     "pydantic>=2.10.6",
     "python-docx>=1.1.2",
-    "rapidfuzz>=3.12.2",
     "rich>=13.9.4",
 ]
 

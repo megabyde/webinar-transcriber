@@ -7,7 +7,6 @@ from webinar_transcriber.models import (
     ReportDocument,
     ReportSection,
     TranscriptSegment,
-    TranscriptWord,
 )
 
 
@@ -26,19 +25,16 @@ def test_media_asset_accepts_video_metadata() -> None:
     assert asset.width == 1920
 
 
-def test_transcript_segment_preserves_nested_words() -> None:
+def test_transcript_segment_accepts_timing_fields() -> None:
     segment = TranscriptSegment(
         id="seg-1",
         text="hello world",
         start_sec=0.0,
         end_sec=1.2,
-        words=[
-            TranscriptWord(text="hello", start_sec=0.0, end_sec=0.5, confidence=0.9),
-            TranscriptWord(text="world", start_sec=0.6, end_sec=1.2, confidence=0.95),
-        ],
     )
 
-    assert [word.text for word in segment.words] == ["hello", "world"]
+    assert segment.start_sec == 0.0
+    assert segment.end_sec == 1.2
 
 
 def test_report_document_defaults_optional_collections() -> None:

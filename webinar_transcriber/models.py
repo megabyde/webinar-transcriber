@@ -25,15 +25,6 @@ class MediaAsset(BaseModel):
     height: int | None = Field(default=None, ge=1)
 
 
-class TranscriptWord(BaseModel):
-    """Word-level transcription timing."""
-
-    text: str
-    start_sec: float = Field(ge=0)
-    end_sec: float = Field(ge=0)
-    confidence: float | None = Field(default=None, ge=0, le=1)
-
-
 class TranscriptSegment(BaseModel):
     """Segment-level transcript block."""
 
@@ -41,7 +32,6 @@ class TranscriptSegment(BaseModel):
     text: str
     start_sec: float = Field(ge=0)
     end_sec: float = Field(ge=0)
-    words: list[TranscriptWord] = Field(default_factory=list)
 
 
 class TranscriptionResult(BaseModel):
@@ -66,8 +56,6 @@ class SlideFrame(BaseModel):
     scene_id: str
     image_path: str
     timestamp_sec: float = Field(ge=0)
-    sharpness_score: float | None = None
-    dedupe_hash: str | None = None
 
 
 class AlignmentBlock(BaseModel):

@@ -223,10 +223,7 @@ def _write_json(output_path: Path, payload: dict[str, object]) -> None:
 
 
 def _transcription_payload(transcription: TranscriptionResult) -> dict[str, object]:
-    return transcription.model_dump(
-        mode="json",
-        exclude={"segments": {"__all__": {"words"}}},
-    )
+    return transcription.model_dump(mode="json")
 
 
 def _transcribe_with_progress(

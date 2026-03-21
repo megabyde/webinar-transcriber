@@ -14,16 +14,6 @@ from webinar_transcriber.asr import (
 from webinar_transcriber.models import TranscriptionResult
 
 
-class FakeWord:
-    """Simple stand-in for a faster-whisper word object."""
-
-    def __init__(self, word: str, start: float, end: float, probability: float) -> None:
-        self.word = word
-        self.start = start
-        self.end = end
-        self.probability = probability
-
-
 class FakeSegment:
     """Simple stand-in for a faster-whisper segment object."""
 
@@ -31,10 +21,7 @@ class FakeSegment:
         self.text = " agenda review "
         self.start = 0.0
         self.end = 1.5
-        self.words = [
-            FakeWord(" agenda ", 0.0, 0.6, 0.91),
-            FakeWord(" review ", 0.7, 1.5, 0.95),
-        ]
+        self.words = []
 
 
 class FakeInfo:
@@ -73,7 +60,6 @@ def test_faster_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_pat
 
     assert result.detected_language == "en"
     assert result.segments[0].text == "agenda review"
-    assert [word.text for word in result.segments[0].words] == ["agenda", "review"]
     assert progress_updates == [1.5]
     assert transcriber.supports_live_progress is True
     assert transcriber.uses_native_progress is False
@@ -135,7 +121,6 @@ def test_mlx_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_path) 
 
     assert result.detected_language == "en"
     assert result.segments[0].text == "agenda review"
-    assert result.segments[0].words == []
     assert progress_updates == []
     assert transcriber.supports_live_progress is False
     assert transcriber.uses_native_progress is True
