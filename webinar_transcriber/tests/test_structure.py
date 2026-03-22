@@ -9,6 +9,16 @@ from webinar_transcriber.models import (
 )
 from webinar_transcriber.structure import build_report
 
+RU_SEND_FILE = "Пожалуйста, пришлите итоговый файл до пятницы."
+RU_CHECK_NUMBERS = (
+    "Не забудьте "  # noqa: RUF001
+    "проверить "
+    "финальные "
+    "цифры перед "
+    "созвоном."
+)
+RU_BUDGET_DISCUSSION = "Сегодня мы обсуждаем бюджет и план внедрения."
+
 
 def test_build_report_uses_alignment_block_title_hint_and_warnings() -> None:
     report = build_report(
@@ -132,3 +142,82 @@ def test_build_report_uses_more_informative_audio_section_title() -> None:
 
     assert len(report.sections) == 1
     assert report.sections[0].title == "Today we review budget negotiations and"
+
+
+def test_build_report_summary_skips_startup_chatter() -> None:
+    report = build_report(
+        MediaAsset(path="demo.wav", media_type=MediaType.AUDIO, duration_sec=260.0),
+        TranscriptionResult(
+            segments=[
+                TranscriptSegment(
+                    id="segment-1",
+                    text="Hello everyone, can you hear me clearly?",
+                    start_sec=0.0,
+                    end_sec=6.0,
+                ),
+                TranscriptSegment(
+                    id="segment-2",
+                    text="Please drop a note in the chat if the audio is working.",
+                    start_sec=6.0,
+                    end_sec=14.0,
+                ),
+                TranscriptSegment(
+                    id="segment-3",
+                    text="Today we review budget negotiations and project delivery timelines.",
+                    start_sec=120.0,
+                    end_sec=132.0,
+                ),
+                TranscriptSegment(
+                    id="segment-4",
+                    text="We compare approval risks, fallback plans, and delivery tradeoffs.",
+                    start_sec=132.0,
+                    end_sec=144.0,
+                ),
+                TranscriptSegment(
+                    id="segment-5",
+                    text="The final section covers next-quarter staffing constraints.",
+                    start_sec=144.0,
+                    end_sec=154.0,
+                ),
+            ],
+        ),
+    )
+
+    assert report.summary == [
+        "Today we review budget negotiations and project delivery timelines.",
+        "We compare approval risks, fallback plans, and delivery tradeoffs.",
+        "The final section covers next-quarter staffing constraints.",
+    ]
+
+
+def test_build_report_extracts_russian_action_items() -> None:
+    report = build_report(
+        MediaAsset(path="demo.wav", media_type=MediaType.AUDIO, duration_sec=120.0),
+        TranscriptionResult(
+            segments=[
+                TranscriptSegment(
+                    id="segment-1",
+                    text=RU_SEND_FILE,
+                    start_sec=65.0,
+                    end_sec=72.0,
+                ),
+                TranscriptSegment(
+                    id="segment-2",
+                    text=RU_CHECK_NUMBERS,
+                    start_sec=72.0,
+                    end_sec=79.0,
+                ),
+                TranscriptSegment(
+                    id="segment-3",
+                    text=RU_BUDGET_DISCUSSION,
+                    start_sec=79.0,
+                    end_sec=88.0,
+                ),
+            ],
+        ),
+    )
+
+    assert report.action_items == [
+        RU_SEND_FILE,
+        RU_CHECK_NUMBERS,
+    ]
