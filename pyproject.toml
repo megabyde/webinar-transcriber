@@ -44,6 +44,7 @@ webinar-transcriber = "webinar_transcriber.cli:main"
 [dependency-groups]
 dev = [
     "coverage[toml]>=7.8.0",
+    "mdformat>=0.7.22",
     "pytest>=8.1.1,<9",
     "pytest-cov>=6.0.0",
     "ruff>=0.11.2",

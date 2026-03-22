@@ -4,7 +4,7 @@ help:
 	@printf "Available targets:\n"
 	@printf "  sync       Install project and dev dependencies with uv\n"
 	@printf "  format     Format Python sources with Ruff\n"
-	@printf "  lint       Run Ruff lint checks\n"
+	@printf "  lint       Run Ruff and markdown lint checks\n"
 	@printf "  typecheck  Run ty over the package\n"
 	@printf "  test       Run pytest\n"
 	@printf "  coverage   Run pytest with coverage gate\n"
@@ -16,9 +16,11 @@ sync:
 	uv sync --group dev
 
 format:
+	uv run mdformat README.md AGENTS.md
 	uv run ruff format .
 
 lint:
+	uv run mdformat --check README.md AGENTS.md
 	uv run ruff check .
 
 typecheck:

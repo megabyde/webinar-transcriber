@@ -50,11 +50,11 @@ The `--asr-model` option can override the backend default, for example `small` f
 ### Pipeline
 
 1. Probe input media with `ffprobe`.
-2. Prepare transcription audio with `ffmpeg`.
-3. Transcribe with the selected ASR backend.
-4. For video input, detect scenes and extract representative frames.
-5. Align transcript content to audio or slide sections.
-6. Structure notes and export Markdown, DOCX, and JSON artifacts.
+1. Prepare transcription audio with `ffmpeg`.
+1. Transcribe with the selected ASR backend.
+1. For video input, detect scenes and extract representative frames.
+1. Align transcript content to audio or slide sections.
+1. Structure notes and export Markdown, DOCX, and JSON artifacts.
 
 ### Runtime Rules
 
@@ -97,9 +97,9 @@ runs/<timestamp>_<basename>/
 ## Local Setup
 
 1. Install Python 3.12 and `uv`.
-2. Install native dependencies with Homebrew on macOS:
+1. Install native dependencies with Homebrew on macOS:
    - `brew install ffmpeg`
-3. Install the project:
+1. Install the project:
 
 ```bash
 make sync
