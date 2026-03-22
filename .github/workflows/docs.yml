@@ -4,12 +4,14 @@ on:
   push:
     branches: [main]
     paths:
+      - ".github/workflows/docs.yml"
+      - "AGENTS.md"
       - "README.md"
-      - "docs/**"
   pull_request:
     paths:
+      - ".github/workflows/docs.yml"
+      - "AGENTS.md"
       - "README.md"
-      - "docs/**"
 
 jobs:
   docs:
