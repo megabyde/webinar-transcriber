@@ -133,7 +133,12 @@ def test_process_input_writes_reports_and_metadata(tmp_path) -> None:
         "test-backend | test-model",
     ) in reporter.events
     assert any(event[0] == "complete" for event in reporter.events)
-    assert any(event == ("start", "transcribe", 1.5) for event in reporter.progress_events)
+    transcribe_start_events = [
+        event
+        for event in reporter.progress_events
+        if event[0] == "start" and event[1] == "transcribe"
+    ]
+    assert transcribe_start_events == [("start", "transcribe", artifacts.media_asset.duration_sec)]
     assert any(
         event[0] == "advance" and event[1] == "transcribe" for event in reporter.progress_events
     )
