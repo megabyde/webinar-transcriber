@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = { file = "LICENSE" }
 authors = [
-    { name = "Megabyde" },
+    { name = "Yury Bayda" },
 ]
 keywords = ["transcription", "webinar", "whisper", "audio", "video"]
 classifiers = [
