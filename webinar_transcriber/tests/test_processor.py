@@ -112,6 +112,10 @@ def test_process_input_writes_reports_and_metadata(tmp_path) -> None:
     assert not (artifacts.layout.run_dir / "audio.wav").exists()
     assert artifacts.report.detected_language == "en"
     assert artifacts.report.action_items == ["Next step please send the draft by Friday."]
+    assert len(artifacts.report.sections) == 1
+    assert (
+        "Next step please send the draft by Friday." in artifacts.report.sections[0].transcript_text
+    )
     assert artifacts.diagnostics.asr_backend == "test-backend"
     assert artifacts.diagnostics.asr_model == "test-model"
     diagnostics_payload = json.loads(artifacts.layout.diagnostics_path.read_text(encoding="utf-8"))

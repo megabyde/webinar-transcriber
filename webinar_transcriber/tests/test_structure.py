@@ -61,6 +61,74 @@ def test_build_report_falls_back_for_empty_text_and_dedupes_summary() -> None:
     )
 
     assert report.title == "Transcription Report"
-    assert report.sections[0].title == "Section 1"
+    assert len(report.sections) == 1
+    assert report.sections[0].title == "Repeat me"
+    assert "Please follow up." in report.sections[0].transcript_text
     assert report.summary == ["Repeat me.", "Please follow up."]
     assert report.action_items == ["Please follow up."]
+
+
+def test_build_report_groups_audio_segments_into_larger_sections() -> None:
+    report = build_report(
+        MediaAsset(path="demo.wav", media_type=MediaType.AUDIO, duration_sec=80.0),
+        TranscriptionResult(
+            segments=[
+                TranscriptSegment(
+                    id="segment-1",
+                    text="Agenda review and project status update.",
+                    start_sec=0.0,
+                    end_sec=10.0,
+                ),
+                TranscriptSegment(
+                    id="segment-2",
+                    text="Budget discussion and delivery timeline review.",
+                    start_sec=10.5,
+                    end_sec=20.0,
+                ),
+                TranscriptSegment(
+                    id="segment-3",
+                    text="Open questions from the audience and follow-up items.",
+                    start_sec=30.0,
+                    end_sec=39.0,
+                ),
+            ],
+        ),
+    )
+
+    assert len(report.sections) == 2
+    assert report.sections[0].start_sec == 0.0
+    assert report.sections[0].end_sec == 20.0
+    assert "Budget discussion" in report.sections[0].transcript_text
+    assert report.sections[1].start_sec == 30.0
+    assert report.sections[1].end_sec == 39.0
+
+
+def test_build_report_uses_more_informative_audio_section_title() -> None:
+    report = build_report(
+        MediaAsset(path="demo.wav", media_type=MediaType.AUDIO, duration_sec=260.0),
+        TranscriptionResult(
+            segments=[
+                TranscriptSegment(
+                    id="segment-1",
+                    text="So, well, okay, let's get started.",
+                    start_sec=0.0,
+                    end_sec=10.0,
+                ),
+                TranscriptSegment(
+                    id="segment-2",
+                    text="Today we review budget negotiations and project delivery timelines.",
+                    start_sec=10.0,
+                    end_sec=22.0,
+                ),
+                TranscriptSegment(
+                    id="segment-3",
+                    text="First we examine the risks and then the approval options.",
+                    start_sec=22.0,
+                    end_sec=34.0,
+                ),
+            ],
+        ),
+    )
+
+    assert len(report.sections) == 1
+    assert report.sections[0].title == "Today we review budget negotiations and"
