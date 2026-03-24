@@ -5,6 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
+import pytest
 from docx import Document
 
 from webinar_transcriber.llm import (
@@ -257,6 +258,29 @@ def test_process_input_normalizes_transcript_before_report_generation(tmp_path) 
     assert len(raw_payload["segments"]) == 4
     assert artifacts.diagnostics.item_counts["normalized_transcript_segments"] == 2
     assert artifacts.report.sections[0].transcript_text.startswith("Привет всем.")
+
+
+def test_process_input_persists_intermediate_artifacts_on_failure(tmp_path, monkeypatch) -> None:
+    reporter = RecordingReporter()
+
+    def fake_build_report(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("webinar_transcriber.processor.build_report", fake_build_report)
+
+    output_dir = tmp_path / "failed-run"
+    with pytest.raises(RuntimeError, match="boom"):
+        process_input(
+            FIXTURE_DIR / "sample-audio.mp3",
+            output_dir=output_dir,
+            transcriber=FakeTranscriber(),
+            reporter=reporter,
+        )
+
+    assert (output_dir / "metadata.json").exists()
+    assert (output_dir / "transcript.json").exists()
+    assert not (output_dir / "diagnostics.json").exists()
+    assert not (output_dir / "report.json").exists()
 
 
 def test_process_input_polishes_report_sections_when_llm_succeeds(tmp_path) -> None:

@@ -99,6 +99,12 @@ def process_input(
     start = perf_counter()
     media_asset = probe_media(input_path)
     stage_timings["probe_media"] = perf_counter() - start
+    _write_json(
+        layout.metadata_path,
+        {
+            "media": media_asset.model_dump(mode="json"),
+        },
+    )
     active_reporter.stage_finished(
         "probe_media",
         "Probing media",
@@ -133,6 +139,7 @@ def process_input(
             reporter=active_reporter,
         )
         stage_timings["transcribe"] = perf_counter() - start
+        _write_json(layout.transcript_path, _transcription_payload(transcription))
         active_reporter.stage_finished(
             "transcribe",
             "Transcribing audio",
@@ -222,14 +229,6 @@ def process_input(
         stage_timings=stage_timings,
         llm_runtime=llm_runtime,
     )
-
-    _write_json(
-        layout.metadata_path,
-        {
-            "media": media_asset.model_dump(mode="json"),
-        },
-    )
-    _write_json(layout.transcript_path, _transcription_payload(transcription))
     report.warnings = list(warnings)
 
     active_reporter.stage_started("export", "Writing reports")
