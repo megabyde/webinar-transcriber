@@ -1,6 +1,14 @@
 """Tests for terminal progress helpers."""
 
-from webinar_transcriber.ui import _format_count, _rate_text_for_update
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, cast
+
+from rich.console import Console
+
+from webinar_transcriber.ui import RichStageReporter, _format_count, _rate_text_for_update
+
+if TYPE_CHECKING:
+    from webinar_transcriber.processor import ProcessArtifacts
 
 
 def test_format_count_renders_frame_counter() -> None:
@@ -39,3 +47,29 @@ def test_rate_text_for_update_hides_empty_values() -> None:
         )
         == ""
     )
+
+
+def test_complete_run_renders_completion_panel() -> None:
+    console = Console(record=True, width=100)
+    reporter = RichStageReporter(console=console)
+    artifacts = cast(
+        "ProcessArtifacts",
+        SimpleNamespace(
+            layout=SimpleNamespace(run_dir="runs/example"),
+            report=SimpleNamespace(
+                detected_language="ru",
+                sections=[object(), object()],
+                warnings=["warning one"],
+            ),
+        ),
+    )
+
+    reporter.complete_run(artifacts)
+
+    output = console.export_text()
+    assert "Completed" in output
+    assert "Run directory" in output
+    assert "runs/example" in output
+    assert "Language" in output
+    assert "Sections" in output
+    assert "Warnings" in output

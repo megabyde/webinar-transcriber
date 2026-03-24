@@ -30,6 +30,7 @@ Typical runs:
 
 ```bash
 webinar-transcriber process INPUT
+webinar-transcriber process INPUT --llm
 webinar-transcriber process INPUT --format docx
 webinar-transcriber process INPUT --output-dir runs/custom-demo
 webinar-transcriber extract-frames INPUT
@@ -62,7 +63,37 @@ The `--asr-model` option can override the backend default, for example `small` f
 - Every invocation writes a fresh run directory unless `--output-dir` is supplied.
 - `process --format md` and `process --format docx` still write `report.json`.
 - `diagnostics.json` is written for successful runs and records ASR backend/model, stage timings,
-  item counts, and warnings.
+  item counts, warnings, and optional LLM metadata.
+
+### Cloud LLM
+
+The optional `--llm` flag enables OpenAI-backed report refinement after deterministic sectioning:
+
+- section transcript polishing for punctuation, spelling, light cleanup, and paragraph breaks
+- summary, action items, and section title refinement
+
+LLM configuration comes only from environment variables:
+
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+
+Plain shell usage:
+
+```bash
+OPENAI_API_KEY=... \
+OPENAI_MODEL=gpt-5-mini \
+uv run webinar-transcriber process INPUT --llm
+```
+
+With 1Password for local interactive runs:
+
+```bash
+OPENAI_API_KEY="$(op read 'op://Private/OpenAI/api key')" \
+OPENAI_MODEL='gpt-5-mini' \
+uv run webinar-transcriber process INPUT --llm
+```
+
+No special 1Password integration is required. The app only reads environment variables.
 
 ### Language Support
 

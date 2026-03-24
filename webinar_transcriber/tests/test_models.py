@@ -61,6 +61,11 @@ def test_report_document_defaults_optional_collections() -> None:
 def test_diagnostics_defaults_empty_maps() -> None:
     diagnostics = Diagnostics()
 
+    assert diagnostics.llm_enabled is False
+    assert diagnostics.llm_transcript_status == "disabled"
+    assert diagnostics.llm_report_status == "disabled"
+    assert diagnostics.llm_transcript_usage == {}
+    assert diagnostics.llm_report_usage == {}
     assert diagnostics.stage_durations_sec == {}
     assert diagnostics.item_counts == {}
     assert diagnostics.warnings == []

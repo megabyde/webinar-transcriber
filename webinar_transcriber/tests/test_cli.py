@@ -53,6 +53,7 @@ def test_process_command_runs_pipeline(tmp_path, monkeypatch) -> None:
         assert kwargs["output_format"] == "json"
         assert kwargs["asr_backend"] == "auto"
         assert kwargs["asr_model"] is None
+        assert kwargs["enable_llm"] is False
         assert kwargs["reporter"].__class__.__name__ == "RichStageReporter"
         return ProcessArtifacts(
             layout=RunLayout(run_dir=run_dir),
@@ -75,8 +76,7 @@ def test_process_command_runs_pipeline(tmp_path, monkeypatch) -> None:
     result = runner.invoke(main, ["process", str(input_path), "--format", "json"])
 
     assert result.exit_code == 0
-    assert "format=json" in result.output
-    assert str(run_dir) in result.output
+    assert result.output == ""
 
 
 def test_process_command_forwards_asr_options(tmp_path, monkeypatch) -> None:
@@ -88,6 +88,7 @@ def test_process_command_forwards_asr_options(tmp_path, monkeypatch) -> None:
     def fake_process_input(**kwargs) -> ProcessArtifacts:
         assert kwargs["asr_backend"] == "faster-whisper"
         assert kwargs["asr_model"] == "small"
+        assert kwargs["enable_llm"] is True
         return ProcessArtifacts(
             layout=RunLayout(run_dir=run_dir),
             media_asset=MediaAsset(
@@ -115,6 +116,7 @@ def test_process_command_forwards_asr_options(tmp_path, monkeypatch) -> None:
             "faster-whisper",
             "--asr-model",
             "small",
+            "--llm",
         ],
     )
 
@@ -129,8 +131,10 @@ def test_process_help_describes_asr_options() -> None:
     assert result.exit_code == 0
     assert "--asr-backend" in result.output
     assert "--asr-model" in result.output
+    assert "--llm" in result.output
     assert "MLX repo name" in result.output
     assert "--asr-compute-type" not in result.output
+    assert "--llm-model" not in result.output
 
 
 def test_process_command_rejects_missing_input(tmp_path) -> None:

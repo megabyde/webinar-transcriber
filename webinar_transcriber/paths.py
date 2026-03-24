@@ -30,6 +30,10 @@ class RunLayout:
         return self.run_dir / "transcript.json"
 
     @property
+    def polished_transcript_path(self) -> Path:
+        return self.run_dir / "transcript_polished.json"
+
+    @property
     def scenes_path(self) -> Path:
         return self.run_dir / "scenes.json"
 

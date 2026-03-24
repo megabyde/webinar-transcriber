@@ -32,6 +32,7 @@ dependencies = [
     "faster-whisper>=1.1.1",
     "mlx-whisper>=0.4.3; platform_system == 'Darwin' and platform_machine == 'arm64'",
     "numpy>=2.2.3",
+    "openai>=2.0.0",
     "pillow>=11.1.0",
     "pydantic>=2.10.6",
     "python-docx>=1.1.2",

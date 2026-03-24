@@ -3,9 +3,17 @@
 import json
 from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 from docx import Document
 
+from webinar_transcriber.llm import (
+    LLMConfigurationError,
+    LLMProcessingError,
+    LLMProcessor,
+    LLMReportPolishPlan,
+    LLMReportPolishResult,
+)
 from webinar_transcriber.models import TranscriptionResult, TranscriptSegment
 from webinar_transcriber.processor import process_input
 from webinar_transcriber.ui import NullStageReporter
@@ -78,6 +86,7 @@ class RecordingReporter(NullStageReporter):
         rate_label: str | None = None,
         rate_multiplier: float = 1.0,
     ) -> None:
+        self.events.append(("start", stage_key, label))
         self.progress_events.append(("start", stage_key, total))
 
     def progress_advanced(self, stage_key: str, *, advance: float = 1.0) -> None:
@@ -208,6 +217,215 @@ def test_process_input_writes_video_scene_artifacts(tmp_path) -> None:
         event == ("start", "extract_frames", artifacts.diagnostics.item_counts["scenes"])
         for event in reporter.progress_events
     )
+
+
+def test_process_input_normalizes_transcript_before_report_generation(tmp_path) -> None:
+    reporter = RecordingReporter()
+
+    class FragmentedTranscriber(FakeTranscriber):
+        def transcribe(
+            self,
+            audio_path: Path,
+            *,
+            progress_callback: Callable[[float], None] | None = None,
+        ) -> TranscriptionResult:
+            assert audio_path.exists()
+            return TranscriptionResult(
+                detected_language="ru",
+                segments=[
+                    TranscriptSegment(id="segment-1", text="", start_sec=0.0, end_sec=0.1),
+                    TranscriptSegment(id="segment-2", text="Привет", start_sec=0.1, end_sec=0.8),
+                    TranscriptSegment(id="segment-3", text="всем.", start_sec=0.8, end_sec=1.4),
+                    TranscriptSegment(
+                        id="segment-4",
+                        text="Новая тема начинается позже.",
+                        start_sec=3.0,
+                        end_sec=6.0,
+                    ),
+                ],
+            )
+
+    artifacts = process_input(
+        FIXTURE_DIR / "sample-audio.mp3",
+        output_dir=tmp_path / "normalized-run",
+        transcriber=FragmentedTranscriber(),
+        reporter=reporter,
+    )
+
+    assert artifacts.layout.transcript_path.exists()
+    raw_payload = json.loads(artifacts.layout.transcript_path.read_text(encoding="utf-8"))
+    assert len(raw_payload["segments"]) == 4
+    assert artifacts.diagnostics.item_counts["normalized_transcript_segments"] == 2
+    assert artifacts.report.sections[0].transcript_text.startswith("Привет всем.")
+
+
+def test_process_input_polishes_report_sections_when_llm_succeeds(tmp_path) -> None:
+    reporter = RecordingReporter()
+
+    class FakeLLMProcessor:
+        provider_name = "openai"
+        model_name = "test-llm-model"
+
+        def report_polish_plan(self, report) -> LLMReportPolishPlan:
+            return LLMReportPolishPlan(
+                section_count=len(report.sections),
+                worker_count=1,
+            )
+
+        def polish_report(self, report):
+            return self.polish_report_with_progress(report)
+
+        def polish_report_with_progress(
+            self,
+            report,
+            *,
+            progress_callback: Callable[[int], None] | None = None,
+        ) -> LLMReportPolishResult:
+            if progress_callback is not None:
+                progress_callback(len(report.sections))
+            return LLMReportPolishResult(
+                summary=["Refined summary point."],
+                action_items=["Refined action item."],
+                section_titles={"section-1": "Refined section title"},
+                section_transcripts={
+                    "section-1": (
+                        "Agenda review, and project status update.\n\n"
+                        "Next step: please send the draft by Friday."
+                    )
+                },
+                usage={"input_tokens": 20, "output_tokens": 6, "total_tokens": 26},
+                warnings=[
+                    (
+                        "Section polish response returned an empty transcript text "
+                        "for section-1; kept original text."
+                    )
+                ],
+            )
+
+    artifacts = process_input(
+        FIXTURE_DIR / "sample-audio.mp3",
+        output_dir=tmp_path / "llm-run",
+        transcriber=FakeTranscriber(),
+        llm_processor=cast("LLMProcessor", FakeLLMProcessor()),
+        enable_llm=True,
+        reporter=reporter,
+    )
+
+    assert artifacts.report.summary == ["Refined summary point."]
+    assert artifacts.report.action_items == ["Refined action item."]
+    assert artifacts.report.sections[0].title == "Refined section title"
+    assert artifacts.report.sections[0].transcript_text == (
+        "Agenda review, and project status update.\n\nNext step: please send the draft by Friday."
+    )
+    assert artifacts.diagnostics.llm_enabled is True
+    assert artifacts.diagnostics.llm_model == "test-llm-model"
+    assert artifacts.diagnostics.llm_transcript_status == "disabled"
+    assert artifacts.diagnostics.llm_report_status == "applied"
+    assert artifacts.diagnostics.llm_transcript_usage == {}
+    assert artifacts.diagnostics.warnings == [
+        (
+            "Section polish response returned an empty transcript text "
+            "for section-1; kept original text."
+        )
+    ]
+    assert artifacts.diagnostics.llm_report_usage == {
+        "input_tokens": 20,
+        "output_tokens": 6,
+        "total_tokens": 26,
+    }
+    assert (
+        "start",
+        "llm_report",
+        1.0,
+    ) in reporter.progress_events
+    assert (
+        "finish",
+        "llm_report",
+        "1 summary bullet | 1 action item | 26 tokens",
+    ) in reporter.events
+    assert ("advance", "llm_report", 1.0) in reporter.progress_events
+    assert (
+        "start",
+        "llm_report",
+        "Polishing report with LLM (openai | test-llm-model | 1 worker)",
+    ) in reporter.events
+    assert reporter.warnings == [
+        (
+            "Section polish response returned an empty transcript text "
+            "for section-1; kept original text."
+        )
+    ]
+
+
+def test_process_input_warns_when_llm_configuration_is_missing(tmp_path, monkeypatch) -> None:
+    reporter = RecordingReporter()
+
+    def fake_build_llm_processor_from_env():
+        raise LLMConfigurationError("Missing required LLM environment variables: OPENAI_API_KEY.")
+
+    monkeypatch.setattr(
+        "webinar_transcriber.processor.build_llm_processor_from_env",
+        fake_build_llm_processor_from_env,
+    )
+
+    artifacts = process_input(
+        FIXTURE_DIR / "sample-audio.mp3",
+        output_dir=tmp_path / "llm-fallback-run",
+        transcriber=FakeTranscriber(),
+        enable_llm=True,
+        reporter=reporter,
+    )
+
+    assert artifacts.diagnostics.llm_enabled is True
+    assert artifacts.diagnostics.llm_model is None
+    assert artifacts.diagnostics.llm_transcript_status == "disabled"
+    assert artifacts.diagnostics.llm_report_status == "fallback"
+    assert artifacts.diagnostics.warnings == [
+        "Missing required LLM environment variables: OPENAI_API_KEY."
+    ]
+    assert reporter.warnings == ["Missing required LLM environment variables: OPENAI_API_KEY."]
+
+
+def test_process_input_falls_back_when_report_polish_fails(tmp_path) -> None:
+    reporter = RecordingReporter()
+
+    class FakeLLMProcessor:
+        provider_name = "openai"
+        model_name = "test-llm-model"
+
+        def report_polish_plan(self, report) -> LLMReportPolishPlan:
+            return LLMReportPolishPlan(
+                section_count=len(report.sections),
+                worker_count=1,
+            )
+
+        def polish_report(self, report):
+            return self.polish_report_with_progress(report)
+
+        def polish_report_with_progress(
+            self,
+            report,
+            *,
+            progress_callback: Callable[[int], None] | None = None,
+        ):
+            if progress_callback is not None:
+                progress_callback(len(report.sections))
+            raise LLMProcessingError("Report polishing failed: backend timeout")
+
+    artifacts = process_input(
+        FIXTURE_DIR / "sample-audio.mp3",
+        output_dir=tmp_path / "llm-report-fallback-run",
+        transcriber=FakeTranscriber(),
+        llm_processor=cast("LLMProcessor", FakeLLMProcessor()),
+        enable_llm=True,
+        reporter=reporter,
+    )
+
+    assert artifacts.report.summary != []
+    assert artifacts.diagnostics.llm_transcript_status == "disabled"
+    assert artifacts.diagnostics.llm_report_status == "fallback"
+    assert "Report polishing failed: backend timeout" in artifacts.diagnostics.warnings
+    assert ("finish", "llm_report", "openai | test-llm-model | fallback") in reporter.events
 
 
 def test_process_input_uses_spinner_for_non_streaming_transcriber(tmp_path) -> None:

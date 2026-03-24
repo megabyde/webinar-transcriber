@@ -7,6 +7,7 @@ from time import perf_counter
 from typing import TYPE_CHECKING
 
 from rich.console import Console
+from rich.panel import Panel
 from rich.progress import (
     BarColumn,
     Progress,
@@ -84,7 +85,7 @@ class RichStageReporter(NullStageReporter):
     """Terminal reporter using Rich status spinners and summaries."""
 
     def __init__(self, console: Console | None = None) -> None:
-        self._console = console or Console(stderr=True)
+        self._console = console or Console()
         self._active_status: Status | None = None
         self._active_progress: Progress | None = None
         self._active_task_id: TaskID | None = None
@@ -192,16 +193,26 @@ class RichStageReporter(NullStageReporter):
         self._active_event = None
 
     def complete_run(self, artifacts: ProcessArtifacts) -> None:
-        table = Table(show_header=False, box=None, padding=(0, 1))
-        table.add_row("Run directory", str(artifacts.layout.run_dir))
-        table.add_row("Language", artifacts.report.detected_language or "unknown")
-        table.add_row("Sections", str(len(artifacts.report.sections)))
-        table.add_row(
-            "Warnings",
-            str(len(artifacts.report.warnings)),
+        table = Table.grid(padding=(0, 2))
+        table.add_column(style="dim")
+        table.add_column()
+        warning_count = len(artifacts.report.warnings)
+        warning_text = Text(
+            str(warning_count),
+            style="yellow" if warning_count else "green",
         )
+        table.add_row("Run directory", Text(str(artifacts.layout.run_dir), style="cyan"))
+        table.add_row("Language", Text(artifacts.report.detected_language or "unknown"))
+        table.add_row("Sections", Text(str(len(artifacts.report.sections))))
+        table.add_row("Warnings", warning_text)
         self._console.print()
-        self._console.print(table)
+        self._console.print(
+            Panel.fit(
+                table,
+                title="[bold green]Completed[/]",
+                border_style="green",
+            )
+        )
 
     def _stop_active_display(self) -> None:
         if self._active_status is not None:

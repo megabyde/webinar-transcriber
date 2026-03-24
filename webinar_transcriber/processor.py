@@ -12,6 +12,12 @@ from webinar_transcriber.export import (
     write_json_report,
     write_markdown_report,
 )
+from webinar_transcriber.llm import (
+    LLMConfigurationError,
+    LLMProcessingError,
+    LLMProcessor,
+    build_llm_processor_from_env,
+)
 from webinar_transcriber.media import prepared_transcription_audio, probe_media
 from webinar_transcriber.models import (
     AlignmentBlock,
@@ -23,6 +29,7 @@ from webinar_transcriber.models import (
 )
 from webinar_transcriber.paths import RunLayout, create_run_layout
 from webinar_transcriber.structure import build_report
+from webinar_transcriber.transcript_processing import normalize_transcription
 from webinar_transcriber.ui import NullStageReporter
 from webinar_transcriber.video import (
     detect_scenes,
@@ -42,6 +49,17 @@ class ProcessArtifacts:
     diagnostics: Diagnostics
 
 
+@dataclass
+class LLMRuntimeState:
+    """Observed state for the optional LLM report stage."""
+
+    provider_name: str | None = None
+    model_name: str | None = None
+    report_status: str = "disabled"
+    report_latency_sec: float | None = None
+    report_usage: dict[str, int] | None = None
+
+
 def process_input(
     input_path: Path,
     *,
@@ -49,7 +67,9 @@ def process_input(
     output_format: str = "all",
     asr_backend: str = "auto",
     asr_model: str | None = None,
+    enable_llm: bool = False,
     transcriber: Transcriber | None = None,
+    llm_processor: LLMProcessor | None = None,
     reporter: NullStageReporter | None = None,
 ) -> ProcessArtifacts:
     """Process a single audio or video file into report artifacts."""
@@ -58,6 +78,7 @@ def process_input(
     warnings: list[str] = []
     alignment_blocks: list[AlignmentBlock] | None = None
     slide_frames: list[SlideFrame] = []
+    llm_runtime = LLMRuntimeState()
 
     active_transcriber = transcriber or WhisperTranscriber(
         model_name=asr_model,
@@ -117,6 +138,16 @@ def process_input(
             "Transcribing audio",
             detail=f"{len(transcription.segments)} segments",
         )
+        normalized_transcription = normalize_transcription(transcription)
+
+        llm_enhancer, llm_runtime = _resolve_llm_processor(
+            enable_llm=enable_llm,
+            llm_processor=llm_processor,
+            reporter=active_reporter,
+            warnings=warnings,
+            llm_runtime=llm_runtime,
+        )
+        report_transcription = normalized_transcription
 
     if media_asset.media_type.value == "video":
         active_reporter.progress_started(
@@ -158,7 +189,7 @@ def process_input(
             "Extracting slide frames",
             detail=f"{len(slide_frames)} frames",
         )
-        alignment_blocks = align_by_time(transcription.segments, scenes, slide_frames)
+        alignment_blocks = align_by_time(report_transcription.segments, scenes, slide_frames)
     else:
         scenes = []
 
@@ -166,7 +197,7 @@ def process_input(
     start = perf_counter()
     report = build_report(
         media_asset,
-        transcription,
+        report_transcription,
         alignment_blocks=alignment_blocks,
         warnings=warnings,
     )
@@ -183,6 +214,15 @@ def process_input(
             if section.frame_id and section.frame_id in frame_by_id:
                 section.image_path = frame_by_id[section.frame_id].image_path
 
+    report, llm_runtime = _maybe_polish_report(
+        report,
+        llm_processor=llm_enhancer,
+        reporter=active_reporter,
+        warnings=warnings,
+        stage_timings=stage_timings,
+        llm_runtime=llm_runtime,
+    )
+
     _write_json(
         layout.metadata_path,
         {
@@ -190,6 +230,7 @@ def process_input(
         },
     )
     _write_json(layout.transcript_path, _transcription_payload(transcription))
+    report.warnings = list(warnings)
 
     active_reporter.stage_started("export", "Writing reports")
     start = perf_counter()
@@ -200,9 +241,19 @@ def process_input(
     diagnostics = Diagnostics(
         asr_backend=active_transcriber.backend_name,
         asr_model=active_transcriber.model_name,
+        llm_enabled=enable_llm,
+        llm_model=llm_runtime.model_name,
+        llm_transcript_status="disabled",
+        llm_report_status=llm_runtime.report_status,
+        llm_transcript_latency_sec=None,
+        llm_report_latency_sec=llm_runtime.report_latency_sec,
+        llm_transcript_usage={},
+        llm_report_usage=llm_runtime.report_usage or {},
         stage_durations_sec={key: round(value, 6) for key, value in stage_timings.items()},
         item_counts={
             "transcript_segments": len(transcription.segments),
+            "normalized_transcript_segments": len(normalized_transcription.segments),
+            "polished_transcript_segments": 0,
             "report_sections": len(report.sections),
             "scenes": len(scenes),
             "frames": len(slide_frames),
@@ -220,6 +271,113 @@ def process_input(
     )
     active_reporter.complete_run(artifacts)
     return artifacts
+
+
+def _resolve_llm_processor(
+    *,
+    enable_llm: bool,
+    llm_processor: LLMProcessor | None,
+    reporter: NullStageReporter,
+    warnings: list[str],
+    llm_runtime: LLMRuntimeState,
+) -> tuple[LLMProcessor | None, LLMRuntimeState]:
+    if not enable_llm:
+        return None, llm_runtime
+
+    if llm_processor is not None:
+        llm_runtime.provider_name = llm_processor.provider_name
+        llm_runtime.model_name = llm_processor.model_name
+        return llm_processor, llm_runtime
+
+    try:
+        resolved_processor = build_llm_processor_from_env()
+    except LLMConfigurationError as error:
+        warnings.append(str(error))
+        reporter.warn(str(error))
+        llm_runtime.report_status = "fallback"
+        return None, llm_runtime
+
+    llm_runtime.provider_name = resolved_processor.provider_name
+    llm_runtime.model_name = resolved_processor.model_name
+    return resolved_processor, llm_runtime
+
+
+def _maybe_polish_report(
+    report: ReportDocument,
+    *,
+    llm_processor: LLMProcessor | None,
+    reporter: NullStageReporter,
+    warnings: list[str],
+    stage_timings: dict[str, float],
+    llm_runtime: LLMRuntimeState,
+) -> tuple[ReportDocument, LLMRuntimeState]:
+    if llm_processor is None:
+        return report, llm_runtime
+
+    polish_plan = llm_processor.report_polish_plan(report)
+    label = _llm_stage_label(
+        "Polishing report with LLM",
+        llm_runtime,
+        detail=_llm_report_plan_label_detail(polish_plan),
+    )
+    reporter.progress_started(
+        "llm_report",
+        label,
+        total=max(float(polish_plan.section_count), 1.0),
+        count_label="sections",
+    )
+    start = perf_counter()
+    try:
+        polish_result = llm_processor.polish_report_with_progress(
+            report,
+            progress_callback=lambda advance: reporter.progress_advanced(
+                "llm_report",
+                advance=float(advance),
+            ),
+        )
+    except LLMProcessingError as error:
+        report_latency_sec = perf_counter() - start
+        stage_timings["llm_report"] = report_latency_sec
+        warnings.append(str(error))
+        reporter.warn(str(error))
+        reporter.stage_finished(
+            "llm_report",
+            label,
+            detail=_llm_fallback_detail(llm_runtime),
+        )
+        llm_runtime.report_status = "fallback"
+        llm_runtime.report_latency_sec = report_latency_sec
+        return report, llm_runtime
+
+    report_latency_sec = perf_counter() - start
+    stage_timings["llm_report"] = report_latency_sec
+    for warning in polish_result.warnings:
+        warnings.append(warning)
+        reporter.warn(warning)
+    report.summary = polish_result.summary
+    report.action_items = polish_result.action_items
+    for section in report.sections:
+        section.title = polish_result.section_titles.get(section.id, section.title)
+        section.transcript_text = polish_result.section_transcripts.get(
+            section.id,
+            section.transcript_text,
+        )
+    reporter.stage_finished(
+        "llm_report",
+        label,
+        detail=_llm_report_detail(
+            llm_runtime,
+            section_count=len(polish_result.section_transcripts),
+            title_count=len(polish_result.section_titles),
+            summary_count=len(polish_result.summary),
+            action_item_count=len(polish_result.action_items),
+            usage=polish_result.usage,
+        ),
+    )
+    llm_runtime.report_status = "applied"
+    llm_runtime.report_latency_sec = report_latency_sec
+    llm_runtime.report_usage = polish_result.usage
+    return report, llm_runtime
 
 
 def _write_requested_reports(report: ReportDocument, layout: RunLayout, output_format: str) -> None:
@@ -301,3 +459,80 @@ def _run_transcription_stage(
 
 def _asr_runtime_detail(transcriber: Transcriber) -> str:
     return f"{transcriber.backend_name} | {transcriber.model_name}"
+
+
+def _llm_stage_label(
+    base_label: str,
+    llm_runtime: LLMRuntimeState,
+    *,
+    detail: str | None = None,
+) -> str:
+    runtime_detail = _llm_runtime_detail(llm_runtime)
+    parenthetical = " | ".join(part for part in (runtime_detail, detail) if part)
+    return f"{base_label} ({parenthetical})" if parenthetical else base_label
+
+
+def _llm_runtime_detail(llm_runtime: LLMRuntimeState) -> str:
+    parts = [
+        value
+        for value in (
+            llm_runtime.provider_name,
+            llm_runtime.model_name,
+        )
+        if value
+    ]
+    return " | ".join(parts)
+
+
+def _llm_report_detail(
+    llm_runtime: LLMRuntimeState,
+    *,
+    section_count: int,
+    title_count: int,
+    summary_count: int,
+    action_item_count: int,
+    usage: dict[str, int],
+) -> str:
+    parts = [
+        _optional_count_detail(summary_count, singular="summary bullet", plural="summary bullets"),
+        _optional_count_detail(
+            action_item_count,
+            singular="action item",
+            plural="action items",
+        ),
+        _title_update_detail(title_count=title_count, section_count=section_count),
+        _token_usage_detail(usage),
+    ]
+    return " | ".join(part for part in parts if part)
+
+
+def _llm_fallback_detail(llm_runtime: LLMRuntimeState) -> str:
+    runtime_detail = _llm_runtime_detail(llm_runtime)
+    return " | ".join(part for part in (runtime_detail, "fallback") if part)
+
+
+def _llm_report_plan_label_detail(plan) -> str:
+    worker_label = "worker" if plan.worker_count == 1 else "workers"
+    return f"{plan.worker_count} {worker_label}"
+
+
+def _token_usage_detail(usage: dict[str, int]) -> str:
+    total_tokens = usage.get("total_tokens")
+    if total_tokens is None:
+        return ""
+    token_label = "token" if total_tokens == 1 else "tokens"
+    return f"{total_tokens} {token_label}"
+
+
+def _optional_count_detail(count: int, *, singular: str, plural: str) -> str:
+    if count <= 0:
+        return ""
+    label = singular if count == 1 else plural
+    return f"{count} {label}"
+
+
+def _title_update_detail(*, title_count: int, section_count: int) -> str:
+    if title_count <= 0 or title_count == section_count:
+        return ""
+    label = "title updated" if title_count == 1 else "titles updated"
+    return f"{title_count} {label}"

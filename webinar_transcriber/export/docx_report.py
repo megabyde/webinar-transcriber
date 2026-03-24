@@ -31,7 +31,13 @@ def write_docx_report(report: ReportDocument, output_path: Path) -> Path:
         document.add_heading(section.title, level=2)
         if section.image_path:
             document.add_picture(section.image_path, width=Inches(6))
-        document.add_paragraph(section.transcript_text)
+        for paragraph_text in _split_paragraphs(section.transcript_text):
+            document.add_paragraph(paragraph_text)
 
     document.save(str(output_path))
     return output_path
+
+
+def _split_paragraphs(text: str) -> list[str]:
+    paragraphs = [paragraph.strip() for paragraph in text.split("\n\n") if paragraph.strip()]
+    return paragraphs or [text]

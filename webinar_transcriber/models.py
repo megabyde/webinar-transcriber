@@ -104,6 +104,14 @@ class Diagnostics(BaseModel):
 
     asr_backend: str | None = None
     asr_model: str | None = None
+    llm_enabled: bool = False
+    llm_model: str | None = None
+    llm_transcript_status: str = "disabled"
+    llm_report_status: str = "disabled"
+    llm_transcript_latency_sec: float | None = None
+    llm_report_latency_sec: float | None = None
+    llm_transcript_usage: dict[str, int] = Field(default_factory=dict)
+    llm_report_usage: dict[str, int] = Field(default_factory=dict)
     stage_durations_sec: dict[str, float] = Field(default_factory=dict)
     item_counts: dict[str, int] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)

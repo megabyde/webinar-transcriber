@@ -52,12 +52,18 @@ def main() -> None:
     default=None,
     help="Override the ASR model identifier, for example 'small' or an MLX repo name.",
 )
+@click.option(
+    "--llm",
+    is_flag=True,
+    help="Enable optional OpenAI-based transcript and report enhancement.",
+)
 def process(
     input_path: Path,
     output_dir: Path | None,
     output_format: str,
     asr_backend: str,
     asr_model: str | None,
+    llm: bool,
 ) -> None:
     """Process an audio or video input file."""
     if not input_path.exists():
@@ -69,12 +75,13 @@ def process(
     reporter = RichStageReporter()
 
     try:
-        artifacts = process_input(
+        process_input(
             input_path=input_path,
             output_dir=output_dir,
             output_format=output_format,
             asr_backend=asr_backend,
             asr_model=asr_model,
+            enable_llm=llm,
             reporter=reporter,
         )
     except KeyboardInterrupt:
@@ -82,8 +89,6 @@ def process(
         raise click.exceptions.Exit(130) from None
     except (MediaProcessingError, OutputDirectoryExistsError) as error:
         raise click.ClickException(str(error)) from error
-
-    click.echo(f"Processed {input_path} into {artifacts.layout.run_dir} (format={output_format}).")
 
 
 @main.command("extract-frames", short_help="Extract representative frames from a video.")
