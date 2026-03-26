@@ -1,6 +1,7 @@
 """Tests for transcription audio preparation, VAD, and chunk planning."""
 
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -151,22 +152,19 @@ def test_merge_nearby_regions_handles_empty_and_gaps() -> None:
     assert [(region.start_sec, region.end_sec) for region in merged] == [(0.0, 2.0), (3.0, 4.0)]
 
 
-def test_silero_speech_timestamps_returns_none_when_module_missing(monkeypatch) -> None:
-    def raise_import_error(_name: str):
-        raise ImportError
-
-    monkeypatch.setattr(
-        "webinar_transcriber.transcription_audio.importlib.import_module", raise_import_error
-    )
-
-    assert (
-        _silero_speech_timestamps(
-            np.zeros(16_000, dtype=np.float32),
-            sample_rate=16_000,
-            settings=VADSettings(),
+def test_silero_speech_timestamps_returns_none_when_module_missing() -> None:
+    with patch(
+        "webinar_transcriber.transcription_audio.importlib.import_module",
+        side_effect=ImportError,
+    ):
+        assert (
+            _silero_speech_timestamps(
+                np.zeros(16_000, dtype=np.float32),
+                sample_rate=16_000,
+                settings=VADSettings(),
+            )
+            is None
         )
-        is None
-    )
 
 
 def test_load_normalized_audio_rejects_wrong_sample_rate(monkeypatch, tmp_path) -> None:

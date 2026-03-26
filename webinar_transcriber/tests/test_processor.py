@@ -4,6 +4,7 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import cast
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -382,16 +383,14 @@ def test_process_input_normalizes_transcript_before_report_generation(tmp_path) 
     assert artifacts.report.sections[0].transcript_text.startswith("Привет всем.")
 
 
-def test_process_input_persists_intermediate_artifacts_on_failure(tmp_path, monkeypatch) -> None:
+def test_process_input_persists_intermediate_artifacts_on_failure(tmp_path) -> None:
     reporter = RecordingReporter()
 
-    def fake_build_report(*args, **kwargs):
-        raise RuntimeError("boom")
-
-    monkeypatch.setattr("webinar_transcriber.processor.build_report", fake_build_report)
-
     output_dir = tmp_path / "failed-run"
-    with pytest.raises(RuntimeError, match="boom"):
+    with patch(
+        "webinar_transcriber.processor.build_report",
+        side_effect=RuntimeError("boom"),
+    ), pytest.raises(RuntimeError, match="boom"):
         process_input(
             FIXTURE_DIR / "sample-audio.mp3",
             output_dir=output_dir,
@@ -538,24 +537,22 @@ def test_process_input_polishes_report_sections_when_llm_succeeds(tmp_path) -> N
     ]
 
 
-def test_process_input_warns_when_llm_configuration_is_missing(tmp_path, monkeypatch) -> None:
+def test_process_input_warns_when_llm_configuration_is_missing(tmp_path) -> None:
     reporter = RecordingReporter()
 
-    def fake_build_llm_processor_from_env():
-        raise LLMConfigurationError("Missing required LLM environment variables: OPENAI_API_KEY.")
-
-    monkeypatch.setattr(
+    with patch(
         "webinar_transcriber.processor.build_llm_processor_from_env",
-        fake_build_llm_processor_from_env,
-    )
-
-    artifacts = process_input(
-        FIXTURE_DIR / "sample-audio.mp3",
-        output_dir=tmp_path / "llm-fallback-run",
-        transcriber=FakeTranscriber(),
-        enable_llm=True,
-        reporter=reporter,
-    )
+        side_effect=LLMConfigurationError(
+            "Missing required LLM environment variables: OPENAI_API_KEY."
+        ),
+    ):
+        artifacts = process_input(
+            FIXTURE_DIR / "sample-audio.mp3",
+            output_dir=tmp_path / "llm-fallback-run",
+            transcriber=FakeTranscriber(),
+            enable_llm=True,
+            reporter=reporter,
+        )
 
     assert artifacts.diagnostics.llm_enabled is True
     assert artifacts.diagnostics.llm_model is None

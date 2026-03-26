@@ -2,6 +2,7 @@
 
 import ctypes
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
@@ -166,15 +167,13 @@ def test_load_backend_plugins_loads_candidate_shared_objects(monkeypatch, tmp_pa
     plugin_path.write_text("stub", encoding="utf-8")
     ggml_library_path = tmp_path / "libggml.so"
     ggml_library_path.write_text("stub", encoding="utf-8")
-    loaded_paths: list[str] = []
-    loaded_dirs: list[bytes] = []
 
     class FakeGgmlLibrary:
         def __init__(self) -> None:
             self.ggml_log_set = FakeFunction(lambda *_args: None)
-            self.ggml_backend_load_all_from_path = FakeFunction(
-                lambda dir_path: loaded_dirs.append(dir_path)
-            )
+            self.ggml_backend_load_all_from_path = Mock()
+
+    fake_ggml_library = FakeGgmlLibrary()
 
     monkeypatch.setattr("webinar_transcriber.whispercpp._BACKEND_REGISTRATION_DONE", False)
     monkeypatch.setattr("webinar_transcriber.whispercpp._GGML_LIBRARY_HANDLE", None)
@@ -186,15 +185,19 @@ def test_load_backend_plugins_loads_candidate_shared_objects(monkeypatch, tmp_pa
         "webinar_transcriber.whispercpp._resolve_ggml_library_path",
         lambda: ggml_library_path,
     )
-    monkeypatch.setattr(
+    with patch(
         "webinar_transcriber.whispercpp.ctypes.CDLL",
-        lambda path, mode=0: loaded_paths.append(str(path)) or FakeGgmlLibrary(),
+        return_value=fake_ggml_library,
+    ) as cdll_mock:
+        _load_backend_plugins()
+
+    cdll_mock.assert_called_once_with(
+        str(ggml_library_path),
+        mode=getattr(ctypes, "RTLD_GLOBAL", 0),
     )
-
-    _load_backend_plugins()
-
-    assert loaded_paths == [str(ggml_library_path)]
-    assert loaded_dirs == [str(plugin_path.parent).encode("utf-8")]
+    fake_ggml_library.ggml_backend_load_all_from_path.assert_called_once_with(
+        str(plugin_path.parent).encode("utf-8")
+    )
 
 
 def test_load_backend_plugins_returns_when_no_ggml_library(monkeypatch) -> None:

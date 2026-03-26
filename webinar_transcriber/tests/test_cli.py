@@ -3,6 +3,7 @@
 import json
 import runpy
 import sys
+from unittest.mock import ANY, patch
 
 from click.testing import CliRunner
 
@@ -43,24 +44,15 @@ def test_main_version_prints_package_version() -> None:
     assert "0.1.0" in result.output
 
 
-def test_process_command_runs_pipeline(tmp_path, monkeypatch) -> None:
+def test_process_command_runs_pipeline(tmp_path) -> None:
     runner = CliRunner()
     input_path = tmp_path / "demo.mp4"
     input_path.write_text("stub", encoding="utf-8")
     run_dir = tmp_path / "run-dir"
 
-    def fake_process_input(**kwargs) -> ProcessArtifacts:
-        assert kwargs["input_path"] == input_path
-        assert kwargs["output_format"] == "json"
-        assert kwargs["asr_model"] is None
-        assert kwargs["vad_enabled"] is True
-        assert kwargs["chunk_target_sec"] == 20.0
-        assert kwargs["chunk_max_sec"] == 30.0
-        assert kwargs["chunk_overlap_sec"] == 1.5
-        assert kwargs["asr_threads"] == DEFAULT_ASR_THREADS
-        assert kwargs["enable_llm"] is False
-        assert kwargs["reporter"].__class__.__name__ == "RichStageReporter"
-        return ProcessArtifacts(
+    with patch(
+        "webinar_transcriber.cli.process_input",
+        return_value=ProcessArtifacts(
             layout=RunLayout(run_dir=run_dir),
             media_asset=MediaAsset(
                 path=str(input_path),
@@ -74,31 +66,37 @@ def test_process_command_runs_pipeline(tmp_path, monkeypatch) -> None:
                 media_type=MediaType.VIDEO,
             ),
             diagnostics=Diagnostics(),
-        )
-
-    monkeypatch.setattr("webinar_transcriber.cli.process_input", fake_process_input)
-
-    result = runner.invoke(main, ["process", str(input_path), "--format", "json"])
+        ),
+    ) as process_input_mock:
+        result = runner.invoke(main, ["process", str(input_path), "--format", "json"])
 
     assert result.exit_code == 0
     assert result.output == ""
+    process_input_mock.assert_called_once_with(
+        input_path=input_path,
+        output_dir=None,
+        output_format="json",
+        asr_model=None,
+        vad_enabled=True,
+        chunk_target_sec=20.0,
+        chunk_max_sec=30.0,
+        chunk_overlap_sec=1.5,
+        asr_threads=DEFAULT_ASR_THREADS,
+        enable_llm=False,
+        reporter=ANY,
+    )
+    assert process_input_mock.call_args.kwargs["reporter"].__class__.__name__ == "RichStageReporter"
 
 
-def test_process_command_forwards_asr_options(tmp_path, monkeypatch) -> None:
+def test_process_command_forwards_asr_options(tmp_path) -> None:
     runner = CliRunner()
     input_path = tmp_path / "demo.mp4"
     input_path.write_text("stub", encoding="utf-8")
     run_dir = tmp_path / "run-dir"
 
-    def fake_process_input(**kwargs) -> ProcessArtifacts:
-        assert kwargs["asr_model"] == "models/whisper-cpp/custom.bin"
-        assert kwargs["vad_enabled"] is False
-        assert kwargs["chunk_target_sec"] == 18.0
-        assert kwargs["chunk_max_sec"] == 24.0
-        assert kwargs["chunk_overlap_sec"] == 2.0
-        assert kwargs["asr_threads"] == 6
-        assert kwargs["enable_llm"] is True
-        return ProcessArtifacts(
+    with patch(
+        "webinar_transcriber.cli.process_input",
+        return_value=ProcessArtifacts(
             layout=RunLayout(run_dir=run_dir),
             media_asset=MediaAsset(
                 path=str(input_path),
@@ -112,31 +110,42 @@ def test_process_command_forwards_asr_options(tmp_path, monkeypatch) -> None:
                 media_type=MediaType.VIDEO,
             ),
             diagnostics=Diagnostics(),
+        ),
+    ) as process_input_mock:
+        result = runner.invoke(
+            main,
+            [
+                "process",
+                str(input_path),
+                "--asr-model",
+                "models/whisper-cpp/custom.bin",
+                "--no-vad",
+                "--chunk-target-sec",
+                "18",
+                "--chunk-max-sec",
+                "24",
+                "--chunk-overlap-sec",
+                "2",
+                "--threads",
+                "6",
+                "--llm",
+            ],
         )
 
-    monkeypatch.setattr("webinar_transcriber.cli.process_input", fake_process_input)
-
-    result = runner.invoke(
-        main,
-        [
-            "process",
-            str(input_path),
-            "--asr-model",
-            "models/whisper-cpp/custom.bin",
-            "--no-vad",
-            "--chunk-target-sec",
-            "18",
-            "--chunk-max-sec",
-            "24",
-            "--chunk-overlap-sec",
-            "2",
-            "--threads",
-            "6",
-            "--llm",
-        ],
-    )
-
     assert result.exit_code == 0
+    process_input_mock.assert_called_once_with(
+        input_path=input_path,
+        output_dir=None,
+        output_format="all",
+        asr_model="models/whisper-cpp/custom.bin",
+        vad_enabled=False,
+        chunk_target_sec=18.0,
+        chunk_max_sec=24.0,
+        chunk_overlap_sec=2.0,
+        asr_threads=6,
+        enable_llm=True,
+        reporter=ANY,
+    )
 
 
 def test_process_help_describes_asr_options() -> None:
@@ -176,35 +185,33 @@ def test_process_command_colors_top_level_errors(tmp_path) -> None:
     assert "Error:" in result.output
 
 
-def test_process_command_rejects_existing_output_directory(tmp_path, monkeypatch) -> None:
+def test_process_command_rejects_existing_output_directory(tmp_path) -> None:
     runner = CliRunner()
     input_path = tmp_path / "demo.wav"
     output_dir = tmp_path / "run"
     input_path.write_text("stub", encoding="utf-8")
     output_dir.mkdir()
 
-    def should_not_run(**_: object) -> ProcessArtifacts:
-        raise OutputDirectoryExistsError(f"Output directory already exists: {output_dir}")
-
-    monkeypatch.setattr("webinar_transcriber.cli.process_input", should_not_run)
-
-    result = runner.invoke(main, ["process", str(input_path), "--output-dir", str(output_dir)])
+    with patch(
+        "webinar_transcriber.cli.process_input",
+        side_effect=OutputDirectoryExistsError(f"Output directory already exists: {output_dir}"),
+    ):
+        result = runner.invoke(main, ["process", str(input_path), "--output-dir", str(output_dir)])
 
     assert result.exit_code != 0
     assert "Output directory already exists" in result.output
 
 
-def test_process_command_handles_ctrl_c(tmp_path, monkeypatch) -> None:
+def test_process_command_handles_ctrl_c(tmp_path) -> None:
     runner = CliRunner()
     input_path = tmp_path / "demo.wav"
     input_path.write_text("stub", encoding="utf-8")
 
-    def interrupted_process_input(**_: object) -> ProcessArtifacts:
-        raise KeyboardInterrupt
-
-    monkeypatch.setattr("webinar_transcriber.cli.process_input", interrupted_process_input)
-
-    result = runner.invoke(main, ["process", str(input_path)])
+    with patch(
+        "webinar_transcriber.cli.process_input",
+        side_effect=KeyboardInterrupt,
+    ):
+        result = runner.invoke(main, ["process", str(input_path)])
 
     assert result.exit_code == 130
     assert "Interrupted" in result.output
