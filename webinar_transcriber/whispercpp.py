@@ -576,7 +576,7 @@ def _set_log_sink_path(log_path: Path | None) -> None:
 def _append_log_message(text: bytes | None) -> None:
     if _LOG_SINK_PATH is None or not text:
         return
-    with _LOG_SINK_LOCK, open(_LOG_SINK_PATH, "ab") as log_file:
+    with _LOG_SINK_LOCK, _LOG_SINK_PATH.open("ab") as log_file:
         log_file.write(text)
 
 

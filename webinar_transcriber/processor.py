@@ -513,7 +513,6 @@ def _maybe_polish_report(
         "llm_report",
         summary_label,
         detail=_llm_report_detail(
-            llm_runtime,
             section_count=len(section_result.section_transcripts),
             title_count=len(metadata_result.section_titles),
             summary_count=len(metadata_result.summary),
@@ -676,7 +675,6 @@ def _llm_runtime_detail(llm_runtime: LLMRuntimeState) -> str:
 
 
 def _llm_report_detail(
-    llm_runtime: LLMRuntimeState,
     *,
     section_count: int,
     title_count: int,

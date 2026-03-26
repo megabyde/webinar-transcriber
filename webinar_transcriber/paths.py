@@ -2,7 +2,7 @@
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -62,7 +62,7 @@ def build_run_layout(
 ) -> RunLayout:
     """Return the run layout without touching the filesystem."""
     if output_dir is None:
-        current_time = now or datetime.now()
+        current_time = now or datetime.now(tz=UTC).astimezone()
         timestamp = current_time.strftime("%Y%m%d-%H%M%S-%f")
         run_dir = Path("runs") / f"{timestamp}_{_slugify_stem(input_path)}"
     else:

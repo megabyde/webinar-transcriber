@@ -51,7 +51,7 @@ class ChunkPlanSettings:
 
 
 @contextmanager
-def prepared_transcription_audio(input_path: Path, media_asset: MediaAsset) -> Iterator[Path]:
+def prepared_transcription_audio(input_path: Path, _media_asset: MediaAsset) -> Iterator[Path]:
     """Yield a normalized mono 16 kHz WAV file for transcription."""
     with tempfile.TemporaryDirectory(prefix="webinar-transcriber-audio-") as temp_dir:
         audio_path = Path(temp_dir) / f"{input_path.stem}.wav"

@@ -82,41 +82,51 @@ line-length = 100
 
 [tool.ruff.lint]
 select = [
-    "F",
-    "E",
-    "W",
-    "D2",
-    "D3",
-    "D4",
-    "I",
-    "N",
-    "UP",
-    "YTT",
-    "ASYNC",
-    "B",
-    "C4",
-    "EXE",
-    "PIE",
-    "PYI",
-    "RSE",
-    "RET",
-    "SIM",
-    "TCH",
-    "C90",
-    "ERA",
-    "FLY",
-    "PLC",
-    "PLE",
-    "TID",
-    "PERF",
-    "RUF",
+    # Core families.
+    "F",   # Pyflakes.
+    "E",   # pycodestyle.
+    "W",   # pycodestyle.
+    "D2",  # pydocstyle.
+    "D3",  # pydocstyle.
+    "D4",  # pydocstyle.
+
+    # Standalone families.
+    "I",   # isort.
+    "N",   # pep8-naming.
+    "UP",  # pyupgrade.
+
+    # flake8 families:
+    "YTT",   # flake8-2020.
+    "ASYNC", # flake8-async.
+    "B",     # flake8-bugbear.
+    "C4",    # flake8-comprehensions.
+    "EXE",   # flake8-executable.
+    "PIE",   # flake8-pie.
+    "PYI",   # flake8-pyi.
+    "RSE",   # flake8-raise.
+    "RET",   # flake8-return.
+    "SIM",   # flake8-simplify.
+    "TCH",   # flake8-type-checking.
+    "ARG",   # flake8-unused-arguments.
+    "DTZ",   # flake8-datetimez.
+    "PTH",   # flake8-use-pathlib.
+    "TID",   # flake8-tidy-imports.
+
+    # Other families.
+    "C90",  # mccabe.
+    "ERA",  # eradicate.
+    "FLY",  # flynt.
+    "PLC",  # Pylint.
+    "PLE",  # Pylint.
+    "PERF", # Perflint.
+    "RUF",  # Ruff-specific rules.
 ]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-"webinar_transcriber/**/tests/*.py" = ["D", "PLC0415"]
+"webinar_transcriber/**/tests/*.py" = ["ARG", "D", "DTZ", "PLC0415"]
 
 [tool.ty.src]
 include = ["webinar_transcriber"]

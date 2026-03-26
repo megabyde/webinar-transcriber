@@ -62,9 +62,7 @@ def _missing_model_error_message(model_path: Path) -> str:
     if model_path == default_path:
         location_hint = f"Download ggml-large-v3-turbo.bin to {default_path}."
     else:
-        location_hint = (
-            f"Download a whisper.cpp model there, or use --asr-model {default_path}."
-        )
+        location_hint = f"Download a whisper.cpp model there, or use --asr-model {default_path}."
     return (
         f"whisper.cpp model file does not exist: {model_path}. "
         f"{location_hint} See README.md for model download instructions."
