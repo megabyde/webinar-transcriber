@@ -150,12 +150,12 @@ def process_input(
         )
 
         if isinstance(active_transcriber, WhisperCppTranscriber):
-            active_reporter.stage_started("vad", "Detecting speech regions")
-            start = perf_counter()
             audio_samples, sample_rate = load_normalized_audio(audio_path)
             asr_pipeline.normalized_audio_duration_sec = normalized_audio_duration(
                 audio_samples, sample_rate
             )
+            active_reporter.stage_started("vad", "Detecting speech regions")
+            start = perf_counter()
             speech_regions, vad_warnings = detect_speech_regions(
                 audio_samples,
                 sample_rate,

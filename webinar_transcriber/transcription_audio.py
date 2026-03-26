@@ -96,7 +96,11 @@ def detect_speech_regions(
     if not settings.enabled:
         return [SpeechRegion(start_sec=0.0, end_sec=duration_sec)], []
 
-    timestamps = _silero_speech_timestamps(samples, sample_rate=sample_rate, settings=settings)
+    timestamps = _silero_speech_timestamps(
+        samples,
+        sample_rate=sample_rate,
+        settings=settings,
+    )
     if timestamps is None:
         warning = "Silero VAD is unavailable; falling back to one full-audio speech region."
         return [SpeechRegion(start_sec=0.0, end_sec=duration_sec)], [warning]
@@ -192,12 +196,14 @@ def _silero_speech_timestamps(
 ) -> list[dict[str, int]] | None:
     try:
         silero_vad = importlib.import_module("silero_vad")
+        torch = importlib.import_module("torch")
     except ImportError:
         return None
 
     speech_model = silero_vad.load_silero_vad()
+    audio_tensor = torch.from_numpy(samples)
     return silero_vad.get_speech_timestamps(
-        samples,
+        audio_tensor,
         speech_model,
         sampling_rate=sample_rate,
         threshold=settings.threshold,

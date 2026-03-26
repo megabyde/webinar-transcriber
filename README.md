@@ -82,6 +82,13 @@ webinar-transcriber process INPUT \
   --threads 4
 ```
 
+Silero VAD is included in the project dependencies and is used automatically when installed in the
+current environment. If you updated from an older checkout, rerun:
+
+```bash
+make sync
+```
+
 ## Processing Behavior
 
 ### Pipeline
