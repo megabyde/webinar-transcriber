@@ -1,6 +1,7 @@
 # webinar-transcriber
 
-[![CI](https://github.com/megabyde/webinar-transcriber/actions/workflows/ci.yml/badge.svg)](https://github.com/megabyde/webinar-transcriber/actions/workflows/ci.yml)
+[![CI][ci-badge]][ci-workflow]
+
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)
 ![Coverage 90%25](https://img.shields.io/badge/coverage-90%25%2B-brightgreen.svg)
 ![License MIT](https://img.shields.io/badge/license-MIT-green.svg)
@@ -23,8 +24,8 @@ heuristic-driven for structuring and summaries.
 ## Usage
 
 The CLI uses `whisper.cpp` in-process through its C API. The Python layer uses one code path on
-macOS and Linux; acceleration depends on how the local `libwhisper` was built and installed. The
-ASR model is a local `.bin` file rather than an automatically downloaded Hugging Face model.
+macOS and Linux; acceleration depends on how the local `libwhisper` was built and installed. The ASR
+model is a local `.bin` file rather than an automatically downloaded Hugging Face model.
 
 Typical runs:
 
@@ -224,8 +225,8 @@ make test
 make coverage
 ```
 
-The repository keeps tiny committed media fixtures so pipeline tests can run without network
-fetches or giant binary blobs.
+The repository keeps tiny committed media fixtures so pipeline tests can run without network fetches
+or giant binary blobs.
 
 ## Package Shape
 
@@ -238,3 +239,6 @@ The package stays intentionally flat:
   `webinar_transcriber/video/tests/`
 
 Contributor and agent-specific repository guidance lives in [AGENTS.md](AGENTS.md).
+
+[ci-badge]: https://github.com/megabyde/webinar-transcriber/actions/workflows/ci.yml/badge.svg
+[ci-workflow]: https://github.com/megabyde/webinar-transcriber/actions/workflows/ci.yml

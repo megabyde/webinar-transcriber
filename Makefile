@@ -1,5 +1,7 @@
 .PHONY: help sync format lint typecheck test coverage check ci clean
 
+MD_FILES := $(shell git ls-files '*.md')
+
 help:
 	@printf "Available targets:\n"
 	@printf "  sync       Install project and dev dependencies with uv\n"
@@ -16,11 +18,12 @@ sync:
 	uv sync --group dev
 
 format:
-	uv run mdformat README.md AGENTS.md
+	uv run mdformat $(MD_FILES)
 	uv run ruff format .
 
 lint:
-	uv run mdformat --check README.md AGENTS.md
+	uv run mdformat --check $(MD_FILES)
+	uv run pymarkdown scan $(MD_FILES)
 	uv run ruff check .
 
 typecheck:

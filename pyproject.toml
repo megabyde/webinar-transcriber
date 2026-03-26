@@ -45,6 +45,7 @@ webinar-transcriber = "webinar_transcriber.cli:main"
 dev = [
     "coverage[toml]>=7.8.0",
     "mdformat>=0.7.22",
+    "pymarkdownlnt>=0.9.33",
     "pytest>=8.1.1,<9",
     "pytest-cov>=6.0.0",
     "ruff>=0.11.2",
@@ -127,6 +128,11 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "webinar_transcriber/**/tests/*.py" = ["ARG", "D", "DTZ", "PLC0415"]
+
+[tool.pymarkdown.plugins.md013]
+line_length = 100
+code_block_line_length = 100
+heading_line_length = 100
 
 [tool.ty.src]
 include = ["webinar_transcriber"]
