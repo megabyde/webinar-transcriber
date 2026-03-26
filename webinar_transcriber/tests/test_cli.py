@@ -41,7 +41,7 @@ def test_main_version_prints_package_version() -> None:
     result = runner.invoke(main, ["--version"])
 
     assert result.exit_code == 0
-    assert "0.1.0" in result.output
+    assert "0.1.1" in result.output
 
 
 def test_process_command_runs_pipeline(tmp_path) -> None:
