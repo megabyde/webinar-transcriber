@@ -55,26 +55,24 @@ def test_build_llm_processor_from_env_requires_api_key_and_model(monkeypatch) ->
 
 
 def test_openai_llm_processor_polishes_report(monkeypatch) -> None:
-    fake_client = FakeClient(
-        [
-            FakeResponse(
-                output_parsed=SectionTextResponse(
-                    transcript_text="Agenda review and project status update.\n\nPlease listen."
-                ),
-                usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
+    fake_client = FakeClient([
+        FakeResponse(
+            output_parsed=SectionTextResponse(
+                transcript_text="Agenda review and project status update.\n\nPlease listen."
             ),
-            FakeResponse(
-                ReportPolishResponse(
-                    summary=["Improved summary."],
-                    action_items=["Send the updated draft by Friday."],
-                    section_updates=[
-                        ReportSectionUpdate(id="section-1", title="Improved overview"),
-                    ],
-                ),
-                {"input_tokens": 12, "output_tokens": 8, "total_tokens": 20},
+            usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
+        ),
+        FakeResponse(
+            ReportPolishResponse(
+                summary=["Improved summary."],
+                action_items=["Send the updated draft by Friday."],
+                section_updates=[
+                    ReportSectionUpdate(id="section-1", title="Improved overview"),
+                ],
             ),
-        ]
-    )
+            {"input_tokens": 12, "output_tokens": 8, "total_tokens": 20},
+        ),
+    ])
     monkeypatch.setattr(
         "webinar_transcriber.llm._build_openai_client", lambda _api_key: fake_client
     )
@@ -110,24 +108,22 @@ def test_openai_llm_processor_polishes_report(monkeypatch) -> None:
 
 
 def test_openai_llm_processor_rejects_unknown_report_section_id(monkeypatch) -> None:
-    fake_client = FakeClient(
-        [
-            FakeResponse(
-                output_parsed=SectionTextResponse(
-                    transcript_text="Agenda review and project status update."
-                ),
-                usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
+    fake_client = FakeClient([
+        FakeResponse(
+            output_parsed=SectionTextResponse(
+                transcript_text="Agenda review and project status update."
             ),
-            FakeResponse(
-                ReportPolishResponse(
-                    section_updates=[
-                        ReportSectionUpdate(id="section-x", title="Unexpected title"),
-                    ]
-                ),
-                {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5},
+            usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
+        ),
+        FakeResponse(
+            ReportPolishResponse(
+                section_updates=[
+                    ReportSectionUpdate(id="section-x", title="Unexpected title"),
+                ]
             ),
-        ]
-    )
+            {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5},
+        ),
+    ])
     monkeypatch.setattr(
         "webinar_transcriber.llm._build_openai_client", lambda _api_key: fake_client
     )

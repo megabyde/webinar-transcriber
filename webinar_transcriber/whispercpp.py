@@ -456,16 +456,14 @@ def _candidate_backend_plugin_paths() -> list[Path]:
     if explicit_plugin_dir:
         candidate_dirs.append(Path(explicit_plugin_dir).expanduser())
 
-    candidate_dirs.extend(
-        [
-            Path("/opt/homebrew/Cellar/ggml"),
-            Path("/usr/local/Cellar/ggml"),
-            Path("/usr/local/lib/ggml"),
-            Path("/usr/lib/ggml"),
-            Path("/usr/local/libexec/ggml"),
-            Path("/usr/libexec/ggml"),
-        ]
-    )
+    candidate_dirs.extend([
+        Path("/opt/homebrew/Cellar/ggml"),
+        Path("/usr/local/Cellar/ggml"),
+        Path("/usr/local/lib/ggml"),
+        Path("/usr/lib/ggml"),
+        Path("/usr/local/libexec/ggml"),
+        Path("/usr/libexec/ggml"),
+    ])
 
     plugin_paths: list[Path] = []
     for candidate_dir in candidate_dirs:

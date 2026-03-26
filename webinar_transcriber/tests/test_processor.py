@@ -116,9 +116,11 @@ class RecordingReporter(NullStageReporter):
         self.warnings.append(message)
 
     def complete_run(self, artifacts) -> None:
-        self.events.append(
-            ("complete", artifacts.layout.run_dir.name, artifacts.report.source_file)
-        )
+        self.events.append((
+            "complete",
+            artifacts.layout.run_dir.name,
+            artifacts.report.source_file,
+        ))
 
 
 def test_process_input_writes_reports_and_metadata(tmp_path) -> None:
@@ -387,10 +389,13 @@ def test_process_input_persists_intermediate_artifacts_on_failure(tmp_path) -> N
     reporter = RecordingReporter()
 
     output_dir = tmp_path / "failed-run"
-    with patch(
-        "webinar_transcriber.processor.build_report",
-        side_effect=RuntimeError("boom"),
-    ), pytest.raises(RuntimeError, match="boom"):
+    with (
+        patch(
+            "webinar_transcriber.processor.build_report",
+            side_effect=RuntimeError("boom"),
+        ),
+        pytest.raises(RuntimeError, match="boom"),
+    ):
         process_input(
             FIXTURE_DIR / "sample-audio.mp3",
             output_dir=output_dir,

@@ -25,16 +25,14 @@ def write_markdown_report(report: ReportDocument, output_path: Path) -> Path:
     lines.extend(["## Sections", ""])
 
     for section in report.sections:
-        lines.extend(
-            [
-                f"### {section.title}",
-                "",
-                f"![{section.title}]({section.image_path})" if section.image_path else "",
-                "",
-                section.transcript_text,
-                "",
-            ]
-        )
+        lines.extend([
+            f"### {section.title}",
+            "",
+            f"![{section.title}]({section.image_path})" if section.image_path else "",
+            "",
+            section.transcript_text,
+            "",
+        ])
 
     output_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
     return output_path

@@ -132,9 +132,10 @@ def _iter_sampled_frames(video_path: Path) -> Iterable[tuple[float, np.ndarray]]
                 process.kill()
                 raise MediaProcessingError("Incomplete frame sample returned by ffmpeg.")
 
-            frame = np.frombuffer(chunk, dtype=np.uint8).reshape(
-                (TARGET_SAMPLE_HEIGHT, TARGET_SAMPLE_WIDTH)
-            )
+            frame = np.frombuffer(chunk, dtype=np.uint8).reshape((
+                TARGET_SAMPLE_HEIGHT,
+                TARGET_SAMPLE_WIDTH,
+            ))
             yield sample_index * SAMPLE_INTERVAL_SEC, frame.astype(np.float32)
             sample_index += 1
     finally:
