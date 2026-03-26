@@ -1,230 +1,155 @@
-"""Tests for ASR backend adapters."""
+"""Tests for the whisper.cpp ASR adapter."""
 
-from types import SimpleNamespace
-
+import numpy as np
 import pytest
 
 from webinar_transcriber.asr import (
-    DEFAULT_FASTER_WHISPER_MODEL,
-    DEFAULT_MLX_WHISPER_MODEL,
-    FasterWhisperTranscriber,
-    MlxWhisperTranscriber,
-    WhisperTranscriber,
+    DEFAULT_WHISPER_CPP_MODEL,
+    WhisperCppTranscriber,
+    _device_name_from_system_info,
 )
-from webinar_transcriber.models import TranscriptionResult
+from webinar_transcriber.models import ChunkTranscription, TranscriptSegment
 
 
-class FakeSegment:
-    """Simple stand-in for a faster-whisper segment object."""
+def test_default_model_uses_whisper_cpp_model_path() -> None:
+    transcriber = WhisperCppTranscriber()
 
-    def __init__(self) -> None:
-        self.text = " agenda review "
-        self.start = 0.0
-        self.end = 1.5
-        self.words = []
+    assert transcriber.model_name == str(DEFAULT_WHISPER_CPP_MODEL)
 
 
-class FakeInfo:
-    """Simple stand-in for faster-whisper transcription metadata."""
-
-    language = "en"
-
-
-class FakeModel:
-    """Simple stand-in for a WhisperModel instance."""
-
-    def transcribe(
-        self,
-        audio_path: str,
-        *,
-        beam_size: int,
-        vad_filter: bool,
-        initial_prompt: str,
-    ):
-        assert audio_path.endswith(".wav")
-        assert beam_size == 5
-        assert vad_filter is True
-        assert initial_prompt is None
-        return [FakeSegment()], FakeInfo()
+def test_prepare_model_requires_model_file(tmp_path) -> None:
+    with pytest.raises(RuntimeError, match="model file does not exist") as error:
+        WhisperCppTranscriber(model_name=str(tmp_path / "missing.bin")).prepare_model()
+    message = str(error.value)
+    assert "--asr-model" in message
+    assert "README.md" in message
 
 
-def test_faster_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("webinar_transcriber.asr.WhisperModel", lambda *args, **kwargs: FakeModel())
-
-    transcriber = FasterWhisperTranscriber(model_name=DEFAULT_FASTER_WHISPER_MODEL)
-    progress_updates: list[float] = []
-    result = transcriber.transcribe(
-        tmp_path / "audio.wav",
-        progress_callback=lambda completed_sec: progress_updates.append(completed_sec),
+def test_prepare_model_missing_default_model_is_actionable(tmp_path, monkeypatch) -> None:
+    default_model_path = tmp_path / "missing-default-model.bin"
+    monkeypatch.setattr(
+        "webinar_transcriber.asr.DEFAULT_WHISPER_CPP_MODEL",
+        default_model_path,
     )
-
-    assert result.detected_language == "en"
-    assert result.segments[0].text == "agenda review"
-    assert progress_updates == [1.5]
-    assert transcriber.supports_live_progress is True
-    assert transcriber.uses_native_progress is False
-
-
-def test_default_model_uses_faster_whisper_backend_defaults(monkeypatch) -> None:
-    captured: dict[str, str] = {}
-
-    class RecordingModel:
-        def __init__(self, model_name: str, *, device: str, compute_type: str) -> None:
-            captured["model_name"] = model_name
-            captured["device"] = device
-            captured["compute_type"] = compute_type
-
-    monkeypatch.setattr("webinar_transcriber.asr.WhisperModel", RecordingModel)
-
-    FasterWhisperTranscriber(device="auto")
-
-    assert captured["model_name"] == DEFAULT_FASTER_WHISPER_MODEL
-    assert captured["compute_type"] == "default"
+    with pytest.raises(RuntimeError, match="model file does not exist") as error:
+        WhisperCppTranscriber(model_name=str(default_model_path)).prepare_model()
+    message = str(error.value)
+    assert "Download ggml-large-v3-turbo.bin" in message
+    assert str(default_model_path) in message
 
 
-def test_mlx_whisper_transcriber_normalizes_model_output(monkeypatch, tmp_path) -> None:
-    def fake_transcribe(
-        audio_path: str,
-        *,
-        path_or_hf_repo: str,
-        verbose: bool,
-        word_timestamps: bool,
-        initial_prompt: str,
-    ) -> dict[str, object]:
-        assert audio_path.endswith(".wav")
-        assert path_or_hf_repo == DEFAULT_MLX_WHISPER_MODEL
-        assert verbose is False
-        assert word_timestamps is False
-        assert initial_prompt is None
-        return {
-            "language": "en",
-            "segments": [
-                {
-                    "text": " agenda review ",
-                    "start": 0.0,
-                    "end": 1.5,
-                }
-            ],
-        }
+def test_prepare_model_reads_runtime_details(monkeypatch, tmp_path) -> None:
+    model_path = tmp_path / "model.bin"
+    model_path.write_text("stub", encoding="utf-8")
+
+    class FakeLibrary:
+        def __init__(self, _library_path, log_path=None) -> None:
+            self._library_path = _library_path
+            self._log_path = log_path
+
+        def create_session(self, _model_path):
+            from webinar_transcriber.whispercpp import WhisperCppRuntimeDetails
+
+            class FakeSession:
+                runtime_details = WhisperCppRuntimeDetails(
+                    library_path="/usr/local/lib/libwhisper.so",
+                    system_info="METAL = 1",
+                )
+
+                def close(self) -> None:
+                    return None
+
+            return FakeSession()
+
+    monkeypatch.setattr("webinar_transcriber.asr.WhisperCppLibrary", FakeLibrary)
+
+    transcriber = WhisperCppTranscriber(model_name=str(model_path))
+    transcriber.prepare_model()
+
+    assert transcriber.device_name == "metal"
+    assert transcriber.library_path == "/usr/local/lib/libwhisper.so"
+
+
+def test_whisper_cpp_transcriber_uses_library_for_chunked_transcription(
+    monkeypatch, tmp_path
+) -> None:
+    model_path = tmp_path / "model.bin"
+    model_path.write_text("stub", encoding="utf-8")
+    progress_updates: list[float] = []
 
     monkeypatch.setattr(
-        "webinar_transcriber.asr._import_mlx_whisper",
-        lambda: SimpleNamespace(transcribe=fake_transcribe),
+        "webinar_transcriber.asr.load_normalized_audio",
+        lambda _path: (np.zeros(16_000, dtype=np.float32), 16_000),
     )
 
-    transcriber = MlxWhisperTranscriber(model_name=DEFAULT_MLX_WHISPER_MODEL)
-    progress_updates: list[float] = []
+    class FakeLibrary:
+        def __init__(self, _library_path, log_path=None) -> None:
+            self._library_path = _library_path
+            self._log_path = log_path
+
+        def create_session(self, _model_path):
+            from webinar_transcriber.whispercpp import WhisperCppRuntimeDetails
+
+            class FakeSession:
+                runtime_details = WhisperCppRuntimeDetails(
+                    library_path="/usr/local/lib/libwhisper.so",
+                    system_info="CPU = 1",
+                )
+
+                def transcribe_chunks(
+                    self,
+                    audio_samples,
+                    chunks,
+                    *,
+                    threads,
+                    initial_prompt=None,
+                    progress_callback=None,
+                ):
+                    del audio_samples, initial_prompt
+                    assert threads == 6
+                    assert len(chunks) == 1
+                    if progress_callback is not None:
+                        progress_callback(chunks[0].end_sec)
+                    return [
+                        ChunkTranscription(
+                            chunk_id=chunks[0].id,
+                            start_sec=0.0,
+                            end_sec=1.0,
+                            detected_language="ru",
+                            segments=[
+                                TranscriptSegment(
+                                    id="segment-1",
+                                    text="agenda review",
+                                    start_sec=0.0,
+                                    end_sec=1.0,
+                                )
+                            ],
+                        )
+                    ]
+
+                def close(self) -> None:
+                    return None
+
+            return FakeSession()
+
+    monkeypatch.setattr("webinar_transcriber.asr.WhisperCppLibrary", FakeLibrary)
+
+    transcriber = WhisperCppTranscriber(model_name=str(model_path), threads=6)
     result = transcriber.transcribe(
         tmp_path / "audio.wav",
         progress_callback=lambda completed_sec: progress_updates.append(completed_sec),
     )
 
-    assert result.detected_language == "en"
-    assert result.segments[0].text == "agenda review"
-    assert progress_updates == []
-    assert transcriber.supports_live_progress is False
-    assert transcriber.uses_native_progress is True
+    assert result.detected_language == "ru"
+    assert [segment.text for segment in result.segments] == ["agenda review"]
+    assert progress_updates == [1.0]
+    assert transcriber.device_name == "cpu"
 
 
-def test_mlx_whisper_transcriber_preloads_model(monkeypatch) -> None:
-    captured: dict[str, str] = {}
-
-    def fake_preload(model_name: str) -> None:
-        captured["model_name"] = model_name
-
-    monkeypatch.setattr("webinar_transcriber.asr._preload_mlx_model", fake_preload)
-
-    transcriber = MlxWhisperTranscriber(model_name=DEFAULT_MLX_WHISPER_MODEL)
-    transcriber.prepare_model()
-
-    assert captured["model_name"] == DEFAULT_MLX_WHISPER_MODEL
-
-
-def test_whisper_transcriber_prefers_mlx_when_available(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("webinar_transcriber.asr._mlx_backend_available", lambda: True)
-    captured: dict[str, object] = {}
-
-    class FakeMlxDelegate:
-        def __init__(self, model_name: str, *, initial_prompt: str | None) -> None:
-            assert model_name == DEFAULT_MLX_WHISPER_MODEL
-            assert initial_prompt is None
-
-        @property
-        def supports_live_progress(self) -> bool:
-            return False
-
-        @property
-        def uses_native_progress(self) -> bool:
-            return True
-
-        def prepare_model(self) -> None:
-            captured["prepared"] = True
-
-        def transcribe(self, audio_path, *, progress_callback=None):
-            captured["audio_path"] = audio_path
-            captured["callback"] = progress_callback
-            return TranscriptionResult(detected_language="en", segments=[])
-
-    monkeypatch.setattr("webinar_transcriber.asr.MlxWhisperTranscriber", FakeMlxDelegate)
-
-    transcriber = WhisperTranscriber()
-    transcriber.prepare_model()
-    transcriber.transcribe(tmp_path / "audio.wav")
-
-    assert transcriber.backend == "mlx"
-    assert transcriber.supports_live_progress is False
-    assert transcriber.uses_native_progress is True
-    assert captured["prepared"] is True
-    assert str(captured["audio_path"]).endswith("audio.wav")
-
-
-def test_whisper_transcriber_falls_back_to_faster_whisper(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("webinar_transcriber.asr._mlx_backend_available", lambda: False)
-    captured: dict[str, object] = {}
-
-    class FakeFasterDelegate:
-        def __init__(
-            self,
-            model_name: str,
-            *,
-            device: str,
-            initial_prompt: str | None,
-        ) -> None:
-            assert model_name == DEFAULT_FASTER_WHISPER_MODEL
-            assert device == "auto"
-            assert initial_prompt is None
-
-        @property
-        def supports_live_progress(self) -> bool:
-            return True
-
-        @property
-        def uses_native_progress(self) -> bool:
-            return False
-
-        def prepare_model(self) -> None:
-            captured["prepared"] = True
-
-        def transcribe(self, audio_path, *, progress_callback=None):
-            captured["audio_path"] = audio_path
-            captured["callback"] = progress_callback
-            return TranscriptionResult(detected_language="en", segments=[])
-
-    monkeypatch.setattr("webinar_transcriber.asr.FasterWhisperTranscriber", FakeFasterDelegate)
-
-    transcriber = WhisperTranscriber()
-    transcriber.prepare_model()
-    transcriber.transcribe(tmp_path / "audio.wav")
-
-    assert transcriber.backend == "faster-whisper"
-    assert transcriber.supports_live_progress is True
-    assert transcriber.uses_native_progress is False
-    assert captured["prepared"] is True
-    assert str(captured["audio_path"]).endswith("audio.wav")
-
-
-def test_explicit_mlx_backend_requires_availability(monkeypatch) -> None:
-    monkeypatch.setattr("webinar_transcriber.asr._mlx_backend_available", lambda: False)
-
-    with pytest.raises(RuntimeError, match="MLX Whisper requires"):
-        WhisperTranscriber(backend="mlx")
+def test_device_name_from_system_info_prefers_enabled_backend() -> None:
+    assert _device_name_from_system_info("CPU = 1 | METAL = 1") == "metal"
+    assert (
+        _device_name_from_system_info("WHISPER : MTL : EMBED_LIBRARY = 1 | CPU : NEON = 1 |")
+        == "metal"
+    )
+    assert _device_name_from_system_info("CPU = 1") == "cpu"

@@ -6,6 +6,7 @@ import sys
 
 from click.testing import CliRunner
 
+from webinar_transcriber.asr import DEFAULT_ASR_THREADS
 from webinar_transcriber.cli import main
 from webinar_transcriber.models import (
     Diagnostics,
@@ -51,8 +52,12 @@ def test_process_command_runs_pipeline(tmp_path, monkeypatch) -> None:
     def fake_process_input(**kwargs) -> ProcessArtifacts:
         assert kwargs["input_path"] == input_path
         assert kwargs["output_format"] == "json"
-        assert kwargs["asr_backend"] == "auto"
         assert kwargs["asr_model"] is None
+        assert kwargs["vad_enabled"] is True
+        assert kwargs["chunk_target_sec"] == 20.0
+        assert kwargs["chunk_max_sec"] == 30.0
+        assert kwargs["chunk_overlap_sec"] == 1.5
+        assert kwargs["asr_threads"] == DEFAULT_ASR_THREADS
         assert kwargs["enable_llm"] is False
         assert kwargs["reporter"].__class__.__name__ == "RichStageReporter"
         return ProcessArtifacts(
@@ -86,8 +91,12 @@ def test_process_command_forwards_asr_options(tmp_path, monkeypatch) -> None:
     run_dir = tmp_path / "run-dir"
 
     def fake_process_input(**kwargs) -> ProcessArtifacts:
-        assert kwargs["asr_backend"] == "faster-whisper"
-        assert kwargs["asr_model"] == "small"
+        assert kwargs["asr_model"] == "models/whisper-cpp/custom.bin"
+        assert kwargs["vad_enabled"] is False
+        assert kwargs["chunk_target_sec"] == 18.0
+        assert kwargs["chunk_max_sec"] == 24.0
+        assert kwargs["chunk_overlap_sec"] == 2.0
+        assert kwargs["asr_threads"] == 6
         assert kwargs["enable_llm"] is True
         return ProcessArtifacts(
             layout=RunLayout(run_dir=run_dir),
@@ -112,10 +121,17 @@ def test_process_command_forwards_asr_options(tmp_path, monkeypatch) -> None:
         [
             "process",
             str(input_path),
-            "--asr-backend",
-            "faster-whisper",
             "--asr-model",
-            "small",
+            "models/whisper-cpp/custom.bin",
+            "--no-vad",
+            "--chunk-target-sec",
+            "18",
+            "--chunk-max-sec",
+            "24",
+            "--chunk-overlap-sec",
+            "2",
+            "--threads",
+            "6",
             "--llm",
         ],
     )
@@ -129,10 +145,14 @@ def test_process_help_describes_asr_options() -> None:
     result = runner.invoke(main, ["process", "--help"])
 
     assert result.exit_code == 0
-    assert "--asr-backend" in result.output
     assert "--asr-model" in result.output
+    assert "--vad / --no-vad" in result.output
+    assert "--chunk-target-sec" in result.output
+    assert "--chunk-max-sec" in result.output
+    assert "--chunk-overlap-sec" in result.output
+    assert "--threads" in result.output
     assert "--llm" in result.output
-    assert "MLX repo name" in result.output
+    assert "Override the whisper.cpp model path" in result.output
     assert "--asr-compute-type" not in result.output
     assert "--llm-model" not in result.output
 
@@ -144,6 +164,16 @@ def test_process_command_rejects_missing_input(tmp_path) -> None:
 
     assert result.exit_code != 0
     assert "Input file does not exist" in result.output
+
+
+def test_process_command_colors_top_level_errors(tmp_path) -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(main, ["process", str(tmp_path / "missing.wav")], color=True)
+
+    assert result.exit_code != 0
+    assert "\x1b[" in result.output
+    assert "Error:" in result.output
 
 
 def test_process_command_rejects_existing_output_directory(tmp_path, monkeypatch) -> None:

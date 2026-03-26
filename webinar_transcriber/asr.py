@@ -1,45 +1,89 @@
-"""ASR adapters for faster-whisper and MLX Whisper."""
+"""ASR adapter built on top of the whisper.cpp C API."""
 
 from __future__ import annotations
 
-import importlib
-import importlib.util
-import platform
-from typing import TYPE_CHECKING, Any, Protocol
+import os
+import re
+import subprocess
+from pathlib import Path
+from typing import TYPE_CHECKING, Protocol
 
-from faster_whisper import WhisperModel
-
-from webinar_transcriber.models import TranscriptionResult, TranscriptSegment
+from webinar_transcriber.models import AudioChunk, ChunkTranscription, TranscriptionResult
+from webinar_transcriber.transcription_audio import load_normalized_audio
+from webinar_transcriber.whispercpp import (
+    WhisperCppLibrary,
+    WhisperCppRuntimeDetails,
+    WhisperCppSession,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
-DEFAULT_FASTER_WHISPER_MODEL = "small"
-DEFAULT_MLX_WHISPER_MODEL = "mlx-community/whisper-large-v3-turbo"
+
+ASR_BACKEND_NAME = "whisper.cpp"
+DEFAULT_WHISPER_CPP_MODEL = Path("models/whisper-cpp/ggml-large-v3-turbo.bin")
+_ENABLED_BACKEND_PATTERN = re.compile(
+    r"(?i)\b(metal|mtl|cuda|vulkan|coreml)\b[^|]*?(?:=|:)\s*(?:1|true)"
+)
+
+
+def _read_sysctl_int(name: str) -> int | None:
+    try:
+        result = subprocess.run(
+            ["sysctl", "-n", name],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (FileNotFoundError, PermissionError, subprocess.CalledProcessError):
+        return None
+
+    value = result.stdout.strip()
+    if not value.isdigit():
+        return None
+    parsed = int(value)
+    return parsed if parsed > 0 else None
+
+
+def default_asr_threads() -> int:
+    return (
+        _read_sysctl_int("hw.perflevel0.physicalcpu")
+        or _read_sysctl_int("hw.physicalcpu")
+        or os.cpu_count()
+        or 4
+    )
+
+
+DEFAULT_ASR_THREADS = default_asr_threads()
+
+
+def _missing_model_error_message(model_path: Path) -> str:
+    default_path = DEFAULT_WHISPER_CPP_MODEL
+    if model_path == default_path:
+        location_hint = f"Download ggml-large-v3-turbo.bin to {default_path}."
+    else:
+        location_hint = (
+            f"Download a whisper.cpp model there, or use --asr-model {default_path}."
+        )
+    return (
+        f"whisper.cpp model file does not exist: {model_path}. "
+        f"{location_hint} See README.md for model download instructions."
+    )
 
 
 class Transcriber(Protocol):
     """Protocol for components that convert audio to transcript text."""
 
     @property
-    def backend_name(self) -> str:
-        """Stable backend name for diagnostics and logging."""
-
-    @property
     def model_name(self) -> str:
         """Effective model name for diagnostics and logging."""
 
     @property
-    def supports_live_progress(self) -> bool:
-        """Whether transcription emits incremental progress during inference."""
-
-    @property
-    def uses_native_progress(self) -> bool:
-        """Whether the backend renders its own user-visible progress output."""
+    def device_name(self) -> str:
+        """Effective device name for diagnostics and logging."""
 
     def prepare_model(self) -> None:
-        """Warm or download model assets before transcription starts."""
+        """Warm or validate model assets before transcription starts."""
 
     def transcribe(
         self,
@@ -49,172 +93,69 @@ class Transcriber(Protocol):
     ) -> TranscriptionResult:
         """Return a normalized transcription for the provided audio file."""
 
-
-class FasterWhisperTranscriber:
-    """ASR implementation using faster-whisper."""
-
-    def __init__(
-        self,
-        model_name: str = DEFAULT_FASTER_WHISPER_MODEL,
-        *,
-        device: str = "auto",
-        initial_prompt: str | None = None,
-    ) -> None:
-        self._initial_prompt = initial_prompt
-        self._model_name = model_name
-        self._model = WhisperModel(
-            model_name,
-            device=device,
-            compute_type="default",
-        )
-
-    def transcribe(
-        self,
-        audio_path: Path,
-        *,
-        progress_callback: Callable[[float], None] | None = None,
-    ) -> TranscriptionResult:
-        segments, info = self._model.transcribe(
-            str(audio_path),
-            beam_size=5,
-            vad_filter=True,
-            initial_prompt=self._initial_prompt,
-        )
-        normalized_segments: list[TranscriptSegment] = []
-
-        for index, segment in enumerate(segments, start=1):
-            normalized_segments.append(
-                TranscriptSegment(
-                    id=f"segment-{index}",
-                    text=segment.text.strip(),
-                    start_sec=float(segment.start),
-                    end_sec=float(segment.end),
-                )
-            )
-            if progress_callback is not None:
-                progress_callback(float(segment.end))
-
-        return TranscriptionResult(
-            detected_language=getattr(info, "language", None),
-            segments=normalized_segments,
-        )
-
-    @property
-    def supports_live_progress(self) -> bool:
-        """faster-whisper yields segments incrementally during inference."""
-        return True
-
-    @property
-    def backend_name(self) -> str:
-        """Stable backend name for diagnostics and logging."""
-        return "faster-whisper"
-
-    @property
-    def model_name(self) -> str:
-        """Effective model name for diagnostics and logging."""
-        return self._model_name
-
-    @property
-    def uses_native_progress(self) -> bool:
-        """faster-whisper relies on the caller to render progress."""
-        return False
-
-    def prepare_model(self) -> None:
-        """No-op because the model is prepared during construction."""
+    def close(self) -> None:
+        """Release any prepared runtime resources."""
 
 
-class MlxWhisperTranscriber:
-    """ASR implementation using MLX Whisper on Apple Silicon."""
-
-    def __init__(
-        self,
-        model_name: str = DEFAULT_MLX_WHISPER_MODEL,
-        *,
-        initial_prompt: str | None = None,
-    ) -> None:
-        self._model_name = model_name
-        self._initial_prompt = initial_prompt
-
-    def transcribe(
-        self,
-        audio_path: Path,
-        *,
-        progress_callback: Callable[[float], None] | None = None,
-    ) -> TranscriptionResult:
-        mlx_whisper = _import_mlx_whisper()
-        result = mlx_whisper.transcribe(
-            str(audio_path),
-            path_or_hf_repo=self._model_name,
-            verbose=False,
-            word_timestamps=False,
-            initial_prompt=self._initial_prompt,
-        )
-        normalized_segments: list[TranscriptSegment] = []
-
-        for index, segment in enumerate(result.get("segments", []), start=1):
-            end_sec = float(segment.get("end", 0.0))
-            normalized_segments.append(
-                TranscriptSegment(
-                    id=f"segment-{index}",
-                    text=str(segment.get("text", "")).strip(),
-                    start_sec=float(segment.get("start", 0.0)),
-                    end_sec=end_sec,
-                )
-            )
-
-        return TranscriptionResult(
-            detected_language=_mlx_detected_language(result),
-            segments=normalized_segments,
-        )
-
-    @property
-    def supports_live_progress(self) -> bool:
-        """MLX returns the full transcription result at the end."""
-        return False
-
-    @property
-    def backend_name(self) -> str:
-        """Stable backend name for diagnostics and logging."""
-        return "mlx"
-
-    @property
-    def model_name(self) -> str:
-        """Effective model name for diagnostics and logging."""
-        return self._model_name
-
-    @property
-    def uses_native_progress(self) -> bool:
-        """mlx-whisper renders its own tqdm progress bar when verbose is False."""
-        return True
-
-    def prepare_model(self) -> None:
-        """Preload model weights so downloads happen outside the transcript stage."""
-        _preload_mlx_model(self._model_name)
-
-
-class WhisperTranscriber:
-    """Default ASR wrapper that selects the best local backend."""
+class WhisperCppTranscriber:
+    """ASR implementation using the in-process whisper.cpp C API."""
 
     def __init__(
         self,
         model_name: str | None = None,
         *,
-        backend: str = "auto",
-        device: str = "auto",
+        threads: int = 4,
         initial_prompt: str | None = None,
+        library_path: Path | None = None,
+        log_path: Path | None = None,
     ) -> None:
-        self.backend = _resolve_backend_name(backend)
-        if self.backend == "mlx":
-            self._delegate: Transcriber = MlxWhisperTranscriber(
-                model_name=model_name or DEFAULT_MLX_WHISPER_MODEL,
-                initial_prompt=initial_prompt,
-            )
-        else:
-            self._delegate = FasterWhisperTranscriber(
-                model_name=model_name or DEFAULT_FASTER_WHISPER_MODEL,
-                device=device,
-                initial_prompt=initial_prompt,
-            )
+        self._model_path = Path(model_name) if model_name else DEFAULT_WHISPER_CPP_MODEL
+        self._threads = max(1, threads)
+        self._initial_prompt = initial_prompt
+        self._library_path = library_path
+        self._log_path = log_path
+        self._runtime_details: WhisperCppRuntimeDetails | None = None
+        self._runtime: WhisperCppLibrary | None = None
+        self._session: WhisperCppSession | None = None
+
+    @property
+    def model_name(self) -> str:
+        return str(self._model_path)
+
+    @property
+    def device_name(self) -> str:
+        if self._runtime_details is None:
+            return "auto"
+        return _device_name_from_system_info(self._runtime_details.system_info)
+
+    @property
+    def threads(self) -> int:
+        return self._threads
+
+    @property
+    def system_info(self) -> str | None:
+        if self._runtime_details is None:
+            return None
+        return self._runtime_details.system_info
+
+    @property
+    def library_path(self) -> str | None:
+        if self._runtime_details is None:
+            return None
+        return self._runtime_details.library_path
+
+    def set_log_path(self, log_path: Path) -> None:
+        self._log_path = log_path
+
+    def prepare_model(self) -> None:
+        if not self._model_path.exists():
+            raise RuntimeError(_missing_model_error_message(self._model_path))
+        self.close()
+        runtime = WhisperCppLibrary(self._library_path, log_path=self._log_path)
+        session = runtime.create_session(self._model_path)
+        self._runtime = runtime
+        self._session = session
+        self._runtime_details = session.runtime_details
 
     def transcribe(
         self,
@@ -222,64 +163,59 @@ class WhisperTranscriber:
         *,
         progress_callback: Callable[[float], None] | None = None,
     ) -> TranscriptionResult:
-        return self._delegate.transcribe(audio_path, progress_callback=progress_callback)
+        audio_samples, sample_rate = load_normalized_audio(audio_path)
+        duration_sec = len(audio_samples) / float(sample_rate) if sample_rate else 0.0
+        chunk = AudioChunk(id="chunk-1", start_sec=0.0, end_sec=duration_sec)
+        chunk_transcriptions = self.transcribe_audio_chunks(
+            audio_samples,
+            [chunk],
+            progress_callback=progress_callback,
+        )
+        if chunk_transcriptions:
+            return TranscriptionResult(
+                detected_language=chunk_transcriptions[0].detected_language,
+                segments=chunk_transcriptions[0].segments,
+            )
+        return TranscriptionResult()
 
-    @property
-    def supports_live_progress(self) -> bool:
-        """Expose whether the selected backend can stream inference progress."""
-        return self._delegate.supports_live_progress
+    def transcribe_audio_chunks(
+        self,
+        audio_samples,
+        chunks: list[AudioChunk],
+        *,
+        progress_callback: Callable[[float], None] | None = None,
+    ) -> list[ChunkTranscription]:
+        session = self._ensure_session()
+        return session.transcribe_chunks(
+            audio_samples,
+            chunks,
+            threads=self._threads,
+            initial_prompt=self._initial_prompt,
+            progress_callback=progress_callback,
+        )
 
-    @property
-    def backend_name(self) -> str:
-        """Expose the selected backend name."""
-        return self._delegate.backend_name
+    def close(self) -> None:
+        if self._session is not None:
+            self._session.close()
+            self._session = None
+        self._runtime = None
 
-    @property
-    def model_name(self) -> str:
-        """Expose the selected model name."""
-        return self._delegate.model_name
+    def _ensure_session(self) -> WhisperCppSession:
+        if self._session is None:
+            self.prepare_model()
+        assert self._session is not None
+        return self._session
 
-    @property
-    def uses_native_progress(self) -> bool:
-        """Expose whether the selected backend renders its own progress output."""
-        return self._delegate.uses_native_progress
-
-    def prepare_model(self) -> None:
-        """Prepare the selected backend before transcription starts."""
-        self._delegate.prepare_model()
-
-
-def _resolve_backend_name(backend: str) -> str:
-    normalized_backend = backend.lower()
-    if normalized_backend not in {"auto", "faster-whisper", "mlx"}:
-        raise ValueError(f"Unsupported ASR backend: {backend}")
-    if normalized_backend == "auto":
-        return "mlx" if _mlx_backend_available() else "faster-whisper"
-    if normalized_backend == "mlx" and not _mlx_backend_available():
-        raise RuntimeError("MLX Whisper requires macOS arm64 with mlx-whisper installed.")
-    return normalized_backend
-
-
-def _mlx_backend_available() -> bool:
-    return _is_apple_silicon_mac() and importlib.util.find_spec("mlx_whisper") is not None
-
-
-def _is_apple_silicon_mac() -> bool:
-    return platform.system() == "Darwin" and platform.machine() == "arm64"
-
-
-def _import_mlx_whisper() -> Any:
-    return importlib.import_module("mlx_whisper")
+    def __del__(self) -> None:
+        self.close()
 
 
-def _preload_mlx_model(model_name: str) -> None:
-    transcribe_module = importlib.import_module("mlx_whisper.transcribe")
-    mlx_core = importlib.import_module("mlx.core")
-    transcribe_module.ModelHolder.get_model(model_name, mlx_core.float16)
+WhisperTranscriber = WhisperCppTranscriber
 
 
-def _mlx_detected_language(result: dict[str, Any]) -> str | None:
-    detected_language = result.get("language")
-    if isinstance(detected_language, str):
-        return detected_language
-    return None
+def _device_name_from_system_info(system_info: str) -> str:
+    match = _ENABLED_BACKEND_PATTERN.search(system_info)
+    if match is not None:
+        backend_name = match.group(1).lower()
+        return "metal" if backend_name == "mtl" else backend_name
+    return "cpu"

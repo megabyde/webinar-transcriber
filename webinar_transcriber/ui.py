@@ -248,6 +248,7 @@ class CountColumn(ProgressColumn):
             total=task.total,
             count_label=task.fields.get("count_label"),
             count_multiplier=float(task.fields.get("count_multiplier", 1.0)),
+            has_rate=bool(task.fields.get("rate_text")),
         )
         return Text(count_text, style="progress.data.speed")
 
@@ -258,6 +259,7 @@ def _format_count(
     total: float | None,
     count_label: str | None,
     count_multiplier: float,
+    has_rate: bool = False,
 ) -> str:
     if total is None:
         return ""
@@ -265,7 +267,8 @@ def _format_count(
     completed_count = int(completed * count_multiplier)
     total_count = int(total * count_multiplier)
     unit_suffix = f" {count_label}" if count_label else ""
-    return f"{completed_count}/{total_count}{unit_suffix}"
+    comma_suffix = "," if has_rate else ""
+    return f"{completed_count}/{total_count}{unit_suffix}{comma_suffix}"
 
 
 def _rate_text_for_update(
@@ -285,4 +288,4 @@ def _rate_text_for_update(
 
     rate = completed * rate_multiplier / elapsed
     display_rate = f"{rate:.0f}" if rate >= 100 else f"{rate:.1f}"
-    return f", {display_rate} {rate_label}"
+    return f"{display_rate} {rate_label}"

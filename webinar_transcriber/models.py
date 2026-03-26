@@ -41,6 +41,31 @@ class TranscriptionResult(BaseModel):
     segments: list[TranscriptSegment] = Field(default_factory=list)
 
 
+class SpeechRegion(BaseModel):
+    """Speech-bearing region on the normalized audio timeline."""
+
+    start_sec: float = Field(ge=0)
+    end_sec: float = Field(ge=0)
+
+
+class AudioChunk(BaseModel):
+    """Chunk planned for ASR inference."""
+
+    id: str
+    start_sec: float = Field(ge=0)
+    end_sec: float = Field(ge=0)
+
+
+class ChunkTranscription(BaseModel):
+    """Transcript result for a planned audio chunk."""
+
+    chunk_id: str
+    start_sec: float = Field(ge=0)
+    end_sec: float = Field(ge=0)
+    detected_language: str | None = None
+    segments: list[TranscriptSegment] = Field(default_factory=list)
+
+
 class Scene(BaseModel):
     """Time-bounded scene for video processing."""
 
@@ -99,6 +124,21 @@ class ReportDocument(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class AsrPipelineDiagnostics(BaseModel):
+    """Additional telemetry for the chunked ASR pipeline."""
+
+    normalized_audio_duration_sec: float | None = Field(default=None, ge=0)
+    vad_enabled: bool = False
+    vad_region_count: int = Field(default=0, ge=0)
+    chunk_count: int = Field(default=0, ge=0)
+    average_chunk_duration_sec: float | None = Field(default=None, ge=0)
+    overlap_duration_sec: float | None = Field(default=None, ge=0)
+    reconciliation_duplicate_segments_dropped: int = Field(default=0, ge=0)
+    reconciliation_boundary_fixes: int = Field(default=0, ge=0)
+    threads: int | None = Field(default=None, ge=1)
+    system_info: str | None = None
+
+
 class Diagnostics(BaseModel):
     """Execution metadata recorded for a processing run."""
 
@@ -106,12 +146,10 @@ class Diagnostics(BaseModel):
     asr_model: str | None = None
     llm_enabled: bool = False
     llm_model: str | None = None
-    llm_transcript_status: str = "disabled"
     llm_report_status: str = "disabled"
-    llm_transcript_latency_sec: float | None = None
     llm_report_latency_sec: float | None = None
-    llm_transcript_usage: dict[str, int] = Field(default_factory=dict)
     llm_report_usage: dict[str, int] = Field(default_factory=dict)
     stage_durations_sec: dict[str, float] = Field(default_factory=dict)
     item_counts: dict[str, int] = Field(default_factory=dict)
+    asr_pipeline: AsrPipelineDiagnostics | None = None
     warnings: list[str] = Field(default_factory=list)

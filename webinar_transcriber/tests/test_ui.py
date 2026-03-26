@@ -32,7 +32,7 @@ def test_rate_text_for_update_renders_frames_per_second() -> None:
             rate_label="frames/s",
             rate_multiplier=100.0,
         )
-        == ", 7400 frames/s"
+        == "7400 frames/s"
     )
 
 

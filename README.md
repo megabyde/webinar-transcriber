@@ -22,9 +22,9 @@ heuristic-driven for structuring and summaries.
 
 ## Usage
 
-On Apple Silicon, the CLI now prefers the `mlx-whisper` backend when it is installed and falls
-back to `faster-whisper` everywhere else. The first ASR run will download the configured backend
-model if it is not already available locally.
+The CLI uses `whisper.cpp` in-process through its C API. The Python layer uses one code path on
+macOS and Linux; acceleration depends on how the local `libwhisper` was built and installed. The
+ASR model is a local `.bin` file rather than an automatically downloaded Hugging Face model.
 
 Typical runs:
 
@@ -36,23 +36,61 @@ webinar-transcriber process INPUT --output-dir runs/custom-demo
 webinar-transcriber extract-frames INPUT
 ```
 
-### ASR Backends
+### ASR Model
 
-- `auto`: prefer MLX on Apple Silicon when `mlx-whisper` is installed, otherwise use
-  `faster-whisper`
-- `mlx`: Apple Silicon MLX backend
-- `faster-whisper`: CTranslate2-based Whisper backend
+The `--asr-model` option can override the `whisper.cpp` model path, for example
+`models/whisper-cpp/ggml-large-v3-turbo.bin`.
 
-The `--asr-model` option can override the backend default, for example `small` for
-`faster-whisper` or an MLX repository name such as `mlx-community/whisper-large-v3-turbo`.
+The default expected model path is:
+
+```text
+models/whisper-cpp/ggml-large-v3-turbo.bin
+```
+
+You need to download that file yourself before the first run. A direct download example:
+
+```bash
+mkdir -p models/whisper-cpp
+curl -L \
+  -o models/whisper-cpp/ggml-large-v3-turbo.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin
+```
+
+You can also use the official `whisper.cpp` helper script:
+
+```bash
+git clone https://github.com/ggml-org/whisper.cpp.git
+sh whisper.cpp/models/download-ggml-model.sh large-v3-turbo models/whisper-cpp
+```
+
+If you store the model somewhere else, point the app at it:
+
+```bash
+webinar-transcriber process INPUT --asr-model /path/to/ggml-large-v3-turbo.bin
+```
+
+### ASR Tuning
+
+The chunked ASR pipeline can be tuned from the CLI:
+
+```bash
+webinar-transcriber process INPUT \
+  --vad \
+  --chunk-target-sec 20 \
+  --chunk-max-sec 30 \
+  --chunk-overlap-sec 1.5 \
+  --threads 4
+```
 
 ## Processing Behavior
 
 ### Pipeline
 
 1. Probe input media with `ffprobe`.
-1. Prepare transcription audio with `ffmpeg`.
-1. Transcribe with the selected ASR backend.
+1. Prepare deterministic transcription audio with `ffmpeg`.
+1. Detect speech regions and plan ASR chunks.
+1. Transcribe chunks with `whisper.cpp`.
+1. Reconcile chunk overlap into one transcript.
 1. For video input, detect scenes and extract representative frames.
 1. Align transcript content to audio or slide sections.
 1. Structure notes and export Markdown, DOCX, and JSON artifacts.
@@ -128,13 +166,32 @@ runs/<timestamp>_<basename>/
 ## Local Setup
 
 1. Install Python 3.12 and `uv`.
-1. Install native dependencies with Homebrew on macOS:
-   - `brew install ffmpeg`
 1. Install the project:
 
 ```bash
 make sync
 ```
+
+### macOS
+
+Install native dependencies with Homebrew:
+
+- `brew install ffmpeg`
+- `brew install whisper-cpp`
+
+Homebrew installs `libwhisper.dylib` in a standard location, so the default setup should work
+without extra configuration.
+
+### Linux
+
+Install `ffmpeg`, then build or install `libwhisper.so` locally. If it is not in a standard system
+location, point the app at it with `WHISPER_CPP_LIB`, for example:
+
+```bash
+export WHISPER_CPP_LIB=/path/to/libwhisper.so
+```
+
+You also need a local `whisper.cpp` model file as described in [ASR Model](#asr-model).
 
 ## Development
 

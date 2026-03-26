@@ -6,6 +6,7 @@ from pathlib import Path
 import click
 
 from webinar_transcriber import __version__
+from webinar_transcriber.asr import DEFAULT_ASR_THREADS
 from webinar_transcriber.media import MediaProcessingError, probe_media
 from webinar_transcriber.paths import OutputDirectoryExistsError, create_run_layout
 from webinar_transcriber.processor import process_input
@@ -15,6 +16,15 @@ from webinar_transcriber.video import (
     estimate_sample_count,
     extract_representative_frames,
 )
+
+
+class CLIError(click.ClickException):
+    """Styled CLI error that keeps terminal failures visually consistent."""
+
+    def show(self, file=None) -> None:
+        stream = file or click.get_text_stream("stderr")
+        click.secho("Error:", fg="red", bold=True, nl=False, err=True, file=stream)
+        click.echo(f" {self.format_message()}", err=True, file=stream)
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -40,37 +50,70 @@ def main() -> None:
     help="Select which report format to write.",
 )
 @click.option(
-    "--asr-backend",
-    type=click.Choice(["auto", "faster-whisper", "mlx"], case_sensitive=False),
-    default="auto",
-    show_default=True,
-    help="Select the ASR backend.",
-)
-@click.option(
     "--asr-model",
     type=str,
     default=None,
-    help="Override the ASR model identifier, for example 'small' or an MLX repo name.",
+    help="Override the whisper.cpp model path, for example "
+    "'models/whisper-cpp/ggml-large-v3-turbo.bin'.",
+)
+@click.option(
+    "--vad/--no-vad",
+    default=True,
+    show_default=True,
+    help="Enable speech-region detection before chunked transcription.",
+)
+@click.option(
+    "--chunk-target-sec",
+    type=float,
+    default=20.0,
+    show_default=True,
+    help="Target chunk duration for ASR planning.",
+)
+@click.option(
+    "--chunk-max-sec",
+    type=float,
+    default=30.0,
+    show_default=True,
+    help="Hard cap for chunk duration.",
+)
+@click.option(
+    "--chunk-overlap-sec",
+    type=float,
+    default=1.5,
+    show_default=True,
+    help="Overlap between adjacent ASR chunks.",
+)
+@click.option(
+    "--threads",
+    "asr_threads",
+    type=int,
+    default=DEFAULT_ASR_THREADS,
+    show_default=True,
+    help="Number of whisper.cpp inference threads to use.",
 )
 @click.option(
     "--llm",
     is_flag=True,
-    help="Enable optional OpenAI-based transcript and report enhancement.",
+    help="Enable optional OpenAI-based report enhancement.",
 )
 def process(
     input_path: Path,
     output_dir: Path | None,
     output_format: str,
-    asr_backend: str,
     asr_model: str | None,
+    vad: bool,
+    chunk_target_sec: float,
+    chunk_max_sec: float,
+    chunk_overlap_sec: float,
+    asr_threads: int,
     llm: bool,
 ) -> None:
     """Process an audio or video input file."""
     if not input_path.exists():
-        raise click.ClickException(f"Input file does not exist: {input_path}")
+        raise CLIError(f"Input file does not exist: {input_path}")
 
     if not input_path.is_file():
-        raise click.ClickException(f"Input path is not a file: {input_path}")
+        raise CLIError(f"Input path is not a file: {input_path}")
 
     reporter = RichStageReporter()
 
@@ -79,8 +122,12 @@ def process(
             input_path=input_path,
             output_dir=output_dir,
             output_format=output_format,
-            asr_backend=asr_backend,
             asr_model=asr_model,
+            vad_enabled=vad,
+            chunk_target_sec=chunk_target_sec,
+            chunk_max_sec=chunk_max_sec,
+            chunk_overlap_sec=chunk_overlap_sec,
+            asr_threads=asr_threads,
             enable_llm=llm,
             reporter=reporter,
         )
@@ -88,7 +135,7 @@ def process(
         reporter.interrupted()
         raise click.exceptions.Exit(130) from None
     except (MediaProcessingError, OutputDirectoryExistsError) as error:
-        raise click.ClickException(str(error)) from error
+        raise CLIError(str(error)) from error
 
 
 @main.command("extract-frames", short_help="Extract representative frames from a video.")
@@ -102,10 +149,10 @@ def process(
 def extract_frames(input_path: Path, output_dir: Path | None) -> None:
     """Detect scenes and extract representative frames from a video input."""
     if not input_path.exists():
-        raise click.ClickException(f"Input file does not exist: {input_path}")
+        raise CLIError(f"Input file does not exist: {input_path}")
 
     if not input_path.is_file():
-        raise click.ClickException(f"Input path is not a file: {input_path}")
+        raise CLIError(f"Input path is not a file: {input_path}")
 
     reporter = RichStageReporter()
 
@@ -125,7 +172,7 @@ def extract_frames(input_path: Path, output_dir: Path | None) -> None:
             detail=f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s",
         )
         if str(media_asset.media_type) != "video":
-            raise click.ClickException("Frame extraction is only supported for video input.")
+            raise CLIError("Frame extraction is only supported for video input.")
 
         reporter.progress_started(
             "detect_scenes",
@@ -164,6 +211,6 @@ def extract_frames(input_path: Path, output_dir: Path | None) -> None:
         reporter.interrupted()
         raise click.exceptions.Exit(130) from None
     except (MediaProcessingError, OutputDirectoryExistsError) as error:
-        raise click.ClickException(str(error)) from error
+        raise CLIError(str(error)) from error
 
     click.echo(f"Extracted {len(frames)} frames into {layout.run_dir}.")

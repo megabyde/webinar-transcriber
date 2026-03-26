@@ -1,11 +1,14 @@
 """Tests for typed pipeline models."""
 
 from webinar_transcriber.models import (
+    AsrPipelineDiagnostics,
+    ChunkTranscription,
     Diagnostics,
     MediaAsset,
     MediaType,
     ReportDocument,
     ReportSection,
+    SpeechRegion,
     TranscriptSegment,
 )
 
@@ -62,10 +65,37 @@ def test_diagnostics_defaults_empty_maps() -> None:
     diagnostics = Diagnostics()
 
     assert diagnostics.llm_enabled is False
-    assert diagnostics.llm_transcript_status == "disabled"
     assert diagnostics.llm_report_status == "disabled"
-    assert diagnostics.llm_transcript_usage == {}
     assert diagnostics.llm_report_usage == {}
     assert diagnostics.stage_durations_sec == {}
     assert diagnostics.item_counts == {}
+    assert diagnostics.asr_pipeline is None
     assert diagnostics.warnings == []
+
+
+def test_asr_pipeline_support_models_accept_expected_fields() -> None:
+    speech_region = SpeechRegion(start_sec=0.0, end_sec=1.5)
+    chunk_transcription = ChunkTranscription(
+        chunk_id="chunk-1",
+        start_sec=0.0,
+        end_sec=1.5,
+        segments=[
+            TranscriptSegment(
+                id="segment-1",
+                text="hello",
+                start_sec=0.0,
+                end_sec=1.0,
+            )
+        ],
+    )
+    diagnostics = AsrPipelineDiagnostics(
+        normalized_audio_duration_sec=120.0,
+        vad_enabled=True,
+        vad_region_count=5,
+        chunk_count=4,
+        overlap_duration_sec=1.5,
+    )
+
+    assert speech_region.end_sec == 1.5
+    assert chunk_transcription.chunk_id == "chunk-1"
+    assert diagnostics.chunk_count == 4

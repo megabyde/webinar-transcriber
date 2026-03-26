@@ -5,18 +5,32 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
+import numpy as np
 import pytest
 from docx import Document
 
+from webinar_transcriber.asr import WhisperCppTranscriber
 from webinar_transcriber.llm import (
     LLMConfigurationError,
     LLMProcessingError,
     LLMProcessor,
+    LLMReportMetadataResult,
     LLMReportPolishPlan,
     LLMReportPolishResult,
+    LLMSectionPolishResult,
 )
-from webinar_transcriber.models import TranscriptionResult, TranscriptSegment
-from webinar_transcriber.processor import process_input
+from webinar_transcriber.models import (
+    AudioChunk,
+    ChunkTranscription,
+    SpeechRegion,
+    TranscriptionResult,
+    TranscriptSegment,
+)
+from webinar_transcriber.processor import (
+    _average_frames_per_second,
+    _transcription_stage_detail,
+    process_input,
+)
 from webinar_transcriber.ui import NullStageReporter
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
@@ -25,10 +39,8 @@ FIXTURE_DIR = Path(__file__).parent / "fixtures"
 class FakeTranscriber:
     """Stable test double for deterministic transcripts."""
 
-    backend_name = "test-backend"
     model_name = "test-model"
-    supports_live_progress = True
-    uses_native_progress = False
+    device_name = "cpu"
 
     def prepare_model(self) -> None:
         """No-op test hook for the ASR preparation stage."""
@@ -60,6 +72,9 @@ class FakeTranscriber:
                 ),
             ],
         )
+
+    def close(self) -> None:
+        """No-op cleanup hook for the transcriber test double."""
 
 
 class RecordingReporter(NullStageReporter):
@@ -126,23 +141,30 @@ def test_process_input_writes_reports_and_metadata(tmp_path) -> None:
     assert (
         "Next step please send the draft by Friday." in artifacts.report.sections[0].transcript_text
     )
-    assert artifacts.diagnostics.asr_backend == "test-backend"
+    assert artifacts.diagnostics.asr_backend == "whisper.cpp"
     assert artifacts.diagnostics.asr_model == "test-model"
     diagnostics_payload = json.loads(artifacts.layout.diagnostics_path.read_text(encoding="utf-8"))
 
     markdown = artifacts.layout.markdown_report_path.read_text(encoding="utf-8")
     assert "# Sample Audio" in markdown
     assert "Agenda review and project status update." in markdown
-    assert ("start", "extract_audio", "Preparing audio") in reporter.events
-    assert ("finish", "extract_audio", "sample-audio.mp3") in reporter.events
+    assert ("start", "prepare_transcription_audio", "Preparing audio") in reporter.events
+    assert ("finish", "prepare_transcription_audio", "sample-audio.wav") in reporter.events
     assert ("start", "probe_media", "Probing media") in reporter.events
     assert ("start", "prepare_asr", "Preparing ASR model") in reporter.events
     assert (
         "finish",
         "prepare_asr",
-        "test-backend | test-model",
+        "test-model | cpu",
     ) in reporter.events
     assert any(event[0] == "complete" for event in reporter.events)
+    assert any(
+        event[0] == "finish"
+        and event[1] == "transcribe"
+        and "segments" in event[2]
+        and "frames/s" in event[2]
+        for event in reporter.events
+    )
     transcribe_start_events = [
         event
         for event in reporter.progress_events
@@ -152,7 +174,7 @@ def test_process_input_writes_reports_and_metadata(tmp_path) -> None:
     assert any(
         event[0] == "advance" and event[1] == "transcribe" for event in reporter.progress_events
     )
-    assert diagnostics_payload["asr_backend"] == "test-backend"
+    assert diagnostics_payload["asr_backend"] == "whisper.cpp"
     assert diagnostics_payload["asr_model"] == "test-model"
 
     document = Document(str(artifacts.layout.docx_report_path))
@@ -218,6 +240,106 @@ def test_process_input_writes_video_scene_artifacts(tmp_path) -> None:
         event == ("start", "extract_frames", artifacts.diagnostics.item_counts["scenes"])
         for event in reporter.progress_events
     )
+
+
+def test_process_input_runs_chunked_whispercpp_pipeline(tmp_path, monkeypatch) -> None:
+    reporter = RecordingReporter()
+
+    class ChunkedTranscriber(WhisperCppTranscriber):
+        @property
+        def system_info(self) -> str:
+            return "METAL = 1"
+
+        def prepare_model(self) -> None:
+            return None
+
+        def transcribe_audio_chunks(
+            self,
+            audio_samples,
+            chunks,
+            *,
+            progress_callback=None,
+        ):
+            del audio_samples
+            if progress_callback is not None:
+                for chunk in chunks:
+                    progress_callback(chunk.end_sec)
+            return [
+                ChunkTranscription(
+                    chunk_id=chunks[0].id,
+                    start_sec=chunks[0].start_sec,
+                    end_sec=chunks[0].end_sec,
+                    detected_language="en",
+                    segments=[
+                        TranscriptSegment(
+                            id="segment-1",
+                            text="Agenda review and project status update.",
+                            start_sec=0.0,
+                            end_sec=3.0,
+                        ),
+                        TranscriptSegment(
+                            id="segment-2",
+                            text="Next step please send the draft by Friday.",
+                            start_sec=3.0,
+                            end_sec=6.0,
+                        ),
+                    ],
+                )
+            ]
+
+    monkeypatch.setattr(
+        "webinar_transcriber.processor.load_normalized_audio",
+        lambda _path: (np.zeros(16_000, dtype=np.float32), 16_000),
+    )
+    monkeypatch.setattr(
+        "webinar_transcriber.processor.detect_speech_regions",
+        lambda *_args, **_kwargs: ([SpeechRegion(start_sec=0.0, end_sec=6.0)], []),
+    )
+    monkeypatch.setattr(
+        "webinar_transcriber.processor.plan_audio_chunks",
+        lambda *_args, **_kwargs: [AudioChunk(id="chunk-1", start_sec=0.0, end_sec=6.0)],
+    )
+
+    artifacts = process_input(
+        FIXTURE_DIR / "sample-audio.mp3",
+        output_dir=tmp_path / "chunked-run",
+        transcriber=ChunkedTranscriber(model_name="test-model"),
+        reporter=reporter,
+    )
+
+    assert artifacts.diagnostics.asr_pipeline is not None
+    assert artifacts.diagnostics.asr_pipeline.chunk_count == 1
+    assert artifacts.diagnostics.asr_pipeline.vad_region_count == 1
+    assert artifacts.diagnostics.asr_pipeline.system_info == "METAL = 1"
+    assert ("start", "vad", "Detecting speech regions") in reporter.events
+    assert ("start", "plan_chunks", "Planning chunks") in reporter.events
+    assert ("start", "reconcile", "Reconciling transcript chunks") in reporter.events
+
+
+def test_average_frames_per_second_uses_whisper_frame_scale() -> None:
+    assert _average_frames_per_second(total_duration_sec=12.5, elapsed_sec=2.5) == 500.0
+
+
+def test_transcription_stage_detail_includes_average_frames_per_second() -> None:
+    transcription = TranscriptionResult(
+        detected_language="en",
+        segments=[
+            TranscriptSegment(
+                id="segment-1",
+                text="Agenda review and project status update.",
+                start_sec=0.0,
+                end_sec=3.0,
+            )
+        ],
+    )
+
+    detail = _transcription_stage_detail(
+        transcription,
+        total_duration_sec=12.5,
+        elapsed_sec=2.5,
+    )
+
+    assert detail == "1 segment | avg 500 frames/s"
 
 
 def test_process_input_normalizes_transcript_before_report_generation(tmp_path) -> None:
@@ -297,33 +419,60 @@ def test_process_input_polishes_report_sections_when_llm_succeeds(tmp_path) -> N
             )
 
         def polish_report(self, report):
-            return self.polish_report_with_progress(report)
+            section_result = self.polish_report_sections_with_progress(report)
+            metadata_result = self.polish_report_metadata(
+                report,
+                section_transcripts=section_result.section_transcripts,
+            )
+            return LLMReportPolishResult(
+                summary=metadata_result.summary,
+                action_items=metadata_result.action_items,
+                section_titles=metadata_result.section_titles,
+                section_transcripts=section_result.section_transcripts,
+                usage={
+                    "input_tokens": 20,
+                    "output_tokens": 6,
+                    "total_tokens": 26,
+                },
+                warnings=section_result.warnings,
+            )
 
-        def polish_report_with_progress(
+        def polish_report_sections_with_progress(
             self,
             report,
             *,
             progress_callback: Callable[[int], None] | None = None,
-        ) -> LLMReportPolishResult:
+        ) -> LLMSectionPolishResult:
             if progress_callback is not None:
                 progress_callback(len(report.sections))
-            return LLMReportPolishResult(
-                summary=["Refined summary point."],
-                action_items=["Refined action item."],
-                section_titles={"section-1": "Refined section title"},
+            return LLMSectionPolishResult(
                 section_transcripts={
                     "section-1": (
                         "Agenda review, and project status update.\n\n"
                         "Next step: please send the draft by Friday."
                     )
                 },
-                usage={"input_tokens": 20, "output_tokens": 6, "total_tokens": 26},
+                usage={"input_tokens": 12, "output_tokens": 3, "total_tokens": 15},
                 warnings=[
                     (
                         "Section polish response returned an empty transcript text "
                         "for section-1; kept original text."
                     )
                 ],
+            )
+
+        def polish_report_metadata(
+            self,
+            report,
+            *,
+            section_transcripts: dict[str, str],
+        ) -> LLMReportMetadataResult:
+            assert "section-1" in section_transcripts
+            return LLMReportMetadataResult(
+                summary=["Refined summary point."],
+                action_items=["Refined action item."],
+                section_titles={"section-1": "Refined section title"},
+                usage={"input_tokens": 8, "output_tokens": 3, "total_tokens": 11},
             )
 
     artifacts = process_input(
@@ -343,9 +492,7 @@ def test_process_input_polishes_report_sections_when_llm_succeeds(tmp_path) -> N
     )
     assert artifacts.diagnostics.llm_enabled is True
     assert artifacts.diagnostics.llm_model == "test-llm-model"
-    assert artifacts.diagnostics.llm_transcript_status == "disabled"
     assert artifacts.diagnostics.llm_report_status == "applied"
-    assert artifacts.diagnostics.llm_transcript_usage == {}
     assert artifacts.diagnostics.warnings == [
         (
             "Section polish response returned an empty transcript text "
@@ -359,7 +506,7 @@ def test_process_input_polishes_report_sections_when_llm_succeeds(tmp_path) -> N
     }
     assert (
         "start",
-        "llm_report",
+        "llm_report_sections",
         1.0,
     ) in reporter.progress_events
     assert (
@@ -367,11 +514,21 @@ def test_process_input_polishes_report_sections_when_llm_succeeds(tmp_path) -> N
         "llm_report",
         "1 summary bullet | 1 action item | 26 tokens",
     ) in reporter.events
-    assert ("advance", "llm_report", 1.0) in reporter.progress_events
+    assert ("advance", "llm_report_sections", 1.0) in reporter.progress_events
+    assert (
+        "start",
+        "llm_report_sections",
+        "Polishing section text with LLM (openai | test-llm-model | 1 worker)",
+    ) in reporter.events
+    assert (
+        "finish",
+        "llm_report_sections",
+        "1 section",
+    ) in reporter.events
     assert (
         "start",
         "llm_report",
-        "Polishing report with LLM (openai | test-llm-model | 1 worker)",
+        "Polishing report summary with LLM (openai | test-llm-model)",
     ) in reporter.events
     assert reporter.warnings == [
         (
@@ -402,7 +559,6 @@ def test_process_input_warns_when_llm_configuration_is_missing(tmp_path, monkeyp
 
     assert artifacts.diagnostics.llm_enabled is True
     assert artifacts.diagnostics.llm_model is None
-    assert artifacts.diagnostics.llm_transcript_status == "disabled"
     assert artifacts.diagnostics.llm_report_status == "fallback"
     assert artifacts.diagnostics.warnings == [
         "Missing required LLM environment variables: OPENAI_API_KEY."
@@ -424,9 +580,9 @@ def test_process_input_falls_back_when_report_polish_fails(tmp_path) -> None:
             )
 
         def polish_report(self, report):
-            return self.polish_report_with_progress(report)
+            raise LLMProcessingError("Report polishing failed: backend timeout")
 
-        def polish_report_with_progress(
+        def polish_report_sections_with_progress(
             self,
             report,
             *,
@@ -435,6 +591,14 @@ def test_process_input_falls_back_when_report_polish_fails(tmp_path) -> None:
             if progress_callback is not None:
                 progress_callback(len(report.sections))
             raise LLMProcessingError("Report polishing failed: backend timeout")
+
+        def polish_report_metadata(
+            self,
+            report,
+            *,
+            section_transcripts: dict[str, str],
+        ):
+            raise AssertionError("metadata polish should not run after section failure")
 
     artifacts = process_input(
         FIXTURE_DIR / "sample-audio.mp3",
@@ -446,108 +610,10 @@ def test_process_input_falls_back_when_report_polish_fails(tmp_path) -> None:
     )
 
     assert artifacts.report.summary != []
-    assert artifacts.diagnostics.llm_transcript_status == "disabled"
     assert artifacts.diagnostics.llm_report_status == "fallback"
     assert "Report polishing failed: backend timeout" in artifacts.diagnostics.warnings
-    assert ("finish", "llm_report", "openai | test-llm-model | fallback") in reporter.events
-
-
-def test_process_input_uses_spinner_for_non_streaming_transcriber(tmp_path) -> None:
-    reporter = RecordingReporter()
-
-    class BlockingTranscriber:
-        backend_name = "blocking-backend"
-        model_name = "blocking-model"
-        supports_live_progress = False
-        uses_native_progress = False
-
-        def __init__(self) -> None:
-            self.prepared = False
-
-        def prepare_model(self) -> None:
-            self.prepared = True
-
-        def transcribe(
-            self,
-            audio_path: Path,
-            *,
-            progress_callback: Callable[[float], None] | None = None,
-        ) -> TranscriptionResult:
-            assert audio_path.exists()
-            assert progress_callback is None
-            return TranscriptionResult(
-                detected_language="en",
-                segments=[
-                    TranscriptSegment(
-                        id="segment-1",
-                        text="Agenda review and project status update.",
-                        start_sec=0.0,
-                        end_sec=1.5,
-                    )
-                ],
-            )
-
-    transcriber = BlockingTranscriber()
-    artifacts = process_input(
-        FIXTURE_DIR / "sample-audio.mp3",
-        output_dir=tmp_path / "blocking-run",
-        transcriber=transcriber,
-        reporter=reporter,
-    )
-
-    assert artifacts.report.detected_language == "en"
-    assert transcriber.prepared is True
-    assert ("start", "prepare_asr", "Preparing ASR model") in reporter.events
-    assert ("start", "transcribe", "Transcribing audio") in reporter.events
-    assert not any(event[1] == "transcribe" for event in reporter.progress_events)
-
-
-def test_process_input_allows_native_transcriber_progress(tmp_path) -> None:
-    reporter = RecordingReporter()
-
-    class NativeProgressTranscriber:
-        backend_name = "native-backend"
-        model_name = "native-model"
-        supports_live_progress = False
-        uses_native_progress = True
-
-        def __init__(self) -> None:
-            self.prepared = False
-
-        def prepare_model(self) -> None:
-            self.prepared = True
-
-        def transcribe(
-            self,
-            audio_path: Path,
-            *,
-            progress_callback: Callable[[float], None] | None = None,
-        ) -> TranscriptionResult:
-            assert audio_path.exists()
-            assert progress_callback is None
-            return TranscriptionResult(
-                detected_language="en",
-                segments=[
-                    TranscriptSegment(
-                        id="segment-1",
-                        text="Agenda review and project status update.",
-                        start_sec=0.0,
-                        end_sec=1.5,
-                    )
-                ],
-            )
-
-    transcriber = NativeProgressTranscriber()
-    artifacts = process_input(
-        FIXTURE_DIR / "sample-audio.mp3",
-        output_dir=tmp_path / "native-progress-run",
-        transcriber=transcriber,
-        reporter=reporter,
-    )
-
-    assert artifacts.report.detected_language == "en"
-    assert transcriber.prepared is True
-    assert ("start", "prepare_asr", "Preparing ASR model") in reporter.events
-    assert ("start", "transcribe", "Transcribing audio") not in reporter.events
-    assert any(event[0] == "finish" and event[1] == "transcribe" for event in reporter.events)
-    assert not any(event[1] == "transcribe" for event in reporter.progress_events)
+    assert (
+        "finish",
+        "llm_report_sections",
+        "openai | test-llm-model | fallback",
+    ) in reporter.events

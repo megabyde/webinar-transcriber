@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [
     { name = "Yury Bayda" },
 ]
-keywords = ["transcription", "webinar", "whisper", "audio", "video"]
+keywords = ["transcription", "speech-to-text", "whisper.cpp", "webinar", "audio", "video"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -29,8 +29,6 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.1.8",
-    "faster-whisper>=1.1.1",
-    "mlx-whisper>=0.4.3; platform_system == 'Darwin' and platform_machine == 'arm64'",
     "numpy>=2.2.3",
     "openai>=2.0.0",
     "pillow>=11.1.0",
