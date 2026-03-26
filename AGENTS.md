@@ -67,6 +67,8 @@ The package intentionally avoids deep nesting.
 
 - Keep tests colocated with the package hierarchy.
 - Prefer tiny deterministic fixtures committed to the repo.
+- Prefer `pytest` `monkeypatch` for simple state replacement and `unittest.mock.patch` when a test
+  needs mock semantics such as `side_effect`, `return_value`, or call assertions.
 - CLI tests should generally monkeypatch the reporter and heavy runtime seams instead of invoking
   real media-processing work.
 
