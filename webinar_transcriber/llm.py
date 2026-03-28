@@ -498,9 +498,7 @@ def _normalize_polished_text(*, original_text: str, polished_text: str) -> str:
         return ""
 
     paragraphs = [
-        re.sub(r"\s+", " ", paragraph).strip()
-        for paragraph in re.split(r"\n\s*\n+", cleaned)
-        if paragraph.strip()
+        re.sub(r"\s+", " ", p) for block in re.split(r"\n\s*\n+", cleaned) if (p := block.strip())
     ]
     cleaned = "\n\n".join(paragraphs)
     cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)

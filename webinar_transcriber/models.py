@@ -48,22 +48,34 @@ class SpeechRegion(BaseModel):
     end_sec: float = Field(ge=0)
 
 
-class AudioChunk(BaseModel):
-    """Chunk planned for ASR inference."""
+class InferenceWindow(BaseModel):
+    """Window planned for one whisper.cpp inference call."""
 
-    id: str
+    window_id: str
+    region_index: int = Field(ge=0)
     start_sec: float = Field(ge=0)
     end_sec: float = Field(ge=0)
+    overlap_sec: float = Field(default=0, ge=0)
+
+    def __lt__(self, other: object) -> bool:
+        """Keep decode ordering deterministic without repeating tuple keys at call sites."""
+        if not isinstance(other, InferenceWindow):
+            return NotImplemented
+        return self._sort_key() < other._sort_key()
+
+    def _sort_key(self) -> tuple[float, float, int, str]:
+        return (self.start_sec, self.end_sec, self.region_index, self.window_id)
 
 
-class ChunkTranscription(BaseModel):
-    """Transcript result for a planned audio chunk."""
+class DecodedWindow(BaseModel):
+    """Transcript result for a planned inference window."""
 
-    chunk_id: str
-    start_sec: float = Field(ge=0)
-    end_sec: float = Field(ge=0)
-    detected_language: str | None = None
+    window: InferenceWindow
+    input_prompt: str | None = None
+    text: str = ""
     segments: list[TranscriptSegment] = Field(default_factory=list)
+    fallback_used: bool = False
+    language: str | None = None
 
 
 class Scene(BaseModel):
@@ -125,14 +137,14 @@ class ReportDocument(BaseModel):
 
 
 class AsrPipelineDiagnostics(BaseModel):
-    """Additional telemetry for the chunked ASR pipeline."""
+    """Additional telemetry for the windowed ASR pipeline."""
 
     normalized_audio_duration_sec: float | None = Field(default=None, ge=0)
     vad_enabled: bool = False
     vad_region_count: int = Field(default=0, ge=0)
-    chunk_count: int = Field(default=0, ge=0)
-    average_chunk_duration_sec: float | None = Field(default=None, ge=0)
-    overlap_duration_sec: float | None = Field(default=None, ge=0)
+    carryover_enabled: bool = False
+    window_count: int = Field(default=0, ge=0)
+    average_window_duration_sec: float | None = Field(default=None, ge=0)
     reconciliation_duplicate_segments_dropped: int = Field(default=0, ge=0)
     reconciliation_boundary_fixes: int = Field(default=0, ge=0)
     threads: int | None = Field(default=None, ge=1)

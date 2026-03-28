@@ -62,10 +62,17 @@ class NullStageReporter:
         count_multiplier: float = 1.0,
         rate_label: str | None = None,
         rate_multiplier: float = 1.0,
+        detail: str | None = None,
     ) -> None:
         """Record that a determinate stage has started."""
 
-    def progress_advanced(self, stage_key: str, *, advance: float = 1.0) -> None:
+    def progress_advanced(
+        self,
+        stage_key: str,
+        *,
+        advance: float = 1.0,
+        detail: str | None = None,
+    ) -> None:
         """Record that a determinate stage has advanced."""
 
     def stage_finished(self, stage_key: str, label: str, *, detail: str | None = None) -> None:
@@ -121,6 +128,7 @@ class RichStageReporter(NullStageReporter):
         count_multiplier: float = 1.0,
         rate_label: str | None = None,
         rate_multiplier: float = 1.0,
+        detail: str | None = None,
     ) -> None:
         self._stop_active_display()
         self._stage_count += 1
@@ -132,6 +140,7 @@ class RichStageReporter(NullStageReporter):
             TaskProgressColumn(),
             CountColumn(),
             RateColumn(),
+            TextColumn("{task.fields[detail_text]}", style="dim"),
             TextColumn("ETA"),
             TimeRemainingColumn(compact=True),
             TimeElapsedColumn(),
@@ -147,14 +156,25 @@ class RichStageReporter(NullStageReporter):
             rate_label=rate_label,
             rate_multiplier=rate_multiplier,
             rate_text="",
+            detail_text=detail or "",
         )
 
-    def progress_advanced(self, stage_key: str, *, advance: float = 1.0) -> None:
+    def progress_advanced(
+        self,
+        stage_key: str,
+        *,
+        advance: float = 1.0,
+        detail: str | None = None,
+    ) -> None:
         if self._active_event is None or self._active_event.stage_key != stage_key:
             return
         if self._active_progress is None or self._active_task_id is None:
             return
-        self._active_progress.update(self._active_task_id, advance=advance)
+        self._active_progress.update(
+            self._active_task_id,
+            advance=advance,
+            detail_text=detail or "",
+        )
         task = self._active_progress.tasks[self._active_task_id]
         now = perf_counter()
         self._active_progress.update(
@@ -266,7 +286,11 @@ def _format_count(
 
     completed_count = int(completed * count_multiplier)
     total_count = int(total * count_multiplier)
-    unit_suffix = f" {count_label}" if count_label else ""
+    if count_label:
+        sep = "" if count_label in {"s", "ms", "%"} else " "
+        unit_suffix = f"{sep}{count_label}"
+    else:
+        unit_suffix = ""
     comma_suffix = "," if has_rate else ""
     return f"{completed_count}/{total_count}{unit_suffix}{comma_suffix}"
 

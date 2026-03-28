@@ -22,6 +22,9 @@ def test_build_run_layout_uses_timestamp_and_slug(tmp_path) -> None:
 
     assert layout.run_dir.name == "20260318-203045-000000_weekly-webinar"
     assert layout.markdown_report_path.name == "report.md"
+    assert layout.asr_dir.name == "asr"
+    assert layout.speech_regions_path.name == "speech_regions.json"
+    assert layout.decoded_windows_path.name == "decoded_windows.json"
     assert layout.frames_dir.name == "frames"
 
 

@@ -6,7 +6,14 @@ from pathlib import Path
 from time import perf_counter
 
 from webinar_transcriber.align import align_by_time
-from webinar_transcriber.asr import ASR_BACKEND_NAME, Transcriber, WhisperCppTranscriber
+from webinar_transcriber.asr import (
+    ASR_BACKEND_NAME,
+    DEFAULT_ASR_THREADS,
+    DEFAULT_CARRYOVER_MAX_SENTENCES,
+    DEFAULT_CARRYOVER_MAX_TOKENS,
+    PromptCarryoverSettings,
+    WhisperCppTranscriber,
+)
 from webinar_transcriber.export import (
     write_docx_report,
     write_json_report,
@@ -23,23 +30,29 @@ from webinar_transcriber.models import (
     AlignmentBlock,
     AsrPipelineDiagnostics,
     Diagnostics,
+    InferenceWindow,
     MediaAsset,
     ReportDocument,
     SlideFrame,
     TranscriptionResult,
 )
 from webinar_transcriber.paths import RunLayout, create_run_layout
-from webinar_transcriber.reconciliation import reconcile_chunk_transcriptions
+from webinar_transcriber.reconciliation import reconcile_decoded_windows
+from webinar_transcriber.segmentation import (
+    DEFAULT_MIN_SILENCE_DURATION_MS,
+    DEFAULT_MIN_SPEECH_DURATION_MS,
+    DEFAULT_SPEECH_PAD_MS,
+    DEFAULT_SPEECH_REGION_PAD_MS,
+    DEFAULT_VAD_THRESHOLD,
+    detect_speech_regions,
+    expand_speech_regions,
+    normalized_audio_duration,
+    repair_speech_regions,
+)
 from webinar_transcriber.structure import build_report
 from webinar_transcriber.transcript_processing import normalize_transcription
 from webinar_transcriber.transcription_audio import (
-    ChunkPlanSettings,
-    VADSettings,
-    average_chunk_duration,
-    detect_speech_regions,
     load_normalized_audio,
-    normalized_audio_duration,
-    plan_audio_chunks,
     prepared_transcription_audio,
 )
 from webinar_transcriber.ui import NullStageReporter
@@ -79,12 +92,16 @@ def process_input(
     output_format: str = "all",
     asr_model: str | None = None,
     vad_enabled: bool = True,
-    chunk_target_sec: float = 20.0,
-    chunk_max_sec: float = 30.0,
-    chunk_overlap_sec: float = 1.5,
-    asr_threads: int = 4,
+    vad_threshold: float = DEFAULT_VAD_THRESHOLD,
+    min_speech_duration_ms: int = DEFAULT_MIN_SPEECH_DURATION_MS,
+    min_silence_duration_ms: int = DEFAULT_MIN_SILENCE_DURATION_MS,
+    speech_region_pad_ms: int = DEFAULT_SPEECH_REGION_PAD_MS,
+    carryover_enabled: bool = True,
+    carryover_max_sentences: int = DEFAULT_CARRYOVER_MAX_SENTENCES,
+    carryover_max_tokens: int = DEFAULT_CARRYOVER_MAX_TOKENS,
+    asr_threads: int = DEFAULT_ASR_THREADS,
     enable_llm: bool = False,
-    transcriber: Transcriber | None = None,
+    transcriber: WhisperCppTranscriber | None = None,
     llm_processor: LLMProcessor | None = None,
     reporter: NullStageReporter | None = None,
 ) -> ProcessArtifacts:
@@ -96,10 +113,16 @@ def process_input(
     slide_frames: list[SlideFrame] = []
     llm_runtime = LLMRuntimeState()
     asr_pipeline = AsrPipelineDiagnostics(vad_enabled=vad_enabled, threads=asr_threads)
+    asr_pipeline.carryover_enabled = carryover_enabled
 
     active_transcriber = transcriber or WhisperCppTranscriber(
         model_name=asr_model,
         threads=asr_threads,
+        carryover_settings=PromptCarryoverSettings(
+            enabled=carryover_enabled,
+            max_sentences=carryover_max_sentences,
+            max_tokens=carryover_max_tokens,
+        ),
     )
 
     active_reporter.begin_run(input_path, output_format=output_format)
@@ -149,121 +172,138 @@ def process_input(
             detail=_asr_runtime_detail(active_transcriber),
         )
 
-        if isinstance(active_transcriber, WhisperCppTranscriber):
-            audio_samples, sample_rate = load_normalized_audio(audio_path)
-            asr_pipeline.normalized_audio_duration_sec = normalized_audio_duration(
-                audio_samples, sample_rate
-            )
-            active_reporter.stage_started("vad", "Detecting speech regions")
-            start = perf_counter()
-            speech_regions, vad_warnings = detect_speech_regions(
-                audio_samples,
-                sample_rate,
-                settings=VADSettings(enabled=vad_enabled),
-            )
-            stage_timings["vad"] = perf_counter() - start
-            asr_pipeline.vad_region_count = len(speech_regions)
-            active_reporter.stage_finished(
-                "vad",
-                "Detecting speech regions",
-                detail=_count_label(len(speech_regions), singular="region"),
-            )
-            for warning in vad_warnings:
-                warnings.append(warning)
-                active_reporter.warn(warning)
+        audio_samples, sample_rate = load_normalized_audio(audio_path)
+        asr_pipeline.normalized_audio_duration_sec = normalized_audio_duration(
+            audio_samples, sample_rate
+        )
+        active_reporter.progress_started(
+            "vad",
+            "Detecting speech regions",
+            total=media_asset.duration_sec,
+            count_label="s",
+        )
+        on_vad_progress, finish_vad_progress = _progress_updater(
+            active_reporter,
+            stage_key="vad",
+        )
 
-            active_reporter.stage_started("plan_chunks", "Planning chunks")
-            start = perf_counter()
-            chunks = plan_audio_chunks(
-                speech_regions,
-                settings=ChunkPlanSettings(
-                    target_sec=chunk_target_sec,
-                    max_sec=chunk_max_sec,
-                    overlap_sec=chunk_overlap_sec,
-                ),
-            )
-            stage_timings["plan_chunks"] = perf_counter() - start
-            asr_pipeline.chunk_count = len(chunks)
-            asr_pipeline.average_chunk_duration_sec = average_chunk_duration(chunks)
-            asr_pipeline.overlap_duration_sec = chunk_overlap_sec
-            active_reporter.stage_finished(
-                "plan_chunks",
-                "Planning chunks",
-                detail=_count_label(len(chunks), singular="chunk"),
-            )
+        start = perf_counter()
+        speech_regions, vad_warnings = detect_speech_regions(
+            audio_samples,
+            sample_rate,
+            enabled=vad_enabled,
+            threshold=vad_threshold,
+            min_speech_duration_ms=min_speech_duration_ms,
+            min_silence_duration_ms=min_silence_duration_ms,
+            speech_pad_ms=DEFAULT_SPEECH_PAD_MS,
+            progress_callback=lambda completed_sec, detected_count: on_vad_progress(
+                completed_sec,
+                detail=_count_label(detected_count, singular="region"),
+            ),
+        )
+        finish_vad_progress(
+            media_asset.duration_sec,
+            detail=_count_label(len(speech_regions), singular="region"),
+        )
+        stage_timings["vad"] = perf_counter() - start
+        asr_pipeline.vad_region_count = len(speech_regions)
+        active_reporter.stage_finished(
+            "vad",
+            "Detecting speech regions",
+            detail=_count_label(len(speech_regions), singular="region"),
+        )
+        for warning in vad_warnings:
+            warnings.append(warning)
+            active_reporter.warn(warning)
+        _write_json(
+            layout.speech_regions_path,
+            {"speech_regions": [region.model_dump(mode="json") for region in speech_regions]},
+        )
 
-            active_reporter.progress_started(
-                "transcribe",
-                "Transcribing audio",
-                total=media_asset.duration_sec,
-                count_label="frames",
-                count_multiplier=100.0,
-                rate_label="frames/s",
-                rate_multiplier=100.0,
+        active_reporter.stage_started("prepare_speech_regions", "Preparing speech regions")
+        start = perf_counter()
+        repaired_regions = repair_speech_regions(speech_regions)
+        expanded_regions = expand_speech_regions(
+            repaired_regions,
+            pad_ms=speech_region_pad_ms,
+            audio_duration_sec=asr_pipeline.normalized_audio_duration_sec or 0.0,
+        )
+        windows = [
+            InferenceWindow(
+                window_id=f"window-{i + 1}",
+                region_index=i,
+                start_sec=region.start_sec,
+                end_sec=region.end_sec,
+                overlap_sec=0.0,
             )
-            transcribed_until_sec = 0.0
+            for i, region in enumerate(expanded_regions)
+            if region.end_sec > region.start_sec
+        ]
+        _write_json(
+            layout.expanded_regions_path,
+            {"expanded_regions": [region.model_dump(mode="json") for region in expanded_regions]},
+        )
+        stage_timings["prepare_speech_regions"] = perf_counter() - start
+        asr_pipeline.window_count = len(windows)
+        asr_pipeline.average_window_duration_sec = (
+            sum(w.end_sec - w.start_sec for w in windows) / len(windows) if windows else None
+        )
+        active_reporter.stage_finished(
+            "prepare_speech_regions",
+            "Preparing speech regions",
+            detail=(
+                f"{len(speech_regions)} -> {len(expanded_regions)} regions"
+                f" | {_count_label(len(windows), singular='window')}"
+            ),
+        )
 
-            def _on_chunk_completed(completed_sec: float) -> None:
-                nonlocal transcribed_until_sec
-                advance = max(0.0, completed_sec - transcribed_until_sec)
-                if advance > 0:
-                    active_reporter.progress_advanced("transcribe", advance=advance)
-                    transcribed_until_sec = completed_sec
+        active_reporter.progress_started(
+            "transcribe",
+            "Transcribing audio",
+            total=media_asset.duration_sec,
+            count_label="s",
+        )
+        on_window_completed, finish_transcribe_progress = _progress_updater(
+            active_reporter,
+            stage_key="transcribe",
+        )
 
-            start = perf_counter()
-            chunk_transcriptions = active_transcriber.transcribe_audio_chunks(
-                audio_samples,
-                chunks,
-                progress_callback=_on_chunk_completed,
-            )
-            remaining_progress = max(0.0, media_asset.duration_sec - transcribed_until_sec)
-            if remaining_progress > 0:
-                active_reporter.progress_advanced("transcribe", advance=remaining_progress)
-            stage_timings["transcribe"] = perf_counter() - start
-            active_reporter.stage_finished(
-                "transcribe",
-                "Transcribing audio",
-                detail=_chunk_transcription_stage_detail(
-                    chunk_count=len(chunks),
-                    total_duration_sec=media_asset.duration_sec,
-                    elapsed_sec=stage_timings["transcribe"],
-                ),
-            )
-
-            active_reporter.stage_started("reconcile", "Reconciling transcript chunks")
-            start = perf_counter()
-            transcription, reconciliation_stats = reconcile_chunk_transcriptions(
-                chunk_transcriptions
-            )
-            stage_timings["reconcile"] = perf_counter() - start
-            asr_pipeline.reconciliation_duplicate_segments_dropped = (
-                reconciliation_stats.duplicate_segments_dropped
-            )
-            asr_pipeline.reconciliation_boundary_fixes = reconciliation_stats.boundary_fixes
-            asr_pipeline.system_info = active_transcriber.system_info
-            active_reporter.stage_finished(
-                "reconcile",
-                "Reconciling transcript chunks",
-                detail=f"{len(transcription.segments)} segments",
-            )
-        else:
-            start = perf_counter()
-            transcription = _run_transcription_stage(
-                active_transcriber,
-                audio_path,
+        start = perf_counter()
+        decoded_windows = active_transcriber.transcribe_inference_windows(
+            audio_samples,
+            windows,
+            progress_callback=on_window_completed,
+        )
+        _write_json(
+            layout.decoded_windows_path,
+            {"decoded_windows": [window.model_dump(mode="json") for window in decoded_windows]},
+        )
+        finish_transcribe_progress(media_asset.duration_sec)
+        stage_timings["transcribe"] = perf_counter() - start
+        active_reporter.stage_finished(
+            "transcribe",
+            "Transcribing audio",
+            detail=_window_transcription_stage_detail(
+                window_count=len(windows),
                 total_duration_sec=media_asset.duration_sec,
-                reporter=active_reporter,
-            )
-            stage_timings["transcribe"] = perf_counter() - start
-            active_reporter.stage_finished(
-                "transcribe",
-                "Transcribing audio",
-                detail=_transcription_stage_detail(
-                    transcription,
-                    total_duration_sec=media_asset.duration_sec,
-                    elapsed_sec=stage_timings["transcribe"],
-                ),
-            )
+                elapsed_sec=stage_timings["transcribe"],
+            ),
+        )
+
+        active_reporter.stage_started("reconcile", "Reconciling transcript windows")
+        start = perf_counter()
+        transcription, reconciliation_stats = reconcile_decoded_windows(decoded_windows)
+        stage_timings["reconcile"] = perf_counter() - start
+        asr_pipeline.reconciliation_duplicate_segments_dropped = (
+            reconciliation_stats.duplicate_segments_dropped
+        )
+        asr_pipeline.reconciliation_boundary_fixes = reconciliation_stats.boundary_fixes
+        asr_pipeline.system_info = active_transcriber.system_info
+        active_reporter.stage_finished(
+            "reconcile",
+            "Reconciling transcript windows",
+            detail=f"{len(transcription.segments)} segments",
+        )
 
         _write_json(layout.transcript_path, _transcription_payload(transcription))
         normalized_transcription = normalize_transcription(transcription)
@@ -371,7 +411,7 @@ def process_input(
             "transcript_segments": len(transcription.segments),
             "normalized_transcript_segments": len(normalized_transcription.segments),
             "vad_regions": asr_pipeline.vad_region_count,
-            "chunks": asr_pipeline.chunk_count,
+            "windows": asr_pipeline.window_count,
             "report_sections": len(report.sections),
             "scenes": len(scenes),
             "frames": len(slide_frames),
@@ -538,7 +578,28 @@ def _write_requested_reports(report: ReportDocument, layout: RunLayout, output_f
 
 
 def _write_json(output_path: Path, payload: dict[str, object]) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _progress_updater(
+    reporter: NullStageReporter,
+    *,
+    stage_key: str,
+):
+    completed = 0.0
+
+    def update(next_completed: float, *, detail: str | None = None) -> None:
+        nonlocal completed
+        advance = max(0.0, next_completed - completed)
+        if advance > 0:
+            reporter.progress_advanced(stage_key, advance=advance, detail=detail)
+            completed = next_completed
+
+    def finish(total: float, *, detail: str | None = None) -> None:
+        update(total, detail=detail)
+
+    return update, finish
 
 
 def _count_label(count: int, *, singular: str, plural: str | None = None) -> str:
@@ -547,108 +608,29 @@ def _count_label(count: int, *, singular: str, plural: str | None = None) -> str
     return f"{count} {label}"
 
 
-def _configure_asr_logging(transcriber: Transcriber, layout: RunLayout) -> None:
-    if isinstance(transcriber, WhisperCppTranscriber):
-        transcriber.set_log_path(layout.run_dir / "whisper-cpp.log")
+def _configure_asr_logging(transcriber: WhisperCppTranscriber, layout: RunLayout) -> None:
+    transcriber.set_log_path(layout.run_dir / "whisper-cpp.log")
 
 
 def _transcription_payload(transcription: TranscriptionResult) -> dict[str, object]:
     return transcription.model_dump(mode="json")
 
 
-def _transcribe_with_progress(
-    transcriber: Transcriber,
-    audio_path: Path,
-    *,
-    total_duration_sec: float,
-    reporter: NullStageReporter,
-) -> TranscriptionResult:
-    transcribed_until_sec = 0.0
-
-    def _update_transcription_progress(completed_sec: float) -> None:
-        nonlocal transcribed_until_sec
-        advance = max(0.0, completed_sec - transcribed_until_sec)
-        if advance > 0:
-            reporter.progress_advanced("transcribe", advance=advance)
-            transcribed_until_sec = completed_sec
-
-    transcription = transcriber.transcribe(
-        audio_path,
-        progress_callback=_update_transcription_progress,
-    )
-    remaining_progress = max(0.0, total_duration_sec - transcribed_until_sec)
-    if remaining_progress > 0:
-        reporter.progress_advanced("transcribe", advance=remaining_progress)
-    return transcription
-
-
-def _run_transcription_stage(
-    transcriber: Transcriber,
-    audio_path: Path,
-    *,
-    total_duration_sec: float,
-    reporter: NullStageReporter,
-) -> TranscriptionResult:
-    reporter.progress_started(
-        "transcribe",
-        "Transcribing audio",
-        total=total_duration_sec,
-        count_label="frames",
-        count_multiplier=100.0,
-        rate_label="frames/s",
-        rate_multiplier=100.0,
-    )
-    return _transcribe_with_progress(
-        transcriber,
-        audio_path,
-        total_duration_sec=total_duration_sec,
-        reporter=reporter,
-    )
-
-
-def _asr_runtime_detail(transcriber: Transcriber) -> str:
+def _asr_runtime_detail(transcriber: WhisperCppTranscriber) -> str:
     return f"{transcriber.model_name} | {transcriber.device_name}"
 
 
-def _transcription_stage_detail(
-    transcription: TranscriptionResult,
+def _window_transcription_stage_detail(
     *,
+    window_count: int,
     total_duration_sec: float,
     elapsed_sec: float,
 ) -> str:
-    segment_count = len(transcription.segments)
-    segment_label = "segment" if segment_count == 1 else "segments"
-    details = [f"{segment_count} {segment_label}"]
-    average_frames_per_second = _average_frames_per_second(
-        total_duration_sec=total_duration_sec,
-        elapsed_sec=elapsed_sec,
-    )
-    if average_frames_per_second is not None:
-        details.append(f"avg {average_frames_per_second:.0f} frames/s")
+    window_label = "window" if window_count == 1 else "windows"
+    details = [f"{window_count} {window_label}"]
+    if total_duration_sec > 0 and elapsed_sec > 0:
+        details.append(f"RTF {elapsed_sec / total_duration_sec:.2f}")
     return " | ".join(details)
-
-
-def _chunk_transcription_stage_detail(
-    *,
-    chunk_count: int,
-    total_duration_sec: float,
-    elapsed_sec: float,
-) -> str:
-    chunk_label = "chunk" if chunk_count == 1 else "chunks"
-    details = [f"{chunk_count} {chunk_label}"]
-    average_frames_per_second = _average_frames_per_second(
-        total_duration_sec=total_duration_sec,
-        elapsed_sec=elapsed_sec,
-    )
-    if average_frames_per_second is not None:
-        details.append(f"avg {average_frames_per_second:.0f} frames/s")
-    return " | ".join(details)
-
-
-def _average_frames_per_second(*, total_duration_sec: float, elapsed_sec: float) -> float | None:
-    if total_duration_sec <= 0 or elapsed_sec <= 0:
-        return None
-    return (total_duration_sec * 100.0) / elapsed_sec
 
 
 def _llm_stage_label(

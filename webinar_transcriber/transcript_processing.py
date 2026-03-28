@@ -78,4 +78,4 @@ def _merge_segment_group(
 
 
 def _merge_text(segments: list[TranscriptSegment]) -> str:
-    return " ".join(segment.text.strip() for segment in segments if segment.text.strip())
+    return " ".join(s for seg in segments if (s := seg.text.strip()))

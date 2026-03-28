@@ -1,134 +1,320 @@
-"""Reconcile overlapping chunk transcripts into a single global transcript."""
+"""Reconcile overlapping window transcripts into a single monotonic transcript.
+
+The overlap solver stays in Python because it is policy: we want deterministic local heuristics
+that can evolve independently of the whisper.cpp binding. The binding only returns per-window
+segments; this module decides which boundary words survive when adjacent windows disagree.
+"""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
 
-from webinar_transcriber.models import ChunkTranscription, TranscriptionResult, TranscriptSegment
+from webinar_transcriber.models import DecodedWindow, TranscriptionResult, TranscriptSegment
 
-_WHITESPACE_PATTERN = re.compile(r"\s+")
 _NON_WORD_PATTERN = re.compile(r"[^\w]+", re.UNICODE)
-_MIN_BOUNDARY_ECHO_SEC = 0.05
 
 
 @dataclass(frozen=True)
 class ReconciliationStats:
-    """Observed cleanup performed during chunk transcript reconciliation."""
+    """Observed cleanup performed during overlap reconciliation."""
 
     duplicate_segments_dropped: int = 0
     boundary_fixes: int = 0
 
 
-def reconcile_chunk_transcriptions(
-    chunk_transcriptions: list[ChunkTranscription],
+@dataclass(frozen=True)
+class _TokenPiece:
+    text: str
+    normalized: str
+    start_sec: float
+    end_sec: float
+    window_start_sec: float
+    window_end_sec: float
+    window_order: int
+    segment_order: int
+    token_order: int
+    source_segment_id: str
+
+    @property
+    def center_sec(self) -> float:
+        return self.start_sec + ((self.end_sec - self.start_sec) / 2.0)
+
+
+def reconcile_decoded_windows(
+    decoded_windows: list[DecodedWindow],
 ) -> tuple[TranscriptionResult, ReconciliationStats]:
-    """Flatten chunk transcripts into one monotonic transcript."""
-    accepted_segments: list[TranscriptSegment] = []
-    dropped_duplicates = 0
-    boundary_fixes = 0
+    """Merge decoded windows while resolving overlap by normalized-token alignment."""
     detected_language: str | None = None
+    merged_tokens: list[_TokenPiece] = []
+    duplicate_segments_dropped = 0
+    boundary_fixes = 0
 
-    for chunk_transcription in sorted(chunk_transcriptions, key=lambda chunk: chunk.start_sec):
-        if detected_language is None and chunk_transcription.detected_language:
-            detected_language = chunk_transcription.detected_language
+    ordered_windows = sorted(decoded_windows, key=lambda item: item.window)
+    for window_order, decoded_window in enumerate(ordered_windows):
+        detected_language = detected_language or decoded_window.language
 
-        for segment in chunk_transcription.segments:
-            candidate = _candidate_segment(segment)
-            if candidate is None:
-                continue
+        current_tokens = _window_tokens(decoded_window, window_order=window_order)
+        if not current_tokens:
+            continue
 
-            accepted, candidate, duplicate_drops, candidate_boundary_fixes = _accept_candidate(
-                accepted_segments,
-                candidate,
+        if merged_tokens:
+            drop_previous, drop_current = _duplicate_token_indices(merged_tokens, current_tokens)
+            if drop_previous or drop_current:
+                boundary_fixes += 1
+            previous_segment_ids = {
+                merged_tokens[index].source_segment_id for index in drop_previous
+            }
+            current_segment_ids = {
+                current_tokens[index].source_segment_id for index in drop_current
+            }
+            duplicate_segments_dropped += _fully_dropped_segment_count(
+                merged_tokens,
+                drop_previous,
+                previous_segment_ids,
             )
-            dropped_duplicates += duplicate_drops
-            boundary_fixes += candidate_boundary_fixes
-            if accepted and candidate is not None:
-                accepted_segments.append(candidate)
+            duplicate_segments_dropped += _fully_dropped_segment_count(
+                current_tokens,
+                drop_current,
+                current_segment_ids,
+            )
+            merged_tokens = [
+                token for index, token in enumerate(merged_tokens) if index not in drop_previous
+            ]
+            current_tokens = [
+                token for index, token in enumerate(current_tokens) if index not in drop_current
+            ]
 
+        merged_tokens = sorted(
+            [*merged_tokens, *current_tokens],
+            key=lambda token: (
+                token.start_sec,
+                token.end_sec,
+                token.window_order,
+                token.segment_order,
+                token.token_order,
+            ),
+        )
+
+    segments, extra_boundary_fixes = _segments_from_tokens(merged_tokens)
     return (
-        TranscriptionResult(detected_language=detected_language, segments=accepted_segments),
+        TranscriptionResult(detected_language=detected_language, segments=segments),
         ReconciliationStats(
-            duplicate_segments_dropped=dropped_duplicates,
-            boundary_fixes=boundary_fixes,
+            duplicate_segments_dropped=duplicate_segments_dropped,
+            boundary_fixes=boundary_fixes + extra_boundary_fixes,
         ),
     )
 
 
-def _candidate_segment(segment: TranscriptSegment) -> TranscriptSegment | None:
-    cleaned_text = segment.text.strip()
-    if not cleaned_text:
-        return None
+def _window_tokens(decoded_window: DecodedWindow, *, window_order: int) -> list[_TokenPiece]:
+    tokens: list[_TokenPiece] = []
+    for segment_order, segment in enumerate(decoded_window.segments):
+        split_tokens = segment.text.split()
+        if not split_tokens:
+            continue
 
-    return TranscriptSegment(
-        id=segment.id,
-        text=cleaned_text,
-        start_sec=max(0.0, segment.start_sec),
-        end_sec=max(segment.start_sec, segment.end_sec),
-    )
+        duration_sec = max(0.0, segment.end_sec - segment.start_sec)
+        token_duration_sec = duration_sec / len(split_tokens) if split_tokens else 0.0
+        for token_order, token_text in enumerate(split_tokens):
+            start_sec = segment.start_sec + (token_duration_sec * token_order)
+            end_sec = (
+                segment.end_sec
+                if token_order == len(split_tokens) - 1
+                else segment.start_sec + (token_duration_sec * (token_order + 1))
+            )
+            tokens.append(
+                _TokenPiece(
+                    text=token_text,
+                    normalized=_normalize_token(token_text),
+                    start_sec=max(0.0, start_sec),
+                    end_sec=max(start_sec, end_sec),
+                    window_start_sec=decoded_window.window.start_sec,
+                    window_end_sec=decoded_window.window.end_sec,
+                    window_order=window_order,
+                    segment_order=segment_order,
+                    token_order=token_order,
+                    source_segment_id=segment.id,
+                )
+            )
+    return tokens
 
 
-def _accept_candidate(
-    accepted_segments: list[TranscriptSegment],
-    candidate: TranscriptSegment,
-) -> tuple[bool, TranscriptSegment | None, int, int]:
-    dropped_duplicates = 0
+def _duplicate_token_indices(
+    previous_tokens: list[_TokenPiece],
+    current_tokens: list[_TokenPiece],
+) -> tuple[set[int], set[int]]:
+    if not previous_tokens or not current_tokens:
+        return set(), set()
+
+    current_window_start = current_tokens[0].start_sec
+    current_window_end = current_tokens[-1].end_sec
+    overlap_region_start = current_window_start
+    overlap_region_end = min(previous_tokens[-1].end_sec, current_window_end)
+    if overlap_region_end <= overlap_region_start:
+        return set(), set()
+
+    previous_overlap = [
+        (index, token)
+        for index, token in enumerate(previous_tokens)
+        if token.end_sec >= overlap_region_start and token.start_sec < overlap_region_end
+    ]
+    current_overlap = [
+        (index, token)
+        for index, token in enumerate(current_tokens)
+        if token.end_sec >= overlap_region_start and token.start_sec < overlap_region_end
+    ]
+    matches = _align_overlap(previous_overlap, current_overlap)
+    if not matches:
+        if _mean_edge_distance(previous_overlap) >= _mean_edge_distance(current_overlap):
+            return set(), {index for index, _ in current_overlap}
+        return {index for index, _ in previous_overlap}, set()
+
+    midpoint_sec = overlap_region_start + ((overlap_region_end - overlap_region_start) / 2.0)
+    drop_previous: set[int] = set()
+    drop_current: set[int] = set()
+    for match_group in _group_match_runs(matches):
+        current_centers = [
+            current_tokens[current_index].center_sec for _, current_index in match_group
+        ]
+        if (sum(current_centers) / len(current_centers)) < midpoint_sec:
+            drop_current.update(current_index for _, current_index in match_group)
+        else:
+            drop_previous.update(previous_index for previous_index, _ in match_group)
+    return drop_previous, drop_current
+
+
+def _align_overlap(
+    previous_overlap: list[tuple[int, _TokenPiece]],
+    current_overlap: list[tuple[int, _TokenPiece]],
+) -> list[tuple[int, int]]:
+    previous_filtered = [(index, token) for index, token in previous_overlap if token.normalized]
+    current_filtered = [(index, token) for index, token in current_overlap if token.normalized]
+    if not previous_filtered or not current_filtered:
+        return []
+
+    rows = len(previous_filtered)
+    cols = len(current_filtered)
+    table = [[0] * (cols + 1) for _ in range(rows + 1)]
+
+    for row in range(rows):
+        for col in range(cols):
+            if previous_filtered[row][1].normalized == current_filtered[col][1].normalized:
+                table[row + 1][col + 1] = table[row][col] + 1
+            else:
+                table[row + 1][col + 1] = max(table[row][col + 1], table[row + 1][col])
+
+    matches: list[tuple[int, int]] = []
+    row = rows
+    col = cols
+    while row > 0 and col > 0:
+        previous_index, previous_token = previous_filtered[row - 1]
+        current_index, current_token = current_filtered[col - 1]
+        if previous_token.normalized == current_token.normalized:
+            matches.append((previous_index, current_index))
+            row -= 1
+            col -= 1
+        elif table[row - 1][col] >= table[row][col - 1]:
+            row -= 1
+        else:
+            col -= 1
+    matches.reverse()
+    return matches
+
+
+def _group_match_runs(matches: list[tuple[int, int]]) -> list[list[tuple[int, int]]]:
+    if not matches:
+        return []
+
+    groups: list[list[tuple[int, int]]] = [[matches[0]]]
+    for previous_index, current_index in matches[1:]:
+        last_previous, last_current = groups[-1][-1]
+        if previous_index == last_previous + 1 and current_index == last_current + 1:
+            groups[-1].append((previous_index, current_index))
+            continue
+        groups.append([(previous_index, current_index)])
+    return groups
+
+
+def _fully_dropped_segment_count(
+    tokens: list[_TokenPiece],
+    dropped_indices: set[int],
+    candidate_segment_ids: set[str],
+) -> int:
+    fully_dropped = 0
+    for segment_id in candidate_segment_ids:
+        segment_indices = {
+            index for index, token in enumerate(tokens) if token.source_segment_id == segment_id
+        }
+        if segment_indices and segment_indices.issubset(dropped_indices):
+            fully_dropped += 1
+    return fully_dropped
+
+
+def _mean_edge_distance(overlap: list[tuple[int, _TokenPiece]]) -> float:
+    if not overlap:
+        return 0.0
+    distances = [
+        min(
+            token.center_sec - token.window_start_sec,
+            token.window_end_sec - token.center_sec,
+        )
+        for _, token in overlap
+    ]
+    return sum(distances) / len(distances)
+
+
+def _segments_from_tokens(
+    tokens: list[_TokenPiece],
+) -> tuple[list[TranscriptSegment], int]:
+    if not tokens:
+        return [], 0
+
+    segments: list[TranscriptSegment] = []
     boundary_fixes = 0
+    current_group: list[_TokenPiece] = [tokens[0]]
 
-    if accepted_segments and _is_duplicate_segment(accepted_segments[-1], candidate):
-        return False, None, 1, 0
+    def flush_group(group: list[_TokenPiece], segment_index: int) -> None:
+        nonlocal boundary_fixes
+        text = " ".join(token.text for token in group).strip()
+        if not text:
+            return
+        start_sec = max(0.0, group[0].start_sec)
+        end_sec = max(start_sec, group[-1].end_sec)
+        if segments and start_sec < segments[-1].end_sec:
+            start_sec = segments[-1].end_sec
+            boundary_fixes += 1
+        if end_sec < start_sec:
+            end_sec = start_sec
+            boundary_fixes += 1
+        if end_sec == start_sec:
+            return
+        segments.append(
+            TranscriptSegment(
+                id=f"segment-{segment_index}",
+                text=text,
+                start_sec=start_sec,
+                end_sec=end_sec,
+            )
+        )
 
-    if not accepted_segments:
-        return True, candidate, 0, 0
-
-    previous = accepted_segments[-1]
-    if candidate.start_sec < previous.end_sec:
-        candidate = candidate.model_copy(update={"start_sec": previous.end_sec})
-        boundary_fixes += 1
-    if candidate.end_sec < candidate.start_sec:
-        candidate = candidate.model_copy(update={"end_sec": candidate.start_sec})
-        boundary_fixes += 1
-    if candidate.end_sec <= candidate.start_sec:
-        dropped_duplicates += 1
-        return False, None, dropped_duplicates, boundary_fixes
-    if _is_boundary_echo(previous, candidate):
-        dropped_duplicates += 1
-        return False, None, dropped_duplicates, boundary_fixes
-
-    return True, candidate, dropped_duplicates, boundary_fixes
-
-
-def _is_duplicate_segment(previous: TranscriptSegment, candidate: TranscriptSegment) -> bool:
-    previous_text = _canonical_text(previous.text)
-    candidate_text = _canonical_text(candidate.text)
-    if not previous_text or not candidate_text:
-        return False
-
-    overlaps_in_time = (
-        candidate.start_sec <= previous.end_sec and candidate.end_sec >= previous.start_sec
-    )
-    if previous_text == candidate_text and overlaps_in_time:
-        return True
-
-    if not overlaps_in_time:
-        return False
-
-    return previous_text in candidate_text or candidate_text in previous_text
-
-
-def _is_boundary_echo(previous: TranscriptSegment, candidate: TranscriptSegment) -> bool:
-    if (candidate.end_sec - candidate.start_sec) > _MIN_BOUNDARY_ECHO_SEC:
-        return False
-
-    previous_text = _canonical_text(previous.text)
-    candidate_text = _canonical_text(candidate.text)
-    if not previous_text or not candidate_text:
-        return False
-
-    return previous_text.endswith(candidate_text) or candidate_text in previous_text
+    segment_index = 1
+    for token in tokens[1:]:
+        previous = current_group[-1]
+        same_source = (
+            token.source_segment_id == previous.source_segment_id
+            and token.window_order == previous.window_order
+            and token.segment_order == previous.segment_order
+            and token.token_order == previous.token_order + 1
+        )
+        if same_source:
+            current_group.append(token)
+            continue
+        flush_group(current_group, segment_index)
+        segment_index += 1
+        current_group = [token]
+    flush_group(current_group, segment_index)
+    return segments, boundary_fixes
 
 
-def _canonical_text(text: str) -> str:
-    normalized_text = _NON_WORD_PATTERN.sub(" ", text.casefold())
-    return _WHITESPACE_PATTERN.sub(" ", normalized_text).strip()
+def _normalize_token(text: str) -> str:
+    return _NON_WORD_PATTERN.sub("", text.casefold())

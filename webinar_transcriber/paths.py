@@ -38,6 +38,22 @@ class RunLayout:
         return self.run_dir / "diagnostics.json"
 
     @property
+    def asr_dir(self) -> Path:
+        return self.run_dir / "asr"
+
+    @property
+    def speech_regions_path(self) -> Path:
+        return self.asr_dir / "speech_regions.json"
+
+    @property
+    def expanded_regions_path(self) -> Path:
+        return self.asr_dir / "expanded_regions.json"
+
+    @property
+    def decoded_windows_path(self) -> Path:
+        return self.asr_dir / "decoded_windows.json"
+
+    @property
     def markdown_report_path(self) -> Path:
         return self.run_dir / "report.md"
 

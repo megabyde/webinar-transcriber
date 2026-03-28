@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 import pytest
 
-from webinar_transcriber.models import AudioChunk
+from webinar_transcriber.models import InferenceWindow
 from webinar_transcriber.whispercpp import (
     WhisperCppError,
     WhisperCppLibrary,
@@ -101,7 +101,7 @@ def test_resolve_library_path_uses_direct_argument_and_errors_when_missing(tmp_p
         resolve_library_path(tmp_path / "missing.dylib")
 
 
-def test_whisper_cpp_library_transcribes_chunks_with_fake_cdll(monkeypatch, tmp_path) -> None:
+def test_whisper_cpp_library_decodes_window_with_fake_cdll(monkeypatch, tmp_path) -> None:
     library_path = tmp_path / "libwhisper.dylib"
     library_path.write_text("stub", encoding="utf-8")
     model_path = tmp_path / "model.bin"
@@ -113,23 +113,20 @@ def test_whisper_cpp_library_transcribes_chunks_with_fake_cdll(monkeypatch, tmp_
     )
 
     library = WhisperCppLibrary(library_path)
-    progress_updates: list[float] = []
-    chunk_transcriptions = library.transcribe_chunks(
+    decoded_window = library.decode_window(
         model_path,
         np.zeros(16_000, dtype=np.float32),
-        [AudioChunk(id="chunk-1", start_sec=0.0, end_sec=3.0)],
+        InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=3.0),
         threads=4,
-        progress_callback=lambda completed_sec: progress_updates.append(completed_sec),
     )
 
     assert library.runtime_details().system_info == "METAL = 1"
-    assert progress_updates == [3.0]
-    assert chunk_transcriptions[0].detected_language == "en"
-    assert [segment.text for segment in chunk_transcriptions[0].segments] == [
+    assert decoded_window.language == "en"
+    assert [segment.text for segment in decoded_window.segments] == [
         "agenda review",
         "next step",
     ]
-    assert [segment.end_sec for segment in chunk_transcriptions[0].segments] == [1.5, 3.0]
+    assert [segment.end_sec for segment in decoded_window.segments] == [1.5, 3.0]
 
 
 def test_whisper_cpp_library_disables_gpu_when_system_info_has_no_backend(
@@ -150,10 +147,10 @@ def test_whisper_cpp_library_disables_gpu_when_system_info_has_no_backend(
     )
 
     library = WhisperCppLibrary(library_path)
-    library.transcribe_chunks(
+    library.decode_window(
         model_path,
         np.zeros(16_000, dtype=np.float32),
-        [AudioChunk(id="chunk-1", start_sec=0.0, end_sec=3.0)],
+        InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=3.0),
         threads=4,
     )
 
@@ -262,10 +259,10 @@ def test_whisper_cpp_library_raises_when_context_init_fails(monkeypatch, tmp_pat
     library = WhisperCppLibrary(library_path)
 
     with pytest.raises(WhisperCppError, match=r"Failed to initialize whisper\.cpp model"):
-        library.transcribe_chunks(
+        library.decode_window(
             model_path,
             np.zeros(16_000, dtype=np.float32),
-            [AudioChunk(id="chunk-1", start_sec=0.0, end_sec=1.0)],
+            InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
             threads=2,
         )
 
@@ -286,15 +283,15 @@ def test_whisper_cpp_library_raises_when_state_init_fails(monkeypatch, tmp_path)
     library = WhisperCppLibrary(library_path)
 
     with pytest.raises(WhisperCppError, match=r"Failed to initialize whisper\.cpp runtime state"):
-        library.transcribe_chunks(
+        library.decode_window(
             model_path,
             np.zeros(16_000, dtype=np.float32),
-            [AudioChunk(id="chunk-1", start_sec=0.0, end_sec=1.0)],
+            InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
             threads=2,
         )
 
 
-def test_transcribe_chunk_handles_empty_input_and_inference_failure(monkeypatch, tmp_path) -> None:
+def test_decode_window_handles_empty_input_and_inference_failure(monkeypatch, tmp_path) -> None:
     library_path = tmp_path / "libwhisper.dylib"
     library_path.write_text("stub", encoding="utf-8")
     fake_cdll = FakeCDLL()
@@ -305,26 +302,26 @@ def test_transcribe_chunk_handles_empty_input_and_inference_failure(monkeypatch,
     )
     library = WhisperCppLibrary(library_path)
 
-    empty_chunk = library._transcribe_chunk(
+    empty_window = library._decode_window(
         ctypes.c_void_p(1),
         ctypes.c_void_p(2),
         np.zeros(0, dtype=np.float32),
-        AudioChunk(id="chunk-1", start_sec=0.0, end_sec=1.0),
+        InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
         threads=2,
-        initial_prompt=None,
+        prompt=None,
         language_hint="ru",
     )
-    assert empty_chunk.detected_language == "ru"
-    assert empty_chunk.segments == []
+    assert empty_window.language == "ru"
+    assert empty_window.segments == []
 
     fake_cdll.whisper_full_with_state = FakeFunction(lambda *_args: 1)
-    with pytest.raises(WhisperCppError, match="inference failed for chunk-2"):
-        library._transcribe_chunk(
+    with pytest.raises(WhisperCppError, match="inference failed for window-2"):
+        library._decode_window(
             ctypes.c_void_p(1),
             ctypes.c_void_p(2),
             np.zeros(16_000, dtype=np.float32),
-            AudioChunk(id="chunk-2", start_sec=0.0, end_sec=1.0),
+            InferenceWindow(window_id="window-2", region_index=0, start_sec=0.0, end_sec=1.0),
             threads=2,
-            initial_prompt=None,
+            prompt=None,
             language_hint=None,
         )

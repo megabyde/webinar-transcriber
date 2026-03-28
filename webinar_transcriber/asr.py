@@ -5,11 +5,10 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
-from webinar_transcriber.models import AudioChunk, ChunkTranscription, TranscriptionResult
-from webinar_transcriber.transcription_audio import load_normalized_audio
 from webinar_transcriber.whispercpp import (
     WhisperCppLibrary,
     WhisperCppRuntimeDetails,
@@ -19,12 +18,17 @@ from webinar_transcriber.whispercpp import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from webinar_transcriber.models import DecodedWindow, InferenceWindow
+
 
 ASR_BACKEND_NAME = "whisper.cpp"
 DEFAULT_WHISPER_CPP_MODEL = Path("models/whisper-cpp/ggml-large-v3-turbo.bin")
 _ENABLED_BACKEND_PATTERN = re.compile(
     r"(?i)\b(metal|mtl|cuda|vulkan|coreml)\b[^|]*?(?:=|:)\s*(?:1|true)"
 )
+_CARRYOVER_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+_CARRYOVER_WHITESPACE = re.compile(r"\s+")
+_CARRYOVER_TRAILING_NOISE = re.compile(r"[\(\[\{<\"'`]+$|[\s\-:,;]+$")
 
 
 def _read_sysctl_int(name: str) -> int | None:
@@ -55,6 +59,24 @@ def default_asr_threads() -> int:
 
 
 DEFAULT_ASR_THREADS = default_asr_threads()
+DEFAULT_CARRYOVER_MAX_SENTENCES = 2
+DEFAULT_CARRYOVER_MAX_TOKENS = 64
+
+
+@dataclass(frozen=True)
+class PromptCarryoverSettings:
+    """Configuration for bounded prompt carryover between adjacent windows."""
+
+    enabled: bool = True
+    max_sentences: int = DEFAULT_CARRYOVER_MAX_SENTENCES
+    max_tokens: int = DEFAULT_CARRYOVER_MAX_TOKENS
+
+
+@dataclass(frozen=True)
+class WhisperDecodeSettings:
+    """Decode-time inference settings kept above the low-level whisper.cpp wrapper."""
+
+    carryover: PromptCarryoverSettings = PromptCarryoverSettings()
 
 
 def _missing_model_error_message(model_path: Path) -> str:
@@ -69,32 +91,6 @@ def _missing_model_error_message(model_path: Path) -> str:
     )
 
 
-class Transcriber(Protocol):
-    """Protocol for components that convert audio to transcript text."""
-
-    @property
-    def model_name(self) -> str:
-        """Effective model name for diagnostics and logging."""
-
-    @property
-    def device_name(self) -> str:
-        """Effective device name for diagnostics and logging."""
-
-    def prepare_model(self) -> None:
-        """Warm or validate model assets before transcription starts."""
-
-    def transcribe(
-        self,
-        audio_path: Path,
-        *,
-        progress_callback: Callable[[float], None] | None = None,
-    ) -> TranscriptionResult:
-        """Return a normalized transcription for the provided audio file."""
-
-    def close(self) -> None:
-        """Release any prepared runtime resources."""
-
-
 class WhisperCppTranscriber:
     """ASR implementation using the in-process whisper.cpp C API."""
 
@@ -103,13 +99,15 @@ class WhisperCppTranscriber:
         model_name: str | None = None,
         *,
         threads: int = 4,
-        initial_prompt: str | None = None,
+        carryover_settings: PromptCarryoverSettings | None = None,
         library_path: Path | None = None,
         log_path: Path | None = None,
     ) -> None:
         self._model_path = Path(model_name) if model_name else DEFAULT_WHISPER_CPP_MODEL
         self._threads = max(1, threads)
-        self._initial_prompt = initial_prompt
+        self._decode_settings = WhisperDecodeSettings(
+            carryover=carryover_settings or PromptCarryoverSettings()
+        )
         self._library_path = library_path
         self._log_path = log_path
         self._runtime_details: WhisperCppRuntimeDetails | None = None
@@ -155,42 +153,39 @@ class WhisperCppTranscriber:
         self._session = session
         self._runtime_details = session.runtime_details
 
-    def transcribe(
-        self,
-        audio_path: Path,
-        *,
-        progress_callback: Callable[[float], None] | None = None,
-    ) -> TranscriptionResult:
-        audio_samples, sample_rate = load_normalized_audio(audio_path)
-        duration_sec = len(audio_samples) / float(sample_rate) if sample_rate else 0.0
-        chunk = AudioChunk(id="chunk-1", start_sec=0.0, end_sec=duration_sec)
-        chunk_transcriptions = self.transcribe_audio_chunks(
-            audio_samples,
-            [chunk],
-            progress_callback=progress_callback,
-        )
-        if chunk_transcriptions:
-            return TranscriptionResult(
-                detected_language=chunk_transcriptions[0].detected_language,
-                segments=chunk_transcriptions[0].segments,
-            )
-        return TranscriptionResult()
-
-    def transcribe_audio_chunks(
+    def transcribe_inference_windows(
         self,
         audio_samples,
-        chunks: list[AudioChunk],
+        windows: list[InferenceWindow],
         *,
         progress_callback: Callable[[float], None] | None = None,
-    ) -> list[ChunkTranscription]:
+    ) -> list[DecodedWindow]:
         session = self._ensure_session()
-        return session.transcribe_chunks(
-            audio_samples,
-            chunks,
-            threads=self._threads,
-            initial_prompt=self._initial_prompt,
-            progress_callback=progress_callback,
-        )
+        ordered_windows = sorted(windows)
+        language_hint: str | None = None
+        carryover_prompt: str | None = None
+        decoded_windows: list[DecodedWindow] = []
+
+        for window in ordered_windows:
+            decoded_window = session.decode_window(
+                audio_samples,
+                window,
+                threads=self._threads,
+                prompt=carryover_prompt,
+                language_hint=language_hint,
+            )
+            decoded_windows.append(
+                decoded_window.model_copy(update={"input_prompt": carryover_prompt})
+            )
+            next_carryover = build_prompt_carryover(
+                decoded_window,
+                settings=self._decode_settings.carryover,
+            )
+            language_hint = language_hint or decoded_window.language
+            carryover_prompt = next_carryover
+            if progress_callback is not None:
+                progress_callback(window.end_sec)
+        return decoded_windows
 
     def close(self) -> None:
         if self._session is not None:
@@ -217,3 +212,59 @@ def _device_name_from_system_info(system_info: str) -> str:
         backend_name = match.group(1).lower()
         return "metal" if backend_name == "mtl" else backend_name
     return "cpu"
+
+
+def build_prompt_carryover(
+    decoded_window: DecodedWindow,
+    *,
+    settings: PromptCarryoverSettings,
+) -> str | None:
+    """Return a bounded prompt suffix for the next window, or `None` when confidence is weak."""
+    if not settings.enabled or not _window_is_confident(decoded_window, settings=settings):
+        return None
+
+    sentences = [
+        stripped
+        for part in _CARRYOVER_SENTENCE_SPLIT.split(decoded_window.text)
+        if (stripped := part.strip())
+    ]
+    carryover = " ".join(sentences[-max(1, settings.max_sentences) :])
+    carryover = _sanitize_prompt(carryover, max_tokens=settings.max_tokens)
+    return carryover or None
+
+
+def _window_is_confident(
+    decoded_window: DecodedWindow,
+    *,
+    settings: PromptCarryoverSettings,
+) -> bool:
+    return _carryover_drop_reason(decoded_window, settings=settings) is None
+
+
+def _carryover_drop_reason(
+    decoded_window: DecodedWindow,
+    *,
+    settings: PromptCarryoverSettings,
+) -> str | None:
+    if not settings.enabled:
+        return "carryover_disabled"
+    if decoded_window.fallback_used:
+        return "fallback_used"
+    if not decoded_window.text.strip():
+        return "empty_text"
+    return None
+
+
+def _sanitize_prompt(prompt: str | None, *, max_tokens: int) -> str:
+    if not prompt:
+        return ""
+
+    cleaned = _CARRYOVER_WHITESPACE.sub(" ", prompt.strip())
+    cleaned = _CARRYOVER_TRAILING_NOISE.sub("", cleaned).strip()
+    if not cleaned:
+        return ""
+
+    tokens = cleaned.split(" ")
+    token_limit = min(len(tokens), max(0, max_tokens))
+    tokens = tokens[-token_limit:] if token_limit else []
+    return " ".join(tokens)

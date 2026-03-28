@@ -23,6 +23,18 @@ def test_format_count_renders_frame_counter() -> None:
     )
 
 
+def test_format_count_renders_compact_seconds_suffix() -> None:
+    assert (
+        _format_count(
+            completed=74.0,
+            total=100.0,
+            count_label="s",
+            count_multiplier=1.0,
+        )
+        == "74/100s"
+    )
+
+
 def test_rate_text_for_update_renders_frames_per_second() -> None:
     assert (
         _rate_text_for_update(

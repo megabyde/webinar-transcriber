@@ -43,6 +43,9 @@ make test
 make coverage
 ```
 
+In sandboxed Codex runs, prefer `UV_CACHE_DIR=/tmp/uv-cache` for `uv` and `make` commands to avoid
+cache-permission failures.
+
 ## Package Layout
 
 The package intentionally avoids deep nesting.
@@ -71,6 +74,24 @@ The package intentionally avoids deep nesting.
   needs mock semantics such as `side_effect`, `return_value`, or call assertions.
 - CLI tests should generally monkeypatch the reporter and heavy runtime seams instead of invoking
   real media-processing work.
+- Prefer asserting current observable behavior over asserting that recently removed options, fields,
+  or artifacts are absent. Deletion-based assertions are usually shallow and brittle.
+
+## Implementation Notes
+
+- When an earlier pipeline stage already guarantees an invariant, prefer enforcing that invariant
+  directly instead of carrying defensive conversion logic downstream. For example, transcription
+  audio is normalized to `16000 Hz`, so the Silero integration should assert that contract rather
+  than silently resample.
+
+## Style Notes
+
+- Use the walrus operator selectively when it removes repeated work without making the code harder
+  to read.
+- Prefer short loop and comprehension variable names when the surrounding context already makes the
+  meaning obvious.
+- In ASR code and artifacts, use `speech region` for VAD/planning inputs and `window` for Whisper
+  decode units; avoid `chunk` for ASR concepts.
 
 ## Open Work
 

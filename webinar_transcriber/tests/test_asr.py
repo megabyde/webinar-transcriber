@@ -5,10 +5,12 @@ import pytest
 
 from webinar_transcriber.asr import (
     DEFAULT_WHISPER_CPP_MODEL,
+    PromptCarryoverSettings,
     WhisperCppTranscriber,
     _device_name_from_system_info,
+    build_prompt_carryover,
 )
-from webinar_transcriber.models import ChunkTranscription, TranscriptSegment
+from webinar_transcriber.models import DecodedWindow, InferenceWindow, TranscriptSegment
 
 
 def test_default_model_uses_whisper_cpp_model_path() -> None:
@@ -70,17 +72,12 @@ def test_prepare_model_reads_runtime_details(monkeypatch, tmp_path) -> None:
     assert transcriber.library_path == "/usr/local/lib/libwhisper.so"
 
 
-def test_whisper_cpp_transcriber_uses_library_for_chunked_transcription(
+def test_whisper_cpp_transcriber_carries_input_prompt_into_decoded_windows(
     monkeypatch, tmp_path
 ) -> None:
     model_path = tmp_path / "model.bin"
     model_path.write_text("stub", encoding="utf-8")
     progress_updates: list[float] = []
-
-    monkeypatch.setattr(
-        "webinar_transcriber.asr.load_normalized_audio",
-        lambda _path: (np.zeros(16_000, dtype=np.float32), 16_000),
-    )
 
     class FakeLibrary:
         def __init__(self, _library_path, log_path=None) -> None:
@@ -96,36 +93,34 @@ def test_whisper_cpp_transcriber_uses_library_for_chunked_transcription(
                     system_info="CPU = 1",
                 )
 
-                def transcribe_chunks(
+                def decode_window(
                     self,
                     audio_samples,
-                    chunks,
+                    window,
                     *,
                     threads,
-                    initial_prompt=None,
-                    progress_callback=None,
+                    prompt=None,
+                    language_hint=None,
                 ):
-                    del audio_samples, initial_prompt
+                    del audio_samples
                     assert threads == 6
-                    assert len(chunks) == 1
-                    if progress_callback is not None:
-                        progress_callback(chunks[0].end_sec)
-                    return [
-                        ChunkTranscription(
-                            chunk_id=chunks[0].id,
-                            start_sec=0.0,
-                            end_sec=1.0,
-                            detected_language="ru",
-                            segments=[
-                                TranscriptSegment(
-                                    id="segment-1",
-                                    text="agenda review",
-                                    start_sec=0.0,
-                                    end_sec=1.0,
-                                )
-                            ],
-                        )
-                    ]
+                    return DecodedWindow(
+                        window=window,
+                        text=(
+                            "agenda review"
+                            if window.window_id == "window-1"
+                            else f"{prompt} follow up"
+                        ),
+                        language="ru",
+                        segments=[
+                            TranscriptSegment(
+                                id="segment-1",
+                                text="agenda review",
+                                start_sec=0.0,
+                                end_sec=1.0,
+                            )
+                        ],
+                    )
 
                 def close(self) -> None:
                     return None
@@ -135,15 +130,69 @@ def test_whisper_cpp_transcriber_uses_library_for_chunked_transcription(
     monkeypatch.setattr("webinar_transcriber.asr.WhisperCppLibrary", FakeLibrary)
 
     transcriber = WhisperCppTranscriber(model_name=str(model_path), threads=6)
-    result = transcriber.transcribe(
-        tmp_path / "audio.wav",
+    decoded_windows = transcriber.transcribe_inference_windows(
+        np.zeros(16_000, dtype=np.float32),
+        [
+            InferenceWindow(
+                window_id="window-1",
+                region_index=0,
+                start_sec=0.0,
+                end_sec=1.0,
+            ),
+            InferenceWindow(
+                window_id="window-2",
+                region_index=0,
+                start_sec=1.0,
+                end_sec=2.0,
+            ),
+        ],
         progress_callback=lambda completed_sec: progress_updates.append(completed_sec),
     )
 
-    assert result.detected_language == "ru"
-    assert [segment.text for segment in result.segments] == ["agenda review"]
-    assert progress_updates == [1.0]
+    assert [w.language for w in decoded_windows] == ["ru", "ru"]
+    assert [w.text for w in decoded_windows] == ["agenda review", "agenda review follow up"]
+    assert [w.input_prompt for w in decoded_windows] == [None, "agenda review"]
+    assert progress_updates == [1.0, 2.0]
     assert transcriber.device_name == "cpu"
+
+
+def test_build_prompt_carryover_uses_last_sentences_and_token_budget() -> None:
+    carryover = build_prompt_carryover(
+        DecodedWindow(
+            window=InferenceWindow(
+                window_id="window-2",
+                region_index=0,
+                start_sec=18.5,
+                end_sec=35.0,
+                overlap_sec=1.5,
+            ),
+            text="First sentence. Second sentence. Third sentence here.",
+            segments=[],
+        ),
+        settings=PromptCarryoverSettings(max_sentences=2, max_tokens=4),
+    )
+
+    assert carryover == "sentence. Third sentence here."
+
+
+def test_build_prompt_carryover_drops_fallback_windows() -> None:
+    carryover = build_prompt_carryover(
+        DecodedWindow(
+            window=InferenceWindow(
+                window_id="window-2",
+                region_index=0,
+                start_sec=18.5,
+                end_sec=35.0,
+                overlap_sec=1.5,
+            ),
+            text="This should not carry.",
+            segments=[],
+            fallback_used=True,
+        ),
+        settings=PromptCarryoverSettings(),
+    )
+
+    assert carryover is None
 
 
 def test_device_name_from_system_info_prefers_enabled_backend() -> None:

@@ -72,14 +72,18 @@ webinar-transcriber process INPUT --asr-model /path/to/ggml-large-v3-turbo.bin
 
 ### ASR Tuning
 
-The chunked ASR pipeline can be tuned from the CLI:
+The VAD-aware whisper.cpp pipeline can be tuned from the CLI:
 
 ```bash
 webinar-transcriber process INPUT \
   --vad \
-  --chunk-target-sec 20 \
-  --chunk-max-sec 30 \
-  --chunk-overlap-sec 1.5 \
+  --vad-threshold 0.5 \
+  --min-speech-ms 250 \
+  --min-silence-ms 600 \
+  --speech-region-pad-ms 200 \
+  --carryover \
+  --carryover-max-sentences 2 \
+  --carryover-max-tokens 64 \
   --threads 4
 ```
 
@@ -90,15 +94,20 @@ current environment. If you updated from an older checkout, rerun:
 make sync
 ```
 
+For the segmentation, prompt carryover, and overlap-reconciliation design, see
+[docs/asr_chunking.md](docs/asr_chunking.md).
+
 ## Processing Behavior
 
 ### Pipeline
 
 1. Probe input media with `ffprobe`.
 1. Prepare deterministic transcription audio with `ffmpeg`.
-1. Detect speech regions and plan ASR chunks.
-1. Transcribe chunks with `whisper.cpp`.
-1. Reconcile chunk overlap into one transcript.
+1. Detect coarse speech regions with Silero VAD.
+1. Merge overly short speech regions, then expand speech regions with ASR-specific padding.
+1. Plan one inference window per expanded speech region.
+1. Decode each window with `whisper.cpp`, using bounded prompt carryover when confidence is good.
+1. Reconcile adjacent decoded windows into the final transcript.
 1. For video input, detect scenes and extract representative frames.
 1. Align transcript content to audio or slide sections.
 1. Structure notes and export Markdown, DOCX, and JSON artifacts.
@@ -153,6 +162,10 @@ No special 1Password integration is required. The app only reads environment var
 
 ```text
 runs/<timestamp>_<basename>/
+├─ asr/
+│  ├─ speech_regions.json
+│  ├─ expanded_regions.json
+│  └─ decoded_windows.json
 ├─ metadata.json
 ├─ transcript.json
 ├─ scenes.json          # video only

@@ -6,10 +6,20 @@ from pathlib import Path
 import click
 
 from webinar_transcriber import __version__
-from webinar_transcriber.asr import DEFAULT_ASR_THREADS
+from webinar_transcriber.asr import (
+    DEFAULT_ASR_THREADS,
+    DEFAULT_CARRYOVER_MAX_SENTENCES,
+    DEFAULT_CARRYOVER_MAX_TOKENS,
+)
 from webinar_transcriber.media import MediaProcessingError, probe_media
 from webinar_transcriber.paths import OutputDirectoryExistsError, create_run_layout
 from webinar_transcriber.processor import process_input
+from webinar_transcriber.segmentation import (
+    DEFAULT_MIN_SILENCE_DURATION_MS,
+    DEFAULT_MIN_SPEECH_DURATION_MS,
+    DEFAULT_SPEECH_REGION_PAD_MS,
+    DEFAULT_VAD_THRESHOLD,
+)
 from webinar_transcriber.ui import RichStageReporter
 from webinar_transcriber.video import (
     detect_scenes,
@@ -60,28 +70,55 @@ def main() -> None:
     "--vad/--no-vad",
     default=True,
     show_default=True,
-    help="Enable speech-region detection before chunked transcription.",
+    help="Enable Silero speech-region detection before transcription planning.",
 )
 @click.option(
-    "--chunk-target-sec",
+    "--vad-threshold",
     type=float,
-    default=20.0,
+    default=DEFAULT_VAD_THRESHOLD,
     show_default=True,
-    help="Target chunk duration for ASR planning.",
+    help="Silero speech detection threshold.",
 )
 @click.option(
-    "--chunk-max-sec",
-    type=float,
-    default=30.0,
+    "--min-speech-ms",
+    type=int,
+    default=DEFAULT_MIN_SPEECH_DURATION_MS,
     show_default=True,
-    help="Hard cap for chunk duration.",
+    help="Minimum speech duration for Silero region detection.",
 )
 @click.option(
-    "--chunk-overlap-sec",
-    type=float,
-    default=1.5,
+    "--min-silence-ms",
+    type=int,
+    default=DEFAULT_MIN_SILENCE_DURATION_MS,
     show_default=True,
-    help="Overlap between adjacent ASR chunks.",
+    help="Minimum silence duration for Silero region separation.",
+)
+@click.option(
+    "--speech-region-pad-ms",
+    type=int,
+    default=DEFAULT_SPEECH_REGION_PAD_MS,
+    show_default=True,
+    help="Symmetric extra context added around detected speech regions.",
+)
+@click.option(
+    "--carryover/--no-carryover",
+    default=True,
+    show_default=True,
+    help="Carry a bounded prompt suffix across adjacent inference windows.",
+)
+@click.option(
+    "--carryover-max-sentences",
+    type=int,
+    default=DEFAULT_CARRYOVER_MAX_SENTENCES,
+    show_default=True,
+    help="Maximum trailing sentences to reuse as prompt carryover.",
+)
+@click.option(
+    "--carryover-max-tokens",
+    type=int,
+    default=DEFAULT_CARRYOVER_MAX_TOKENS,
+    show_default=True,
+    help="Approximate token budget for prompt carryover per inference window.",
 )
 @click.option(
     "--threads",
@@ -102,9 +139,13 @@ def process(
     output_format: str,
     asr_model: str | None,
     vad: bool,
-    chunk_target_sec: float,
-    chunk_max_sec: float,
-    chunk_overlap_sec: float,
+    vad_threshold: float,
+    min_speech_ms: int,
+    min_silence_ms: int,
+    speech_region_pad_ms: int,
+    carryover: bool,
+    carryover_max_sentences: int,
+    carryover_max_tokens: int,
     asr_threads: int,
     llm: bool,
 ) -> None:
@@ -124,9 +165,13 @@ def process(
             output_format=output_format,
             asr_model=asr_model,
             vad_enabled=vad,
-            chunk_target_sec=chunk_target_sec,
-            chunk_max_sec=chunk_max_sec,
-            chunk_overlap_sec=chunk_overlap_sec,
+            vad_threshold=vad_threshold,
+            min_speech_duration_ms=min_speech_ms,
+            min_silence_duration_ms=min_silence_ms,
+            speech_region_pad_ms=speech_region_pad_ms,
+            carryover_enabled=carryover,
+            carryover_max_sentences=carryover_max_sentences,
+            carryover_max_tokens=carryover_max_tokens,
             asr_threads=asr_threads,
             enable_llm=llm,
             reporter=reporter,

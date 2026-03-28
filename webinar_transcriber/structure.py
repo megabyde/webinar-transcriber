@@ -146,7 +146,7 @@ def _build_sections_from_blocks(blocks: list[AlignmentBlock]) -> list[ReportSect
 
 
 def _build_audio_sections(segments: list[TranscriptSegment]) -> list[ReportSection]:
-    meaningful_segments = [segment for segment in segments if segment.text.strip()]
+    meaningful_segments = [seg for seg in segments if seg.text.strip()]
     if not meaningful_segments:
         return []
 
@@ -197,9 +197,7 @@ def _should_start_new_audio_section(
 def _audio_section_from_segments(
     segments: list[TranscriptSegment], section_index: int
 ) -> ReportSection:
-    transcript_text = "\n\n".join(
-        segment.text.strip() for segment in segments if segment.text.strip()
-    )
+    transcript_text = "\n\n".join(s for seg in segments if (s := seg.text.strip()))
     title = _audio_title_from_segments(segments, fallback=f"Section {section_index}")
 
     return ReportSection(

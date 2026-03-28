@@ -2,8 +2,9 @@
 
 from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
-    ChunkTranscription,
+    DecodedWindow,
     Diagnostics,
+    InferenceWindow,
     MediaAsset,
     MediaType,
     ReportDocument,
@@ -75,10 +76,17 @@ def test_diagnostics_defaults_empty_maps() -> None:
 
 def test_asr_pipeline_support_models_accept_expected_fields() -> None:
     speech_region = SpeechRegion(start_sec=0.0, end_sec=1.5)
-    chunk_transcription = ChunkTranscription(
-        chunk_id="chunk-1",
+    window = InferenceWindow(
+        window_id="window-1",
+        region_index=0,
         start_sec=0.0,
         end_sec=1.5,
+        overlap_sec=0.3,
+    )
+    decoded_window = DecodedWindow(
+        window=window,
+        input_prompt="hello",
+        text="hello",
         segments=[
             TranscriptSegment(
                 id="segment-1",
@@ -92,10 +100,26 @@ def test_asr_pipeline_support_models_accept_expected_fields() -> None:
         normalized_audio_duration_sec=120.0,
         vad_enabled=True,
         vad_region_count=5,
-        chunk_count=4,
-        overlap_duration_sec=1.5,
+        carryover_enabled=True,
+        window_count=4,
     )
 
     assert speech_region.end_sec == 1.5
-    assert chunk_transcription.chunk_id == "chunk-1"
-    assert diagnostics.chunk_count == 4
+    assert decoded_window.window.window_id == "window-1"
+    assert decoded_window.input_prompt == "hello"
+    assert diagnostics.carryover_enabled is True
+    assert diagnostics.window_count == 4
+
+
+def test_inference_window_is_ordered_by_timeline() -> None:
+    windows = [
+        InferenceWindow(window_id="window-3", region_index=1, start_sec=10.0, end_sec=12.0),
+        InferenceWindow(window_id="window-2", region_index=0, start_sec=0.0, end_sec=8.0),
+        InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=6.0),
+    ]
+
+    assert [window.window_id for window in sorted(windows)] == [
+        "window-1",
+        "window-2",
+        "window-3",
+    ]

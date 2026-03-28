@@ -78,9 +78,13 @@ def test_process_command_runs_pipeline(tmp_path) -> None:
         output_format="json",
         asr_model=None,
         vad_enabled=True,
-        chunk_target_sec=20.0,
-        chunk_max_sec=30.0,
-        chunk_overlap_sec=1.5,
+        vad_threshold=0.5,
+        min_speech_duration_ms=250,
+        min_silence_duration_ms=600,
+        speech_region_pad_ms=200,
+        carryover_enabled=True,
+        carryover_max_sentences=2,
+        carryover_max_tokens=64,
         asr_threads=DEFAULT_ASR_THREADS,
         enable_llm=False,
         reporter=ANY,
@@ -120,12 +124,19 @@ def test_process_command_forwards_asr_options(tmp_path) -> None:
                 "--asr-model",
                 "models/whisper-cpp/custom.bin",
                 "--no-vad",
-                "--chunk-target-sec",
-                "18",
-                "--chunk-max-sec",
-                "24",
-                "--chunk-overlap-sec",
-                "2",
+                "--vad-threshold",
+                "0.42",
+                "--min-speech-ms",
+                "300",
+                "--min-silence-ms",
+                "500",
+                "--speech-region-pad-ms",
+                "220",
+                "--no-carryover",
+                "--carryover-max-sentences",
+                "1",
+                "--carryover-max-tokens",
+                "32",
                 "--threads",
                 "6",
                 "--llm",
@@ -139,9 +150,13 @@ def test_process_command_forwards_asr_options(tmp_path) -> None:
         output_format="all",
         asr_model="models/whisper-cpp/custom.bin",
         vad_enabled=False,
-        chunk_target_sec=18.0,
-        chunk_max_sec=24.0,
-        chunk_overlap_sec=2.0,
+        vad_threshold=0.42,
+        min_speech_duration_ms=300,
+        min_silence_duration_ms=500,
+        speech_region_pad_ms=220,
+        carryover_enabled=False,
+        carryover_max_sentences=1,
+        carryover_max_tokens=32,
         asr_threads=6,
         enable_llm=True,
         reporter=ANY,
@@ -156,9 +171,13 @@ def test_process_help_describes_asr_options() -> None:
     assert result.exit_code == 0
     assert "--asr-model" in result.output
     assert "--vad / --no-vad" in result.output
-    assert "--chunk-target-sec" in result.output
-    assert "--chunk-max-sec" in result.output
-    assert "--chunk-overlap-sec" in result.output
+    assert "--vad-threshold" in result.output
+    assert "--min-speech-ms" in result.output
+    assert "--min-silence-ms" in result.output
+    assert "--speech-region-pad-ms" in result.output
+    assert "--carryover / --no-carryover" in result.output
+    assert "--carryover-max-sentences" in result.output
+    assert "--carryover-max-tokens" in result.output
     assert "--threads" in result.output
     assert "--llm" in result.output
     assert "Override the whisper.cpp model path" in result.output

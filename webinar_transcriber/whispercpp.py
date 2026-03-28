@@ -13,7 +13,7 @@ from typing import Final
 
 import numpy as np
 
-from webinar_transcriber.models import AudioChunk, ChunkTranscription, TranscriptSegment
+from webinar_transcriber.models import DecodedWindow, InferenceWindow, TranscriptSegment
 
 _WHISPER_SAMPLING_GREEDY: Final[int] = 0
 _TICKS_PER_SECOND: Final[float] = 100.0
@@ -179,34 +179,24 @@ class WhisperCppSession:
     def runtime_details(self) -> WhisperCppRuntimeDetails:
         return self._runtime_details
 
-    def transcribe_chunks(
+    def decode_window(
         self,
         audio_samples: np.ndarray,
-        chunks: list[AudioChunk],
+        window: InferenceWindow,
         *,
         threads: int,
-        initial_prompt: str | None = None,
-        progress_callback=None,
-    ) -> list[ChunkTranscription]:
-        language_hint: str | None = None
-        chunk_transcriptions: list[ChunkTranscription] = []
-        contiguous_samples = np.ascontiguousarray(audio_samples, dtype=np.float32)
-        for chunk in chunks:
-            chunk_transcription = self._library._transcribe_chunk(
-                self._context,
-                self._state,
-                contiguous_samples,
-                chunk,
-                threads=threads,
-                initial_prompt=initial_prompt,
-                language_hint=language_hint,
-            )
-            chunk_transcriptions.append(chunk_transcription)
-            if language_hint is None and chunk_transcription.detected_language:
-                language_hint = chunk_transcription.detected_language
-            if progress_callback is not None:
-                progress_callback(chunk.end_sec)
-        return chunk_transcriptions
+        prompt: str | None = None,
+        language_hint: str | None = None,
+    ) -> DecodedWindow:
+        return self._library._decode_window(
+            self._context,
+            self._state,
+            np.ascontiguousarray(audio_samples, dtype=np.float32),
+            window,
+            threads=threads,
+            prompt=prompt,
+            language_hint=language_hint,
+        )
 
     def close(self) -> None:
         if self._closed:
@@ -269,49 +259,49 @@ class WhisperCppLibrary:
             runtime_details=runtime_details,
         )
 
-    def transcribe_chunks(
+    def decode_window(
         self,
         model_path: Path,
         audio_samples: np.ndarray,
-        chunks: list[AudioChunk],
+        window: InferenceWindow,
         *,
         threads: int,
-        initial_prompt: str | None = None,
-        progress_callback=None,
-    ) -> list[ChunkTranscription]:
+        prompt: str | None = None,
+        language_hint: str | None = None,
+    ) -> DecodedWindow:
         session = self.create_session(model_path)
         try:
-            return session.transcribe_chunks(
+            return session.decode_window(
                 audio_samples,
-                chunks,
                 threads=threads,
-                initial_prompt=initial_prompt,
-                progress_callback=progress_callback,
+                window=window,
+                prompt=prompt,
+                language_hint=language_hint,
             )
         finally:
             session.close()
 
-    def _transcribe_chunk(
+    def _decode_window(
         self,
         context: ctypes.c_void_p,
         state: ctypes.c_void_p,
         audio_samples: np.ndarray,
-        chunk: AudioChunk,
+        window: InferenceWindow,
         *,
         threads: int,
-        initial_prompt: str | None,
+        prompt: str | None,
         language_hint: str | None,
-    ) -> ChunkTranscription:
-        start_index = max(0, round(chunk.start_sec * 16_000))
-        end_index = min(len(audio_samples), round(chunk.end_sec * 16_000))
-        chunk_samples = np.ascontiguousarray(audio_samples[start_index:end_index], dtype=np.float32)
+    ) -> DecodedWindow:
+        start_index = max(0, round(window.start_sec * 16_000))
+        end_index = min(len(audio_samples), round(window.end_sec * 16_000))
+        window_samples = np.ascontiguousarray(
+            audio_samples[start_index:end_index], dtype=np.float32
+        )
 
-        if chunk_samples.size == 0:
-            return ChunkTranscription(
-                chunk_id=chunk.id,
-                start_sec=chunk.start_sec,
-                end_sec=chunk.end_sec,
-                detected_language=language_hint,
+        if window_samples.size == 0:
+            return DecodedWindow(
+                window=window,
+                language=language_hint,
             )
 
         params_ptr = self._lib.whisper_full_default_params_by_ref(_WHISPER_SAMPLING_GREEDY)
@@ -330,21 +320,23 @@ class WhisperCppLibrary:
             params.max_tokens = 0
             params.single_segment = False
             params.tdrz_enable = False
-            params.initial_prompt = _encode_optional_text(initial_prompt)
+            params.initial_prompt = _encode_optional_text(prompt)
             params.carry_initial_prompt = False
             params.language = _encode_optional_text(language_hint)
             params.detect_language = language_hint is None
+            params.greedy.best_of = 1
+            params.beam_search.patience = 1.0
 
             _set_log_sink_path(self._log_path)
             result = self._lib.whisper_full_with_state(
                 context,
                 state,
                 params,
-                chunk_samples.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
-                int(chunk_samples.size),
+                window_samples.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+                int(window_samples.size),
             )
             if result != 0:
-                raise WhisperCppError(f"whisper.cpp inference failed for {chunk.id}.")
+                raise WhisperCppError(f"whisper.cpp inference failed for {window.window_id}.")
 
             detected_language = _decode_c_string(
                 self._lib.whisper_lang_str(self._lib.whisper_full_lang_id_from_state(state))
@@ -352,11 +344,11 @@ class WhisperCppLibrary:
             segment_count = self._lib.whisper_full_n_segments_from_state(state)
             segments: list[TranscriptSegment] = []
             for segment_index in range(segment_count):
-                start_sec = chunk.start_sec + (
+                start_sec = window.start_sec + (
                     self._lib.whisper_full_get_segment_t0_from_state(state, segment_index)
                     / _TICKS_PER_SECOND
                 )
-                end_sec = chunk.start_sec + (
+                end_sec = window.start_sec + (
                     self._lib.whisper_full_get_segment_t1_from_state(state, segment_index)
                     / _TICKS_PER_SECOND
                 )
@@ -365,19 +357,19 @@ class WhisperCppLibrary:
                 ).strip()
                 segments.append(
                     TranscriptSegment(
-                        id=f"{chunk.id}-segment-{segment_index + 1}",
+                        id=f"{window.window_id}-segment-{segment_index + 1}",
                         text=text,
-                        start_sec=max(chunk.start_sec, start_sec),
+                        start_sec=max(window.start_sec, start_sec),
                         end_sec=max(start_sec, end_sec),
                     )
                 )
 
-            return ChunkTranscription(
-                chunk_id=chunk.id,
-                start_sec=chunk.start_sec,
-                end_sec=chunk.end_sec,
-                detected_language=detected_language,
+            return DecodedWindow(
+                window=window,
+                text=" ".join(segment.text for segment in segments if segment.text).strip(),
                 segments=segments,
+                fallback_used=False,
+                language=detected_language,
             )
         finally:
             self._lib.whisper_free_params(params_ptr)
