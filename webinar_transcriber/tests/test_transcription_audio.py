@@ -6,7 +6,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from webinar_transcriber.media import MediaProcessingError, probe_media
+from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.models import SpeechRegion
 from webinar_transcriber.segmentation import (
     _normalize_regions,
@@ -25,9 +25,7 @@ FIXTURE_DIR = Path(__file__).parent / "fixtures"
 
 
 def test_prepared_transcription_audio_normalizes_audio_input_to_temp_wav() -> None:
-    asset = probe_media(FIXTURE_DIR / "sample-audio.mp3")
-
-    with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3", asset) as audio_path:
+    with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
         assert audio_path.exists()
         assert audio_path.suffix == ".wav"
 
@@ -35,9 +33,7 @@ def test_prepared_transcription_audio_normalizes_audio_input_to_temp_wav() -> No
 
 
 def test_prepared_transcription_audio_cleans_up_temp_wav() -> None:
-    asset = probe_media(FIXTURE_DIR / "sample-video.mp4")
-
-    with prepared_transcription_audio(FIXTURE_DIR / "sample-video.mp4", asset) as audio_path:
+    with prepared_transcription_audio(FIXTURE_DIR / "sample-video.mp4") as audio_path:
         assert audio_path.exists()
         assert audio_path.suffix == ".wav"
 
@@ -45,9 +41,7 @@ def test_prepared_transcription_audio_cleans_up_temp_wav() -> None:
 
 
 def test_load_normalized_audio_returns_mono_float32_samples() -> None:
-    asset = probe_media(FIXTURE_DIR / "sample-audio.mp3")
-
-    with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3", asset) as audio_path:
+    with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
         samples, sample_rate = load_normalized_audio(audio_path)
 
     assert sample_rate == 16_000
@@ -112,6 +106,7 @@ def test_detect_speech_regions_drops_empty_timestamps(monkeypatch) -> None:
 
     assert regions == []
     assert warnings == []
+
 
 def test_normalized_audio_duration_returns_zero_for_invalid_sample_rate() -> None:
     assert normalized_audio_duration(np.zeros(16, dtype=np.float32), 0) == 0.0
@@ -251,9 +246,10 @@ def test_silero_speech_timestamps_uses_vad_iterator_and_reports_progress(monkeyp
         min_speech_duration_ms=10,
         min_silence_duration_ms=600,
         speech_pad_ms=30,
-        progress_callback=lambda completed_sec, detected_count: progress.append(
-            (completed_sec, detected_count)
-        ),
+        progress_callback=lambda completed_sec, detected_count: progress.append((
+            completed_sec,
+            detected_count,
+        )),
     )
 
     assert timestamps == [{"start": 100, "end": 900}]
@@ -344,9 +340,7 @@ def test_silero_speech_timestamps_flushes_open_speech_at_end_of_stream(monkeypat
 
 
 def test_load_normalized_audio_rejects_wrong_sample_rate(monkeypatch, tmp_path) -> None:
-    asset = probe_media(FIXTURE_DIR / "sample-audio.mp3")
-
-    with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3", asset) as audio_path:
+    with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
 
         class FakeWave:
             def __enter__(self):

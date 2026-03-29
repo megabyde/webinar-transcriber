@@ -173,7 +173,7 @@ def process_input(
 
     active_reporter.stage_started("prepare_transcription_audio", "Preparing audio")
     timer = _start_stage_timer(stage_timings, "prepare_transcription_audio")
-    with prepared_transcription_audio(input_path, media_asset) as audio_path:
+    with prepared_transcription_audio(input_path) as audio_path:
         timer.finish()
         active_reporter.stage_finished(
             "prepare_transcription_audio",
