@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from pydantic import BaseModel, Field
 
 from webinar_transcriber.models import ReportDocument, ReportSection
+from webinar_transcriber.usage import merge_usage, merge_usage_into
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -286,8 +287,7 @@ class OpenAILLMProcessor:
             report,
             section_transcripts=section_result.section_transcripts,
         )
-        usage_totals = dict(section_result.usage)
-        _merge_usage(usage_totals, metadata_result.usage)
+        usage_totals = merge_usage(section_result.usage, metadata_result.usage)
 
         return LLMReportPolishResult(
             summary=metadata_result.summary,
@@ -332,7 +332,7 @@ class OpenAILLMProcessor:
                     usage = {}
                     section_warnings = [str(error)]
                 polished_texts[section.id] = transcript_text
-                _merge_usage(usage_totals, usage)
+                merge_usage_into(usage_totals, usage)
                 warnings.extend(section_warnings)
                 if progress_callback is not None:
                     progress_callback(1)
@@ -545,8 +545,3 @@ def _extract_usage(response: object) -> dict[str, int]:
         if isinstance(field_value, int):
             extracted[field_name] = field_value
     return extracted
-
-
-def _merge_usage(target: dict[str, int], new_usage: dict[str, int]) -> None:
-    for key, value in new_usage.items():
-        target[key] = target.get(key, 0) + value

@@ -56,6 +56,7 @@ from webinar_transcriber.transcription_audio import (
     prepared_transcription_audio,
 )
 from webinar_transcriber.ui import NullStageReporter
+from webinar_transcriber.usage import merge_usage
 from webinar_transcriber.video import (
     detect_scenes,
     estimate_sample_count,
@@ -595,7 +596,7 @@ def _maybe_polish_report(
         return report, llm_runtime
 
     report_latency_sec = timer.finish()
-    usage = _merged_usage(section_result.usage, metadata_result.usage)
+    usage = merge_usage(section_result.usage, metadata_result.usage)
     report.summary = metadata_result.summary
     report.action_items = metadata_result.action_items
     for section in report.sections:
@@ -744,14 +745,6 @@ def _llm_fallback_detail(llm_runtime: LLMRuntimeState) -> str:
 def _llm_report_plan_label_detail(plan) -> str:
     worker_label = "worker" if plan.worker_count == 1 else "workers"
     return f"{plan.worker_count} {worker_label}"
-
-
-def _merged_usage(*usage_dicts: dict[str, int]) -> dict[str, int]:
-    merged: dict[str, int] = {}
-    for usage in usage_dicts:
-        for key, value in usage.items():
-            merged[key] = merged.get(key, 0) + value
-    return merged
 
 
 def _token_usage_detail(usage: dict[str, int]) -> str:
