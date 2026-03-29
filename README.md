@@ -94,8 +94,18 @@ current environment. If you updated from an older checkout, rerun:
 make sync
 ```
 
-For the segmentation, prompt carryover, and overlap-reconciliation design, see
-[docs/asr_chunking.md](docs/asr_chunking.md).
+The default ASR design is intentionally simple and deterministic:
+
+- Silero VAD produces coarse speech regions.
+- Very short neighboring regions are merged before ASR planning.
+- Each repaired region is expanded with explicit symmetric ASR padding.
+- Each expanded region becomes one deterministic inference window.
+- `whisper.cpp` decodes one window at a time.
+- Prompt carryover only reuses a small trusted suffix from the previous window.
+- Adjacent decoded windows are reconciled back into one final transcript in Python.
+
+This split keeps `whispercpp.py` thin, keeps segmentation policy in `segmentation.py`, and keeps
+carryover policy in `asr.py`.
 
 ## Processing Behavior
 
@@ -117,6 +127,7 @@ For the segmentation, prompt carryover, and overlap-reconciliation design, see
 - The tool auto-detects whether `INPUT` is audio or video.
 - Every invocation writes a fresh run directory unless `--output-dir` is supplied.
 - `process --format md` and `process --format docx` still write `report.json`.
+- The ASR planner, carryover builder, and reconciliation path are deterministic and local-first.
 - `diagnostics.json` is written for successful runs and records ASR backend/model, stage timings,
   item counts, warnings, and optional LLM metadata.
 
