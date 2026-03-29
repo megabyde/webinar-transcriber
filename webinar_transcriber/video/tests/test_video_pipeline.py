@@ -1,12 +1,19 @@
 """Tests for baseline video helpers."""
 
+import subprocess
 from pathlib import Path
 
 import numpy as np
+import pytest
 from PIL import Image
 
+from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.video import detect_scenes, extract_representative_frames
-from webinar_transcriber.video.frames import _frame_extract_command, _normalize_extracted_frame
+from webinar_transcriber.video.frames import (
+    _extract_frame,
+    _frame_extract_command,
+    _normalize_extracted_frame,
+)
 from webinar_transcriber.video.scenes import _detect_scene_start_times
 
 FIXTURE_DIR = Path(__file__).parents[2] / "tests" / "fixtures"
@@ -98,3 +105,16 @@ def test_frame_extract_command_disables_ffmpeg_autorotate(tmp_path) -> None:
 
     assert command[:3] == ["ffmpeg", "-y", "-noautorotate"]
     assert "-i" in command
+
+
+def test_extract_frame_wraps_timeout_with_media_processing_error(tmp_path, monkeypatch) -> None:
+    def fake_run(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired(cmd=["ffmpeg"], timeout=12.5)
+
+    monkeypatch.setattr("webinar_transcriber.video.frames.subprocess.run", fake_run)
+
+    with pytest.raises(
+        MediaProcessingError,
+        match=r"ffmpeg frame extraction timed out after 300s\.",
+    ):
+        _extract_frame(FIXTURE_DIR / "sample-video.mp4", 1.0, tmp_path / "scene-1.png")

@@ -3,7 +3,9 @@
 import subprocess
 from pathlib import Path
 
-from webinar_transcriber.media import extract_audio, probe_media
+import pytest
+
+from webinar_transcriber.media import MediaProcessingError, _run_command, extract_audio, probe_media
 from webinar_transcriber.models import MediaType
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
@@ -40,3 +42,13 @@ def test_extract_audio_creates_wav(tmp_path) -> None:
 
     assert probe.returncode == 0
     assert "pcm_s16le" in probe.stdout
+
+
+def test_run_command_wraps_timeout_with_media_processing_error(monkeypatch) -> None:
+    def fake_run(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired(cmd=["ffprobe"], timeout=12.5)
+
+    monkeypatch.setattr("webinar_transcriber.media.subprocess.run", fake_run)
+
+    with pytest.raises(MediaProcessingError, match=r"ffprobe timed out after 300s\."):
+        _run_command("ffprobe")

@@ -6,7 +6,10 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
+from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.models import Scene, SlideFrame
+
+FRAME_EXTRACT_TIMEOUT_SEC = 300.0
 
 
 def extract_representative_frames(
@@ -44,12 +47,18 @@ def extract_representative_frames(
 
 
 def _extract_frame(video_path: Path, timestamp_sec: float, output_path: Path) -> bool:
-    result = subprocess.run(
-        _frame_extract_command(video_path, timestamp_sec, output_path),
-        capture_output=True,
-        check=False,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            _frame_extract_command(video_path, timestamp_sec, output_path),
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=FRAME_EXTRACT_TIMEOUT_SEC,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise MediaProcessingError(
+            f"ffmpeg frame extraction timed out after {FRAME_EXTRACT_TIMEOUT_SEC:g}s."
+        ) from error
     return result.returncode == 0 and output_path.exists()
 
 

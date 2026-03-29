@@ -25,27 +25,20 @@ def detect_scenes(
     progress_callback: Callable[[], None] | None = None,
 ) -> list[Scene]:
     """Detect slide changes by sampling the video once per second."""
-    scene_starts: list[float] = []
-    accepted_frame: np.ndarray | None = None
     last_sample_time = 0.0
 
-    for current_time, current_frame in _iter_sampled_frames(video_path):
-        last_sample_time = current_time
-        if progress_callback is not None:
-            progress_callback()
+    def sampled_frames() -> Iterable[tuple[float, np.ndarray]]:
+        nonlocal last_sample_time
+        for current_time, current_frame in _iter_sampled_frames(video_path):
+            last_sample_time = current_time
+            yield current_time, current_frame
 
-        if accepted_frame is None:
-            scene_starts.append(current_time)
-            accepted_frame = current_frame
-            continue
-
-        if (current_time - scene_starts[-1]) < min_scene_length_sec:
-            continue
-
-        difference = float(np.abs(current_frame - accepted_frame).mean())
-        if difference >= DIFFERENCE_THRESHOLD:
-            scene_starts.append(current_time)
-            accepted_frame = current_frame
+    scene_starts = _detect_scene_start_times(
+        sampled_frames(),
+        difference_threshold=DIFFERENCE_THRESHOLD,
+        min_scene_length_sec=min_scene_length_sec,
+        progress_callback=progress_callback,
+    )
 
     if duration_sec is None:
         duration_sec = _estimate_sample_end_time(last_sample_time)
@@ -65,15 +58,20 @@ def _detect_scene_start_times(
     *,
     difference_threshold: float = DIFFERENCE_THRESHOLD,
     min_scene_length_sec: float = MIN_SCENE_LENGTH_SEC,
+    progress_callback: Callable[[], None] | None = None,
 ) -> list[float]:
-    samples = list(sampled_frames)
-    if not samples:
-        return []
+    scene_starts: list[float] = []
+    accepted_frame: np.ndarray | None = None
 
-    scene_starts = [float(samples[0][0])]
-    accepted_frame = samples[0][1]
+    for current_time, current_frame in sampled_frames:
+        if progress_callback is not None:
+            progress_callback()
 
-    for current_time, current_frame in samples[1:]:
+        if accepted_frame is None:
+            scene_starts.append(float(current_time))
+            accepted_frame = current_frame
+            continue
+
         if (current_time - scene_starts[-1]) < min_scene_length_sec:
             continue
 

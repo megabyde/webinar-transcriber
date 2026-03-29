@@ -7,13 +7,28 @@ from pathlib import Path
 
 from webinar_transcriber.models import MediaAsset, MediaType
 
+MEDIA_COMMAND_TIMEOUT_SEC = 300.0
+
 
 class MediaProcessingError(RuntimeError):
     """Raised when ffmpeg or ffprobe work cannot be completed."""
 
 
-def _run_command(*args: str) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(args, capture_output=True, check=False, text=True)
+def _run_command(
+    *args: str,
+    timeout_sec: float = MEDIA_COMMAND_TIMEOUT_SEC,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=timeout_sec,
+        )
+    except subprocess.TimeoutExpired as error:
+        command_name = Path(args[0]).name if args else "External media command"
+        raise MediaProcessingError(f"{command_name} timed out after {timeout_sec:g}s.") from error
     if result.returncode != 0:
         raise MediaProcessingError(result.stderr.strip() or "External media command failed.")
     return result
