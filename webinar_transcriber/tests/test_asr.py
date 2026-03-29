@@ -202,3 +202,14 @@ def test_device_name_from_system_info_prefers_enabled_backend() -> None:
         == "metal"
     )
     assert _device_name_from_system_info("CPU = 1") == "cpu"
+
+
+def test_transcriber_destructor_swallows_close_failures() -> None:
+    transcriber = object.__new__(WhisperCppTranscriber)
+
+    def failing_close() -> None:
+        raise RuntimeError("shutdown")
+
+    transcriber.close = failing_close  # type: ignore[method-assign]
+
+    transcriber.__del__()

@@ -7,6 +7,7 @@ import ctypes.util
 import os
 import re
 import threading
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -206,7 +207,8 @@ class WhisperCppSession:
         self._closed = True
 
     def __del__(self) -> None:
-        self.close()
+        with suppress(Exception):
+            self.close()
 
 
 class WhisperCppLibrary:

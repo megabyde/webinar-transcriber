@@ -11,6 +11,7 @@ from webinar_transcriber.models import InferenceWindow
 from webinar_transcriber.whispercpp import (
     WhisperCppError,
     WhisperCppLibrary,
+    WhisperCppSession,
     _decode_c_string,
     _encode_optional_text,
     _library_log_callback,
@@ -325,3 +326,14 @@ def test_decode_window_handles_empty_input_and_inference_failure(monkeypatch, tm
             prompt=None,
             language_hint=None,
         )
+
+
+def test_session_destructor_swallows_close_failures() -> None:
+    session = object.__new__(WhisperCppSession)
+
+    def failing_close() -> None:
+        raise RuntimeError("shutdown")
+
+    session.close = failing_close  # type: ignore[method-assign]
+
+    session.__del__()

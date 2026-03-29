@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -200,10 +201,8 @@ class WhisperCppTranscriber:
         return self._session
 
     def __del__(self) -> None:
-        self.close()
-
-
-WhisperTranscriber = WhisperCppTranscriber
+        with suppress(Exception):
+            self.close()
 
 
 def _device_name_from_system_info(system_info: str) -> str:
