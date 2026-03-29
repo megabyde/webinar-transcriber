@@ -85,6 +85,18 @@ class LLMRuntimeState:
     report_usage: dict[str, int] | None = None
 
 
+@dataclass(frozen=True)
+class _StageTimer:
+    stage_timings: dict[str, float]
+    key: str
+    start_sec: float
+
+    def finish(self) -> float:
+        elapsed_sec = perf_counter() - self.start_sec
+        self.stage_timings[self.key] = elapsed_sec
+        return elapsed_sec
+
+
 def process_input(
     input_path: Path,
     *,
@@ -128,18 +140,18 @@ def process_input(
     active_reporter.begin_run(input_path, output_format=output_format)
 
     active_reporter.stage_started("prepare_run_dir", "Preparing run directory")
-    start = perf_counter()
+    timer = _start_stage_timer(stage_timings, "prepare_run_dir")
     layout = create_run_layout(input_path=input_path, output_dir=output_dir)
-    stage_timings["prepare_run_dir"] = perf_counter() - start
+    timer.finish()
     active_reporter.stage_finished(
         "prepare_run_dir", "Preparing run directory", detail=str(layout.run_dir)
     )
     _configure_asr_logging(active_transcriber, layout)
 
     active_reporter.stage_started("probe_media", "Probing media")
-    start = perf_counter()
+    timer = _start_stage_timer(stage_timings, "probe_media")
     media_asset = probe_media(input_path)
-    stage_timings["probe_media"] = perf_counter() - start
+    timer.finish()
     _write_json(
         layout.metadata_path,
         {
@@ -153,9 +165,9 @@ def process_input(
     )
 
     active_reporter.stage_started("prepare_transcription_audio", "Preparing audio")
-    start = perf_counter()
+    timer = _start_stage_timer(stage_timings, "prepare_transcription_audio")
     with prepared_transcription_audio(input_path, media_asset) as audio_path:
-        stage_timings["prepare_transcription_audio"] = perf_counter() - start
+        timer.finish()
         active_reporter.stage_finished(
             "prepare_transcription_audio",
             "Preparing audio",
@@ -163,9 +175,9 @@ def process_input(
         )
 
         active_reporter.stage_started("prepare_asr", "Preparing ASR model")
-        start = perf_counter()
+        timer = _start_stage_timer(stage_timings, "prepare_asr")
         active_transcriber.prepare_model()
-        stage_timings["prepare_asr"] = perf_counter() - start
+        timer.finish()
         active_reporter.stage_finished(
             "prepare_asr",
             "Preparing ASR model",
@@ -187,7 +199,7 @@ def process_input(
             stage_key="vad",
         )
 
-        start = perf_counter()
+        timer = _start_stage_timer(stage_timings, "vad")
         speech_regions, vad_warnings = detect_speech_regions(
             audio_samples,
             sample_rate,
@@ -205,7 +217,7 @@ def process_input(
             media_asset.duration_sec,
             detail=_count_label(len(speech_regions), singular="region"),
         )
-        stage_timings["vad"] = perf_counter() - start
+        timer.finish()
         asr_pipeline.vad_region_count = len(speech_regions)
         active_reporter.stage_finished(
             "vad",
@@ -221,7 +233,7 @@ def process_input(
         )
 
         active_reporter.stage_started("prepare_speech_regions", "Preparing speech regions")
-        start = perf_counter()
+        timer = _start_stage_timer(stage_timings, "prepare_speech_regions")
         repaired_regions = repair_speech_regions(speech_regions)
         expanded_regions = expand_speech_regions(
             repaired_regions,
@@ -243,7 +255,7 @@ def process_input(
             layout.expanded_regions_path,
             {"expanded_regions": [region.model_dump(mode="json") for region in expanded_regions]},
         )
-        stage_timings["prepare_speech_regions"] = perf_counter() - start
+        timer.finish()
         asr_pipeline.window_count = len(windows)
         asr_pipeline.average_window_duration_sec = (
             sum(w.end_sec - w.start_sec for w in windows) / len(windows) if windows else None
@@ -268,7 +280,7 @@ def process_input(
             stage_key="transcribe",
         )
 
-        start = perf_counter()
+        timer = _start_stage_timer(stage_timings, "transcribe")
         decoded_windows = active_transcriber.transcribe_inference_windows(
             audio_samples,
             windows,
@@ -279,21 +291,21 @@ def process_input(
             {"decoded_windows": [window.model_dump(mode="json") for window in decoded_windows]},
         )
         finish_transcribe_progress(media_asset.duration_sec)
-        stage_timings["transcribe"] = perf_counter() - start
+        transcribe_elapsed_sec = timer.finish()
         active_reporter.stage_finished(
             "transcribe",
             "Transcribing audio",
             detail=_window_transcription_stage_detail(
                 window_count=len(windows),
                 total_duration_sec=media_asset.duration_sec,
-                elapsed_sec=stage_timings["transcribe"],
+                elapsed_sec=transcribe_elapsed_sec,
             ),
         )
 
         active_reporter.stage_started("reconcile", "Reconciling transcript windows")
-        start = perf_counter()
+        timer = _start_stage_timer(stage_timings, "reconcile")
         transcription, reconciliation_stats = reconcile_decoded_windows(decoded_windows)
-        stage_timings["reconcile"] = perf_counter() - start
+        timer.finish()
         asr_pipeline.reconciliation_duplicate_segments_dropped = (
             reconciliation_stats.duplicate_segments_dropped
         )
@@ -323,13 +335,13 @@ def process_input(
             "Detecting scenes",
             total=estimate_sample_count(media_asset.duration_sec),
         )
-        start = perf_counter()
+        timer = _start_stage_timer(stage_timings, "detect_scenes")
         scenes = detect_scenes(
             input_path,
             duration_sec=media_asset.duration_sec,
             progress_callback=lambda: active_reporter.progress_advanced("detect_scenes"),
         )
-        stage_timings["detect_scenes"] = perf_counter() - start
+        timer.finish()
         _write_json(
             layout.scenes_path, {"scenes": [scene.model_dump(mode="json") for scene in scenes]}
         )
@@ -344,14 +356,14 @@ def process_input(
             "Extracting slide frames",
             total=len(scenes),
         )
-        start = perf_counter()
+        timer = _start_stage_timer(stage_timings, "extract_frames")
         slide_frames = extract_representative_frames(
             input_path,
             scenes,
             layout.frames_dir,
             progress_callback=lambda: active_reporter.progress_advanced("extract_frames"),
         )
-        stage_timings["extract_frames"] = perf_counter() - start
+        timer.finish()
         active_reporter.stage_finished(
             "extract_frames",
             "Extracting slide frames",
@@ -362,14 +374,14 @@ def process_input(
         scenes = []
 
     active_reporter.stage_started("structure", "Structuring report")
-    start = perf_counter()
+    timer = _start_stage_timer(stage_timings, "structure")
     report = build_report(
         media_asset,
         report_transcription,
         alignment_blocks=alignment_blocks,
         warnings=warnings,
     )
-    stage_timings["structure"] = perf_counter() - start
+    timer.finish()
     active_reporter.stage_finished(
         "structure",
         "Structuring report",
@@ -393,9 +405,9 @@ def process_input(
     report.warnings = list(warnings)
 
     active_reporter.stage_started("export", "Writing reports")
-    start = perf_counter()
+    timer = _start_stage_timer(stage_timings, "export")
     _write_requested_reports(report, layout, output_format)
-    stage_timings["export"] = perf_counter() - start
+    timer.finish()
     active_reporter.stage_finished("export", "Writing reports", detail=output_format)
 
     diagnostics = Diagnostics(
@@ -486,7 +498,7 @@ def _maybe_polish_report(
         total=max(float(polish_plan.section_count), 1.0),
         count_label="sections",
     )
-    start = perf_counter()
+    timer = _start_stage_timer(stage_timings, "llm_report")
     try:
         section_result = llm_processor.polish_report_sections_with_progress(
             report,
@@ -496,8 +508,7 @@ def _maybe_polish_report(
             ),
         )
     except LLMProcessingError as error:
-        report_latency_sec = perf_counter() - start
-        stage_timings["llm_report"] = report_latency_sec
+        report_latency_sec = timer.finish()
         warnings.append(str(error))
         reporter.warn(str(error))
         reporter.stage_finished(
@@ -525,8 +536,7 @@ def _maybe_polish_report(
             section_transcripts=section_result.section_transcripts,
         )
     except LLMProcessingError as error:
-        report_latency_sec = perf_counter() - start
-        stage_timings["llm_report"] = report_latency_sec
+        report_latency_sec = timer.finish()
         warnings.append(str(error))
         reporter.warn(str(error))
         reporter.stage_finished(
@@ -538,8 +548,7 @@ def _maybe_polish_report(
         llm_runtime.report_latency_sec = report_latency_sec
         return report, llm_runtime
 
-    report_latency_sec = perf_counter() - start
-    stage_timings["llm_report"] = report_latency_sec
+    report_latency_sec = timer.finish()
     usage = _merged_usage(section_result.usage, metadata_result.usage)
     report.summary = metadata_result.summary
     report.action_items = metadata_result.action_items
@@ -564,6 +573,10 @@ def _maybe_polish_report(
     llm_runtime.report_latency_sec = report_latency_sec
     llm_runtime.report_usage = usage
     return report, llm_runtime
+
+
+def _start_stage_timer(stage_timings: dict[str, float], key: str) -> _StageTimer:
+    return _StageTimer(stage_timings=stage_timings, key=key, start_sec=perf_counter())
 
 
 def _write_requested_reports(report: ReportDocument, layout: RunLayout, output_format: str) -> None:
