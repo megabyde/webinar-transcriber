@@ -30,7 +30,10 @@ def write_docx_report(report: ReportDocument, output_path: Path) -> Path:
     for section in report.sections:
         document.add_heading(section.title, level=2)
         if section.image_path:
-            document.add_picture(section.image_path, width=Inches(6))
+            image_path = Path(section.image_path)
+            if not image_path.exists():
+                raise FileNotFoundError(f"Section image does not exist: {image_path}")
+            document.add_picture(str(image_path), width=Inches(6))
         for paragraph_text in _split_paragraphs(section.transcript_text):
             document.add_paragraph(paragraph_text)
 
