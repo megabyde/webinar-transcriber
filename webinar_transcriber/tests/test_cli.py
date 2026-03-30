@@ -5,6 +5,7 @@ import runpy
 import sys
 from unittest.mock import ANY, patch
 
+import pytest
 from click.testing import CliRunner
 
 from webinar_transcriber.asr import DEFAULT_ASR_THREADS
@@ -349,9 +350,8 @@ def test_module_entrypoint_reports_version() -> None:
 
     try:
         with CliRunner().isolated_filesystem():
-            try:
+            with pytest.raises(SystemExit) as error:
                 runpy.run_module("webinar_transcriber", run_name="__main__")
-            except SystemExit as error:
-                assert error.code == 0
+            assert error.value.code == 0
     finally:
         sys.argv = original_argv

@@ -106,12 +106,16 @@ select = [
     "UP",  # pyupgrade.
 
     # flake8 families:
+    "A",     # flake8-builtins.
     "YTT",   # flake8-2020.
     "ASYNC", # flake8-async.
     "B",     # flake8-bugbear.
     "C4",    # flake8-comprehensions.
     "EXE",   # flake8-executable.
+    "G",     # flake8-logging-format.
+    "ISC",   # flake8-implicit-str-concat.
     "PIE",   # flake8-pie.
+    "PT",    # flake8-pytest-style.
     "PYI",   # flake8-pyi.
     "RSE",   # flake8-raise.
     "RET",   # flake8-return.
