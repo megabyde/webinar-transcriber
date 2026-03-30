@@ -169,6 +169,54 @@ class RecordingReporter(NullStageReporter):
             artifacts.report.source_file,
         ))
 
+    def has_event(self, event_type: str, stage_key: str, detail: str) -> bool:
+        return (event_type, stage_key, detail) in self.events
+
+    def has_event_detail(
+        self,
+        event_type: str,
+        stage_key: str,
+        predicate: Callable[[str], bool],
+    ) -> bool:
+        return any(
+            event[0] == event_type and event[1] == stage_key and predicate(event[2])
+            for event in self.events
+        )
+
+    def stage_events(self, event_type: str, stage_key: str) -> list[tuple[str, str, str]]:
+        return [event for event in self.events if event[0] == event_type and event[1] == stage_key]
+
+    def has_progress_event(
+        self,
+        event_type: str,
+        stage_key: str,
+        value: float,
+        detail: str | None,
+    ) -> bool:
+        return (event_type, stage_key, value, detail) in self.progress_events
+
+    def has_progress_event_detail(
+        self,
+        event_type: str,
+        stage_key: str,
+        predicate: Callable[[str | None], bool],
+    ) -> bool:
+        return any(
+            event[0] == event_type and event[1] == stage_key and predicate(event[3])
+            for event in self.progress_events
+        )
+
+    def progress_stage_events(
+        self,
+        event_type: str,
+        stage_key: str,
+    ) -> list[tuple[str, str, float, str | None]]:
+        return [
+            event
+            for event in self.progress_events
+            if event[0] == event_type and event[1] == stage_key
+        ]
+
 
 def test_process_input_writes_reports_and_metadata(tmp_path, monkeypatch) -> None:
     install_basic_windowing(monkeypatch)
@@ -199,40 +247,33 @@ def test_process_input_writes_reports_and_metadata(tmp_path, monkeypatch) -> Non
     markdown = artifacts.layout.markdown_report_path.read_text(encoding="utf-8")
     assert "# Sample Audio" in markdown
     assert "Agenda review and project status update." in markdown
-    assert ("start", "prepare_transcription_audio", "Preparing audio") in reporter.events
-    assert ("finish", "prepare_transcription_audio", "sample-audio.wav") in reporter.events
-    assert ("start", "probe_media", "Probing media") in reporter.events
-    assert ("start", "prepare_asr", "Preparing ASR model") in reporter.events
-    assert ("finish", "prepare_asr", "test-model | cpu") in reporter.events
+    assert reporter.has_event("start", "prepare_transcription_audio", "Preparing audio")
+    assert reporter.has_event("finish", "prepare_transcription_audio", "sample-audio.wav")
+    assert reporter.has_event("start", "probe_media", "Probing media")
+    assert reporter.has_event("start", "prepare_asr", "Preparing ASR model")
+    assert reporter.has_event("finish", "prepare_asr", "test-model | cpu")
     assert any(event[0] == "complete" for event in reporter.events)
-    has_transcribe_finish = any(
-        event[0] == "finish"
-        and event[1] == "transcribe"
-        and "window" in event[2]
-        and "RTF" in event[2]
-        for event in reporter.events
+    assert reporter.has_event_detail(
+        "finish",
+        "transcribe",
+        lambda detail: "window" in detail and "RTF" in detail,
     )
-    assert has_transcribe_finish
-    transcribe_start_events = [
-        event
-        for event in reporter.progress_events
-        if event[0] == "start" and event[1] == "transcribe"
-    ]
+    transcribe_start_events = reporter.progress_stage_events("start", "transcribe")
     assert transcribe_start_events == [
         ("start", "transcribe", artifacts.media_asset.duration_sec, None)
     ]
-    vad_start_events = [
-        event for event in reporter.progress_events if event[0] == "start" and event[1] == "vad"
-    ]
+    vad_start_events = reporter.progress_stage_events("start", "vad")
     assert vad_start_events == [("start", "vad", artifacts.media_asset.duration_sec, None)]
-    assert any(
-        event[0] == "advance" and event[1] == "transcribe" for event in reporter.progress_events
+    assert reporter.has_progress_event_detail(
+        "advance",
+        "transcribe",
+        lambda _detail: True,
     )
-    has_vad_advance = any(
-        event[0] == "advance" and event[1] == "vad" and event[3] == "1 region"
-        for event in reporter.progress_events
+    assert reporter.has_progress_event_detail(
+        "advance",
+        "vad",
+        lambda detail: detail == "1 region",
     )
-    assert has_vad_advance
     assert diagnostics_payload["asr_backend"] == "whisper.cpp"
     assert diagnostics_payload["asr_model"] == "test-model"
 
@@ -282,15 +323,18 @@ def test_process_input_writes_video_scene_artifacts(tmp_path, monkeypatch) -> No
     assert any(artifacts.layout.frames_dir.iterdir())
     assert artifacts.report.sections
     assert artifacts.report.sections[0].image_path
-    assert any(event == ("start", "detect_scenes", 2, None) for event in reporter.progress_events)
-    assert any(
-        event[0] == "advance" and event[1] == "detect_scenes" for event in reporter.progress_events
+    assert reporter.has_progress_event("start", "detect_scenes", 2, None)
+    assert reporter.has_progress_event_detail(
+        "advance",
+        "detect_scenes",
+        lambda _detail: True,
     )
-    has_extract_frames_start = any(
-        event == ("start", "extract_frames", artifacts.diagnostics.item_counts["scenes"], None)
-        for event in reporter.progress_events
+    assert reporter.has_progress_event(
+        "start",
+        "extract_frames",
+        artifacts.diagnostics.item_counts["scenes"],
+        None,
     )
-    assert has_extract_frames_start
 
 
 def test_process_input_runs_windowed_whispercpp_pipeline(tmp_path, monkeypatch) -> None:
@@ -363,9 +407,9 @@ def test_process_input_runs_windowed_whispercpp_pipeline(tmp_path, monkeypatch) 
     assert artifacts.diagnostics.asr_pipeline.window_count == 1
     assert artifacts.diagnostics.asr_pipeline.vad_region_count == 1
     assert artifacts.diagnostics.asr_pipeline.system_info == "METAL = 1"
-    assert ("start", "vad", "Detecting speech regions") in reporter.events
-    assert ("start", "prepare_speech_regions", "Preparing speech regions") in reporter.events
-    assert ("start", "reconcile", "Reconciling transcript windows") in reporter.events
+    assert reporter.has_event("start", "vad", "Detecting speech regions")
+    assert reporter.has_event("start", "prepare_speech_regions", "Preparing speech regions")
+    assert reporter.has_event("start", "reconcile", "Reconciling transcript windows")
     assert artifacts.layout.speech_regions_path.exists()
     assert artifacts.layout.expanded_regions_path.exists()
     assert artifacts.layout.decoded_windows_path.exists()
@@ -595,9 +639,9 @@ def test_process_input_polishes_report_sections_when_llm_succeeds(tmp_path, monk
 
     assert artifacts.diagnostics.warnings == [expected_warning]
     assert artifacts.diagnostics.llm_report_usage == expected_usage
-    assert ("start", "llm_report_sections", 1.0, None) in reporter.progress_events
+    assert reporter.has_progress_event("start", "llm_report_sections", 1.0, None)
     assert llm_report_finish in reporter.events
-    assert ("advance", "llm_report_sections", 1.0, None) in reporter.progress_events
+    assert reporter.has_progress_event("advance", "llm_report_sections", 1.0, None)
     llm_sections_start = (
         "start",
         "llm_report_sections",
@@ -610,7 +654,7 @@ def test_process_input_polishes_report_sections_when_llm_succeeds(tmp_path, monk
     )
 
     assert llm_sections_start in reporter.events
-    assert ("finish", "llm_report_sections", "1 section") in reporter.events
+    assert reporter.has_event("finish", "llm_report_sections", "1 section")
     assert llm_report_start in reporter.events
     assert reporter.warnings == [expected_warning]
 
