@@ -1,5 +1,7 @@
 """Tests for the whisper.cpp ASR adapter."""
 
+from typing import TYPE_CHECKING, cast
+
 import numpy as np
 import pytest
 
@@ -7,10 +9,16 @@ from webinar_transcriber.asr import (
     DEFAULT_WHISPER_CPP_MODEL,
     PromptCarryoverSettings,
     WhisperCppTranscriber,
+    _carryover_drop_reason,
     _device_name_from_system_info,
+    _read_sysctl_int,
+    _sanitize_prompt,
     build_prompt_carryover,
 )
 from webinar_transcriber.models import DecodedWindow, InferenceWindow, TranscriptSegment
+
+if TYPE_CHECKING:
+    from webinar_transcriber.whispercpp import WhisperCppSession
 
 
 def test_default_model_uses_whisper_cpp_model_path() -> None:
@@ -69,6 +77,7 @@ def test_prepare_model_reads_runtime_details(monkeypatch, tmp_path) -> None:
     transcriber.prepare_model()
 
     assert transcriber.device_name == "metal"
+    assert transcriber.system_info == "METAL = 1"
     assert transcriber.library_path == "/usr/local/lib/libwhisper.so"
 
 
@@ -212,3 +221,103 @@ def test_transcriber_destructor_swallows_close_failures() -> None:
     transcriber.close = failing_close  # type: ignore[method-assign]
 
     transcriber.__del__()
+
+
+@pytest.mark.parametrize("stdout", ["abc", "0"])
+def test_read_sysctl_int_returns_none_for_invalid_or_nonpositive_values(
+    monkeypatch: pytest.MonkeyPatch,
+    stdout: str,
+) -> None:
+    monkeypatch.setattr(
+        "webinar_transcriber.asr.subprocess.run",
+        lambda *_args, **_kwargs: type("Result", (), {"stdout": stdout})(),
+    )
+
+    assert _read_sysctl_int("hw.physicalcpu") is None
+
+
+def test_transcriber_properties_are_safe_before_runtime_is_prepared() -> None:
+    transcriber = WhisperCppTranscriber(threads=0)
+
+    assert transcriber.threads == 1
+    assert transcriber.system_info is None
+    assert transcriber.library_path is None
+
+
+def test_carryover_drop_reason_covers_disabled_and_empty_windows() -> None:
+    decoded_window = DecodedWindow(
+        window=InferenceWindow(
+            window_id="window-1",
+            region_index=0,
+            start_sec=0.0,
+            end_sec=1.0,
+        ),
+        text="",
+        segments=[],
+    )
+
+    assert _carryover_drop_reason(
+        decoded_window,
+        settings=PromptCarryoverSettings(enabled=False),
+    ) == "carryover_disabled"
+    assert _carryover_drop_reason(
+        decoded_window,
+        settings=PromptCarryoverSettings(),
+    ) == "empty_text"
+
+
+def test_sanitize_prompt_drops_missing_and_noise_only_prompts() -> None:
+    assert _sanitize_prompt(None, max_tokens=8) == ""
+    assert _sanitize_prompt("(((", max_tokens=8) == ""
+
+
+def test_transcribe_inference_windows_reuses_existing_session_without_prepare() -> None:
+    class FakeSession:
+        def decode_window(
+            self,
+            audio_samples,
+            window,
+            *,
+            threads,
+            prompt=None,
+            language_hint=None,
+        ):
+            del audio_samples, threads, prompt, language_hint
+            return DecodedWindow(
+                window=window,
+                text="agenda review",
+                language="en",
+                segments=[
+                    TranscriptSegment(
+                        id="segment-1",
+                        text="agenda review",
+                        start_sec=window.start_sec,
+                        end_sec=window.end_sec,
+                    )
+                ],
+            )
+
+    fake_session = cast("WhisperCppSession", FakeSession())
+
+    class ReuseSessionTranscriber(WhisperCppTranscriber):
+        def prepare_model(self) -> None:
+            raise AssertionError("should not prepare")
+
+        def _ensure_session(self):
+            return fake_session
+
+    transcriber = ReuseSessionTranscriber(model_name="stub.bin")
+
+    decoded_windows = transcriber.transcribe_inference_windows(
+        np.zeros(16_000, dtype=np.float32),
+        [
+            InferenceWindow(
+                window_id="window-1",
+                region_index=0,
+                start_sec=0.0,
+                end_sec=1.0,
+            )
+        ],
+    )
+
+    assert [window.text for window in decoded_windows] == ["agenda review"]

@@ -206,7 +206,7 @@ class WhisperCppSession:
         self._library._lib.whisper_free(self._context)
         self._closed = True
 
-    def __del__(self) -> None:
+    def __del__(self) -> None:  # pragma: no cover - interpreter shutdown cleanup
         with suppress(Exception):
             self.close()
 
@@ -411,7 +411,7 @@ def resolve_library_path(library_path: Path | None = None) -> Path:
             return candidate_path
 
     discovered_library = ctypes.util.find_library("whisper")
-    if discovered_library:
+    if discovered_library:  # pragma: no cover - host linker discovery
         return Path(discovered_library)
 
     raise WhisperCppError(
@@ -422,11 +422,11 @@ def resolve_library_path(library_path: Path | None = None) -> Path:
 
 def _load_backend_plugins() -> None:
     global _BACKEND_REGISTRATION_DONE, _GGML_LIBRARY_HANDLE
-    if _BACKEND_REGISTRATION_DONE:
+    if _BACKEND_REGISTRATION_DONE:  # pragma: no cover - process-global native state
         return
 
     ggml_library_path = _resolve_ggml_library_path()
-    if ggml_library_path is None:
+    if ggml_library_path is None:  # pragma: no cover - optional native dependency
         _BACKEND_REGISTRATION_DONE = True
         return
 
@@ -485,7 +485,7 @@ def _resolve_ggml_library_path() -> Path | None:
             return candidate_path
 
     discovered_library = ctypes.util.find_library("ggml")
-    if discovered_library:
+    if discovered_library:  # pragma: no cover - host linker discovery
         return Path(discovered_library)
     return None
 

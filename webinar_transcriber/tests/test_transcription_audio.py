@@ -372,3 +372,49 @@ def test_load_normalized_audio_rejects_wrong_sample_rate(monkeypatch, tmp_path) 
 
         with pytest.raises(MediaProcessingError, match="Expected 16000 Hz"):
             load_normalized_audio(audio_path)
+
+
+@pytest.mark.parametrize(
+    ("channels", "sample_width", "message"),
+    [
+        (2, 2, "Expected mono transcription audio"),
+        (1, 1, "Expected 16-bit PCM"),
+    ],
+)
+def test_load_normalized_audio_rejects_invalid_channel_or_sample_width(
+    monkeypatch: pytest.MonkeyPatch,
+    channels: int,
+    sample_width: int,
+    message: str,
+) -> None:
+    with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
+
+        class FakeWave:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return None
+
+            def getframerate(self):
+                return 16_000
+
+            def getnchannels(self):
+                return channels
+
+            def getsampwidth(self):
+                return sample_width
+
+            def getnframes(self):
+                return 1
+
+            def readframes(self, _count):
+                return b"\x00\x00"
+
+        monkeypatch.setattr(
+            "webinar_transcriber.transcription_audio.wave.open",
+            lambda *_args, **_kwargs: FakeWave(),
+        )
+
+        with pytest.raises(MediaProcessingError, match=message):
+            load_normalized_audio(audio_path)

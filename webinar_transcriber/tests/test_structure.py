@@ -7,7 +7,22 @@ from webinar_transcriber.models import (
     TranscriptionResult,
     TranscriptSegment,
 )
-from webinar_transcriber.structure import build_report
+from webinar_transcriber.structure import (
+    _action_item_score,
+    _audio_title_from_segments,
+    _audio_title_score,
+    _build_audio_sections,
+    _build_summary,
+    _extract_action_items,
+    _fallback_summary,
+    _segment_key,
+    _summary_filler_penalty,
+    _summary_repetition_penalty,
+    _summary_start_penalty,
+    _title_from_text,
+    _title_from_words,
+    build_report,
+)
 
 RU_SEND_FILE = "Пожалуйста, пришлите итоговый файл до пятницы."
 RU_CHECK_NUMBERS = (
@@ -220,3 +235,211 @@ def test_build_report_extracts_russian_action_items() -> None:
     )
 
     assert report.action_items == [RU_SEND_FILE, RU_CHECK_NUMBERS]
+
+
+def test_build_report_returns_no_audio_sections_for_blank_segments() -> None:
+    report = build_report(
+        MediaAsset(path="demo.wav", media_type=MediaType.AUDIO, duration_sec=30.0),
+        TranscriptionResult(
+            segments=[
+                TranscriptSegment(id="segment-1", text=" ", start_sec=0.0, end_sec=1.0),
+                TranscriptSegment(id="segment-2", text="", start_sec=1.0, end_sec=2.0),
+            ],
+        ),
+    )
+
+    assert report.sections == []
+
+
+def test_build_audio_sections_splits_when_target_duration_would_be_exceeded() -> None:
+    sections = _build_audio_sections([
+        TranscriptSegment(
+            id="segment-1",
+            text="Long section opening.",
+            start_sec=0.0,
+            end_sec=140.0,
+        ),
+        TranscriptSegment(
+            id="segment-2",
+            text="This should start a new section because it pushes duration too far.",
+            start_sec=140.5,
+            end_sec=320.0,
+        ),
+    ])
+
+    assert [(section.start_sec, section.end_sec) for section in sections] == [
+        (0.0, 140.0),
+        (140.5, 320.0),
+    ]
+
+
+def test_build_summary_dedupes_repeated_high_value_segments() -> None:
+    summary = _build_summary([
+        TranscriptSegment(
+            id="segment-1",
+            text="We review staffing constraints and project delivery tradeoffs.",
+            start_sec=120.0,
+            end_sec=132.0,
+        ),
+        TranscriptSegment(
+            id="segment-2",
+            text="We review staffing constraints and project delivery tradeoffs.",
+            start_sec=132.0,
+            end_sec=144.0,
+        ),
+    ])
+
+    assert summary == ["We review staffing constraints and project delivery tradeoffs."]
+
+
+def test_extract_action_items_dedupes_and_respects_limit() -> None:
+    action_items = _extract_action_items([
+        TranscriptSegment(id="segment-1", text="TODO", start_sec=120.0, end_sec=121.0),
+        TranscriptSegment(
+            id="segment-2",
+            text="Please send the notes.",
+            start_sec=121.0,
+            end_sec=124.0,
+        ),
+        TranscriptSegment(
+            id="segment-3",
+            text="Please send the notes.",
+            start_sec=124.0,
+            end_sec=127.0,
+        ),
+        TranscriptSegment(
+            id="segment-4",
+            text="Please review the spreadsheet.",
+            start_sec=127.0,
+            end_sec=130.0,
+        ),
+        TranscriptSegment(
+            id="segment-5",
+            text="Please update the tracker.",
+            start_sec=130.0,
+            end_sec=133.0,
+        ),
+        TranscriptSegment(
+            id="segment-6",
+            text="Please share the recording.",
+            start_sec=133.0,
+            end_sec=136.0,
+        ),
+        TranscriptSegment(
+            id="segment-7",
+            text="Please check the final numbers.",
+            start_sec=136.0,
+            end_sec=139.0,
+        ),
+        TranscriptSegment(
+            id="segment-8",
+            text="Please remember the follow-up note.",
+            start_sec=139.0,
+            end_sec=142.0,
+        ),
+    ])
+
+    assert action_items == [
+        "Please send the notes.",
+        "Please review the spreadsheet.",
+        "Please update the tracker.",
+        "Please share the recording.",
+        "Please check the final numbers.",
+    ]
+
+
+def test_title_helpers_fall_back_for_empty_or_filler_only_text() -> None:
+    filler_segments = [
+        TranscriptSegment(id="segment-1", text="So, okay, well.", start_sec=0.0, end_sec=5.0),
+        TranscriptSegment(
+            id="segment-2",
+            text="Just like okay right.",
+            start_sec=5.0,
+            end_sec=10.0,
+        ),
+    ]
+
+    assert _title_from_text("   ", fallback="Fallback Title") == "Fallback Title"
+    assert _audio_title_from_segments([], fallback="Fallback Title") == "Fallback Title"
+    assert (
+        _audio_title_from_segments(filler_segments, fallback="Fallback Title")
+        == "Fallback Title"
+    )
+    assert _title_from_words([]) == ""
+    assert _segment_key("   ") == ""
+
+
+def test_structure_scoring_helpers_cover_penalty_branches() -> None:
+    repetitive_segment = TranscriptSegment(
+        id="segment-1",
+        text="So so so so.",
+        start_sec=0.0,
+        end_sec=10.0,
+    )
+    filler_heavy_segment = TranscriptSegment(
+        id="segment-2",
+        text="Please chat audio microphone hello everyone.",
+        start_sec=10.0,
+        end_sec=14.0,
+    )
+
+    assert _audio_title_score(repetitive_segment) < 0
+    assert _action_item_score(
+        TranscriptSegment(id="segment-3", text="TODO", start_sec=0.0, end_sec=1.0)
+    ) == -1.0
+    assert _summary_start_penalty(200.0) == 0.0
+    assert _summary_repetition_penalty(["plan"] * 6) == -3.0
+    assert (
+        _summary_repetition_penalty(["plan", "budget", "timeline", "risk", "owner", "scope"])
+        == 0.0
+    )
+    assert _summary_filler_penalty(4, 10) == -2.0
+    assert _summary_filler_penalty(2, 10) == -1.0
+    assert _segment_key(filler_heavy_segment.text) == "please chat audio microphone hello everyone"
+
+
+def test_audio_title_score_covers_repetition_penalty_bands() -> None:
+    heavy_repetition = TranscriptSegment(
+        id="segment-1",
+        text="Plan plan plan plan",
+        start_sec=0.0,
+        end_sec=4.0,
+    )
+    medium_repetition = TranscriptSegment(
+        id="segment-2",
+        text="Plan plan budget budget",
+        start_sec=4.0,
+        end_sec=8.0,
+    )
+
+    assert _audio_title_score(heavy_repetition) < _audio_title_score(medium_repetition)
+
+
+def test_action_item_score_penalizes_noise_and_missing_punctuation() -> None:
+    score = _action_item_score(
+        TranscriptSegment(
+            id="segment-1",
+            text="Please update the audio chat group",
+            start_sec=10.0,
+            end_sec=14.0,
+        )
+    )
+
+    assert score < 0
+
+
+def test_summary_helpers_cover_medium_repetition_and_fallback_limit() -> None:
+    summary = _fallback_summary([
+        TranscriptSegment(id="segment-1", text="One", start_sec=0.0, end_sec=1.0),
+        TranscriptSegment(id="segment-2", text="Two", start_sec=1.0, end_sec=2.0),
+        TranscriptSegment(id="segment-3", text="Three", start_sec=2.0, end_sec=3.0),
+        TranscriptSegment(id="segment-4", text="Four", start_sec=3.0, end_sec=4.0),
+    ])
+
+    assert (
+        _summary_repetition_penalty(
+            ["plan", "plan", "budget", "budget", "risk", "risk", "owner"]
+        )
+        == -1.5
+    )
+    assert summary == ["One", "Two", "Three"]

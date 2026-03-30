@@ -200,7 +200,7 @@ class WhisperCppTranscriber:
         assert self._session is not None
         return self._session
 
-    def __del__(self) -> None:
+    def __del__(self) -> None:  # pragma: no cover - interpreter shutdown cleanup
         with suppress(Exception):
             self.close()
 
