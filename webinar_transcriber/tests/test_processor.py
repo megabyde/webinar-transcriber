@@ -232,9 +232,7 @@ def test_process_input_writes_reports_and_metadata(tmp_path, monkeypatch) -> Non
         event[0] == "advance" and event[1] == "transcribe" for event in reporter.progress_events
     )
     assert any(
-        event[0] == "advance"
-        and event[1] == "vad"
-        and event[3] == "1 region"
+        event[0] == "advance" and event[1] == "vad" and event[3] == "1 region"
         for event in reporter.progress_events
     )
     assert diagnostics_payload["asr_backend"] == "whisper.cpp"

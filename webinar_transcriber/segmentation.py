@@ -234,6 +234,8 @@ def _load_silero_modules():
     except ImportError:
         return None
     return silero_vad, torch
+
+
 def _silero_chunk(samples: np.ndarray, *, start: int, window_size: int) -> np.ndarray:
     chunk = samples[start : start + window_size]
     if len(chunk) < window_size:

@@ -3,8 +3,8 @@
 import json
 from pathlib import Path
 
-from docx import Document
 import pytest
+from docx import Document
 
 from webinar_transcriber.export.docx_report import write_docx_report
 from webinar_transcriber.export.json_report import write_json_report
