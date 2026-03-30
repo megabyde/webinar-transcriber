@@ -19,10 +19,9 @@ def test_normalize_transcription_drops_empty_segments_and_merges_short_adjacent_
     normalized = normalize_transcription(transcription)
 
     assert normalized.detected_language == "ru"
-    assert [segment.text for segment in normalized.segments] == [
-        "Привет всем.",
-        "Это новая часть.",
-    ]
+    segment_texts = [segment.text for segment in normalized.segments]
+
+    assert segment_texts == ["Привет всем.", "Это новая часть."]
     assert normalized.segments[0].start_sec == 0.4
     assert normalized.segments[0].end_sec == 1.6
     assert normalized.segments[1].start_sec == 3.0
@@ -39,7 +38,6 @@ def test_normalize_transcription_keeps_sentence_when_gap_is_large() -> None:
 
     normalized = normalize_transcription(transcription)
 
-    assert [segment.text for segment in normalized.segments] == [
-        "Короткая фраза.",
-        "Следующая фраза.",
-    ]
+    segment_texts = [segment.text for segment in normalized.segments]
+
+    assert segment_texts == ["Короткая фраза.", "Следующая фраза."]

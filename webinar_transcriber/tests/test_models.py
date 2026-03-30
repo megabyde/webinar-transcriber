@@ -118,8 +118,6 @@ def test_inference_window_is_ordered_by_timeline() -> None:
         InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=6.0),
     ]
 
-    assert [window.window_id for window in sorted(windows)] == [
-        "window-1",
-        "window-2",
-        "window-3",
-    ]
+    window_ids = [window.window_id for window in sorted(windows)]
+
+    assert window_ids == ["window-1", "window-2", "window-3"]

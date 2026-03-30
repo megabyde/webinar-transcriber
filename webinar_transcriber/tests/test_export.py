@@ -91,7 +91,7 @@ def test_write_markdown_report_omits_blank_image_line_for_imageless_sections(
     output_path = tmp_path / "report.md"
     write_markdown_report(report, output_path)
 
-    assert output_path.read_text(encoding="utf-8") == (
+    expected_markdown = (
         "# Demo\n\n"
         "- Language: `en`\n\n"
         "## Summary\n\n"
@@ -105,6 +105,8 @@ def test_write_markdown_report_omits_blank_image_line_for_imageless_sections(
         "![Section 2](frames/scene-2.png)\n\n"
         "Paragraph two.\n"
     )
+
+    assert output_path.read_text(encoding="utf-8") == expected_markdown
 
 
 def test_write_json_report_round_trips_report_document(tmp_path: Path) -> None:

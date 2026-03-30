@@ -183,11 +183,13 @@ def test_build_report_summary_skips_startup_chatter() -> None:
         ),
     )
 
-    assert report.summary == [
+    expected_summary = [
         "Today we review budget negotiations and project delivery timelines.",
         "We compare approval risks, fallback plans, and delivery tradeoffs.",
         "The final section covers next-quarter staffing constraints.",
     ]
+
+    assert report.summary == expected_summary
 
 
 def test_build_report_extracts_russian_action_items() -> None:
@@ -217,7 +219,4 @@ def test_build_report_extracts_russian_action_items() -> None:
         ),
     )
 
-    assert report.action_items == [
-        RU_SEND_FILE,
-        RU_CHECK_NUMBERS,
-    ]
+    assert report.action_items == [RU_SEND_FILE, RU_CHECK_NUMBERS]

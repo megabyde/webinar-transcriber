@@ -10,11 +10,7 @@ def test_merge_usage_sums_matching_keys_across_dicts() -> None:
         {},
     )
 
-    assert merged == {
-        "input_tokens": 10,
-        "output_tokens": 4,
-        "total_tokens": 18,
-    }
+    assert merged == {"input_tokens": 10, "output_tokens": 4, "total_tokens": 18}
 
 
 def test_merge_usage_into_mutates_target_totals() -> None:
@@ -22,8 +18,4 @@ def test_merge_usage_into_mutates_target_totals() -> None:
 
     merge_usage_into(usage_totals, {"output_tokens": 4, "total_tokens": 4})
 
-    assert usage_totals == {
-        "input_tokens": 10,
-        "output_tokens": 4,
-        "total_tokens": 18,
-    }
+    assert usage_totals == {"input_tokens": 10, "output_tokens": 4, "total_tokens": 18}

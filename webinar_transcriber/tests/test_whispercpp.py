@@ -123,10 +123,9 @@ def test_whisper_cpp_library_decodes_window_with_fake_cdll(monkeypatch, tmp_path
 
     assert library.runtime_details().system_info == "METAL = 1"
     assert decoded_window.language == "en"
-    assert [segment.text for segment in decoded_window.segments] == [
-        "agenda review",
-        "next step",
-    ]
+    segment_texts = [segment.text for segment in decoded_window.segments]
+
+    assert segment_texts == ["agenda review", "next step"]
     assert [segment.end_sec for segment in decoded_window.segments] == [1.5, 3.0]
 
 

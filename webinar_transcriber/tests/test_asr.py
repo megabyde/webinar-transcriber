@@ -196,11 +196,10 @@ def test_build_prompt_carryover_drops_fallback_windows() -> None:
 
 
 def test_device_name_from_system_info_prefers_enabled_backend() -> None:
+    system_info = "WHISPER : MTL : EMBED_LIBRARY = 1 | CPU : NEON = 1 |"
+
     assert _device_name_from_system_info("CPU = 1 | METAL = 1") == "metal"
-    assert (
-        _device_name_from_system_info("WHISPER : MTL : EMBED_LIBRARY = 1 | CPU : NEON = 1 |")
-        == "metal"
-    )
+    assert _device_name_from_system_info(system_info) == "metal"
     assert _device_name_from_system_info("CPU = 1") == "cpu"
 
 

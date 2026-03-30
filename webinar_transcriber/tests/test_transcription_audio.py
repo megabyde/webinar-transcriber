@@ -153,11 +153,13 @@ def test_repair_speech_regions_keeps_short_region_when_gaps_are_too_large() -> N
         SpeechRegion(start_sec=15.1, end_sec=28.0),
     ])
 
-    assert repaired == [
+    expected_regions = [
         SpeechRegion(start_sec=0.0, end_sec=12.0),
         SpeechRegion(start_sec=13.1, end_sec=13.9),
         SpeechRegion(start_sec=15.1, end_sec=28.0),
     ]
+
+    assert repaired == expected_regions
 
 
 def test_normalize_regions_handles_empty_and_overlap() -> None:
@@ -174,17 +176,16 @@ def test_silero_speech_timestamps_returns_none_when_module_missing() -> None:
         "webinar_transcriber.segmentation.importlib.import_module",
         side_effect=ImportError,
     ):
-        assert (
-            _silero_speech_timestamps(
-                np.zeros(16_000, dtype=np.float32),
-                sample_rate=16_000,
-                threshold=0.5,
-                min_speech_duration_ms=250,
-                min_silence_duration_ms=600,
-                speech_pad_ms=30,
-            )
-            is None
+        timestamps = _silero_speech_timestamps(
+            np.zeros(16_000, dtype=np.float32),
+            sample_rate=16_000,
+            threshold=0.5,
+            min_speech_duration_ms=250,
+            min_silence_duration_ms=600,
+            speech_pad_ms=30,
         )
+
+    assert timestamps is None
 
 
 def test_silero_speech_timestamps_uses_vad_iterator_and_reports_progress(monkeypatch) -> None:

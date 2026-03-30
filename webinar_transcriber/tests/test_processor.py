@@ -203,19 +203,16 @@ def test_process_input_writes_reports_and_metadata(tmp_path, monkeypatch) -> Non
     assert ("finish", "prepare_transcription_audio", "sample-audio.wav") in reporter.events
     assert ("start", "probe_media", "Probing media") in reporter.events
     assert ("start", "prepare_asr", "Preparing ASR model") in reporter.events
-    assert (
-        "finish",
-        "prepare_asr",
-        "test-model | cpu",
-    ) in reporter.events
+    assert ("finish", "prepare_asr", "test-model | cpu") in reporter.events
     assert any(event[0] == "complete" for event in reporter.events)
-    assert any(
+    has_transcribe_finish = any(
         event[0] == "finish"
         and event[1] == "transcribe"
         and "window" in event[2]
         and "RTF" in event[2]
         for event in reporter.events
     )
+    assert has_transcribe_finish
     transcribe_start_events = [
         event
         for event in reporter.progress_events
@@ -231,10 +228,11 @@ def test_process_input_writes_reports_and_metadata(tmp_path, monkeypatch) -> Non
     assert any(
         event[0] == "advance" and event[1] == "transcribe" for event in reporter.progress_events
     )
-    assert any(
+    has_vad_advance = any(
         event[0] == "advance" and event[1] == "vad" and event[3] == "1 region"
         for event in reporter.progress_events
     )
+    assert has_vad_advance
     assert diagnostics_payload["asr_backend"] == "whisper.cpp"
     assert diagnostics_payload["asr_model"] == "test-model"
 
@@ -288,10 +286,11 @@ def test_process_input_writes_video_scene_artifacts(tmp_path, monkeypatch) -> No
     assert any(
         event[0] == "advance" and event[1] == "detect_scenes" for event in reporter.progress_events
     )
-    assert any(
+    has_extract_frames_start = any(
         event == ("start", "extract_frames", artifacts.diagnostics.item_counts["scenes"], None)
         for event in reporter.progress_events
     )
+    assert has_extract_frames_start
 
 
 def test_process_input_runs_windowed_whispercpp_pipeline(tmp_path, monkeypatch) -> None:
@@ -387,14 +386,13 @@ def test_process_input_runs_windowed_whispercpp_pipeline(tmp_path, monkeypatch) 
 
 
 def test_window_transcription_stage_detail_reports_rtf() -> None:
-    assert (
-        _window_transcription_stage_detail(
-            window_count=1,
-            total_duration_sec=12.5,
-            elapsed_sec=2.5,
-        )
-        == "1 window | RTF 0.20"
+    detail = _window_transcription_stage_detail(
+        window_count=1,
+        total_duration_sec=12.5,
+        elapsed_sec=2.5,
     )
+
+    assert detail == "1 window | RTF 0.20"
 
 
 def test_process_input_normalizes_transcript_before_report_generation(
@@ -425,11 +423,9 @@ def test_process_input_normalizes_transcript_before_report_generation(
 
     assert artifacts.layout.transcript_path.exists()
     raw_payload = json.loads(artifacts.layout.transcript_path.read_text(encoding="utf-8"))
-    assert [segment["text"] for segment in raw_payload["segments"]] == [
-        "Привет",
-        "всем.",
-        "Новая тема начинается позже.",
-    ]
+    segment_texts = [segment["text"] for segment in raw_payload["segments"]]
+
+    assert segment_texts == ["Привет", "всем.", "Новая тема начинается позже."]
     assert artifacts.diagnostics.item_counts["normalized_transcript_segments"] == 2
     assert artifacts.report.sections[0].transcript_text.startswith("Привет всем.")
 
@@ -590,50 +586,33 @@ def test_process_input_polishes_report_sections_when_llm_succeeds(tmp_path, monk
     assert artifacts.diagnostics.llm_enabled is True
     assert artifacts.diagnostics.llm_model == "test-llm-model"
     assert artifacts.diagnostics.llm_report_status == "applied"
-    assert artifacts.diagnostics.warnings == [
-        (
-            "Section polish response returned an empty transcript text "
-            "for section-1; kept original text."
-        )
-    ]
-    assert artifacts.diagnostics.llm_report_usage == {
-        "input_tokens": 20,
-        "output_tokens": 6,
-        "total_tokens": 26,
-    }
-    assert (
-        "start",
-        "llm_report_sections",
-        1.0,
-        None,
-    ) in reporter.progress_events
-    assert (
-        "finish",
-        "llm_report",
-        "1 summary bullet | 1 action item | 26 tokens",
-    ) in reporter.events
+    expected_warning = (
+        "Section polish response returned an empty transcript text "
+        "for section-1; kept original text."
+    )
+    expected_usage = {"input_tokens": 20, "output_tokens": 6, "total_tokens": 26}
+    llm_report_finish = ("finish", "llm_report", "1 summary bullet | 1 action item | 26 tokens")
+
+    assert artifacts.diagnostics.warnings == [expected_warning]
+    assert artifacts.diagnostics.llm_report_usage == expected_usage
+    assert ("start", "llm_report_sections", 1.0, None) in reporter.progress_events
+    assert llm_report_finish in reporter.events
     assert ("advance", "llm_report_sections", 1.0, None) in reporter.progress_events
-    assert (
+    llm_sections_start = (
         "start",
         "llm_report_sections",
         "Polishing section text with LLM (openai | test-llm-model | 1 worker)",
-    ) in reporter.events
-    assert (
-        "finish",
-        "llm_report_sections",
-        "1 section",
-    ) in reporter.events
-    assert (
+    )
+    llm_report_start = (
         "start",
         "llm_report",
         "Polishing report summary with LLM (openai | test-llm-model)",
-    ) in reporter.events
-    assert reporter.warnings == [
-        (
-            "Section polish response returned an empty transcript text "
-            "for section-1; kept original text."
-        )
-    ]
+    )
+
+    assert llm_sections_start in reporter.events
+    assert ("finish", "llm_report_sections", "1 section") in reporter.events
+    assert llm_report_start in reporter.events
+    assert reporter.warnings == [expected_warning]
 
 
 def test_process_input_warns_when_llm_configuration_is_missing(tmp_path, monkeypatch) -> None:
@@ -707,11 +686,9 @@ def test_process_input_falls_back_when_report_polish_fails(tmp_path, monkeypatch
         reporter=reporter,
     )
 
+    fallback_finish = ("finish", "llm_report_sections", "openai | test-llm-model | fallback")
+
     assert artifacts.report.summary != []
     assert artifacts.diagnostics.llm_report_status == "fallback"
     assert "Report polishing failed: backend timeout" in artifacts.diagnostics.warnings
-    assert (
-        "finish",
-        "llm_report_sections",
-        "openai | test-llm-model | fallback",
-    ) in reporter.events
+    assert fallback_finish in reporter.events

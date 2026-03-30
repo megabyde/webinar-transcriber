@@ -38,11 +38,9 @@ def test_reconcile_decoded_windows_drops_aligned_overlap_duplicates() -> None:
         ),
     ])
 
-    assert [segment.text for segment in transcription.segments] == [
-        "Agenda review",
-        "Next topic",
-        "Action items",
-    ]
+    segment_texts = [segment.text for segment in transcription.segments]
+
+    assert segment_texts == ["Agenda review", "Next topic", "Action items"]
     assert stats.duplicate_segments_dropped == 1
     assert transcription.detected_language == "en"
 
@@ -124,12 +122,9 @@ def test_reconcile_decoded_windows_keeps_monotonic_segment_boundaries() -> None:
         ),
     ])
 
-    assert all(
-        current.start_sec >= previous.end_sec
-        for previous, current in zip(
-            transcription.segments, transcription.segments[1:], strict=False
-        )
-    )
+    segment_pairs = zip(transcription.segments, transcription.segments[1:], strict=False)
+
+    assert all(current.start_sec >= previous.end_sec for previous, current in segment_pairs)
 
 
 def test_reconcile_decoded_windows_prefers_one_side_when_overlap_has_no_alignment() -> None:
@@ -172,8 +167,11 @@ def test_reconcile_decoded_windows_prefers_one_side_when_overlap_has_no_alignmen
         ),
     ])
 
-    assert [seg.text for seg in transcription.segments] == [
+    segment_texts = [seg.text for seg in transcription.segments]
+    expected_texts = [
         "Понятно, что, имея основной специализацией соблазнения девчонок,",
         "начинаешь понимать, что секс-то важно.",
     ]
+
+    assert segment_texts == expected_texts
     assert stats.boundary_fixes >= 1
