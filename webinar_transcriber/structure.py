@@ -1,6 +1,7 @@
 """Deterministic report structuring helpers."""
 
 import re
+from itertools import pairwise
 
 from webinar_transcriber.models import (
     AlignmentBlock,
@@ -53,6 +54,10 @@ MAX_AUDIO_SECTION_CHARS = 3600
 TITLE_WORD_LIMIT = 6
 SUMMARY_ITEM_LIMIT = 3
 ACTION_ITEM_LIMIT = 5
+INTERLUDE_MIN_WORDS = 18
+INTERLUDE_LOW_PUNCTUATION_DENSITY = 0.06
+INTERLUDE_LOW_UNIQUE_RATIO = 0.6
+INTERLUDE_REPEATED_BIGRAM_RATIO = 0.12
 TITLE_FILLER_WORDS = {
     "actually",
     "basically",
@@ -94,6 +99,16 @@ SUMMARY_NOISE_PATTERN = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+INTERLUDE_MARKER_PATTERN = re.compile(
+    r"(?:"
+    r"субтитры сделал|музыкальн|припев|куплет|"
+    r"lyrics?|instrumental|chorus|verse|interlude"
+    r")",
+    re.IGNORECASE,
+)
+INTERLUDE_WORD_RE = re.compile(r"[\w'-]+", re.UNICODE)
+RUSSIAN_VOWELS = frozenset("аеёиоуыэюя")
+LATIN_VOWELS = frozenset("aeiouy")
 
 
 def build_report(
@@ -109,8 +124,13 @@ def build_report(
         if alignment_blocks is not None
         else _build_audio_sections(transcription.segments)
     )
-    summary = _build_summary(transcription.segments)
-    action_items = _extract_action_items(transcription.segments)
+    sections = _render_interlude_sections(
+        sections,
+        detected_language=transcription.detected_language,
+    )
+    report_segments = _segments_excluding_interludes(transcription.segments, sections)
+    summary = _build_summary(report_segments)
+    action_items = _extract_action_items(report_segments)
 
     return ReportDocument(
         title=_derive_title(media_asset.path),
@@ -423,3 +443,118 @@ def _has_action_item_cue(text: str) -> bool:
 def _derive_title(source_path: str) -> str:
     stem = source_path.rsplit("/", maxsplit=1)[-1].rsplit(".", maxsplit=1)[0]
     return stem.replace("-", " ").replace("_", " ").strip().title() or "Transcription Report"
+
+
+def _render_interlude_sections(
+    sections: list[ReportSection],
+    *,
+    detected_language: str | None,
+) -> list[ReportSection]:
+    rendered_sections: list[ReportSection] = []
+
+    for section in sections:
+        if not _is_likely_interlude_text(section.transcript_text):
+            rendered_sections.append(section)
+            continue
+
+        rendered_sections.append(
+            section.model_copy(
+                update={
+                    "title": _interlude_title(detected_language),
+                    "transcript_text": _interlude_note(detected_language),
+                    "is_interlude": True,
+                }
+            )
+        )
+
+    return rendered_sections
+
+
+def _segments_excluding_interludes(
+    segments: list[TranscriptSegment],
+    sections: list[ReportSection],
+) -> list[TranscriptSegment]:
+    interlude_ranges = [
+        (section.start_sec, section.end_sec) for section in sections if section.is_interlude
+    ]
+    if not interlude_ranges:
+        return segments
+
+    return [
+        segment
+        for segment in segments
+        if not any(
+            segment.start_sec < end_sec and segment.end_sec > start_sec
+            for start_sec, end_sec in interlude_ranges
+        )
+    ]
+
+
+def _is_likely_interlude_text(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if INTERLUDE_MARKER_PATTERN.search(stripped):
+        return True
+
+    words = INTERLUDE_WORD_RE.findall(stripped.casefold())
+    if len(words) < INTERLUDE_MIN_WORDS:
+        return False
+
+    sample_size = min(len(words), 80)
+    sampled_words = words[:sample_size]
+    punctuation_density = (
+        sum(1 for char in stripped if char in ".?!:;") / sample_size
+    )
+    unique_ratio = len(set(sampled_words)) / sample_size
+    repeated_bigram_ratio = _repeated_bigram_ratio(sampled_words)
+    noisy_word_ratio = _noisy_word_ratio(sampled_words)
+
+    return bool(
+        punctuation_density <= INTERLUDE_LOW_PUNCTUATION_DENSITY
+        and (
+            unique_ratio <= INTERLUDE_LOW_UNIQUE_RATIO
+            or repeated_bigram_ratio >= INTERLUDE_REPEATED_BIGRAM_RATIO
+            or noisy_word_ratio >= 0.35
+        )
+    )
+
+
+def _repeated_bigram_ratio(words: list[str]) -> float:
+    if len(words) < 4:
+        return 0.0
+
+    bigrams = list(pairwise(words))
+    repeated_bigram_count = len(bigrams) - len(set(bigrams))
+    return repeated_bigram_count / len(bigrams)
+
+
+def _noisy_word_ratio(words: list[str]) -> float:
+    noisy_words = sum(1 for word in words if _is_noisy_word(word))
+    return noisy_words / len(words) if words else 0.0
+
+
+def _is_noisy_word(word: str) -> bool:
+    if len(word) < 5:
+        return False
+
+    vowels = RUSSIAN_VOWELS | LATIN_VOWELS
+    return not any(char in vowels for char in word)
+
+
+def _interlude_title(detected_language: str | None) -> str:
+    if detected_language == "ru":
+        return "Музыкальная пауза"
+    return "Music Interlude"
+
+
+def _interlude_note(detected_language: str | None) -> str:
+    if detected_language == "ru":
+        return (
+            "Музыкальная вставка или поэтический фрагмент. "
+            "Исходная расшифровка сохранена в transcript.json."
+        )
+    return (
+        "Music or spoken-performance interlude. "
+        "The raw transcript is preserved in transcript.json."
+    )

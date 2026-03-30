@@ -258,6 +258,46 @@ class TestBuildReport:
 
         assert report.sections == []
 
+    def test_renders_music_breaks_as_interludes_and_excludes_them_from_summary(self) -> None:
+        report = build_report(
+            MediaAsset(path="demo.wav", media_type=MediaType.AUDIO, duration_sec=180.0),
+            TranscriptionResult(
+                detected_language="ru",
+                segments=[
+                    TranscriptSegment(
+                        id="segment-1",
+                        text=(
+                            "ля ля ля ля ля ля ля ля ля ля "
+                            "ля ля ля ля ля ля ля ля ля ля"
+                        ),
+                        start_sec=0.0,
+                        end_sec=45.0,
+                    ),
+                    TranscriptSegment(
+                        id="segment-2",
+                        text="Сегодня мы обсуждаем бюджет и план внедрения.",
+                        start_sec=60.0,
+                        end_sec=75.0,
+                    ),
+                    TranscriptSegment(
+                        id="segment-3",
+                        text="Пожалуйста, пришлите итоговый файл до пятницы.",
+                        start_sec=75.0,
+                        end_sec=90.0,
+                    ),
+                ],
+            ),
+        )
+
+        assert report.sections[0].is_interlude is True
+        assert report.sections[0].title == "Музыкальная пауза"
+        assert "transcript.json" in report.sections[0].transcript_text
+        assert report.summary == [
+            "Сегодня мы обсуждаем бюджет и план внедрения.",
+            "Пожалуйста, пришлите итоговый файл до пятницы.",
+        ]
+        assert report.action_items == ["Пожалуйста, пришлите итоговый файл до пятницы."]
+
 
 class TestAudioSectionHeuristics:
     def test_build_audio_sections_splits_when_target_duration_would_be_exceeded(self) -> None:

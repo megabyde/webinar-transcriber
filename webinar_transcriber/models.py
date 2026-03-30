@@ -121,6 +121,7 @@ class ReportSection(BaseModel):
     bullet_points: list[str] = Field(default_factory=list)
     frame_id: str | None = None
     image_path: str | None = None
+    is_interlude: bool = False
 
 
 class ReportDocument(BaseModel):

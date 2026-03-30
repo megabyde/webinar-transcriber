@@ -146,3 +146,58 @@ def test_openai_llm_processor_rejects_unknown_report_section_id(monkeypatch) -> 
 
     with pytest.raises(LLMProcessingError):
         processor.polish_report(report)
+
+
+def test_openai_llm_processor_skips_interlude_section_text_polish(monkeypatch) -> None:
+    progress_updates: list[int] = []
+    fake_client = FakeClient([
+        FakeResponse(
+            output_parsed=SectionTextResponse(
+                transcript_text="Agenda review and project status update."
+            ),
+            usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
+        ),
+    ])
+    monkeypatch.setattr(
+        "webinar_transcriber.llm._build_openai_client", lambda _api_key: fake_client
+    )
+
+    processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
+    report = ReportDocument(
+        title="Demo",
+        source_file="demo.wav",
+        media_type=MediaType.AUDIO,
+        sections=[
+            ReportSection(
+                id="section-1",
+                title="Music Interlude",
+                start_sec=0.0,
+                end_sec=10.0,
+                transcript_text=(
+                    "Music interlude. "
+                    "The raw transcript is preserved in transcript.json."
+                ),
+                is_interlude=True,
+            ),
+            ReportSection(
+                id="section-2",
+                title="Old title",
+                start_sec=10.0,
+                end_sec=20.0,
+                transcript_text="Agenda review and project status update.",
+            ),
+        ],
+    )
+
+    result = processor.polish_report_sections_with_progress(
+        report,
+        progress_callback=lambda advance: progress_updates.append(advance),
+    )
+
+    assert len(fake_client.responses.calls) == 1
+    assert result.section_transcripts["section-1"] == report.sections[0].transcript_text
+    assert result.section_transcripts["section-2"] == "Agenda review and project status update."
+    assert result.warnings == [
+        "Skipped LLM section polish for likely music/interlude section section-1."
+    ]
+    assert progress_updates == [1, 1]

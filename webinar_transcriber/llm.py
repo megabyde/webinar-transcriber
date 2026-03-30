@@ -237,6 +237,7 @@ class OpenAILLMProcessor:
                     bullet_points=list(section.bullet_points),
                     frame_id=section.frame_id,
                     image_path=section.image_path,
+                    is_interlude=section.is_interlude,
                 )
                 for section in report.sections
             ],
@@ -322,7 +323,16 @@ class OpenAILLMProcessor:
             future_to_section = {
                 executor.submit(self._polish_section_text, section): section
                 for section in report.sections
+                if not section.is_interlude
             }
+            skipped_sections = [section for section in report.sections if section.is_interlude]
+            for section in skipped_sections:
+                polished_texts[section.id] = section.transcript_text
+                warnings.append(
+                    f"Skipped LLM section polish for likely music/interlude section {section.id}."
+                )
+                if progress_callback is not None:
+                    progress_callback(1)
             for future in as_completed(future_to_section):
                 section = future_to_section[future]
                 try:
