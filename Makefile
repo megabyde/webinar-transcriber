@@ -1,44 +1,32 @@
-.PHONY: help sync format lint typecheck test coverage check ci clean
+.PHONY: help sync format lint test check clean
 
 MD_FILES := $(shell git ls-files '*.md')
 
-help:
+help: ## Show available targets
 	@printf "Available targets:\n"
-	@printf "  sync       Install project and dev dependencies with uv\n"
-	@printf "  format     Format Python sources with Ruff\n"
-	@printf "  lint       Run Ruff and markdown lint checks\n"
-	@printf "  typecheck  Run ty over the package\n"
-	@printf "  test       Run pytest\n"
-	@printf "  coverage   Run pytest with coverage gate\n"
-	@printf "  check      Run lint, typecheck, test, and coverage\n"
-	@printf "  ci         Alias for check\n"
-	@printf "  clean      Remove caches and build artifacts\n"
+	@sed -n 's/^\([^:#[:space:]][^:]*\):.*##[[:space:]]*\(.*\)$$/\1\t\2/p' $(MAKEFILE_LIST) | \
+	while IFS=$$(printf '\t') read -r target description; do \
+		printf "  %-10s %s\n" "$$target" "$$description"; \
+	done
 
-sync:
+sync: ## Install project and dev dependencies with uv
 	uv sync --group dev
 
-format:
+format: ## Format Markdown and Python sources
 	uv run mdformat $(MD_FILES)
 	uv run ruff format .
 
-lint:
+lint: ## Run Markdown, Ruff, and type checks
 	uv run mdformat --check $(MD_FILES)
 	uv run pymarkdown scan $(MD_FILES)
 	uv run ruff check .
-
-typecheck:
 	uv run ty check webinar_transcriber
 
-test:
+test: ## Run pytest with coverage
 	uv run pytest
 
-coverage:
-	uv run pytest --cov=webinar_transcriber --cov-report=term-missing --cov-report=xml
+check: lint test ## Run lint and test
 
-check: lint typecheck test coverage
-
-ci: check
-
-clean:
+clean: ## Remove caches and build artifacts
 	rm -rf .coverage .mypy_cache .pytest_cache .ruff_cache .venv coverage.xml dist build
 	find webinar_transcriber -type d -name __pycache__ -prune -exec rm -rf {} +

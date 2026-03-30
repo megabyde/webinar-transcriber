@@ -38,9 +38,7 @@ Run the full gate before each logical commit:
 ```bash
 make format
 make lint
-make typecheck
 make test
-make coverage
 ```
 
 In sandboxed Codex runs, prefer `UV_CACHE_DIR=/tmp/uv-cache` for `uv` and `make` commands to avoid

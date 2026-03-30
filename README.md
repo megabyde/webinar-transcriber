@@ -244,9 +244,7 @@ committed:
 ```bash
 make format
 make lint
-make typecheck
 make test
-make coverage
 ```
 
 The repository keeps tiny committed media fixtures so pipeline tests can run without network fetches

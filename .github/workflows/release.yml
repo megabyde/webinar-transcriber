@@ -25,7 +25,7 @@ jobs:
       - name: Sync dependencies
         run: make sync
       - name: Run release checks
-        run: make ci
+        run: make check
       - name: Build package
         run: uv build
       - name: Upload artifacts

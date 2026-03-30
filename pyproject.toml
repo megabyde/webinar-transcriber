@@ -53,7 +53,13 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "--strict-config --strict-markers"
+addopts = [
+    "--strict-config",
+    "--strict-markers",
+    "--cov=webinar_transcriber",
+    "--cov-report=term-missing",
+    "--cov-report=xml",
+]
 testpaths = ["webinar_transcriber"]
 
 [tool.coverage.run]

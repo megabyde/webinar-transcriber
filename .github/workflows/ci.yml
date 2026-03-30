@@ -21,7 +21,7 @@ jobs:
       - name: Sync dependencies
         run: make sync
       - name: Run CI
-        run: make ci
+        run: make check
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v6
