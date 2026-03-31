@@ -34,6 +34,7 @@ def test_write_docx_report_splits_blank_line_paragraphs(tmp_path: Path) -> None:
     document = Document(str(output_path))
     paragraph_texts = [paragraph.text for paragraph in document.paragraphs]
 
+    assert "Section 1 (00:00-00:05)" in paragraph_texts
     assert "Первый абзац." in paragraph_texts
     assert "Второй абзац." in paragraph_texts
 
@@ -99,14 +100,38 @@ def test_write_markdown_report_omits_blank_image_line_for_imageless_sections(
         "## Action Items\n\n"
         "- Follow up.\n\n"
         "## Sections\n\n"
-        "### Section 1\n\n"
+        "### Section 1 (00:00-00:05)\n\n"
         "Paragraph one.\n\n"
-        "### Section 2\n\n"
+        "### Section 2 (00:05-00:10)\n\n"
         "![Section 2](frames/scene-2.png)\n\n"
         "Paragraph two.\n"
     )
 
     assert output_path.read_text(encoding="utf-8") == expected_markdown
+
+
+def test_write_markdown_report_uses_hour_format_for_long_sections(tmp_path: Path) -> None:
+    report = ReportDocument(
+        title="Demo",
+        source_file="demo.wav",
+        media_type=MediaType.AUDIO,
+        sections=[
+            ReportSection(
+                id="section-1",
+                title="Section 1",
+                start_sec=3661.2,
+                end_sec=7325.9,
+                transcript_text="Paragraph one.",
+            )
+        ],
+    )
+
+    output_path = tmp_path / "report.md"
+    write_markdown_report(report, output_path)
+
+    markdown = output_path.read_text(encoding="utf-8")
+
+    assert "### Section 1 (01:01:01-02:02:05)" in markdown
 
 
 def test_write_json_report_round_trips_report_document(tmp_path: Path) -> None:
