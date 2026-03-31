@@ -158,7 +158,9 @@ class TestWhisperCppTranscriber:
                     end_sec=2.0,
                 ),
             ],
-            progress_callback=lambda completed_sec: progress_updates.append(completed_sec),
+            progress_callback=lambda completed_sec, _segment_count: progress_updates.append(
+                completed_sec
+            ),
         )
 
         assert [w.language for w in decoded_windows] == ["ru", "ru"]
@@ -306,14 +308,17 @@ class TestPromptCarryover:
             segments=[],
         )
 
-        assert _carryover_drop_reason(
+        disabled_reason = _carryover_drop_reason(
             decoded_window,
             settings=PromptCarryoverSettings(enabled=False),
-        ) == "carryover_disabled"
-        assert _carryover_drop_reason(
+        )
+        empty_text_reason = _carryover_drop_reason(
             decoded_window,
             settings=PromptCarryoverSettings(),
-        ) == "empty_text"
+        )
+
+        assert disabled_reason == "carryover_disabled"
+        assert empty_text_reason == "empty_text"
 
     def test_sanitize_prompt_drops_missing_and_noise_only_prompts(self) -> None:
         assert _sanitize_prompt(None, max_tokens=8) == ""

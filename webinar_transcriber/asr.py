@@ -159,13 +159,14 @@ class WhisperCppTranscriber:
         audio_samples,
         windows: list[InferenceWindow],
         *,
-        progress_callback: Callable[[float], None] | None = None,
+        progress_callback: Callable[[float, int], None] | None = None,
     ) -> list[DecodedWindow]:
         session = self._ensure_session()
         ordered_windows = sorted(windows)
         language_hint: str | None = None
         carryover_prompt: str | None = None
         decoded_windows: list[DecodedWindow] = []
+        decoded_segment_count = 0
 
         for window in ordered_windows:
             decoded_window = session.decode_window(
@@ -178,6 +179,7 @@ class WhisperCppTranscriber:
             decoded_windows.append(
                 decoded_window.model_copy(update={"input_prompt": carryover_prompt})
             )
+            decoded_segment_count += len(decoded_window.segments)
             next_carryover = build_prompt_carryover(
                 decoded_window,
                 settings=self._decode_settings.carryover,
@@ -185,7 +187,7 @@ class WhisperCppTranscriber:
             language_hint = language_hint or decoded_window.language
             carryover_prompt = next_carryover
             if progress_callback is not None:
-                progress_callback(window.end_sec)
+                progress_callback(window.end_sec, decoded_segment_count)
         return decoded_windows
 
     def close(self) -> None:

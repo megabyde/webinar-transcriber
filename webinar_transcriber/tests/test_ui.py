@@ -56,19 +56,22 @@ class TestFormatHelpers:
         assert rate_text == ""
 
     def test_count_and_rate_helpers_hide_empty_values(self) -> None:
-        assert _format_count(
+        formatted_count = _format_count(
             completed=3.0,
             total=None,
             count_label="frames",
             count_multiplier=1.0,
-        ) == ""
-        assert _rate_text_for_update(
+        )
+        rate_text = _rate_text_for_update(
             completed=3.0,
             now=2.0,
             started_at=2.0,
             rate_label="frames/s",
             rate_multiplier=1.0,
-        ) == ""
+        )
+
+        assert formatted_count == ""
+        assert rate_text == ""
 
 
 class TestRichStageReporter:

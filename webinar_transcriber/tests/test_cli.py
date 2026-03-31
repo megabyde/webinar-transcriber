@@ -222,6 +222,25 @@ def test_process_command_rejects_existing_output_directory(tmp_path) -> None:
     assert "Output directory already exists" in result.output
 
 
+def test_process_command_resets_active_display_before_cli_errors(tmp_path) -> None:
+    runner = CliRunner()
+    input_path = tmp_path / "demo.wav"
+    input_path.write_text("stub", encoding="utf-8")
+
+    with (
+        patch(
+            "webinar_transcriber.cli.process_input",
+            side_effect=OutputDirectoryExistsError("Output directory already exists: demo"),
+        ),
+        patch("webinar_transcriber.cli.RichStageReporter.reset_active_display") as reset_mock,
+    ):
+        result = runner.invoke(main, ["process", str(input_path)])
+
+    assert result.exit_code != 0
+    assert "Output directory already exists: demo" in result.output
+    reset_mock.assert_called_once()
+
+
 def test_process_command_handles_ctrl_c(tmp_path) -> None:
     runner = CliRunner()
     input_path = tmp_path / "demo.wav"

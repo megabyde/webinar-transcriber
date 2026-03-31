@@ -266,10 +266,7 @@ class TestBuildReport:
                 segments=[
                     TranscriptSegment(
                         id="segment-1",
-                        text=(
-                            "ля ля ля ля ля ля ля ля ля ля "
-                            "ля ля ля ля ля ля ля ля ля ля"
-                        ),
+                        text=("ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля"),
                         start_sec=0.0,
                         end_sec=45.0,
                     ),
@@ -332,12 +329,14 @@ class TestAudioSectionHeuristics:
             ),
         ]
 
+        filler_title = _audio_title_from_segments(
+            filler_segments,
+            fallback="Fallback Title",
+        )
+
         assert _title_from_text("   ", fallback="Fallback Title") == "Fallback Title"
         assert _audio_title_from_segments([], fallback="Fallback Title") == "Fallback Title"
-        assert (
-            _audio_title_from_segments(filler_segments, fallback="Fallback Title")
-            == "Fallback Title"
-        )
+        assert filler_title == "Fallback Title"
         assert _title_from_words([]) == ""
         assert _segment_key("   ") == ""
 
@@ -446,23 +445,22 @@ class TestSummaryAndActionHeuristics:
             end_sec=14.0,
         )
 
-        assert _audio_title_score(repetitive_segment) < 0
-        assert _action_item_score(
+        todo_score = _action_item_score(
             TranscriptSegment(id="segment-3", text="TODO", start_sec=0.0, end_sec=1.0)
-        ) == -1.0
+        )
+        no_repetition_penalty = _summary_repetition_penalty(
+            ["plan", "budget", "timeline", "risk", "owner", "scope"]
+        )
+        filler_key = _segment_key(filler_heavy_segment.text)
+
+        assert _audio_title_score(repetitive_segment) < 0
+        assert todo_score == -1.0
         assert _summary_start_penalty(200.0) == 0.0
         assert _summary_repetition_penalty(["plan"] * 6) == -3.0
-        assert (
-            _summary_repetition_penalty(
-                ["plan", "budget", "timeline", "risk", "owner", "scope"]
-            )
-            == 0.0
-        )
+        assert no_repetition_penalty == 0.0
         assert _summary_filler_penalty(4, 10) == -2.0
         assert _summary_filler_penalty(2, 10) == -1.0
-        assert _segment_key(
-            filler_heavy_segment.text
-        ) == "please chat audio microphone hello everyone"
+        assert filler_key == "please chat audio microphone hello everyone"
 
     def test_action_item_score_penalizes_noise_and_missing_punctuation(self) -> None:
         score = _action_item_score(
@@ -483,11 +481,15 @@ class TestSummaryAndActionHeuristics:
             TranscriptSegment(id="segment-3", text="Three", start_sec=2.0, end_sec=3.0),
             TranscriptSegment(id="segment-4", text="Four", start_sec=3.0, end_sec=4.0),
         ])
+        repetition_penalty = _summary_repetition_penalty([
+            "plan",
+            "plan",
+            "budget",
+            "budget",
+            "risk",
+            "risk",
+            "owner",
+        ])
 
-        assert (
-            _summary_repetition_penalty(
-                ["plan", "plan", "budget", "budget", "risk", "risk", "owner"]
-            )
-            == -1.5
-        )
+        assert repetition_penalty == -1.5
         assert summary == ["One", "Two", "Three"]

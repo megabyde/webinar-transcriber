@@ -84,6 +84,9 @@ class NullStageReporter:
     def interrupted(self) -> None:
         """Record an interrupted run."""
 
+    def reset_active_display(self) -> None:
+        """Clear any in-progress spinner or progress bar without printing output."""
+
     def complete_run(self, artifacts: ProcessArtifacts) -> None:
         """Record run completion."""
 
@@ -210,6 +213,10 @@ class RichStageReporter(NullStageReporter):
         if self._active_event is not None:
             stage_suffix = f" during {self._active_event.label.lower()}"
         self._console.print(f"[red]\u2717[/] Interrupted{stage_suffix}.")
+        self._active_event = None
+
+    def reset_active_display(self) -> None:
+        self._stop_active_display()
         self._active_event = None
 
     def complete_run(self, artifacts: ProcessArtifacts) -> None:

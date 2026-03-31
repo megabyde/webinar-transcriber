@@ -39,6 +39,7 @@ def test_transcript_segment_accepts_timing_fields() -> None:
 
     assert segment.start_sec == 0.0
     assert segment.end_sec == 1.2
+    assert segment.text == "hello world"
 
 
 def test_report_document_defaults_optional_collections() -> None:

@@ -143,7 +143,6 @@ def process_input(
             max_tokens=carryover_max_tokens,
         ),
     )
-
     active_reporter.begin_run(input_path, output_format=output_format)
 
     active_reporter.stage_started("prepare_run_dir", "Preparing run directory")
@@ -180,7 +179,6 @@ def process_input(
             "Preparing audio",
             detail=str(audio_path.name),
         )
-
         asr_result = _run_asr_pipeline(
             audio_path=audio_path,
             media_asset=media_asset,
@@ -252,13 +250,40 @@ def process_input(
     else:
         scenes = []
 
-    active_reporter.stage_started("structure", "Structuring report")
+    structure_total = max(
+        (
+            len(alignment_blocks)
+            if alignment_blocks is not None
+            else len(report_transcription.segments)
+        ),
+        1,
+    )
+    structure_count_label = "blocks" if alignment_blocks is not None else "segments"
+    active_reporter.progress_started(
+        "structure",
+        "Structuring report",
+        total=float(structure_total),
+        count_label=structure_count_label,
+        detail="0 sections",
+    )
+    on_structure_progress, finish_structure_progress = _progress_updater(
+        active_reporter,
+        stage_key="structure",
+    )
     timer = _start_stage_timer(stage_timings, "structure")
     report = build_report(
         media_asset,
         report_transcription,
         alignment_blocks=alignment_blocks,
         warnings=warnings,
+        progress_callback=lambda completed_count, section_count: on_structure_progress(
+            float(completed_count),
+            detail=_count_label(section_count, singular="section"),
+        ),
+    )
+    finish_structure_progress(
+        float(structure_total),
+        detail=_count_label(len(report.sections), singular="section"),
     )
     timer.finish()
     active_reporter.stage_finished(
@@ -469,6 +494,7 @@ def _run_asr_pipeline(
         "Transcribing audio",
         total=media_asset.duration_sec,
         count_label="s",
+        detail="0 segments",
     )
     on_window_completed, finish_transcribe_progress = _progress_updater(
         reporter,
@@ -479,7 +505,10 @@ def _run_asr_pipeline(
     decoded_windows = transcriber.transcribe_inference_windows(
         audio_samples,
         windows,
-        progress_callback=on_window_completed,
+        progress_callback=lambda completed_sec, segment_count: on_window_completed(
+            completed_sec,
+            detail=_count_label(segment_count, singular="segment"),
+        ),
     )
     _write_json(
         layout.decoded_windows_path,

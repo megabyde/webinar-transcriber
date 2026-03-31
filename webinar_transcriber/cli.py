@@ -180,6 +180,7 @@ def process(
         reporter.interrupted()
         raise click.exceptions.Exit(130) from None
     except (MediaProcessingError, OutputDirectoryExistsError) as error:
+        reporter.reset_active_display()
         raise CLIError(str(error)) from error
 
 
@@ -256,6 +257,7 @@ def extract_frames(input_path: Path, output_dir: Path | None) -> None:
         reporter.interrupted()
         raise click.exceptions.Exit(130) from None
     except (MediaProcessingError, OutputDirectoryExistsError) as error:
+        reporter.reset_active_display()
         raise CLIError(str(error)) from error
 
     click.echo(f"Extracted {len(frames)} frames into {layout.run_dir}.")

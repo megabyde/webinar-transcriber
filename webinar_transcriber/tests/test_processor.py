@@ -81,7 +81,7 @@ class FakeTranscriber(WhisperCppTranscriber):
         del audio_samples
         if progress_callback is not None:
             for window in windows:
-                progress_callback(window.end_sec)
+                progress_callback(window.end_sec, len(self._segments))
         return [
             DecodedWindow(
                 window=w,
@@ -260,14 +260,28 @@ def test_process_input_writes_reports_and_metadata(tmp_path, monkeypatch) -> Non
     )
     transcribe_start_events = reporter.progress_stage_events("start", "transcribe")
     assert transcribe_start_events == [
-        ("start", "transcribe", artifacts.media_asset.duration_sec, None)
+        ("start", "transcribe", artifacts.media_asset.duration_sec, "0 segments")
     ]
     vad_start_events = reporter.progress_stage_events("start", "vad")
     assert vad_start_events == [("start", "vad", artifacts.media_asset.duration_sec, None)]
     assert reporter.has_progress_event_detail(
         "advance",
         "transcribe",
-        lambda _detail: True,
+        lambda detail: detail == "2 segments",
+    )
+    structure_start_events = reporter.progress_stage_events("start", "structure")
+    assert structure_start_events == [
+        (
+            "start",
+            "structure",
+            float(artifacts.diagnostics.item_counts["normalized_transcript_segments"]),
+            "0 sections",
+        )
+    ]
+    assert reporter.has_progress_event_detail(
+        "advance",
+        "structure",
+        lambda detail: detail == "1 section",
     )
     assert reporter.has_progress_event_detail(
         "advance",
@@ -279,7 +293,6 @@ def test_process_input_writes_reports_and_metadata(tmp_path, monkeypatch) -> Non
 
     document = Document(str(artifacts.layout.docx_report_path))
     assert "Sample Audio" in "\n".join(paragraph.text for paragraph in document.paragraphs)
-
 
 def test_process_input_writes_video_scene_artifacts(tmp_path, monkeypatch) -> None:
     reporter = RecordingReporter()
@@ -358,7 +371,7 @@ def test_process_input_runs_windowed_whispercpp_pipeline(tmp_path, monkeypatch) 
             del audio_samples
             if progress_callback is not None:
                 for window in windows:
-                    progress_callback(window.end_sec)
+                    progress_callback(window.end_sec, 2)
             return [
                 DecodedWindow(
                     window=windows[0],

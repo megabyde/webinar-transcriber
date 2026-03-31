@@ -174,8 +174,7 @@ def test_openai_llm_processor_skips_interlude_section_text_polish(monkeypatch) -
                 start_sec=0.0,
                 end_sec=10.0,
                 transcript_text=(
-                    "Music interlude. "
-                    "The raw transcript is preserved in transcript.json."
+                    "Music interlude. The raw transcript is preserved in transcript.json."
                 ),
                 is_interlude=True,
             ),

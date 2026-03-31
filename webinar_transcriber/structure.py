@@ -1,6 +1,7 @@
 """Deterministic report structuring helpers."""
 
 import re
+from collections.abc import Callable
 from itertools import pairwise
 
 from webinar_transcriber.models import (
@@ -117,12 +118,16 @@ def build_report(
     *,
     alignment_blocks: list[AlignmentBlock] | None = None,
     warnings: list[str] | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> ReportDocument:
     """Build a report document from media metadata and transcript segments."""
     sections = (
-        _build_sections_from_blocks(alignment_blocks)
+        _build_sections_from_blocks(alignment_blocks, progress_callback=progress_callback)
         if alignment_blocks is not None
-        else _build_audio_sections(transcription.segments)
+        else _build_audio_sections(
+            transcription.segments,
+            progress_callback=progress_callback,
+        )
     )
     sections = _render_interlude_sections(
         sections,
@@ -144,7 +149,11 @@ def build_report(
     )
 
 
-def _build_sections_from_blocks(blocks: list[AlignmentBlock]) -> list[ReportSection]:
+def _build_sections_from_blocks(
+    blocks: list[AlignmentBlock],
+    *,
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> list[ReportSection]:
     sections: list[ReportSection] = []
 
     for index, block in enumerate(blocks, start=1):
@@ -161,11 +170,17 @@ def _build_sections_from_blocks(blocks: list[AlignmentBlock]) -> list[ReportSect
                 frame_id=block.frame_id,
             )
         )
+        if progress_callback is not None:
+            progress_callback(index, len(sections))
 
     return sections
 
 
-def _build_audio_sections(segments: list[TranscriptSegment]) -> list[ReportSection]:
+def _build_audio_sections(
+    segments: list[TranscriptSegment],
+    *,
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> list[ReportSection]:
     meaningful_segments = [seg for seg in segments if seg.text.strip()]
     if not meaningful_segments:
         return []
@@ -173,12 +188,14 @@ def _build_audio_sections(segments: list[TranscriptSegment]) -> list[ReportSecti
     sections: list[ReportSection] = []
     current_segments: list[TranscriptSegment] = []
 
-    for segment in meaningful_segments:
+    for index, segment in enumerate(meaningful_segments, start=1):
         if _should_start_new_audio_section(current_segments, segment):
             sections.append(_audio_section_from_segments(current_segments, len(sections) + 1))
             current_segments = []
 
         current_segments.append(segment)
+        if progress_callback is not None:
+            progress_callback(index, len(sections) + 1)
 
     if current_segments:
         sections.append(_audio_section_from_segments(current_segments, len(sections) + 1))
@@ -503,9 +520,7 @@ def _is_likely_interlude_text(text: str) -> bool:
 
     sample_size = min(len(words), 80)
     sampled_words = words[:sample_size]
-    punctuation_density = (
-        sum(1 for char in stripped if char in ".?!:;") / sample_size
-    )
+    punctuation_density = sum(1 for char in stripped if char in ".?!:;") / sample_size
     unique_ratio = len(set(sampled_words)) / sample_size
     repeated_bigram_ratio = _repeated_bigram_ratio(sampled_words)
     noisy_word_ratio = _noisy_word_ratio(sampled_words)
@@ -555,6 +570,5 @@ def _interlude_note(detected_language: str | None) -> str:
             "Исходная расшифровка сохранена в transcript.json."
         )
     return (
-        "Music or spoken-performance interlude. "
-        "The raw transcript is preserved in transcript.json."
+        "Music or spoken-performance interlude. The raw transcript is preserved in transcript.json."
     )
