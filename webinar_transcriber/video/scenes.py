@@ -22,7 +22,7 @@ def detect_scenes(
     *,
     duration_sec: float | None = None,
     min_scene_length_sec: float = MIN_SCENE_LENGTH_SEC,
-    progress_callback: Callable[[], None] | None = None,
+    progress_callback: Callable[[int], None] | None = None,
 ) -> list[Scene]:
     """Detect slide changes by sampling the video once per second."""
     last_sample_time = 0.0
@@ -58,27 +58,30 @@ def _detect_scene_start_times(
     *,
     difference_threshold: float = DIFFERENCE_THRESHOLD,
     min_scene_length_sec: float = MIN_SCENE_LENGTH_SEC,
-    progress_callback: Callable[[], None] | None = None,
+    progress_callback: Callable[[int], None] | None = None,
 ) -> list[float]:
     scene_starts: list[float] = []
     accepted_frame: np.ndarray | None = None
 
     for current_time, current_frame in sampled_frames:
-        if progress_callback is not None:
-            progress_callback()
-
         if accepted_frame is None:
             scene_starts.append(float(current_time))
             accepted_frame = current_frame
+            if progress_callback is not None:
+                progress_callback(len(scene_starts))
             continue
 
         if (current_time - scene_starts[-1]) < min_scene_length_sec:
+            if progress_callback is not None:
+                progress_callback(len(scene_starts))
             continue
 
         difference = float(np.abs(current_frame - accepted_frame).mean())
         if difference >= difference_threshold:
             scene_starts.append(float(current_time))
             accepted_frame = current_frame
+        if progress_callback is not None:
+            progress_callback(len(scene_starts))
 
     return scene_starts
 

@@ -336,11 +336,11 @@ def test_process_input_writes_video_scene_artifacts(tmp_path, monkeypatch) -> No
     assert any(artifacts.layout.frames_dir.iterdir())
     assert artifacts.report.sections
     assert artifacts.report.sections[0].image_path
-    assert reporter.has_progress_event("start", "detect_scenes", 2, None)
+    assert reporter.has_progress_event("start", "detect_scenes", 2, "0 scenes")
     assert reporter.has_progress_event_detail(
         "advance",
         "detect_scenes",
-        lambda _detail: True,
+        lambda detail: detail == "1 scene" or detail == "2 scenes",
     )
     assert reporter.has_progress_event(
         "start",

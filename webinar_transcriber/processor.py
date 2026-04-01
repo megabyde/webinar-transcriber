@@ -211,12 +211,17 @@ def process_input(
             "detect_scenes",
             "Detecting scenes",
             total=estimate_sample_count(media_asset.duration_sec),
+            count_label="s",
+            detail="0 scenes",
         )
         timer = _start_stage_timer(stage_timings, "detect_scenes")
         scenes = detect_scenes(
             input_path,
             duration_sec=media_asset.duration_sec,
-            progress_callback=lambda: active_reporter.progress_advanced("detect_scenes"),
+            progress_callback=lambda scene_count: active_reporter.progress_advanced(
+                "detect_scenes",
+                detail=_count_label(scene_count, singular="scene"),
+            ),
         )
         timer.finish()
         _write_json(

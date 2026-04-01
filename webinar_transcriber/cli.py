@@ -224,11 +224,16 @@ def extract_frames(input_path: Path, output_dir: Path | None) -> None:
             "detect_scenes",
             "Detecting scenes",
             total=estimate_sample_count(media_asset.duration_sec),
+            count_label="s",
+            detail="0 scenes",
         )
         scenes = detect_scenes(
             input_path,
             duration_sec=media_asset.duration_sec,
-            progress_callback=lambda: reporter.progress_advanced("detect_scenes"),
+            progress_callback=lambda scene_count: reporter.progress_advanced(
+                "detect_scenes",
+                detail=f"{scene_count} {'scene' if scene_count == 1 else 'scenes'}",
+            ),
         )
         reporter.stage_finished("detect_scenes", "Detecting scenes", detail=f"{len(scenes)} scenes")
 

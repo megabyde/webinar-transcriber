@@ -27,16 +27,16 @@ FIXTURE_DIR = Path(__file__).parents[2] / "tests" / "fixtures"
 
 
 def test_detect_scenes_finds_multiple_segments() -> None:
-    progress_ticks: list[int] = []
+    scene_counts: list[int] = []
     scenes = detect_scenes(
         FIXTURE_DIR / "sample-video.mp4",
         min_scene_length_sec=1.0,
-        progress_callback=lambda: progress_ticks.append(1),
+        progress_callback=lambda scene_count: scene_counts.append(scene_count),
     )
 
     assert len(scenes) >= 2
     assert scenes[0].start_sec == 0.0
-    assert len(progress_ticks) == 2
+    assert scene_counts == [1, 2]
 
 
 def test_extract_representative_frames_creates_images(tmp_path) -> None:
@@ -87,6 +87,25 @@ def test_detect_scene_start_times_respects_min_scene_length() -> None:
     )
 
     assert scene_starts == [0.0, 4.0]
+
+
+def test_detect_scene_start_times_reports_running_scene_counts() -> None:
+    scene_counts: list[int] = []
+    samples = [
+        (0.0, np.zeros((2, 2), dtype=np.float32)),
+        (1.0, np.full((2, 2), 30.0, dtype=np.float32)),
+        (4.0, np.full((2, 2), 30.0, dtype=np.float32)),
+    ]
+
+    scene_starts = _detect_scene_start_times(
+        samples,
+        difference_threshold=10.0,
+        min_scene_length_sec=3.0,
+        progress_callback=lambda scene_count: scene_counts.append(scene_count),
+    )
+
+    assert scene_starts == [0.0, 4.0]
+    assert scene_counts == [1, 1, 2]
 
 
 def test_normalize_extracted_frame_applies_exif_orientation(tmp_path) -> None:
