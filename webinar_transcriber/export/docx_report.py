@@ -5,6 +5,7 @@ from math import floor
 from pathlib import Path
 
 from docx import Document
+from docx.document import Document as DocxDocument
 from docx.shared import Inches
 
 from webinar_transcriber.models import ReportDocument, ReportSection
@@ -43,7 +44,7 @@ def _split_paragraphs(text: str) -> list[str]:
     return paragraphs or [text]
 
 
-def _add_section(document: Document, section: ReportSection) -> None:
+def _add_section(document: DocxDocument, section: ReportSection) -> None:
     title = section.title
     timecode = _section_timecode(section.start_sec, section.end_sec)
     document.add_heading(f"{title} ({timecode})", level=2)
@@ -53,7 +54,7 @@ def _add_section(document: Document, section: ReportSection) -> None:
         document.add_paragraph(paragraph_text)
 
 
-def _add_section_image(document: Document, image_path: str | None) -> None:
+def _add_section_image(document: DocxDocument, image_path: str | None) -> None:
     if not image_path:
         return
 
@@ -63,7 +64,7 @@ def _add_section_image(document: Document, image_path: str | None) -> None:
     document.add_picture(str(resolved_path), width=Inches(6))
 
 
-def _add_section_tldr(document: Document, tldr: str | None) -> None:
+def _add_section_tldr(document: DocxDocument, tldr: str | None) -> None:
     if not tldr:
         return
 
@@ -74,7 +75,7 @@ def _add_section_tldr(document: Document, tldr: str | None) -> None:
     transcript_label.add_run("Transcript").bold = True
 
 
-def _add_text_blocks(document: Document, text: str) -> None:
+def _add_text_blocks(document: DocxDocument, text: str) -> None:
     for paragraph_text in _split_paragraphs(text):
         lines = [line.strip() for line in paragraph_text.splitlines() if line.strip()]
         if not lines:

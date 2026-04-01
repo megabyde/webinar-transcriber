@@ -14,6 +14,11 @@ from webinar_transcriber.models import MediaType, ReportDocument, ReportSection
 EN_DASH = "\N{EN DASH}"
 
 
+def _style_name(paragraph) -> str | None:
+    style = paragraph.style
+    return None if style is None else style.name
+
+
 def test_write_docx_report_splits_blank_line_paragraphs(tmp_path: Path) -> None:
     report = ReportDocument(
         title="Demo",
@@ -66,7 +71,7 @@ def test_write_docx_report_formats_cheat_sheet_lists(tmp_path: Path) -> None:
     write_docx_report(report, output_path)
 
     document = Document(str(output_path))
-    paragraph_data = [(paragraph.text, paragraph.style.name) for paragraph in document.paragraphs]
+    paragraph_data = [(paragraph.text, _style_name(paragraph)) for paragraph in document.paragraphs]
 
     assert ("First point.", "List Bullet") in paragraph_data
     assert ("Second point.", "List Number") in paragraph_data
