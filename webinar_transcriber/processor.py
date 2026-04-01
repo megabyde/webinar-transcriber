@@ -630,6 +630,7 @@ def _maybe_polish_report(
     report.action_items = metadata_result.action_items
     for section in report.sections:
         section.title = metadata_result.section_titles.get(section.id, section.title)
+        section.tldr = section_result.section_tldrs.get(section.id, section.tldr)
         section.transcript_text = section_result.section_transcripts.get(
             section.id,
             section.transcript_text,
@@ -639,6 +640,7 @@ def _maybe_polish_report(
         summary_label,
         detail=_llm_report_detail(
             section_count=len(section_result.section_transcripts),
+            tldr_count=len(section_result.section_tldrs),
             title_count=len(metadata_result.section_titles),
             summary_count=len(metadata_result.summary),
             action_item_count=len(metadata_result.action_items),
@@ -748,6 +750,7 @@ def _llm_runtime_detail(llm_runtime: LLMRuntimeState) -> str:
 def _llm_report_detail(
     *,
     section_count: int,
+    tldr_count: int,
     title_count: int,
     summary_count: int,
     action_item_count: int,
@@ -760,6 +763,7 @@ def _llm_report_detail(
             singular="action item",
             plural="action items",
         ),
+        _optional_count_detail(tldr_count, singular="TL;DR", plural="TL;DRs"),
         _title_update_detail(title_count=title_count, section_count=section_count),
         _token_usage_detail(usage),
     ]

@@ -49,6 +49,12 @@ clearly trails off.
 Split the text into natural paragraphs separated by blank lines, usually 3-6 sentences
 per paragraph. Insert a paragraph break when the speaker shifts to a new subpoint or
 topic. Avoid returning one giant paragraph unless the input is extremely short.
+Also return a factual section cheat sheet / TL;DR that is longer and more informative than a
+one-line summary. Usually write 3-6 short paragraphs, and you may use bullets or numbered items
+when that is clearer and more compact. Capture the main claims, important examples, caveats,
+concrete mechanisms, and practical takeaways when they are present in the source. Prefer a format
+that is easy to scan quickly without turning into a wall of text. The cheat sheet should be easier
+to read than the transcript, but it must not add new facts.
 """.strip()
 
 
@@ -67,6 +73,7 @@ class LLMReportPolishResult:
     summary: list[str]
     action_items: list[str]
     section_titles: dict[str, str]
+    section_tldrs: dict[str, str]
     section_transcripts: dict[str, str]
     usage: dict[str, int]
     warnings: list[str] = field(default_factory=list)
@@ -76,6 +83,7 @@ class LLMReportPolishResult:
 class LLMSectionPolishResult:
     """Validated result from the section-text polishing phase."""
 
+    section_tldrs: dict[str, str]
     section_transcripts: dict[str, str]
     usage: dict[str, int]
     warnings: list[str] = field(default_factory=list)
@@ -91,9 +99,16 @@ class LLMReportMetadataResult:
     usage: dict[str, int]
 
 
+@dataclass(frozen=True)
+class _SectionPolishOutputs:
+    transcripts: dict[str, str]
+    tldrs: dict[str, str]
+
+
 class SectionTextResponse(BaseModel):
     """Structured LLM response for one polished section body."""
 
+    tldr: str = ""
     transcript_text: str = ""
 
 
@@ -208,7 +223,8 @@ class OpenAILLMProcessor:
             warnings=warnings,
         )
         return LLMSectionPolishResult(
-            section_transcripts=polished_section_texts,
+            section_tldrs=polished_section_texts.tldrs,
+            section_transcripts=polished_section_texts.transcripts,
             usage=usage_totals,
             warnings=warnings,
         )
@@ -233,6 +249,7 @@ class OpenAILLMProcessor:
                     title=section.title,
                     start_sec=section.start_sec,
                     end_sec=section.end_sec,
+                    tldr=section.tldr,
                     transcript_text=section_transcripts.get(section.id, section.transcript_text),
                     bullet_points=list(section.bullet_points),
                     frame_id=section.frame_id,
@@ -294,6 +311,7 @@ class OpenAILLMProcessor:
             summary=metadata_result.summary,
             action_items=metadata_result.action_items,
             section_titles=metadata_result.section_titles,
+            section_tldrs=section_result.section_tldrs,
             section_transcripts=section_result.section_transcripts,
             usage=usage_totals,
             warnings=section_result.warnings,
@@ -313,12 +331,13 @@ class OpenAILLMProcessor:
         progress_callback: Callable[[int], None] | None,
         usage_totals: dict[str, int],
         warnings: list[str],
-    ) -> dict[str, str]:
+    ) -> _SectionPolishOutputs:
         plan = self.report_polish_plan(report)
         if not report.sections:
-            return {}
+            return _SectionPolishOutputs(transcripts={}, tldrs={})
 
-        polished_texts: dict[str, str] = {}
+        polished_transcripts: dict[str, str] = {}
+        polished_tldrs: dict[str, str] = {}
         with ThreadPoolExecutor(max_workers=plan.worker_count) as executor:
             future_to_section = {
                 executor.submit(self._polish_section_text, section): section
@@ -327,7 +346,9 @@ class OpenAILLMProcessor:
             }
             skipped_sections = [section for section in report.sections if section.is_interlude]
             for section in skipped_sections:
-                polished_texts[section.id] = section.transcript_text
+                polished_transcripts[section.id] = section.transcript_text
+                if section.tldr:
+                    polished_tldrs[section.id] = section.tldr
                 warnings.append(
                     f"Skipped LLM section polish for likely music/interlude section {section.id}."
                 )
@@ -336,23 +357,29 @@ class OpenAILLMProcessor:
             for future in as_completed(future_to_section):
                 section = future_to_section[future]
                 try:
-                    transcript_text, usage, section_warnings = future.result()
+                    transcript_text, tldr, usage, section_warnings = future.result()
                 except LLMProcessingError as error:
                     transcript_text = section.transcript_text
+                    tldr = section.tldr or ""
                     usage = {}
                     section_warnings = [str(error)]
-                polished_texts[section.id] = transcript_text
+                polished_transcripts[section.id] = transcript_text
+                if tldr:
+                    polished_tldrs[section.id] = tldr
                 merge_usage_into(usage_totals, usage)
                 warnings.extend(section_warnings)
                 if progress_callback is not None:
                     progress_callback(1)
 
-        return polished_texts
+        return _SectionPolishOutputs(
+            transcripts=polished_transcripts,
+            tldrs=polished_tldrs,
+        )
 
     def _polish_section_text(
         self,
         section: ReportSection,
-    ) -> tuple[str, dict[str, int], list[str]]:
+    ) -> tuple[str, str, dict[str, int], list[str]]:
         payload = {
             "id": section.id,
             "title": section.title,
@@ -384,6 +411,7 @@ class OpenAILLMProcessor:
             polished_text=parsed.transcript_text,
             section_id=section.id,
         )
+        tldr = _normalize_polished_section_tldr(parsed.tldr)
         warnings: list[str] = []
         if transcript_text == section.transcript_text and not parsed.transcript_text.strip():
             warnings.append(
@@ -391,7 +419,7 @@ class OpenAILLMProcessor:
                 "kept original text."
             )
 
-        return transcript_text, _extract_usage(response), warnings
+        return transcript_text, tldr, _extract_usage(response), warnings
 
 
 def build_llm_processor_from_env() -> OpenAILLMProcessor:
@@ -536,6 +564,17 @@ def _normalize_polished_section_text(
             f"Section polish response looked truncated for {section_id}; kept original text."
         )
     return cleaned
+
+
+def _normalize_polished_section_tldr(tldr: str) -> str:
+    cleaned = tldr.strip()
+    if not cleaned:
+        return ""
+
+    paragraphs = [
+        re.sub(r"\s+", " ", p) for block in re.split(r"\n\s*\n+", cleaned) if (p := block.strip())
+    ]
+    return "\n\n".join(paragraphs)
 
 
 def _extract_usage(response: object) -> dict[str, int]:

@@ -578,6 +578,7 @@ def test_process_input_polishes_report_sections_when_llm_succeeds(tmp_path, monk
                 summary=metadata_result.summary,
                 action_items=metadata_result.action_items,
                 section_titles=metadata_result.section_titles,
+                section_tldrs=section_result.section_tldrs,
                 section_transcripts=section_result.section_transcripts,
                 usage={
                     "input_tokens": 20,
@@ -596,6 +597,9 @@ def test_process_input_polishes_report_sections_when_llm_succeeds(tmp_path, monk
             if progress_callback is not None:
                 progress_callback(len(report.sections))
             return LLMSectionPolishResult(
+                section_tldrs={
+                    "section-1": "Agenda update and next-step reminder for the draft delivery."
+                },
                 section_transcripts={
                     "section-1": (
                         "Agenda review, and project status update.\n\n"
@@ -637,6 +641,9 @@ def test_process_input_polishes_report_sections_when_llm_succeeds(tmp_path, monk
     assert artifacts.report.summary == ["Refined summary point."]
     assert artifacts.report.action_items == ["Refined action item."]
     assert artifacts.report.sections[0].title == "Refined section title"
+    assert artifacts.report.sections[0].tldr == (
+        "Agenda update and next-step reminder for the draft delivery."
+    )
     assert artifacts.report.sections[0].transcript_text == (
         "Agenda review, and project status update.\n\nNext step: please send the draft by Friday."
     )
@@ -648,7 +655,11 @@ def test_process_input_polishes_report_sections_when_llm_succeeds(tmp_path, monk
         "for section-1; kept original text."
     )
     expected_usage = {"input_tokens": 20, "output_tokens": 6, "total_tokens": 26}
-    llm_report_finish = ("finish", "llm_report", "1 summary bullet | 1 action item | 26 tokens")
+    llm_report_finish = (
+        "finish",
+        "llm_report",
+        "1 summary bullet | 1 action item | 1 TL;DR | 26 tokens",
+    )
 
     assert artifacts.diagnostics.warnings == [expected_warning]
     assert artifacts.diagnostics.llm_report_usage == expected_usage

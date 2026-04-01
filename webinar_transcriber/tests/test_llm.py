@@ -58,6 +58,7 @@ def test_openai_llm_processor_polishes_report(monkeypatch) -> None:
     fake_client = FakeClient([
         FakeResponse(
             output_parsed=SectionTextResponse(
+                tldr="Short recap of the section.",
                 transcript_text="Agenda review and project status update.\n\nPlease listen."
             ),
             usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
@@ -101,6 +102,7 @@ def test_openai_llm_processor_polishes_report(monkeypatch) -> None:
     assert result.summary == ["Improved summary."]
     assert result.action_items == ["Send the updated draft by Friday."]
     assert result.section_titles == {"section-1": "Improved overview"}
+    assert result.section_tldrs == {"section-1": "Short recap of the section."}
     assert result.section_transcripts == {
         "section-1": "Agenda review and project status update.\n\nPlease listen."
     }
@@ -111,6 +113,7 @@ def test_openai_llm_processor_rejects_unknown_report_section_id(monkeypatch) -> 
     fake_client = FakeClient([
         FakeResponse(
             output_parsed=SectionTextResponse(
+                tldr="Agenda recap.",
                 transcript_text="Agenda review and project status update."
             ),
             usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
@@ -153,6 +156,7 @@ def test_openai_llm_processor_skips_interlude_section_text_polish(monkeypatch) -
     fake_client = FakeClient([
         FakeResponse(
             output_parsed=SectionTextResponse(
+                tldr="Agenda recap.",
                 transcript_text="Agenda review and project status update."
             ),
             usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
@@ -194,6 +198,7 @@ def test_openai_llm_processor_skips_interlude_section_text_polish(monkeypatch) -
     )
 
     assert len(fake_client.responses.calls) == 1
+    assert result.section_tldrs == {"section-2": "Agenda recap."}
     assert result.section_transcripts["section-1"] == report.sections[0].transcript_text
     assert result.section_transcripts["section-2"] == "Agenda review and project status update."
     assert result.warnings == [

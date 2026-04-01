@@ -1,12 +1,15 @@
 """DOCX export helpers."""
 
+import re
 from math import floor
 from pathlib import Path
 
 from docx import Document
 from docx.shared import Inches
 
-from webinar_transcriber.models import ReportDocument
+from webinar_transcriber.models import ReportDocument, ReportSection
+
+EN_DASH = "\N{EN DASH}"
 
 
 def write_docx_report(report: ReportDocument, output_path: Path) -> Path:
@@ -29,16 +32,7 @@ def write_docx_report(report: ReportDocument, output_path: Path) -> Path:
 
     document.add_heading("Sections", level=1)
     for section in report.sections:
-        title = section.title
-        timecode = _section_timecode(section.start_sec, section.end_sec)
-        document.add_heading(f"{title} ({timecode})", level=2)
-        if section.image_path:
-            image_path = Path(section.image_path)
-            if not image_path.exists():
-                raise FileNotFoundError(f"Section image does not exist: {image_path}")
-            document.add_picture(str(image_path), width=Inches(6))
-        for paragraph_text in _split_paragraphs(section.transcript_text):
-            document.add_paragraph(paragraph_text)
+        _add_section(document, section)
 
     document.save(str(output_path))
     return output_path
@@ -49,8 +43,74 @@ def _split_paragraphs(text: str) -> list[str]:
     return paragraphs or [text]
 
 
+def _add_section(document: Document, section: ReportSection) -> None:
+    title = section.title
+    timecode = _section_timecode(section.start_sec, section.end_sec)
+    document.add_heading(f"{title} ({timecode})", level=2)
+    _add_section_image(document, section.image_path)
+    _add_section_tldr(document, section.tldr)
+    for paragraph_text in _split_paragraphs(section.transcript_text):
+        document.add_paragraph(paragraph_text)
+
+
+def _add_section_image(document: Document, image_path: str | None) -> None:
+    if not image_path:
+        return
+
+    resolved_path = Path(image_path)
+    if not resolved_path.exists():
+        raise FileNotFoundError(f"Section image does not exist: {resolved_path}")
+    document.add_picture(str(resolved_path), width=Inches(6))
+
+
+def _add_section_tldr(document: Document, tldr: str | None) -> None:
+    if not tldr:
+        return
+
+    tldr_label = document.add_paragraph()
+    tldr_label.add_run("TL;DR / Cheat Sheet").bold = True
+    _add_text_blocks(document, tldr)
+    transcript_label = document.add_paragraph()
+    transcript_label.add_run("Transcript").bold = True
+
+
+def _add_text_blocks(document: Document, text: str) -> None:
+    for paragraph_text in _split_paragraphs(text):
+        lines = [line.strip() for line in paragraph_text.splitlines() if line.strip()]
+        if not lines:
+            continue
+        if _all_list_items(lines):
+            for line in lines:
+                body, style = _list_item_parts(line)
+                assert body is not None
+                assert style is not None
+                document.add_paragraph(body, style=style)
+            continue
+        body, style = _list_item_parts(paragraph_text)
+        if body is not None and style is not None:
+            document.add_paragraph(body, style=style)
+            continue
+        document.add_paragraph(paragraph_text)
+
+
+def _all_list_items(lines: list[str]) -> bool:
+    return all(_list_item_parts(line)[0] is not None for line in lines)
+
+
+def _list_item_parts(text: str) -> tuple[str | None, str | None]:
+    bullet_match = re.match(r"^[-*]\s+(.*)$", text, flags=re.DOTALL)
+    if bullet_match is not None:
+        return bullet_match.group(1), "List Bullet"
+
+    number_match = re.match(r"^\d+[.)]\s+(.*)$", text, flags=re.DOTALL)
+    if number_match is not None:
+        return number_match.group(1), "List Number"
+
+    return None, None
+
+
 def _section_timecode(start_sec: float, end_sec: float) -> str:
-    return f"{_format_timecode(start_sec)}-{_format_timecode(end_sec)}"
+    return f"{_format_timecode(start_sec)}{EN_DASH}{_format_timecode(end_sec)}"
 
 
 def _format_timecode(total_sec: float) -> str:

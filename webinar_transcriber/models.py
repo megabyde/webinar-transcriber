@@ -117,6 +117,7 @@ class ReportSection(BaseModel):
     title: str
     start_sec: float = Field(ge=0)
     end_sec: float = Field(ge=0)
+    tldr: str | None = None
     transcript_text: str
     bullet_points: list[str] = Field(default_factory=list)
     frame_id: str | None = None

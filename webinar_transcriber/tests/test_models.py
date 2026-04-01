@@ -61,6 +61,7 @@ def test_report_document_defaults_optional_collections() -> None:
     assert report.summary == []
     assert report.action_items == []
     assert report.sections[0].title == "Overview"
+    assert report.sections[0].tldr is None
 
 
 def test_diagnostics_defaults_empty_maps() -> None:

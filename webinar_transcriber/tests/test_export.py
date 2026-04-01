@@ -11,6 +11,8 @@ from webinar_transcriber.export.json_report import write_json_report
 from webinar_transcriber.export.markdown import write_markdown_report
 from webinar_transcriber.models import MediaType, ReportDocument, ReportSection
 
+EN_DASH = "\N{EN DASH}"
+
 
 def test_write_docx_report_splits_blank_line_paragraphs(tmp_path: Path) -> None:
     report = ReportDocument(
@@ -23,6 +25,7 @@ def test_write_docx_report_splits_blank_line_paragraphs(tmp_path: Path) -> None:
                 title="Section 1",
                 start_sec=0.0,
                 end_sec=5.0,
+                tldr="Краткое резюме раздела.",
                 transcript_text="Первый абзац.\n\nВторой абзац.",  # noqa: RUF001
             )
         ],
@@ -34,9 +37,40 @@ def test_write_docx_report_splits_blank_line_paragraphs(tmp_path: Path) -> None:
     document = Document(str(output_path))
     paragraph_texts = [paragraph.text for paragraph in document.paragraphs]
 
-    assert "Section 1 (00:00-00:05)" in paragraph_texts
+    assert f"Section 1 (00:00{EN_DASH}00:05)" in paragraph_texts
+    assert "TL;DR / Cheat Sheet" in paragraph_texts
+    assert "Transcript" in paragraph_texts
+    assert "Краткое резюме раздела." in paragraph_texts
     assert "Первый абзац." in paragraph_texts
     assert "Второй абзац." in paragraph_texts
+
+
+def test_write_docx_report_formats_cheat_sheet_lists(tmp_path: Path) -> None:
+    report = ReportDocument(
+        title="Demo",
+        source_file="demo.wav",
+        media_type=MediaType.AUDIO,
+        sections=[
+            ReportSection(
+                id="section-1",
+                title="Section 1",
+                start_sec=0.0,
+                end_sec=5.0,
+                tldr="- First point.\n\n1. Second point.\n2) Third point.",
+                transcript_text="Transcript body.",
+            )
+        ],
+    )
+
+    output_path = tmp_path / "report.docx"
+    write_docx_report(report, output_path)
+
+    document = Document(str(output_path))
+    paragraph_data = [(paragraph.text, paragraph.style.name) for paragraph in document.paragraphs]
+
+    assert ("First point.", "List Bullet") in paragraph_data
+    assert ("Second point.", "List Number") in paragraph_data
+    assert ("Third point.", "List Number") in paragraph_data
 
 
 def test_write_docx_report_raises_clear_error_for_missing_section_image(tmp_path: Path) -> None:
@@ -76,6 +110,7 @@ def test_write_markdown_report_omits_blank_image_line_for_imageless_sections(
                 title="Section 1",
                 start_sec=0.0,
                 end_sec=5.0,
+                tldr="Section recap.",
                 transcript_text="Paragraph one.",
             ),
             ReportSection(
@@ -100,9 +135,12 @@ def test_write_markdown_report_omits_blank_image_line_for_imageless_sections(
         "## Action Items\n\n"
         "- Follow up.\n\n"
         "## Sections\n\n"
-        "### Section 1 (00:00-00:05)\n\n"
+        f"### Section 1 (00:00{EN_DASH}00:05)\n\n"
+        "**TL;DR / Cheat Sheet**\n\n"
+        "Section recap.\n\n"
+        "**Transcript**\n\n"
         "Paragraph one.\n\n"
-        "### Section 2 (00:05-00:10)\n\n"
+        f"### Section 2 (00:05{EN_DASH}00:10)\n\n"
         "![Section 2](frames/scene-2.png)\n\n"
         "Paragraph two.\n"
     )
@@ -131,7 +169,7 @@ def test_write_markdown_report_uses_hour_format_for_long_sections(tmp_path: Path
 
     markdown = output_path.read_text(encoding="utf-8")
 
-    assert "### Section 1 (01:01:01-02:02:05)" in markdown
+    assert f"### Section 1 (01:01:01{EN_DASH}02:02:05)" in markdown
 
 
 def test_write_json_report_round_trips_report_document(tmp_path: Path) -> None:
