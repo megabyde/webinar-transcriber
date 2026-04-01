@@ -56,6 +56,7 @@ TITLE_WORD_LIMIT = 6
 SUMMARY_ITEM_LIMIT = 3
 ACTION_ITEM_LIMIT = 5
 INTERLUDE_MIN_WORDS = 18
+MIN_INTERLUDE_DURATION_SEC = 30.0
 INTERLUDE_LOW_PUNCTUATION_DENSITY = 0.06
 INTERLUDE_LOW_UNIQUE_RATIO = 0.6
 INTERLUDE_REPEATED_BIGRAM_RATIO = 0.12
@@ -121,11 +122,19 @@ def build_report(
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> ReportDocument:
     """Build a report document from media metadata and transcript segments."""
+    interlude_candidate_ranges = _detect_interlude_ranges(transcription.segments)
+    interlude_ranges = _renderable_interlude_ranges(interlude_candidate_ranges)
     sections = (
-        _build_sections_from_blocks(alignment_blocks, progress_callback=progress_callback)
+        _build_sections_from_blocks(
+            alignment_blocks,
+            transcript_segments=transcription.segments,
+            interlude_ranges=interlude_ranges,
+            progress_callback=progress_callback,
+        )
         if alignment_blocks is not None
         else _build_audio_sections(
             transcription.segments,
+            interlude_ranges=interlude_ranges,
             progress_callback=progress_callback,
         )
     )
@@ -152,22 +161,25 @@ def build_report(
 def _build_sections_from_blocks(
     blocks: list[AlignmentBlock],
     *,
+    transcript_segments: list[TranscriptSegment],
+    interlude_ranges: list[tuple[float, float]],
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[ReportSection]:
+    segment_by_id = {segment.id: segment for segment in transcript_segments}
     sections: list[ReportSection] = []
 
     for index, block in enumerate(blocks, start=1):
-        title = _title_from_text(block.transcript_text, fallback=f"Slide {index}")
-        if block.title_hint:
-            title = _title_from_text(block.title_hint, fallback=title)
-        sections.append(
-            ReportSection(
-                id=f"section-{index}",
-                title=title,
-                start_sec=block.start_sec,
-                end_sec=block.end_sec,
-                transcript_text=block.transcript_text,
-                frame_id=block.frame_id,
+        block_segments = [
+            segment_by_id[segment_id]
+            for segment_id in block.transcript_segment_ids
+            if segment_id in segment_by_id and segment_by_id[segment_id].text.strip()
+        ]
+        sections.extend(
+            _sections_from_block(
+                block,
+                block_segments=block_segments,
+                interlude_ranges=interlude_ranges,
+                next_section_index=len(sections) + 1,
             )
         )
         if progress_callback is not None:
@@ -179,26 +191,59 @@ def _build_sections_from_blocks(
 def _build_audio_sections(
     segments: list[TranscriptSegment],
     *,
+    interlude_ranges: list[tuple[float, float]] | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[ReportSection]:
+    resolved_interlude_ranges = interlude_ranges or []
     meaningful_segments = [seg for seg in segments if seg.text.strip()]
     if not meaningful_segments:
         return []
 
     sections: list[ReportSection] = []
-    current_segments: list[TranscriptSegment] = []
+    current_speech_segments: list[TranscriptSegment] = []
+    current_interlude_segments: list[TranscriptSegment] = []
 
     for index, segment in enumerate(meaningful_segments, start=1):
-        if _should_start_new_audio_section(current_segments, segment):
-            sections.append(_audio_section_from_segments(current_segments, len(sections) + 1))
-            current_segments = []
-
-        current_segments.append(segment)
+        if _overlaps_interlude_ranges(segment, resolved_interlude_ranges):
+            if current_speech_segments:
+                sections.append(
+                    _audio_section_from_segments(
+                        current_speech_segments,
+                        len(sections) + 1,
+                    )
+                )
+                current_speech_segments = []
+            current_interlude_segments.append(segment)
+        else:
+            if current_interlude_segments:
+                sections.append(
+                    _interlude_section_from_segments(
+                        current_interlude_segments,
+                        len(sections) + 1,
+                    )
+                )
+                current_interlude_segments = []
+            if _should_start_new_audio_section(current_speech_segments, segment):
+                sections.append(
+                    _audio_section_from_segments(
+                        current_speech_segments,
+                        len(sections) + 1,
+                    )
+                )
+                current_speech_segments = []
+            current_speech_segments.append(segment)
         if progress_callback is not None:
             progress_callback(index, len(sections) + 1)
 
-    if current_segments:
-        sections.append(_audio_section_from_segments(current_segments, len(sections) + 1))
+    if current_speech_segments:
+        sections.append(_audio_section_from_segments(current_speech_segments, len(sections) + 1))
+    if current_interlude_segments:
+        sections.append(
+            _interlude_section_from_segments(
+                current_interlude_segments,
+                len(sections) + 1,
+            )
+        )
 
     return sections
 
@@ -234,15 +279,47 @@ def _should_start_new_audio_section(
 def _audio_section_from_segments(
     segments: list[TranscriptSegment], section_index: int
 ) -> ReportSection:
-    transcript_text = "\n\n".join(s for seg in segments if (s := seg.text.strip()))
     title = _audio_title_from_segments(segments, fallback=f"Section {section_index}")
+    return _section_from_segments(
+        segments,
+        section_index=section_index,
+        title=title,
+    )
 
+
+def _interlude_section_from_segments(
+    segments: list[TranscriptSegment],
+    section_index: int,
+    *,
+    frame_id: str | None = None,
+) -> ReportSection:
+    title = f"Section {section_index}"
+    return _section_from_segments(
+        segments,
+        section_index=section_index,
+        title=title,
+        frame_id=frame_id,
+        is_interlude=True,
+    )
+
+
+def _section_from_segments(
+    segments: list[TranscriptSegment],
+    *,
+    section_index: int,
+    title: str,
+    frame_id: str | None = None,
+    is_interlude: bool = False,
+) -> ReportSection:
+    transcript_text = "\n\n".join(s for seg in segments if (s := seg.text.strip()))
     return ReportSection(
         id=f"section-{section_index}",
         title=title,
         start_sec=segments[0].start_sec,
         end_sec=segments[-1].end_sec,
         transcript_text=transcript_text,
+        frame_id=frame_id,
+        is_interlude=is_interlude,
     )
 
 
@@ -462,6 +539,75 @@ def _derive_title(source_path: str) -> str:
     return stem.replace("-", " ").replace("_", " ").strip().title() or "Transcription Report"
 
 
+def _sections_from_block(
+    block: AlignmentBlock,
+    *,
+    block_segments: list[TranscriptSegment],
+    interlude_ranges: list[tuple[float, float]],
+    next_section_index: int,
+) -> list[ReportSection]:
+    if not block_segments:
+        title = _title_from_text(block.transcript_text, fallback=f"Slide {next_section_index}")
+        if block.title_hint:
+            title = _title_from_text(block.title_hint, fallback=title)
+        return [
+            ReportSection(
+                id=f"section-{next_section_index}",
+                title=title,
+                start_sec=block.start_sec,
+                end_sec=block.end_sec,
+                transcript_text=block.transcript_text,
+                frame_id=block.frame_id,
+            )
+        ]
+
+    runs: list[tuple[bool, list[TranscriptSegment]]] = []
+    current_run: list[TranscriptSegment] = []
+    current_is_interlude = _overlaps_interlude_ranges(block_segments[0], interlude_ranges)
+
+    for segment in block_segments:
+        segment_is_interlude = _overlaps_interlude_ranges(segment, interlude_ranges)
+        if current_run and segment_is_interlude != current_is_interlude:
+            runs.append((current_is_interlude, current_run))
+            current_run = []
+        current_run.append(segment)
+        current_is_interlude = segment_is_interlude
+
+    if current_run:
+        runs.append((current_is_interlude, current_run))
+
+    sections: list[ReportSection] = []
+    for offset, (is_interlude, run_segments) in enumerate(runs):
+        section_index = next_section_index + offset
+        if is_interlude:
+            sections.append(
+                _interlude_section_from_segments(
+                    run_segments,
+                    section_index,
+                    frame_id=block.frame_id,
+                )
+            )
+            continue
+
+        run_text = " ".join(segment.text for segment in run_segments)
+        title = _title_from_text(
+            run_text,
+            fallback=f"Slide {section_index}",
+        )
+        if block.title_hint:
+            title = _title_from_text(block.title_hint, fallback=title)
+        sections.append(
+            _section_from_segments(
+                run_segments,
+                section_index=section_index,
+                title=title,
+                frame_id=block.frame_id,
+            )
+        )
+
+    return sections
+
+
 def _render_interlude_sections(
     sections: list[ReportSection],
     *,
@@ -470,7 +616,7 @@ def _render_interlude_sections(
     rendered_sections: list[ReportSection] = []
 
     for section in sections:
-        if not _is_likely_interlude_text(section.transcript_text):
+        if not section.is_interlude:
             rendered_sections.append(section)
             continue
 
@@ -507,11 +653,71 @@ def _segments_excluding_interludes(
     ]
 
 
+def _detect_interlude_ranges(segments: list[TranscriptSegment]) -> list[tuple[float, float]]:
+    meaningful_segments = [segment for segment in segments if segment.text.strip()]
+    if not meaningful_segments:
+        return []
+
+    ranges: list[tuple[float, float]] = []
+    current_run: list[TranscriptSegment] = []
+
+    for segment in meaningful_segments:
+        if not _is_likely_interlude_text(segment.text):
+            _append_interlude_range(ranges, current_run)
+            current_run = []
+            continue
+
+        if (
+            current_run
+            and (segment.start_sec - current_run[-1].end_sec) >= AUDIO_SECTION_BREAK_GAP_SEC
+        ):
+            _append_interlude_range(ranges, current_run)
+            current_run = []
+        current_run.append(segment)
+
+    _append_interlude_range(ranges, current_run)
+    return ranges
+
+
+def _append_interlude_range(
+    ranges: list[tuple[float, float]],
+    segments: list[TranscriptSegment],
+) -> None:
+    if not segments:
+        return
+    if not any(_has_interlude_marker(segment.text) for segment in segments) and len(segments) < 2:
+        return
+
+    start_sec = segments[0].start_sec
+    end_sec = segments[-1].end_sec
+    ranges.append((start_sec, end_sec))
+
+
+def _renderable_interlude_ranges(
+    ranges: list[tuple[float, float]],
+) -> list[tuple[float, float]]:
+    return [
+        (start_sec, end_sec)
+        for start_sec, end_sec in ranges
+        if (end_sec - start_sec) >= MIN_INTERLUDE_DURATION_SEC
+    ]
+
+
+def _overlaps_interlude_ranges(
+    segment: TranscriptSegment,
+    interlude_ranges: list[tuple[float, float]],
+) -> bool:
+    return any(
+        segment.start_sec < end_sec and segment.end_sec > start_sec
+        for start_sec, end_sec in interlude_ranges
+    )
+
+
 def _is_likely_interlude_text(text: str) -> bool:
     stripped = text.strip()
     if not stripped:
         return False
-    if INTERLUDE_MARKER_PATTERN.search(stripped):
+    if _has_interlude_marker(stripped):
         return True
 
     words = INTERLUDE_WORD_RE.findall(stripped.casefold())
@@ -533,6 +739,10 @@ def _is_likely_interlude_text(text: str) -> bool:
             or noisy_word_ratio >= 0.35
         )
     )
+
+
+def _has_interlude_marker(text: str) -> bool:
+    return bool(INTERLUDE_MARKER_PATTERN.search(text))
 
 
 def _repeated_bigram_ratio(words: list[str]) -> float:
