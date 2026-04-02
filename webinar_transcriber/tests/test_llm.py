@@ -1,8 +1,11 @@
 """Tests for optional cloud LLM helpers."""
 
+import json
+
 import pytest
 
 from webinar_transcriber.llm import (
+    AnthropicLLMProcessor,
     LLMConfigurationError,
     LLMProcessingError,
     LLMReportPolishResult,
@@ -46,11 +49,71 @@ class FakeClient:
         self.responses = FakeResponsesAPI(responses)
 
 
+class FakeAnthropicContentBlock:
+    """Simple Anthropic text content block."""
+
+    def __init__(self, text: str) -> None:
+        self.type = "text"
+        self.text = text
+
+
+class FakeAnthropicResponse:
+    """Simple stand-in for the Anthropic SDK response object."""
+
+    def __init__(self, text: str, usage) -> None:
+        self.content = [FakeAnthropicContentBlock(text)]
+        self.usage = usage
+
+
+class FakeAnthropicMessagesAPI:
+    """Capture create calls and replay canned responses."""
+
+    def __init__(self, responses) -> None:
+        self.calls = []
+        self._responses = list(responses)
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        return self._responses.pop(0)
+
+
+class FakeAnthropicClient:
+    """Container exposing a fake Anthropic messages API surface."""
+
+    def __init__(self, responses) -> None:
+        self.messages = FakeAnthropicMessagesAPI(responses)
+
+
 def test_build_llm_processor_from_env_requires_api_key_and_model(monkeypatch) -> None:
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_MODEL", raising=False)
 
     with pytest.raises(LLMConfigurationError):
+        build_llm_processor_from_env()
+
+
+def test_build_llm_processor_from_env_supports_anthropic(monkeypatch) -> None:
+    fake_client = FakeAnthropicClient([])
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("ANTHROPIC_MODEL", "claude-test")
+    monkeypatch.setattr(
+        "webinar_transcriber.llm._build_anthropic_client",
+        lambda _api_key: fake_client,
+    )
+
+    processor = build_llm_processor_from_env()
+
+    assert isinstance(processor, AnthropicLLMProcessor)
+    assert processor.provider_name == "anthropic"
+    assert processor.model_name == "claude-test"
+
+
+def test_build_llm_processor_from_env_rejects_unknown_provider(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "unknown")
+
+    with pytest.raises(LLMConfigurationError, match="Unsupported LLM provider"):
         build_llm_processor_from_env()
 
 
@@ -205,3 +268,62 @@ def test_openai_llm_processor_skips_interlude_section_text_polish(monkeypatch) -
         "Skipped LLM section polish for likely music/interlude section section-1."
     ]
     assert progress_updates == [1, 1]
+
+
+def test_anthropic_llm_processor_polishes_report(monkeypatch) -> None:
+    fake_client = FakeAnthropicClient([
+        FakeAnthropicResponse(
+            json.dumps(
+                {
+                    "tldr": "Short recap of the section.",
+                    "transcript_text": "Agenda review and project status update.\n\nPlease listen.",
+                }
+            ),
+            usage=type("Usage", (), {"input_tokens": 5, "output_tokens": 4})(),
+        ),
+        FakeAnthropicResponse(
+            json.dumps(
+                {
+                    "summary": ["Improved summary."],
+                    "action_items": ["Send the updated draft by Friday."],
+                    "section_updates": [
+                        {"id": "section-1", "title": "Improved overview"},
+                    ],
+                }
+            ),
+            usage=type("Usage", (), {"input_tokens": 12, "output_tokens": 8})(),
+        ),
+    ])
+    monkeypatch.setattr(
+        "webinar_transcriber.llm._build_anthropic_client", lambda _api_key: fake_client
+    )
+
+    processor = AnthropicLLMProcessor(api_key="test-key", model_name="claude-test")
+    report = ReportDocument(
+        title="Demo",
+        source_file="demo.wav",
+        media_type=MediaType.AUDIO,
+        summary=["Old summary."],
+        action_items=["Old action."],
+        sections=[
+            ReportSection(
+                id="section-1",
+                title="Old title",
+                start_sec=0.0,
+                end_sec=10.0,
+                transcript_text="Agenda review and project status update.",
+            )
+        ],
+    )
+
+    result = processor.polish_report(report)
+
+    assert isinstance(result, LLMReportPolishResult)
+    assert result.summary == ["Improved summary."]
+    assert result.action_items == ["Send the updated draft by Friday."]
+    assert result.section_titles == {"section-1": "Improved overview"}
+    assert result.section_tldrs == {"section-1": "Short recap of the section."}
+    assert result.section_transcripts == {
+        "section-1": "Agenda review and project status update.\n\nPlease listen."
+    }
+    assert result.usage == {"input_tokens": 17, "output_tokens": 12, "total_tokens": 29}

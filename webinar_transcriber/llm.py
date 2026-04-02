@@ -8,7 +8,7 @@ import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -16,7 +16,9 @@ from webinar_transcriber.models import ReportDocument, ReportSection
 from webinar_transcriber.usage import merge_usage, merge_usage_into
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Mapping, Sequence
+
+SchemaModelT = TypeVar("SchemaModelT", bound=BaseModel)
 
 
 REPORT_POLISH_TOTAL_CHAR_BUDGET = 16_000
@@ -105,6 +107,13 @@ class _SectionPolishOutputs:
     tldrs: dict[str, str]
 
 
+@dataclass(frozen=True)
+class _ProviderEnvConfig:
+    provider_name: str
+    api_key_env: str
+    model_env: str
+
+
 class SectionTextResponse(BaseModel):
     """Structured LLM response for one polished section body."""
 
@@ -177,31 +186,31 @@ class LLMProcessor(Protocol):
         """Return concurrency details for report polishing."""
 
 
-class OpenAILLMProcessor:
-    """OpenAI-backed transcript polishing integration."""
+class _BaseLLMProcessor:
+    """Shared report-polishing flow for structured LLM backends."""
 
     def __init__(
         self,
         *,
-        api_key: str,
+        provider_name: str,
         model_name: str,
         section_max_workers: int = SECTION_POLISH_MAX_WORKERS,
         report_char_budget: int = REPORT_POLISH_TOTAL_CHAR_BUDGET,
     ) -> None:
+        self._provider_name = provider_name
         self._model_name = model_name
         self._report_char_budget = report_char_budget
         self._section_max_workers = section_max_workers
-        self._client = _build_openai_client(api_key)
 
     @property
     def model_name(self) -> str:
-        """Return the configured OpenAI model identifier."""
+        """Return the configured model identifier."""
         return self._model_name
 
     @property
     def provider_name(self) -> str:
         """Return the configured LLM provider identifier."""
-        return "openai"
+        return self._provider_name
 
     def polish_report(self, report: ReportDocument) -> LLMReportPolishResult:
         """Polish section text, summary, action items, and section titles."""
@@ -264,21 +273,12 @@ class OpenAILLMProcessor:
             polished_report,
             total_char_budget=self._report_char_budget,
         )
-        try:
-            response = self._client.responses.parse(
-                model=self._model_name,
-                input=[
-                    {"role": "system", "content": REPORT_POLISH_SYSTEM_PROMPT},
-                    {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
-                ],
-                text_format=ReportPolishResponse,
-            )
-        except Exception as error:  # pragma: no cover - backend-specific SDK errors
-            raise LLMProcessingError(f"Report polishing failed: {error}") from error
-
-        parsed = getattr(response, "output_parsed", None)
-        if not isinstance(parsed, ReportPolishResponse):
-            raise LLMProcessingError("Report polish response did not match the schema.")
+        parsed, usage = self._parse_structured_response(
+            system_prompt=REPORT_POLISH_SYSTEM_PROMPT,
+            user_payload=payload,
+            response_model=ReportPolishResponse,
+            error_prefix="Report polishing failed",
+        )
 
         return LLMReportMetadataResult(
             summary=_normalize_report_lines(parsed.summary, limit=SUMMARY_ITEM_LIMIT),
@@ -287,7 +287,7 @@ class OpenAILLMProcessor:
                 limit=ACTION_ITEM_LIMIT,
             ),
             section_titles=_validated_section_titles(report, parsed.section_updates),
-            usage=_extract_usage(response),
+            usage=usage,
         )
 
     def polish_report_with_progress(
@@ -387,24 +387,12 @@ class OpenAILLMProcessor:
             "end_sec": section.end_sec,
             "transcript_text": section.transcript_text,
         }
-        try:
-            response = self._client.responses.parse(
-                model=self._model_name,
-                input=[
-                    {"role": "system", "content": SECTION_POLISH_SYSTEM_PROMPT},
-                    {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
-                ],
-                text_format=SectionTextResponse,
-            )
-        except Exception as error:  # pragma: no cover - backend-specific SDK errors
-            raise LLMProcessingError(
-                f"Section polishing failed for {section.id}: {error}"
-            ) from error
-        parsed = getattr(response, "output_parsed", None)
-        if not isinstance(parsed, SectionTextResponse):
-            raise LLMProcessingError(
-                f"Section polish response did not match the schema for {section.id}."
-            )
+        parsed, usage = self._parse_structured_response(
+            system_prompt=SECTION_POLISH_SYSTEM_PROMPT,
+            user_payload=payload,
+            response_model=SectionTextResponse,
+            error_prefix=f"Section polishing failed for {section.id}",
+        )
 
         transcript_text = _normalize_polished_section_text(
             original_text=section.transcript_text,
@@ -419,39 +407,199 @@ class OpenAILLMProcessor:
                 "kept original text."
             )
 
-        return transcript_text, tldr, _extract_usage(response), warnings
+        return transcript_text, tldr, usage, warnings
+
+    def _parse_structured_response(
+        self,
+        *,
+        system_prompt: str,
+        user_payload: Mapping[str, object],
+        response_model: type[SchemaModelT],
+        error_prefix: str,
+    ) -> tuple[SchemaModelT, dict[str, int]]:
+        raise NotImplementedError
 
 
-def build_llm_processor_from_env() -> OpenAILLMProcessor:
-    """Build an OpenAI-backed LLM processor from environment variables."""
-    api_key = os.environ.get("OPENAI_API_KEY")
-    model_name = os.environ.get("OPENAI_MODEL")
+class OpenAILLMProcessor(_BaseLLMProcessor):
+    """OpenAI-backed transcript polishing integration."""
 
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model_name: str,
+        section_max_workers: int = SECTION_POLISH_MAX_WORKERS,
+        report_char_budget: int = REPORT_POLISH_TOTAL_CHAR_BUDGET,
+    ) -> None:
+        super().__init__(
+            provider_name="openai",
+            model_name=model_name,
+            section_max_workers=section_max_workers,
+            report_char_budget=report_char_budget,
+        )
+        self._client = _build_openai_client(api_key)
+
+    def _parse_structured_response(
+        self,
+        *,
+        system_prompt: str,
+        user_payload: Mapping[str, object],
+        response_model: type[SchemaModelT],
+        error_prefix: str,
+    ) -> tuple[SchemaModelT, dict[str, int]]:
+        try:
+            response = self._client.responses.parse(
+                model=self.model_name,
+                input=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
+                ],
+                text_format=response_model,
+            )
+        except Exception as error:  # pragma: no cover - backend-specific SDK errors
+            raise LLMProcessingError(f"{error_prefix}: {error}") from error
+
+        parsed = getattr(response, "output_parsed", None)
+        if not isinstance(parsed, response_model):
+            raise LLMProcessingError(
+                f"{_schema_label(response_model)} response did not match the schema."
+            )
+        return parsed, _extract_usage(response)
+
+
+class AnthropicLLMProcessor(_BaseLLMProcessor):
+    """Anthropic-backed transcript polishing integration."""
+
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model_name: str,
+        section_max_workers: int = SECTION_POLISH_MAX_WORKERS,
+        report_char_budget: int = REPORT_POLISH_TOTAL_CHAR_BUDGET,
+    ) -> None:
+        super().__init__(
+            provider_name="anthropic",
+            model_name=model_name,
+            section_max_workers=section_max_workers,
+            report_char_budget=report_char_budget,
+        )
+        self._client = _build_anthropic_client(api_key)
+
+    def _parse_structured_response(
+        self,
+        *,
+        system_prompt: str,
+        user_payload: Mapping[str, object],
+        response_model: type[SchemaModelT],
+        error_prefix: str,
+    ) -> tuple[SchemaModelT, dict[str, int]]:
+        prompt = _anthropic_structured_prompt(
+            system_prompt=system_prompt,
+            user_payload=user_payload,
+            response_model=response_model,
+        )
+        try:
+            response = self._client.messages.create(
+                model=self.model_name,
+                max_tokens=4096,
+                messages=[{"role": "user", "content": prompt}],
+            )
+        except Exception as error:  # pragma: no cover - backend-specific SDK errors
+            raise LLMProcessingError(f"{error_prefix}: {error}") from error
+
+        text = _anthropic_response_text(response)
+        try:
+            parsed = response_model.model_validate_json(_extract_json_text(text))
+        except Exception as error:
+            raise LLMProcessingError(
+                f"{_schema_label(response_model)} response did not match the schema."
+            ) from error
+        return parsed, _extract_usage(response)
+
+
+def build_llm_processor_from_env() -> LLMProcessor:
+    """Build a configured LLM processor from environment variables."""
+    provider = os.environ.get("LLM_PROVIDER", "openai").strip().casefold()
+    match provider:
+        case "openai":
+            api_key, model_name = _required_provider_env(
+                _ProviderEnvConfig(
+                    provider_name="openai",
+                    api_key_env="OPENAI_API_KEY",
+                    model_env="OPENAI_MODEL",
+                )
+            )
+            return OpenAILLMProcessor(api_key=api_key, model_name=model_name)
+        case "anthropic":
+            api_key, model_name = _required_provider_env(
+                _ProviderEnvConfig(
+                    provider_name="anthropic",
+                    api_key_env="ANTHROPIC_API_KEY",
+                    model_env="ANTHROPIC_MODEL",
+                )
+            )
+            return AnthropicLLMProcessor(api_key=api_key, model_name=model_name)
+        case _:
+            raise LLMConfigurationError(
+                "Unsupported LLM provider. Set LLM_PROVIDER to 'openai' or 'anthropic'."
+            )
+
+
+def _build_openai_client(api_key: str) -> Any:
+    return _build_sdk_client(
+        module_name="openai",
+        client_class_name="OpenAI",
+        api_key=api_key,
+        missing_sdk_message=(
+            "LLM requested but the OpenAI SDK is not installed in this environment."
+        ),
+    )
+
+
+def _build_anthropic_client(api_key: str) -> Any:
+    return _build_sdk_client(
+        module_name="anthropic",
+        client_class_name="Anthropic",
+        api_key=api_key,
+        missing_sdk_message=(
+            "LLM requested but the Anthropic SDK is not installed in this environment."
+        ),
+    )
+
+
+def _build_sdk_client(
+    *,
+    module_name: str,
+    client_class_name: str,
+    api_key: str,
+    missing_sdk_message: str,
+) -> Any:
+    try:
+        sdk_module = importlib.import_module(module_name)
+    except ModuleNotFoundError as error:  # pragma: no cover - dependency wiring only
+        raise LLMConfigurationError(missing_sdk_message) from error
+    client_class = getattr(sdk_module, client_class_name)
+    return client_class(api_key=api_key)
+
+
+def _required_provider_env(config: _ProviderEnvConfig) -> tuple[str, str]:
+    api_key = os.environ.get(config.api_key_env)
+    model_name = os.environ.get(config.model_env)
     missing_vars = [
         env_name
         for env_name, value in (
-            ("OPENAI_API_KEY", api_key),
-            ("OPENAI_MODEL", model_name),
+            (config.api_key_env, api_key),
+            (config.model_env, model_name),
         )
         if not value
     ]
     if missing_vars:
         missing = ", ".join(missing_vars)
         raise LLMConfigurationError(f"Missing required LLM environment variables: {missing}.")
-
     assert api_key is not None
     assert model_name is not None
-    return OpenAILLMProcessor(api_key=api_key, model_name=model_name)
-
-
-def _build_openai_client(api_key: str) -> Any:
-    try:
-        openai_module = importlib.import_module("openai")
-    except ModuleNotFoundError as error:  # pragma: no cover - dependency wiring only
-        raise LLMConfigurationError(
-            "LLM requested but the OpenAI SDK is not installed in this environment."
-        ) from error
-    return openai_module.OpenAI(api_key=api_key)
+    return api_key, model_name
 
 
 def _build_report_polish_payload(
@@ -593,4 +741,63 @@ def _extract_usage(response: object) -> dict[str, int]:
         field_value = getattr(usage, field_name, None)
         if isinstance(field_value, int):
             extracted[field_name] = field_value
+    if (
+        "total_tokens" not in extracted
+        and "input_tokens" in extracted
+        and "output_tokens" in extracted
+    ):
+        extracted["total_tokens"] = extracted["input_tokens"] + extracted["output_tokens"]
     return extracted
+
+
+def _anthropic_structured_prompt(
+    *,
+    system_prompt: str,
+    user_payload: Mapping[str, object],
+    response_model: type[BaseModel],
+) -> str:
+    schema = json.dumps(response_model.model_json_schema(), ensure_ascii=False)
+    payload = json.dumps(user_payload, ensure_ascii=False)
+    return (
+        f"{system_prompt}\n\n"
+        "Return only a JSON object that matches this JSON Schema exactly.\n"
+        f"{schema}\n\n"
+        "User payload:\n"
+        f"{payload}"
+    )
+
+
+def _anthropic_response_text(response: object) -> str:
+    content = getattr(response, "content", None)
+    if not isinstance(content, list):
+        raise LLMProcessingError("Anthropic response did not contain text content.")
+
+    text_chunks = [
+        block.text
+        for block in content
+        if getattr(block, "type", None) == "text" and isinstance(getattr(block, "text", None), str)
+    ]
+    if not text_chunks:
+        raise LLMProcessingError("Anthropic response did not contain text content.")
+    return "".join(text_chunks).strip()
+
+
+def _extract_json_text(text: str) -> str:
+    cleaned = text.strip()
+    fenced = re.match(r"^```(?:json)?\s*(.*?)\s*```$", cleaned, flags=re.DOTALL)
+    if fenced is not None:
+        return fenced.group(1)
+
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        return cleaned[start : end + 1]
+    return cleaned
+
+
+def _schema_label(response_model: type[BaseModel]) -> str:
+    if response_model is SectionTextResponse:
+        return "Section polish"
+    if response_model is ReportPolishResponse:
+        return "Report polish"
+    return "Structured LLM"

@@ -1,4 +1,4 @@
-# webinar-transcriber
+# Webinar Transcriber
 
 [![CI][ci-badge]][ci-workflow]
 
@@ -10,16 +10,16 @@
 audio-only recordings. The tool exports Markdown, DOCX, and JSON and supports automatic language
 detection.
 
-## Status
+## Capabilities
 
-The project now includes a working local pipeline for:
+The tool supports:
 
 - audio-only inputs
 - video inputs with scene detection and representative slide frames
 - Markdown, DOCX, and JSON outputs
 
-The implementation is still intentionally conservative: it is local-first, CLI-only, and
-heuristic-driven for structuring and summaries.
+The pipeline is intentionally conservative: local-first, CLI-only, and heuristic-driven for
+structuring and summaries.
 
 ## Usage
 
@@ -53,8 +53,8 @@ You need to download that file yourself before the first run. A direct download 
 ```bash
 mkdir -p models/whisper-cpp
 curl -L \
-  -o models/whisper-cpp/ggml-large-v3-turbo.bin \
-  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin
+    -o models/whisper-cpp/ggml-large-v3-turbo.bin \
+    https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin
 ```
 
 You can also use the official `whisper.cpp` helper script:
@@ -76,15 +76,15 @@ The VAD-aware whisper.cpp pipeline can be tuned from the CLI:
 
 ```bash
 webinar-transcriber process INPUT \
-  --vad \
-  --vad-threshold 0.5 \
-  --min-speech-ms 250 \
-  --min-silence-ms 600 \
-  --speech-region-pad-ms 200 \
-  --carryover \
-  --carryover-max-sentences 2 \
-  --carryover-max-tokens 64 \
-  --threads 4
+    --vad \
+    --vad-threshold 0.5 \
+    --min-speech-ms 250 \
+    --min-silence-ms 600 \
+    --speech-region-pad-ms 200 \
+    --carryover \
+    --carryover-max-sentences 2 \
+    --carryover-max-tokens 64 \
+    --threads 4
 ```
 
 Silero VAD is included in the project dependencies and is used automatically when installed in the
@@ -133,12 +133,19 @@ carryover policy in `asr.py`.
 
 ### Cloud LLM
 
-The optional `--llm` flag enables OpenAI-backed report refinement after deterministic sectioning:
+The optional `--llm` flag enables provider-backed report refinement after deterministic sectioning:
 
 - section transcript polishing for punctuation, spelling, light cleanup, and paragraph breaks
 - summary, action items, and section title refinement
 
-LLM configuration comes only from environment variables:
+Supported providers:
+
+- `openai` (default)
+- `anthropic`
+
+LLM configuration comes only from environment variables.
+
+OpenAI:
 
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
@@ -147,8 +154,17 @@ Plain shell usage:
 
 ```bash
 OPENAI_API_KEY=... \
-OPENAI_MODEL=gpt-5-mini \
-uv run webinar-transcriber process INPUT --llm
+    OPENAI_MODEL=gpt-5-mini \
+    uv run webinar-transcriber process INPUT --llm
+```
+
+Anthropic:
+
+```bash
+LLM_PROVIDER=anthropic \
+    ANTHROPIC_API_KEY=... \
+    ANTHROPIC_MODEL=claude-sonnet-4-20250514 \
+    uv run webinar-transcriber process INPUT --llm
 ```
 
 With 1Password for local interactive runs:
@@ -156,7 +172,7 @@ With 1Password for local interactive runs:
 ```bash
 OPENAI_API_KEY="$(op read 'op://Private/OpenAI/api key')" \
 OPENAI_MODEL='gpt-5-mini' \
-uv run webinar-transcriber process INPUT --llm
+    uv run webinar-transcriber process INPUT --llm
 ```
 
 No special 1Password integration is required. The app only reads environment variables.

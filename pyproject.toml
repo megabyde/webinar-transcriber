@@ -10,7 +10,7 @@ authors = [
 ]
 keywords = ["transcription", "speech-to-text", "whisper.cpp", "webinar", "audio", "video"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: End Users/Desktop",
@@ -24,6 +24,7 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
+    "anthropic>=0.72.0,<1.0.0",
     "click>=8.3.1,<9.0.0",
     "numpy>=2.4.3,<3.0.0",
     "openai>=2.30.0,<3.0.0",
