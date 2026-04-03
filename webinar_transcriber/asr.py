@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import os
 import re
 import subprocess
@@ -23,7 +24,9 @@ if TYPE_CHECKING:
 
 
 ASR_BACKEND_NAME = "whisper.cpp"
-DEFAULT_WHISPER_CPP_MODEL = Path("models/whisper-cpp/ggml-large-v3-turbo.bin")
+DEFAULT_WHISPER_CPP_MODEL_REPO = "ggerganov/whisper.cpp"
+DEFAULT_WHISPER_CPP_MODEL_FILENAME = "ggml-large-v3-turbo.bin"
+DEFAULT_WHISPER_CPP_MODEL_EXAMPLE = Path("models/whisper-cpp/ggml-large-v3-turbo.bin")
 _ENABLED_BACKEND_PATTERN = re.compile(
     r"(?i)\b(metal|mtl|cuda|vulkan|coreml)\b[^|]*?(?:=|:)\s*(?:1|true)"
 )
@@ -81,14 +84,20 @@ class WhisperDecodeSettings:
 
 
 def _missing_model_error_message(model_path: Path) -> str:
-    default_path = DEFAULT_WHISPER_CPP_MODEL
-    if model_path == default_path:
-        location_hint = f"Download ggml-large-v3-turbo.bin to {default_path}."
-    else:
-        location_hint = f"Download a whisper.cpp model there, or use --asr-model {default_path}."
+    example_path = DEFAULT_WHISPER_CPP_MODEL_EXAMPLE
+    location_hint = f"Download a whisper.cpp model there, or use --asr-model {example_path}."
     return (
         f"whisper.cpp model file does not exist: {model_path}. "
         f"{location_hint} See README.md for model download instructions."
+    )
+
+
+def _default_model_download_error_message() -> str:
+    return (
+        "Could not resolve the default whisper.cpp model from the Hugging Face cache. "
+        "The app uses Hugging Face cache defaults for the built-in model. "
+        f"To use a manual file instead, pass --asr-model {DEFAULT_WHISPER_CPP_MODEL_EXAMPLE}. "
+        "See README.md for model download instructions."
     )
 
 
@@ -104,7 +113,9 @@ class WhisperCppTranscriber:
         library_path: Path | None = None,
         log_path: Path | None = None,
     ) -> None:
-        self._model_path = Path(model_name) if model_name else DEFAULT_WHISPER_CPP_MODEL
+        self._configured_model_path = Path(model_name) if model_name else None
+        self._uses_default_model_path = model_name is None
+        self._model_path: Path | None = self._configured_model_path
         self._threads = max(1, threads)
         self._decode_settings = WhisperDecodeSettings(
             carryover=carryover_settings or PromptCarryoverSettings()
@@ -117,7 +128,9 @@ class WhisperCppTranscriber:
 
     @property
     def model_name(self) -> str:
-        return str(self._model_path)
+        if self._model_path is not None:
+            return str(self._model_path)
+        return f"{DEFAULT_WHISPER_CPP_MODEL_REPO}/{DEFAULT_WHISPER_CPP_MODEL_FILENAME}"
 
     @property
     def device_name(self) -> str:
@@ -145,9 +158,9 @@ class WhisperCppTranscriber:
         self._log_path = log_path
 
     def prepare_model(self) -> None:
-        if not self._model_path.exists():
-            raise RuntimeError(_missing_model_error_message(self._model_path))
+        self._model_path = self._resolve_model_path()
         self.close()
+        assert self._model_path is not None
         runtime = WhisperCppLibrary(self._library_path, log_path=self._log_path)
         session = runtime.create_session(self._model_path)
         self._runtime = runtime
@@ -202,6 +215,18 @@ class WhisperCppTranscriber:
         assert self._session is not None
         return self._session
 
+    def _resolve_model_path(self) -> Path:
+        if not self._uses_default_model_path:
+            assert self._configured_model_path is not None
+            if not self._configured_model_path.exists():
+                raise RuntimeError(_missing_model_error_message(self._configured_model_path))
+            return self._configured_model_path
+
+        try:
+            return _download_default_whisper_cpp_model()
+        except RuntimeError as error:
+            raise RuntimeError(f"{_default_model_download_error_message()} {error}") from error
+
     def __del__(self) -> None:  # pragma: no cover - interpreter shutdown cleanup
         with suppress(Exception):
             self.close()
@@ -213,6 +238,28 @@ def _device_name_from_system_info(system_info: str) -> str:
         backend_name = match.group(1).lower()
         return "metal" if backend_name == "mtl" else backend_name
     return "cpu"
+
+
+def _download_default_whisper_cpp_model() -> Path:
+    try:
+        huggingface_hub = importlib.import_module("huggingface_hub")
+    except ModuleNotFoundError as error:  # pragma: no cover - dependency wiring only
+        raise RuntimeError(
+            "huggingface_hub is not installed, so the default whisper.cpp model cannot be "
+            "downloaded automatically."
+        ) from error
+
+    try:
+        downloaded_path = huggingface_hub.hf_hub_download(
+            repo_id=DEFAULT_WHISPER_CPP_MODEL_REPO,
+            filename=DEFAULT_WHISPER_CPP_MODEL_FILENAME,
+        )
+    except Exception as error:  # pragma: no cover - network/backend specific
+        raise RuntimeError(
+            "Automatic download of the default whisper.cpp model from Hugging Face failed."
+        ) from error
+
+    return Path(downloaded_path)
 
 
 def build_prompt_carryover(

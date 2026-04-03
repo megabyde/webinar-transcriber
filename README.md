@@ -42,13 +42,11 @@ webinar-transcriber extract-frames INPUT
 The `--asr-model` option can override the `whisper.cpp` model path, for example
 `models/whisper-cpp/ggml-large-v3-turbo.bin`.
 
-The default expected model path is:
+By default, the app downloads the official `whisper.cpp` model into the standard Hugging Face cache
+and reuses that cached file on later runs.
 
-```text
-models/whisper-cpp/ggml-large-v3-turbo.bin
-```
-
-You need to download that file yourself before the first run. A direct download example:
+If you want a manual file instead of the cache-backed default, download it yourself. A direct
+download example:
 
 ```bash
 mkdir -p models/whisper-cpp
@@ -64,7 +62,7 @@ git clone https://github.com/ggml-org/whisper.cpp.git
 sh whisper.cpp/models/download-ggml-model.sh large-v3-turbo models/whisper-cpp
 ```
 
-If you store the model somewhere else, point the app at it:
+If you store the model somewhere else, point the app at it explicitly:
 
 ```bash
 webinar-transcriber process INPUT --asr-model /path/to/ggml-large-v3-turbo.bin

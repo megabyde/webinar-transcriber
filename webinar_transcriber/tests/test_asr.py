@@ -6,7 +6,9 @@ import numpy as np
 import pytest
 
 from webinar_transcriber.asr import (
-    DEFAULT_WHISPER_CPP_MODEL,
+    DEFAULT_WHISPER_CPP_MODEL_EXAMPLE,
+    DEFAULT_WHISPER_CPP_MODEL_FILENAME,
+    DEFAULT_WHISPER_CPP_MODEL_REPO,
     PromptCarryoverSettings,
     WhisperCppTranscriber,
     _carryover_drop_reason,
@@ -22,10 +24,13 @@ if TYPE_CHECKING:
 
 
 class TestWhisperCppTranscriber:
-    def test_default_model_uses_whisper_cpp_model_path(self) -> None:
+    def test_default_model_uses_hugging_face_reference(self) -> None:
         transcriber = WhisperCppTranscriber()
 
-        assert transcriber.model_name == str(DEFAULT_WHISPER_CPP_MODEL)
+        assert (
+            transcriber.model_name
+            == f"{DEFAULT_WHISPER_CPP_MODEL_REPO}/{DEFAULT_WHISPER_CPP_MODEL_FILENAME}"
+        )
 
     def test_prepare_model_requires_model_file(self, tmp_path) -> None:
         with pytest.raises(RuntimeError, match="model file does not exist") as error:
@@ -39,16 +44,86 @@ class TestWhisperCppTranscriber:
         tmp_path,
         monkeypatch,
     ) -> None:
-        default_model_path = tmp_path / "missing-default-model.bin"
-        monkeypatch.setattr(
-            "webinar_transcriber.asr.DEFAULT_WHISPER_CPP_MODEL",
-            default_model_path,
-        )
         with pytest.raises(RuntimeError, match="model file does not exist") as error:
-            WhisperCppTranscriber(model_name=str(default_model_path)).prepare_model()
+            WhisperCppTranscriber(
+                model_name=str(tmp_path / "missing-default-model.bin")
+            ).prepare_model()
         message = str(error.value)
-        assert "Download ggml-large-v3-turbo.bin" in message
-        assert str(default_model_path) in message
+        assert "Download a whisper.cpp model there" in message
+        assert str(DEFAULT_WHISPER_CPP_MODEL_EXAMPLE) in message
+
+    def test_prepare_model_downloads_default_model_into_hf_cache(
+        self,
+        tmp_path,
+        monkeypatch,
+    ) -> None:
+        cached_model_path = tmp_path / "hf-cache" / "ggml-large-v3-turbo.bin"
+        cached_model_path.parent.mkdir(parents=True)
+        cached_model_path.write_text("stub", encoding="utf-8")
+        created_paths: list[str] = []
+
+        class FakeLibrary:
+            def __init__(self, _library_path, log_path=None) -> None:
+                self._library_path = _library_path
+                self._log_path = log_path
+
+            def create_session(self, model_path):
+                from webinar_transcriber.whispercpp import WhisperCppRuntimeDetails
+
+                created_paths.append(str(model_path))
+
+                class FakeSession:
+                    runtime_details = WhisperCppRuntimeDetails(
+                        library_path="/usr/local/lib/libwhisper.so",
+                        system_info="CPU = 1",
+                    )
+
+                    def close(self) -> None:
+                        return None
+
+                return FakeSession()
+
+        monkeypatch.setattr(
+            "webinar_transcriber.asr._download_default_whisper_cpp_model",
+            lambda: cached_model_path,
+        )
+        monkeypatch.setattr("webinar_transcriber.asr.WhisperCppLibrary", FakeLibrary)
+
+        transcriber = WhisperCppTranscriber()
+        transcriber.prepare_model()
+
+        assert created_paths == [str(cached_model_path)]
+        assert transcriber.model_name == str(cached_model_path)
+
+    def test_prepare_model_reports_default_download_failure(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            "webinar_transcriber.asr._download_default_whisper_cpp_model",
+            lambda: (_ for _ in ()).throw(RuntimeError("download failed")),
+        )
+
+        with pytest.raises(RuntimeError, match="download failed") as error:
+            WhisperCppTranscriber().prepare_model()
+
+        message = str(error.value)
+        assert "Hugging Face cache defaults" in message
+        assert str(DEFAULT_WHISPER_CPP_MODEL_EXAMPLE) in message
+
+    def test_prepare_model_does_not_download_explicit_model_path(
+        self,
+        tmp_path,
+        monkeypatch,
+    ) -> None:
+        explicit_model_path = tmp_path / "missing.bin"
+        download_calls: list[None] = []
+        monkeypatch.setattr(
+            "webinar_transcriber.asr._download_default_whisper_cpp_model",
+            lambda: download_calls.append(None),  # type: ignore[return-value]
+        )
+
+        with pytest.raises(RuntimeError, match="model file does not exist"):
+            WhisperCppTranscriber(model_name=str(explicit_model_path)).prepare_model()
+
+        assert download_calls == []
 
     def test_prepare_model_reads_runtime_details(self, monkeypatch, tmp_path) -> None:
         model_path = tmp_path / "model.bin"
