@@ -1,10 +1,10 @@
 # Webinar Transcriber
 
-[![CI][ci-badge]][ci-workflow]
+![Webinar Transcriber](docs/assets/logo.svg)
 
-![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)
-![Coverage 90%25](https://img.shields.io/badge/coverage-90%25%2B-brightgreen.svg)
-![License MIT](https://img.shields.io/badge/license-MIT-green.svg)
+[![CI][ci-badge]][ci-workflow] [![Python 3.12][python-badge]][python-home]
+[![Coverage 95%+][coverage-badge]][coverage-home] [![Ruff][ruff-badge]][ruff-home]
+[![uv][uv-badge]][uv-home] [![License MIT][license-badge]][license-home]
 
 `webinar-transcriber` is a local-first CLI for transcribing webinar videos with slides and
 audio-only recordings. The tool exports Markdown, DOCX, and JSON and supports automatic language
@@ -278,3 +278,13 @@ Contributor and agent-specific repository guidance lives in [AGENTS.md](AGENTS.m
 
 [ci-badge]: https://github.com/megabyde/webinar-transcriber/actions/workflows/ci.yml/badge.svg
 [ci-workflow]: https://github.com/megabyde/webinar-transcriber/actions/workflows/ci.yml
+[coverage-badge]: https://img.shields.io/badge/coverage-95%25%2B-brightgreen
+[coverage-home]: https://github.com/megabyde/webinar-transcriber/actions/workflows/ci.yml
+[license-badge]: https://img.shields.io/badge/license-MIT-2F855A
+[license-home]: LICENSE
+[python-badge]: https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white
+[python-home]: https://www.python.org/downloads/release/python-3120/
+[ruff-badge]: https://img.shields.io/badge/lint-ruff-D7FF64?logo=ruff&logoColor=1D2B34
+[ruff-home]: https://docs.astral.sh/ruff/
+[uv-badge]: https://img.shields.io/badge/package-uv-5C5CFF?logo=uv&logoColor=white
+[uv-home]: https://docs.astral.sh/uv/
