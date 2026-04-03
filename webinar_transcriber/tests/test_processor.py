@@ -26,6 +26,7 @@ from webinar_transcriber.models import (
     TranscriptSegment,
 )
 from webinar_transcriber.processor import (
+    _asr_runtime_detail,
     _window_transcription_stage_detail,
     process_input,
 )
@@ -450,6 +451,19 @@ def test_window_transcription_stage_detail_reports_rtf() -> None:
     )
 
     assert detail == "1 window | RTF 0.20"
+
+
+def test_asr_runtime_detail_shortens_hf_cache_model_path() -> None:
+    transcriber = FakeTranscriber()
+    transcriber._model_path = Path(
+        "/tmp/huggingface/hub/"
+        "models--ggerganov--whisper.cpp/snapshots/123456/"
+        "ggml-large-v3-turbo.bin"
+    )
+
+    assert _asr_runtime_detail(transcriber) == (
+        "ggerganov/whisper.cpp/ggml-large-v3-turbo.bin (HF cache) | cpu"
+    )
 
 
 def test_process_input_normalizes_transcript_before_report_generation(

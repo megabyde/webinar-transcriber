@@ -712,8 +712,25 @@ def _transcription_payload(transcription: TranscriptionResult) -> dict[str, obje
     return transcription.model_dump(mode="json")
 
 
+def _asr_model_label(model_name: str) -> str:
+    path = Path(model_name)
+    if path.is_absolute():
+        if repo_label := _hf_cache_repo_label(path):
+            return f"{repo_label}/{path.name} (HF cache)"
+        return path.name
+    return model_name
+
+
+def _hf_cache_repo_label(path: Path) -> str | None:
+    for part in path.parts:
+        if part.startswith("models--"):
+            return part.removeprefix("models--").replace("--", "/")
+    return None
+
+
 def _asr_runtime_detail(transcriber: WhisperCppTranscriber) -> str:
-    return f"{transcriber.model_name} | {transcriber.device_name}"
+    model_label = _asr_model_label(transcriber.model_name)
+    return f"{model_label} | {transcriber.device_name}"
 
 
 def _window_transcription_stage_detail(
