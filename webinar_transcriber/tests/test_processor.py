@@ -231,6 +231,7 @@ def test_process_input_writes_reports_and_metadata(tmp_path, monkeypatch) -> Non
 
     assert artifacts.layout.metadata_path.exists()
     assert artifacts.layout.transcript_path.exists()
+    assert artifacts.layout.subtitle_vtt_path.exists()
     assert artifacts.layout.markdown_report_path.exists()
     assert artifacts.layout.docx_report_path.exists()
     assert artifacts.layout.json_report_path.exists()
@@ -246,8 +247,11 @@ def test_process_input_writes_reports_and_metadata(tmp_path, monkeypatch) -> Non
     diagnostics_payload = json.loads(artifacts.layout.diagnostics_path.read_text(encoding="utf-8"))
 
     markdown = artifacts.layout.markdown_report_path.read_text(encoding="utf-8")
+    vtt = artifacts.layout.subtitle_vtt_path.read_text(encoding="utf-8")
     assert "# Sample Audio" in markdown
     assert "Agenda review and project status update." in markdown
+    assert "00:00:00.000 --> 00:00:03.000" in vtt
+    assert "WEBVTT" in vtt
     assert reporter.has_event("start", "prepare_transcription_audio", "Preparing audio")
     assert reporter.has_event("finish", "prepare_transcription_audio", "sample-audio.wav")
     assert reporter.has_event("start", "probe_media", "Probing media")

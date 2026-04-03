@@ -18,6 +18,7 @@ from webinar_transcriber.export import (
     write_docx_report,
     write_json_report,
     write_markdown_report,
+    write_vtt_subtitles,
 )
 from webinar_transcriber.llm import (
     LLMConfigurationError,
@@ -313,11 +314,11 @@ def process_input(
     )
     report.warnings = list(warnings)
 
-    active_reporter.stage_started("export", "Writing reports")
+    active_reporter.stage_started("export", "Writing artifacts")
     timer = _start_stage_timer(stage_timings, "export")
-    _write_requested_reports(report, layout, output_format)
+    _write_requested_artifacts(report, normalized_transcription, layout, output_format)
     timer.finish()
-    active_reporter.stage_finished("export", "Writing reports", detail=output_format)
+    active_reporter.stage_finished("export", "Writing artifacts", detail=output_format)
 
     diagnostics = Diagnostics(
         asr_backend=ASR_BACKEND_NAME,
@@ -662,7 +663,12 @@ def _start_stage_timer(stage_timings: dict[str, float], key: str) -> _StageTimer
     return _StageTimer(stage_timings=stage_timings, key=key, start_sec=perf_counter())
 
 
-def _write_requested_reports(report: ReportDocument, layout: RunLayout, output_format: str) -> None:
+def _write_requested_artifacts(
+    report: ReportDocument,
+    transcription: TranscriptionResult,
+    layout: RunLayout,
+    output_format: str,
+) -> None:
     formats = {"md", "docx", "json"} if output_format == "all" else {output_format}
 
     if "md" in formats:
@@ -671,6 +677,7 @@ def _write_requested_reports(report: ReportDocument, layout: RunLayout, output_f
         write_docx_report(report, layout.docx_report_path)
 
     write_json_report(report, layout.json_report_path)
+    write_vtt_subtitles(transcription, layout.subtitle_vtt_path)
 
 
 def _write_json(output_path: Path, payload: dict[str, object]) -> None:

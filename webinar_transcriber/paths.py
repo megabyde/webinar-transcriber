@@ -30,6 +30,10 @@ class RunLayout:
         return self.run_dir / "transcript.json"
 
     @property
+    def subtitle_vtt_path(self) -> Path:
+        return self.run_dir / "transcript.vtt"
+
+    @property
     def scenes_path(self) -> Path:
         return self.run_dir / "scenes.json"
 
