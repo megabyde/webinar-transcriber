@@ -129,6 +129,20 @@ def main() -> None:
     help="Number of whisper.cpp inference threads to use.",
 )
 @click.option(
+    "--keep-audio/--no-keep-audio",
+    default=False,
+    show_default=True,
+    help="Keep the normalized transcription audio as a run artifact.",
+)
+@click.option(
+    "--audio-format",
+    "kept_audio_format",
+    type=click.Choice(["wav", "mp3"], case_sensitive=False),
+    default="wav",
+    show_default=True,
+    help="Format for the kept transcription audio artifact.",
+)
+@click.option(
     "--llm",
     is_flag=True,
     help="Enable optional OpenAI-based report enhancement.",
@@ -147,6 +161,8 @@ def process(
     carryover_max_sentences: int,
     carryover_max_tokens: int,
     asr_threads: int,
+    keep_audio: bool,
+    kept_audio_format: str,
     llm: bool,
 ) -> None:
     """Process an audio or video input file."""
@@ -173,6 +189,8 @@ def process(
             carryover_max_sentences=carryover_max_sentences,
             carryover_max_tokens=carryover_max_tokens,
             asr_threads=asr_threads,
+            keep_audio=keep_audio,
+            kept_audio_format=kept_audio_format,
             enable_llm=llm,
             reporter=reporter,
         )

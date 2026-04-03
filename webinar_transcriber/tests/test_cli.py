@@ -87,6 +87,8 @@ def test_process_command_runs_pipeline(tmp_path) -> None:
         carryover_max_sentences=2,
         carryover_max_tokens=64,
         asr_threads=DEFAULT_ASR_THREADS,
+        keep_audio=False,
+        kept_audio_format="wav",
         enable_llm=False,
         reporter=ANY,
     )
@@ -140,6 +142,9 @@ def test_process_command_forwards_asr_options(tmp_path) -> None:
                 "32",
                 "--threads",
                 "6",
+                "--keep-audio",
+                "--audio-format",
+                "mp3",
                 "--llm",
             ],
         )
@@ -159,6 +164,8 @@ def test_process_command_forwards_asr_options(tmp_path) -> None:
         carryover_max_sentences=1,
         carryover_max_tokens=32,
         asr_threads=6,
+        keep_audio=True,
+        kept_audio_format="mp3",
         enable_llm=True,
         reporter=ANY,
     )
@@ -180,6 +187,8 @@ def test_process_help_describes_asr_options() -> None:
     assert "--carryover-max-sentences" in result.output
     assert "--carryover-max-tokens" in result.output
     assert "--threads" in result.output
+    assert "--keep-audio / --no-keep-audio" in result.output
+    assert "--audio-format" in result.output
     assert "--llm" in result.output
     assert "Override the whisper.cpp model path" in result.output
     assert "--asr-compute-type" not in result.output

@@ -19,6 +19,7 @@ from webinar_transcriber.segmentation import (
 from webinar_transcriber.transcription_audio import (
     load_normalized_audio,
     prepared_transcription_audio,
+    preserve_transcription_audio,
 )
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
@@ -38,6 +39,46 @@ def test_prepared_transcription_audio_cleans_up_temp_wav() -> None:
         assert audio_path.suffix == ".wav"
 
     assert not audio_path.exists()
+
+
+def test_preserve_transcription_audio_copies_wav_output(tmp_path: Path) -> None:
+    with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
+        kept_audio_path = preserve_transcription_audio(
+            audio_path,
+            tmp_path / "transcription-audio.wav",
+        )
+
+    assert kept_audio_path.exists()
+    assert kept_audio_path.suffix == ".wav"
+    assert kept_audio_path.read_bytes()[:4] == b"RIFF"
+
+
+def test_preserve_transcription_audio_transcodes_mp3_output(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
+        expected_output = tmp_path / "transcription-audio.mp3"
+        calls: list[tuple[Path, Path]] = []
+
+        def fake_transcode(input_path: Path, output_path: Path) -> Path:
+            calls.append((input_path, output_path))
+            output_path.write_text("mp3", encoding="utf-8")
+            return output_path
+
+        monkeypatch.setattr(
+            "webinar_transcriber.transcription_audio.transcode_audio_to_mp3",
+            fake_transcode,
+        )
+        kept_audio_path = preserve_transcription_audio(
+            audio_path,
+            expected_output,
+            audio_format="mp3",
+        )
+
+    assert calls == [(audio_path, expected_output)]
+    assert kept_audio_path == expected_output
+    assert kept_audio_path.read_text(encoding="utf-8") == "mp3"
 
 
 def test_load_normalized_audio_returns_mono_float32_samples() -> None:

@@ -55,6 +55,7 @@ from webinar_transcriber.transcript_processing import normalize_transcription
 from webinar_transcriber.transcription_audio import (
     load_normalized_audio,
     prepared_transcription_audio,
+    preserve_transcription_audio,
 )
 from webinar_transcriber.ui import NullStageReporter
 from webinar_transcriber.usage import merge_usage
@@ -120,6 +121,8 @@ def process_input(
     carryover_max_sentences: int = DEFAULT_CARRYOVER_MAX_SENTENCES,
     carryover_max_tokens: int = DEFAULT_CARRYOVER_MAX_TOKENS,
     asr_threads: int = DEFAULT_ASR_THREADS,
+    keep_audio: bool = False,
+    kept_audio_format: str = "wav",
     enable_llm: bool = False,
     transcriber: WhisperCppTranscriber | None = None,
     llm_processor: LLMProcessor | None = None,
@@ -206,6 +209,13 @@ def process_input(
             llm_runtime=llm_runtime,
         )
         report_transcription = normalized_transcription
+        if keep_audio:
+            preserved_audio_path = layout.transcription_audio_path(kept_audio_format)
+            preserve_transcription_audio(
+                audio_path,
+                preserved_audio_path,
+                audio_format=kept_audio_format,
+            )
 
     if media_asset.media_type.value == "video":
         active_reporter.progress_started(

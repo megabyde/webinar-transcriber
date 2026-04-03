@@ -24,8 +24,8 @@ structuring and summaries.
 ## Usage
 
 The CLI uses `whisper.cpp` in-process through its C API. The Python layer uses one code path on
-macOS and Linux; acceleration depends on how the local `libwhisper` was built and installed. The ASR
-model is a local `.bin` file rather than an automatically downloaded Hugging Face model.
+macOS and Linux; acceleration depends on how the local `libwhisper` was built and installed. By
+default, the ASR model is resolved from the Hugging Face cache and downloaded there on first use.
 
 Typical runs:
 
@@ -33,6 +33,7 @@ Typical runs:
 webinar-transcriber process INPUT
 webinar-transcriber process INPUT --llm
 webinar-transcriber process INPUT --format docx
+webinar-transcriber process INPUT --keep-audio --audio-format mp3
 webinar-transcriber process INPUT --output-dir runs/custom-demo
 webinar-transcriber extract-frames INPUT
 ```
@@ -66,6 +67,19 @@ If you store the model somewhere else, point the app at it explicitly:
 
 ```bash
 webinar-transcriber process INPUT --asr-model /path/to/ggml-large-v3-turbo.bin
+```
+
+### Extra Artifacts
+
+`process` always writes subtitle files alongside the report artifacts:
+
+- `transcript.vtt`
+
+To keep the normalized transcription audio, add:
+
+```bash
+webinar-transcriber process INPUT --keep-audio
+webinar-transcriber process INPUT --keep-audio --audio-format mp3
 ```
 
 ### ASR Tuning
@@ -193,6 +207,9 @@ runs/<timestamp>_<basename>/
 │  └─ decoded_windows.json
 ├─ metadata.json
 ├─ transcript.json
+├─ transcript.vtt
+├─ transcription-audio.wav # optional via --keep-audio
+├─ transcription-audio.mp3 # optional via --keep-audio --audio-format mp3
 ├─ scenes.json          # video only
 ├─ diagnostics.json
 ├─ report.md

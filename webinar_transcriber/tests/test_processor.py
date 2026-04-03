@@ -300,6 +300,23 @@ def test_process_input_writes_reports_and_metadata(tmp_path, monkeypatch) -> Non
     assert "Sample Audio" in "\n".join(paragraph.text for paragraph in document.paragraphs)
 
 
+def test_process_input_keeps_normalized_audio_artifact(tmp_path, monkeypatch) -> None:
+    install_basic_windowing(monkeypatch)
+
+    artifacts = process_input(
+        FIXTURE_DIR / "sample-audio.mp3",
+        output_dir=tmp_path / "run",
+        transcriber=FakeTranscriber(),
+        keep_audio=True,
+        kept_audio_format="wav",
+    )
+
+    kept_audio_path = artifacts.layout.transcription_audio_path()
+
+    assert kept_audio_path.exists()
+    assert kept_audio_path.read_bytes()[:4] == b"RIFF"
+
+
 def test_process_input_writes_video_scene_artifacts(tmp_path, monkeypatch) -> None:
     reporter = RecordingReporter()
     transcription_audio_path: Path | None = None

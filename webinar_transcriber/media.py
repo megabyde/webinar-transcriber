@@ -96,3 +96,20 @@ def extract_audio(input_path: Path, output_path: Path) -> Path:
         str(output_path),
     )
     return output_path
+
+
+def transcode_audio_to_mp3(input_path: Path, output_path: Path) -> Path:
+    """Convert normalized transcription audio into an MP3 artifact."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    _run_command(
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(input_path),
+        "-codec:a",
+        "libmp3lame",
+        "-q:a",
+        "2",
+        str(output_path),
+    )
+    return output_path

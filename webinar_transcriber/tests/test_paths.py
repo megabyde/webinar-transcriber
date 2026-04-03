@@ -26,6 +26,8 @@ def test_build_run_layout_uses_timestamp_and_slug(tmp_path) -> None:
     assert layout.speech_regions_path.name == "speech_regions.json"
     assert layout.decoded_windows_path.name == "decoded_windows.json"
     assert layout.subtitle_vtt_path.name == "transcript.vtt"
+    assert layout.transcription_audio_path().name == "transcription-audio.wav"
+    assert layout.transcription_audio_path("mp3").name == "transcription-audio.mp3"
     assert layout.frames_dir.name == "frames"
 
 

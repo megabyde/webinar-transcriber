@@ -6,11 +6,16 @@ import tempfile
 import wave
 from contextlib import contextmanager
 from pathlib import Path
+from shutil import copy2
 from typing import TYPE_CHECKING
 
 import numpy as np
 
-from webinar_transcriber.media import MediaProcessingError, extract_audio
+from webinar_transcriber.media import (
+    MediaProcessingError,
+    extract_audio,
+    transcode_audio_to_mp3,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -25,6 +30,22 @@ def prepared_transcription_audio(input_path: Path) -> Iterator[Path]:
         audio_path = Path(temp_dir) / f"{input_path.stem}.wav"
         extract_audio(input_path, audio_path)
         yield audio_path
+
+
+def preserve_transcription_audio(
+    audio_path: Path,
+    output_path: Path,
+    *,
+    audio_format: str = "wav",
+) -> Path:
+    """Persist prepared transcription audio as a run artifact."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if audio_format == "wav":
+        copy2(audio_path, output_path)
+        return output_path
+    if audio_format == "mp3":
+        return transcode_audio_to_mp3(audio_path, output_path)
+    raise ValueError(f"Unsupported transcription audio format: {audio_format}")
 
 
 def load_normalized_audio(audio_path: Path) -> tuple[np.ndarray, int]:
