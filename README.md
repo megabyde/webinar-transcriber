@@ -239,16 +239,24 @@ make sync
 
 Install native dependencies with Homebrew:
 
-- `brew install ffmpeg`
-- `brew install whisper-cpp`
+```bash
+brew install ffmpeg whisper-cpp
+```
 
 Homebrew installs `libwhisper.dylib` in a standard location, so the default setup should work
 without extra configuration.
 
 ### Linux
 
-Install `ffmpeg`, then build or install `libwhisper.so` locally. If it is not in a standard system
-location, point the app at it with `WHISPER_CPP_LIB`, for example:
+On Debian or Ubuntu, a typical setup is:
+
+```bash
+sudo apt update
+sudo apt install -y ffmpeg libwhisper-cpp-dev
+```
+
+If `libwhisper.so` is not in a standard system location, point the app at it with `WHISPER_CPP_LIB`,
+for example:
 
 ```bash
 export WHISPER_CPP_LIB=/path/to/libwhisper.so
