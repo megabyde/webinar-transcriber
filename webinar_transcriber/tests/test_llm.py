@@ -122,7 +122,7 @@ def test_openai_llm_processor_polishes_report(monkeypatch) -> None:
         FakeResponse(
             output_parsed=SectionTextResponse(
                 tldr="Short recap of the section.",
-                transcript_text="Agenda review and project status update.\n\nPlease listen."
+                transcript_text="Agenda review and project status update.\n\nPlease listen.",
             ),
             usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
         ),
@@ -176,8 +176,7 @@ def test_openai_llm_processor_rejects_unknown_report_section_id(monkeypatch) -> 
     fake_client = FakeClient([
         FakeResponse(
             output_parsed=SectionTextResponse(
-                tldr="Agenda recap.",
-                transcript_text="Agenda review and project status update."
+                tldr="Agenda recap.", transcript_text="Agenda review and project status update."
             ),
             usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
         ),
@@ -219,8 +218,7 @@ def test_openai_llm_processor_skips_interlude_section_text_polish(monkeypatch) -
     fake_client = FakeClient([
         FakeResponse(
             output_parsed=SectionTextResponse(
-                tldr="Agenda recap.",
-                transcript_text="Agenda review and project status update."
+                tldr="Agenda recap.", transcript_text="Agenda review and project status update."
             ),
             usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
         ),
@@ -273,24 +271,20 @@ def test_openai_llm_processor_skips_interlude_section_text_polish(monkeypatch) -
 def test_anthropic_llm_processor_polishes_report(monkeypatch) -> None:
     fake_client = FakeAnthropicClient([
         FakeAnthropicResponse(
-            json.dumps(
-                {
-                    "tldr": "Short recap of the section.",
-                    "transcript_text": "Agenda review and project status update.\n\nPlease listen.",
-                }
-            ),
+            json.dumps({
+                "tldr": "Short recap of the section.",
+                "transcript_text": "Agenda review and project status update.\n\nPlease listen.",
+            }),
             usage=type("Usage", (), {"input_tokens": 5, "output_tokens": 4})(),
         ),
         FakeAnthropicResponse(
-            json.dumps(
-                {
-                    "summary": ["Improved summary."],
-                    "action_items": ["Send the updated draft by Friday."],
-                    "section_updates": [
-                        {"id": "section-1", "title": "Improved overview"},
-                    ],
-                }
-            ),
+            json.dumps({
+                "summary": ["Improved summary."],
+                "action_items": ["Send the updated draft by Friday."],
+                "section_updates": [
+                    {"id": "section-1", "title": "Improved overview"},
+                ],
+            }),
             usage=type("Usage", (), {"input_tokens": 12, "output_tokens": 8})(),
         ),
     ])

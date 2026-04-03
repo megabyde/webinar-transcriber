@@ -623,9 +623,14 @@ class TestSummaryAndActionHeuristics:
         todo_score = _action_item_score(
             TranscriptSegment(id="segment-3", text="TODO", start_sec=0.0, end_sec=1.0)
         )
-        no_repetition_penalty = _summary_repetition_penalty(
-            ["plan", "budget", "timeline", "risk", "owner", "scope"]
-        )
+        no_repetition_penalty = _summary_repetition_penalty([
+            "plan",
+            "budget",
+            "timeline",
+            "risk",
+            "owner",
+            "scope",
+        ])
         filler_key = _segment_key(filler_heavy_segment.text)
 
         assert _audio_title_score(repetitive_segment) < 0

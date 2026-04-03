@@ -295,6 +295,7 @@ def test_process_input_writes_reports_and_metadata(tmp_path, monkeypatch) -> Non
     document = Document(str(artifacts.layout.docx_report_path))
     assert "Sample Audio" in "\n".join(paragraph.text for paragraph in document.paragraphs)
 
+
 def test_process_input_writes_video_scene_artifacts(tmp_path, monkeypatch) -> None:
     reporter = RecordingReporter()
     transcription_audio_path: Path | None = None
