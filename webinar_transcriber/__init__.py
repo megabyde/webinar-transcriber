@@ -1,5 +1,15 @@
 """Project metadata for webinar-transcriber."""
 
+from importlib import import_module
+
 __all__ = ["__version__"]
 
-__version__ = "0.1.1"
+
+def _resolve_version() -> str:
+    try:
+        return import_module("webinar_transcriber._version").__version__
+    except ModuleNotFoundError:
+        return "0.0.0"
+
+
+__version__ = _resolve_version()

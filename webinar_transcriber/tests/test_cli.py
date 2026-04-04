@@ -8,6 +8,7 @@ from unittest.mock import ANY, patch
 import pytest
 from click.testing import CliRunner
 
+from webinar_transcriber import __version__
 from webinar_transcriber.asr import DEFAULT_ASR_THREADS
 from webinar_transcriber.cli import main
 from webinar_transcriber.models import (
@@ -42,7 +43,7 @@ def test_main_version_prints_package_version() -> None:
     result = runner.invoke(main, ["--version"])
 
     assert result.exit_code == 0
-    assert "0.1.1" in result.output
+    assert __version__ in result.output
 
 
 def test_process_command_runs_pipeline(tmp_path) -> None:
@@ -204,6 +205,17 @@ def test_process_command_rejects_missing_input(tmp_path) -> None:
     assert "Input file does not exist" in result.output
 
 
+def test_process_command_rejects_directory_input(tmp_path) -> None:
+    runner = CliRunner()
+    input_dir = tmp_path / "input-dir"
+    input_dir.mkdir()
+
+    result = runner.invoke(main, ["process", str(input_dir)])
+
+    assert result.exit_code != 0
+    assert "Input path is not a file" in result.output
+
+
 def test_process_command_colors_top_level_errors(tmp_path) -> None:
     runner = CliRunner()
 
@@ -338,6 +350,34 @@ def test_extract_frames_command_rejects_audio_input(tmp_path, monkeypatch) -> No
 
     assert result.exit_code != 0
     assert "only supported for video input" in result.output
+
+
+def test_extract_frames_command_rejects_missing_input(tmp_path) -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(main, ["extract-frames", str(tmp_path / "missing.mp4")])
+
+    assert result.exit_code != 0
+    assert "Input file does not exist" in result.output
+
+
+def test_extract_frames_command_resets_active_display_before_cli_errors(tmp_path) -> None:
+    runner = CliRunner()
+    input_path = tmp_path / "demo.mp4"
+    input_path.write_text("stub", encoding="utf-8")
+
+    with (
+        patch(
+            "webinar_transcriber.cli.create_run_layout",
+            side_effect=OutputDirectoryExistsError("Output directory already exists: frames-run"),
+        ),
+        patch("webinar_transcriber.cli.RichStageReporter.reset_active_display") as reset_mock,
+    ):
+        result = runner.invoke(main, ["extract-frames", str(input_path)])
+
+    assert result.exit_code != 0
+    assert "Output directory already exists: frames-run" in result.output
+    reset_mock.assert_called_once()
 
 
 def test_extract_frames_command_handles_ctrl_c(tmp_path, monkeypatch) -> None:

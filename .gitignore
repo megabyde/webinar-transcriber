@@ -50,6 +50,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+webinar_transcriber/_version.py
 runs/
 models/.DS_Store
 models/whisper-cpp/*.bin
