@@ -1,6 +1,6 @@
 [project]
 name = "webinar-transcriber"
-version = "0.1.1"
+dynamic = ["version"]
 description = "Local-first CLI for transcribing webinar videos and audio recordings."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -40,7 +40,7 @@ dependencies = [
 webinar-transcriber = "webinar_transcriber.cli:main"
 
 [build-system]
-requires = ["hatchling>=1.27.0,<2.0.0"]
+requires = ["hatch-vcs>=0.5.0,<1.0.0", "hatchling>=1.27.0,<2.0.0"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
@@ -151,6 +151,14 @@ heading_line_length = 100
 
 [tool.ty.src]
 include = ["webinar_transcriber"]
+
+[tool.hatch.version]
+source = "vcs"
+tag-pattern = "^v(?P<version>.*)$"
+fallback-version = "0.0.0"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "webinar_transcriber/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["webinar_transcriber"]
