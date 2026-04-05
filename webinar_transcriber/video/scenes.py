@@ -142,9 +142,8 @@ def _iter_sampled_frames(video_path: Path) -> Iterable[tuple[float, np.ndarray]]
     finally:
         stderr_output = process.stderr.read().strip()
         return_code = process.wait()
-
-    if return_code != 0:
-        raise MediaProcessingError(stderr_output or "ffmpeg scene sampling failed.")
+        if return_code != 0:
+            raise MediaProcessingError(stderr_output or "ffmpeg scene sampling failed.")
 
 
 def _estimate_sample_end_time(last_sample_time: float) -> float:

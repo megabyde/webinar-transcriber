@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from webinar_transcriber.whispercpp import (
+    GPU_BACKEND_PATTERN,
     WhisperCppLibrary,
     WhisperCppRuntimeDetails,
     WhisperCppSession,
@@ -27,9 +28,6 @@ ASR_BACKEND_NAME = "whisper.cpp"
 DEFAULT_WHISPER_CPP_MODEL_REPO = "ggerganov/whisper.cpp"
 DEFAULT_WHISPER_CPP_MODEL_FILENAME = "ggml-large-v3-turbo.bin"
 DEFAULT_WHISPER_CPP_MODEL_EXAMPLE = Path("models/whisper-cpp/ggml-large-v3-turbo.bin")
-_ENABLED_BACKEND_PATTERN = re.compile(
-    r"(?i)\b(metal|mtl|cuda|vulkan|coreml)\b[^|]*?(?:=|:)\s*(?:1|true)"
-)
 _CARRYOVER_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 _CARRYOVER_WHITESPACE = re.compile(r"\s+")
 _CARRYOVER_TRAILING_NOISE = re.compile(r"[\(\[\{<\"'`]+$|[\s\-:,;]+$")
@@ -233,7 +231,7 @@ class WhisperCppTranscriber:
 
 
 def _device_name_from_system_info(system_info: str) -> str:
-    match = _ENABLED_BACKEND_PATTERN.search(system_info)
+    match = GPU_BACKEND_PATTERN.search(system_info)
     if match is not None:
         backend_name = match.group(1).lower()
         return "metal" if backend_name == "mtl" else backend_name
