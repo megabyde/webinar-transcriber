@@ -32,7 +32,7 @@ from webinar_transcriber.processor import (
     _window_transcription_stage_detail,
     process_input,
 )
-from webinar_transcriber.ui import NullStageReporter
+from webinar_transcriber.reporter import NullStageReporter
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 EXPECTED_LLM_WARNING = (

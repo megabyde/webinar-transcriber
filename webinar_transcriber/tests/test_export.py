@@ -3,7 +3,6 @@
 import json
 from pathlib import Path
 
-import pytest
 from docx import Document
 
 from webinar_transcriber.export.docx_report import write_docx_report
@@ -91,7 +90,7 @@ def test_write_docx_report_formats_cheat_sheet_lists(tmp_path: Path) -> None:
     assert ("Third point.", "List Number") in paragraph_data
 
 
-def test_write_docx_report_raises_clear_error_for_missing_section_image(tmp_path: Path) -> None:
+def test_write_docx_report_skips_missing_section_image(tmp_path: Path, caplog) -> None:
     report = ReportDocument(
         title="Demo",
         source_file="demo.wav",
@@ -108,8 +107,12 @@ def test_write_docx_report_raises_clear_error_for_missing_section_image(tmp_path
         ],
     )
 
-    with pytest.raises(FileNotFoundError, match="Section image does not exist"):
-        write_docx_report(report, tmp_path / "report.docx")
+    output_path = tmp_path / "report.docx"
+
+    write_docx_report(report, output_path)
+
+    assert output_path.exists()
+    assert "Section image does not exist" in caplog.text
 
 
 def test_write_markdown_report_omits_blank_image_line_for_imageless_sections(

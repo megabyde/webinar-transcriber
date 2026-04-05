@@ -39,6 +39,7 @@ from webinar_transcriber.models import (
 )
 from webinar_transcriber.paths import RunLayout, create_run_layout
 from webinar_transcriber.reconciliation import reconcile_decoded_windows
+from webinar_transcriber.reporter import NullStageReporter
 from webinar_transcriber.segmentation import (
     DEFAULT_SPEECH_PAD_MS,
     VadSettings,
@@ -54,7 +55,6 @@ from webinar_transcriber.transcription_audio import (
     prepared_transcription_audio,
     preserve_transcription_audio,
 )
-from webinar_transcriber.ui import NullStageReporter
 from webinar_transcriber.usage import merge_usage
 from webinar_transcriber.video import (
     detect_scenes,

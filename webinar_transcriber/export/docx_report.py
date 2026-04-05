@@ -1,5 +1,6 @@
 """DOCX export helpers."""
 
+import logging
 import re
 from pathlib import Path
 
@@ -58,7 +59,8 @@ def _add_section_image(document: DocxDocument, image_path: str | None) -> None:
 
     resolved_path = Path(image_path)
     if not resolved_path.exists():
-        raise FileNotFoundError(f"Section image does not exist: {resolved_path}")
+        logging.warning("Section image does not exist: %s", resolved_path)
+        return
     document.add_picture(str(resolved_path), width=Inches(6))
 
 
