@@ -22,6 +22,7 @@ from webinar_transcriber.llm import (
 )
 from webinar_transcriber.models import (
     DecodedWindow,
+    MediaType,
     SpeechRegion,
     TranscriptSegment,
 )
@@ -350,7 +351,7 @@ def test_process_input_writes_video_scene_artifacts(tmp_path, monkeypatch) -> No
         reporter=reporter,
     )
 
-    assert artifacts.media_asset.media_type.value == "video"
+    assert artifacts.media_asset.media_type == MediaType.VIDEO
     assert not (artifacts.layout.run_dir / "audio.wav").exists()
     assert transcription_audio_path is not None
     assert not transcription_audio_path.exists()
