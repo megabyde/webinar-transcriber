@@ -114,12 +114,13 @@ def test_whisper_cpp_library_decodes_window_with_fake_cdll(monkeypatch, tmp_path
     )
 
     library = WhisperCppLibrary(library_path)
-    decoded_window = library.decode_window(
-        model_path,
+    session = library.create_session(model_path)
+    decoded_window = session.decode_window(
         np.zeros(16_000, dtype=np.float32),
         InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=3.0),
         threads=4,
     )
+    session.close()
 
     assert library.runtime_details().system_info == "METAL = 1"
     assert decoded_window.language == "en"
@@ -147,12 +148,8 @@ def test_whisper_cpp_library_disables_gpu_when_system_info_has_no_backend(
     )
 
     library = WhisperCppLibrary(library_path)
-    library.decode_window(
-        model_path,
-        np.zeros(16_000, dtype=np.float32),
-        InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=3.0),
-        threads=4,
-    )
+    session = library.create_session(model_path)
+    session.close()
 
     assert fake_cdll.context_params_seen
     assert fake_cdll.context_params_seen[0].use_gpu is False
@@ -259,12 +256,7 @@ def test_whisper_cpp_library_raises_when_context_init_fails(monkeypatch, tmp_pat
     library = WhisperCppLibrary(library_path)
 
     with pytest.raises(WhisperCppError, match=r"Failed to initialize whisper\.cpp model"):
-        library.decode_window(
-            model_path,
-            np.zeros(16_000, dtype=np.float32),
-            InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
-            threads=2,
-        )
+        library.create_session(model_path)
 
 
 def test_whisper_cpp_library_raises_when_state_init_fails(monkeypatch, tmp_path) -> None:
@@ -283,12 +275,7 @@ def test_whisper_cpp_library_raises_when_state_init_fails(monkeypatch, tmp_path)
     library = WhisperCppLibrary(library_path)
 
     with pytest.raises(WhisperCppError, match=r"Failed to initialize whisper\.cpp runtime state"):
-        library.decode_window(
-            model_path,
-            np.zeros(16_000, dtype=np.float32),
-            InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
-            threads=2,
-        )
+        library.create_session(model_path)
 
 
 def test_decode_window_handles_empty_input_and_inference_failure(monkeypatch, tmp_path) -> None:

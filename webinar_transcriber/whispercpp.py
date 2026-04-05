@@ -261,28 +261,6 @@ class WhisperCppLibrary:
             runtime_details=runtime_details,
         )
 
-    def decode_window(
-        self,
-        model_path: Path,
-        audio_samples: np.ndarray,
-        window: InferenceWindow,
-        *,
-        threads: int,
-        prompt: str | None = None,
-        language_hint: str | None = None,
-    ) -> DecodedWindow:
-        session = self.create_session(model_path)
-        try:
-            return session.decode_window(
-                audio_samples,
-                threads=threads,
-                window=window,
-                prompt=prompt,
-                language_hint=language_hint,
-            )
-        finally:
-            session.close()
-
     def _decode_window(
         self,
         context: ctypes.c_void_p,

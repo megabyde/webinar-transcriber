@@ -33,6 +33,7 @@ from webinar_transcriber.models import (
     Diagnostics,
     InferenceWindow,
     MediaAsset,
+    MediaType,
     ReportDocument,
     SlideFrame,
     TranscriptionResult,
@@ -208,7 +209,6 @@ def process_input(
             warnings=warnings,
             llm_runtime=llm_runtime,
         )
-        report_transcription = normalized_transcription
         if keep_audio:
             preserved_audio_path = layout.transcription_audio_path(kept_audio_format)
             preserve_transcription_audio(
@@ -217,7 +217,7 @@ def process_input(
                 audio_format=kept_audio_format,
             )
 
-    if media_asset.media_type.value == "video":
+    if media_asset.media_type == MediaType.VIDEO:
         active_reporter.progress_started(
             "detect_scenes",
             "Detecting scenes",
@@ -262,7 +262,7 @@ def process_input(
             "Extracting slide frames",
             detail=_count_label(len(slide_frames), singular="frame"),
         )
-        alignment_blocks = align_by_time(report_transcription.segments, scenes, slide_frames)
+        alignment_blocks = align_by_time(normalized_transcription.segments, scenes, slide_frames)
     else:
         scenes = []
 
@@ -270,7 +270,7 @@ def process_input(
         (
             len(alignment_blocks)
             if alignment_blocks is not None
-            else len(report_transcription.segments)
+            else len(normalized_transcription.segments)
         ),
         1,
     )
@@ -289,7 +289,7 @@ def process_input(
     timer = _start_stage_timer(stage_timings, "structure")
     report = build_report(
         media_asset,
-        report_transcription,
+        normalized_transcription,
         alignment_blocks=alignment_blocks,
         warnings=warnings,
         progress_callback=lambda completed_count, section_count: on_structure_progress(
@@ -557,7 +557,7 @@ def _run_asr_pipeline(
         detail=f"{len(transcription.segments)} segments",
     )
 
-    _write_json(layout.transcript_path, _transcription_payload(transcription))
+    _write_json(layout.transcript_path, transcription.model_dump(mode="json"))
     normalized_transcription = normalize_transcription(transcription)
     return _AsrPipelineResult(
         transcription=transcription,
@@ -723,10 +723,6 @@ def _count_label(count: int, *, singular: str, plural: str | None = None) -> str
 
 def _configure_asr_logging(transcriber: WhisperCppTranscriber, layout: RunLayout) -> None:
     transcriber.set_log_path(layout.run_dir / "whisper-cpp.log")
-
-
-def _transcription_payload(transcription: TranscriptionResult) -> dict[str, object]:
-    return transcription.model_dump(mode="json")
 
 
 def _asr_model_label(model_name: str) -> str:

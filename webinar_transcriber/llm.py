@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
+import openai
 from pydantic import BaseModel, Field
 
 from webinar_transcriber.models import ReportDocument, ReportSection
@@ -547,14 +548,7 @@ def build_llm_processor_from_env() -> LLMProcessor:
 
 
 def _build_openai_client(api_key: str) -> Any:
-    return _build_sdk_client(
-        module_name="openai",
-        client_class_name="OpenAI",
-        api_key=api_key,
-        missing_sdk_message=(
-            "LLM requested but the OpenAI SDK is not installed in this environment."
-        ),
-    )
+    return openai.OpenAI(api_key=api_key)
 
 
 def _build_anthropic_client(api_key: str) -> Any:
