@@ -10,6 +10,7 @@ from webinar_transcriber.asr import (
     DEFAULT_ASR_THREADS,
     DEFAULT_CARRYOVER_MAX_SENTENCES,
     DEFAULT_CARRYOVER_MAX_TOKENS,
+    PromptCarryoverSettings,
 )
 from webinar_transcriber.media import MediaProcessingError, probe_media
 from webinar_transcriber.models import MediaType
@@ -20,6 +21,7 @@ from webinar_transcriber.segmentation import (
     DEFAULT_MIN_SPEECH_DURATION_MS,
     DEFAULT_SPEECH_REGION_PAD_MS,
     DEFAULT_VAD_THRESHOLD,
+    VadSettings,
 )
 from webinar_transcriber.ui import RichStageReporter
 from webinar_transcriber.video import (
@@ -181,14 +183,18 @@ def process(
             output_dir=output_dir,
             output_format=output_format,
             asr_model=asr_model,
-            vad_enabled=vad,
-            vad_threshold=vad_threshold,
-            min_speech_duration_ms=min_speech_ms,
-            min_silence_duration_ms=min_silence_ms,
-            speech_region_pad_ms=speech_region_pad_ms,
-            carryover_enabled=carryover,
-            carryover_max_sentences=carryover_max_sentences,
-            carryover_max_tokens=carryover_max_tokens,
+            vad=VadSettings(
+                enabled=vad,
+                threshold=vad_threshold,
+                min_speech_duration_ms=min_speech_ms,
+                min_silence_duration_ms=min_silence_ms,
+                speech_region_pad_ms=speech_region_pad_ms,
+            ),
+            carryover=PromptCarryoverSettings(
+                enabled=carryover,
+                max_sentences=carryover_max_sentences,
+                max_tokens=carryover_max_tokens,
+            ),
             asr_threads=asr_threads,
             keep_audio=keep_audio,
             kept_audio_format=kept_audio_format,

@@ -10,8 +10,6 @@ from webinar_transcriber.align import align_by_time
 from webinar_transcriber.asr import (
     ASR_BACKEND_NAME,
     DEFAULT_ASR_THREADS,
-    DEFAULT_CARRYOVER_MAX_SENTENCES,
-    DEFAULT_CARRYOVER_MAX_TOKENS,
     PromptCarryoverSettings,
     WhisperCppTranscriber,
 )
@@ -42,11 +40,8 @@ from webinar_transcriber.models import (
 from webinar_transcriber.paths import RunLayout, create_run_layout
 from webinar_transcriber.reconciliation import reconcile_decoded_windows
 from webinar_transcriber.segmentation import (
-    DEFAULT_MIN_SILENCE_DURATION_MS,
-    DEFAULT_MIN_SPEECH_DURATION_MS,
     DEFAULT_SPEECH_PAD_MS,
-    DEFAULT_SPEECH_REGION_PAD_MS,
-    DEFAULT_VAD_THRESHOLD,
+    VadSettings,
     detect_speech_regions,
     expand_speech_regions,
     normalized_audio_duration,
@@ -108,20 +103,18 @@ class _AsrPipelineResult:
     normalized_transcription: TranscriptionResult
 
 
+DEFAULT_VAD_SETTINGS = VadSettings()
+DEFAULT_PROMPT_CARRYOVER_SETTINGS = PromptCarryoverSettings()
+
+
 def process_input(
     input_path: Path,
     *,
     output_dir: Path | None = None,
     output_format: str = "all",
     asr_model: str | None = None,
-    vad_enabled: bool = True,
-    vad_threshold: float = DEFAULT_VAD_THRESHOLD,
-    min_speech_duration_ms: int = DEFAULT_MIN_SPEECH_DURATION_MS,
-    min_silence_duration_ms: int = DEFAULT_MIN_SILENCE_DURATION_MS,
-    speech_region_pad_ms: int = DEFAULT_SPEECH_REGION_PAD_MS,
-    carryover_enabled: bool = True,
-    carryover_max_sentences: int = DEFAULT_CARRYOVER_MAX_SENTENCES,
-    carryover_max_tokens: int = DEFAULT_CARRYOVER_MAX_TOKENS,
+    vad: VadSettings = DEFAULT_VAD_SETTINGS,
+    carryover: PromptCarryoverSettings = DEFAULT_PROMPT_CARRYOVER_SETTINGS,
     asr_threads: int = DEFAULT_ASR_THREADS,
     keep_audio: bool = False,
     kept_audio_format: str = "wav",
@@ -137,17 +130,13 @@ def process_input(
     alignment_blocks: list[AlignmentBlock] | None = None
     slide_frames: list[SlideFrame] = []
     llm_runtime = LLMRuntimeState()
-    asr_pipeline = AsrPipelineDiagnostics(vad_enabled=vad_enabled, threads=asr_threads)
-    asr_pipeline.carryover_enabled = carryover_enabled
+    asr_pipeline = AsrPipelineDiagnostics(vad_enabled=vad.enabled, threads=asr_threads)
+    asr_pipeline.carryover_enabled = carryover.enabled
 
     active_transcriber = transcriber or WhisperCppTranscriber(
         model_name=asr_model,
         threads=asr_threads,
-        carryover_settings=PromptCarryoverSettings(
-            enabled=carryover_enabled,
-            max_sentences=carryover_max_sentences,
-            max_tokens=carryover_max_tokens,
-        ),
+        carryover_settings=carryover,
     )
     active_reporter.begin_run(input_path, output_format=output_format)
 
@@ -194,11 +183,7 @@ def process_input(
             stage_timings=stage_timings,
             warnings=warnings,
             asr_pipeline=asr_pipeline,
-            vad_enabled=vad_enabled,
-            vad_threshold=vad_threshold,
-            min_speech_duration_ms=min_speech_duration_ms,
-            min_silence_duration_ms=min_silence_duration_ms,
-            speech_region_pad_ms=speech_region_pad_ms,
+            vad=vad,
         )
         transcription = asr_result.transcription
         normalized_transcription = asr_result.normalized_transcription
@@ -404,11 +389,7 @@ def _run_asr_pipeline(
     stage_timings: dict[str, float],
     warnings: list[str],
     asr_pipeline: AsrPipelineDiagnostics,
-    vad_enabled: bool,
-    vad_threshold: float,
-    min_speech_duration_ms: int,
-    min_silence_duration_ms: int,
-    speech_region_pad_ms: int,
+    vad: VadSettings,
 ) -> _AsrPipelineResult:
     reporter.stage_started("prepare_asr", "Preparing ASR model")
     timer = _start_stage_timer(stage_timings, "prepare_asr")
@@ -440,10 +421,10 @@ def _run_asr_pipeline(
     speech_regions, vad_warnings = detect_speech_regions(
         audio_samples,
         sample_rate,
-        enabled=vad_enabled,
-        threshold=vad_threshold,
-        min_speech_duration_ms=min_speech_duration_ms,
-        min_silence_duration_ms=min_silence_duration_ms,
+        enabled=vad.enabled,
+        threshold=vad.threshold,
+        min_speech_duration_ms=vad.min_speech_duration_ms,
+        min_silence_duration_ms=vad.min_silence_duration_ms,
         speech_pad_ms=DEFAULT_SPEECH_PAD_MS,
         progress_callback=lambda completed_sec, detected_count: on_vad_progress(
             completed_sec,
@@ -474,7 +455,7 @@ def _run_asr_pipeline(
     repaired_regions = repair_speech_regions(speech_regions)
     expanded_regions = expand_speech_regions(
         repaired_regions,
-        pad_ms=speech_region_pad_ms,
+        pad_ms=vad.speech_region_pad_ms,
         audio_duration_sec=asr_pipeline.normalized_audio_duration_sec or 0.0,
     )
     windows = [

@@ -9,7 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from webinar_transcriber import __version__
-from webinar_transcriber.asr import DEFAULT_ASR_THREADS
+from webinar_transcriber.asr import DEFAULT_ASR_THREADS, PromptCarryoverSettings
 from webinar_transcriber.cli import main
 from webinar_transcriber.models import (
     Diagnostics,
@@ -22,6 +22,7 @@ from webinar_transcriber.models import (
 )
 from webinar_transcriber.paths import OutputDirectoryExistsError, RunLayout
 from webinar_transcriber.processor import ProcessArtifacts
+from webinar_transcriber.segmentation import VadSettings
 
 
 def test_main_help_shows_process_command() -> None:
@@ -79,14 +80,8 @@ def test_process_command_runs_pipeline(tmp_path) -> None:
         output_dir=None,
         output_format="json",
         asr_model=None,
-        vad_enabled=True,
-        vad_threshold=0.5,
-        min_speech_duration_ms=250,
-        min_silence_duration_ms=600,
-        speech_region_pad_ms=200,
-        carryover_enabled=True,
-        carryover_max_sentences=2,
-        carryover_max_tokens=64,
+        vad=VadSettings(),
+        carryover=PromptCarryoverSettings(),
         asr_threads=DEFAULT_ASR_THREADS,
         keep_audio=False,
         kept_audio_format="wav",
@@ -156,14 +151,18 @@ def test_process_command_forwards_asr_options(tmp_path) -> None:
         output_dir=None,
         output_format="all",
         asr_model="models/whisper-cpp/custom.bin",
-        vad_enabled=False,
-        vad_threshold=0.42,
-        min_speech_duration_ms=300,
-        min_silence_duration_ms=500,
-        speech_region_pad_ms=220,
-        carryover_enabled=False,
-        carryover_max_sentences=1,
-        carryover_max_tokens=32,
+        vad=VadSettings(
+            enabled=False,
+            threshold=0.42,
+            min_speech_duration_ms=300,
+            min_silence_duration_ms=500,
+            speech_region_pad_ms=220,
+        ),
+        carryover=PromptCarryoverSettings(
+            enabled=False,
+            max_sentences=1,
+            max_tokens=32,
+        ),
         asr_threads=6,
         keep_audio=True,
         kept_audio_format="mp3",
