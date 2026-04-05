@@ -1,6 +1,7 @@
 """High-level processing orchestration."""
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
@@ -686,6 +687,7 @@ def _write_requested_artifacts(
     if "docx" in formats:
         write_docx_report(report, layout.docx_report_path)
 
+    # Always write JSON - it is the canonical machine-readable artifact.
     write_json_report(report, layout.json_report_path)
     write_vtt_subtitles(transcription, layout.subtitle_vtt_path)
 
@@ -699,7 +701,7 @@ def _progress_updater(
     reporter: NullStageReporter,
     *,
     stage_key: str,
-):
+) -> tuple[Callable[..., None], Callable[..., None]]:
     completed = 0.0
 
     def update(next_completed: float, *, detail: str | None = None) -> None:
