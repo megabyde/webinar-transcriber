@@ -13,6 +13,7 @@ from webinar_transcriber.models import (
     TranscriptionResult,
     TranscriptSegment,
 )
+from webinar_transcriber.transcript_processing import STRONG_SENTENCE_END_RE
 
 
 def _compile_case_insensitive_patterns(*patterns: str) -> tuple[re.Pattern[str], ...]:
@@ -261,6 +262,10 @@ def _should_start_new_audio_section(
     gap_duration = max(0.0, next_segment.start_sec - current_end)
     next_duration = max(0.0, next_segment.end_sec - current_start)
     current_chars = sum(len(segment.text.strip()) for segment in current_segments)
+    ends_on_sentence_boundary = bool(
+        STRONG_SENTENCE_END_RE.search(current_segments[-1].text.strip())
+    )
+    hard_cap_exceeded = next_duration > (2 * TARGET_AUDIO_SECTION_DURATION_SEC)
 
     if gap_duration >= AUDIO_SECTION_BREAK_GAP_SEC:
         return True
@@ -269,11 +274,12 @@ def _should_start_new_audio_section(
         current_duration >= MIN_AUDIO_SECTION_DURATION_SEC
         and next_duration > TARGET_AUDIO_SECTION_DURATION_SEC
     ):
-        return True
+        return hard_cap_exceeded or ends_on_sentence_boundary
 
     return (
         current_duration >= MIN_AUDIO_SECTION_DURATION_SEC
         and current_chars >= MAX_AUDIO_SECTION_CHARS
+        and (hard_cap_exceeded or ends_on_sentence_boundary)
     )
 
 

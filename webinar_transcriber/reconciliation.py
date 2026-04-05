@@ -113,6 +113,8 @@ def _window_tokens(decoded_window: DecodedWindow, *, window_order: int) -> list[
         if not split_tokens:
             continue
 
+        # Token timing is linearly interpolated across whitespace tokens, which is cheap and
+        # deterministic but only an approximation until whisper.cpp token timestamps are wired in.
         duration_sec = max(0.0, segment.end_sec - segment.start_sec)
         token_duration_sec = duration_sec / len(split_tokens) if split_tokens else 0.0
         for token_order, token_text in enumerate(split_tokens):
@@ -187,6 +189,7 @@ def _align_overlap(
     previous_overlap: list[tuple[int, _TokenPiece]],
     current_overlap: list[tuple[int, _TokenPiece]],
 ) -> list[tuple[int, int]]:
+    # This uses an O(n^2) LCS table and assumes overlap regions stay short.
     previous_filtered = [(index, token) for index, token in previous_overlap if token.normalized]
     current_filtered = [(index, token) for index, token in current_overlap if token.normalized]
     if not previous_filtered or not current_filtered:
@@ -269,6 +272,8 @@ def _segments_from_tokens(
     if not tokens:
         return [], 0
 
+    # Reconciliation preserves source-window seams here; normalize_transcription downstream is
+    # responsible for merging those fragments back into cleaner utterance boundaries.
     segments: list[TranscriptSegment] = []
     boundary_fixes = 0
     current_group: list[_TokenPiece] = [tokens[0]]
