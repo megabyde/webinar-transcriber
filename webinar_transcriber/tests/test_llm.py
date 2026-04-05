@@ -137,9 +137,7 @@ def test_openai_llm_processor_polishes_report(monkeypatch) -> None:
             {"input_tokens": 12, "output_tokens": 8, "total_tokens": 20},
         ),
     ])
-    monkeypatch.setattr(
-        "webinar_transcriber.llm._build_openai_client", lambda _api_key: fake_client
-    )
+    monkeypatch.setattr("webinar_transcriber.llm.openai.OpenAI", lambda api_key: fake_client)
 
     processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
     report = ReportDocument(
@@ -189,9 +187,7 @@ def test_openai_llm_processor_rejects_unknown_report_section_id(monkeypatch) -> 
             {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5},
         ),
     ])
-    monkeypatch.setattr(
-        "webinar_transcriber.llm._build_openai_client", lambda _api_key: fake_client
-    )
+    monkeypatch.setattr("webinar_transcriber.llm.openai.OpenAI", lambda api_key: fake_client)
 
     processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
     report = ReportDocument(
@@ -223,9 +219,7 @@ def test_openai_llm_processor_skips_interlude_section_text_polish(monkeypatch) -
             usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
         ),
     ])
-    monkeypatch.setattr(
-        "webinar_transcriber.llm._build_openai_client", lambda _api_key: fake_client
-    )
+    monkeypatch.setattr("webinar_transcriber.llm.openai.OpenAI", lambda api_key: fake_client)
 
     processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
     report = ReportDocument(
