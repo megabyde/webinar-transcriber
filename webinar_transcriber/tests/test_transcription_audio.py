@@ -229,7 +229,10 @@ def test_silero_speech_timestamps_returns_none_when_module_missing() -> None:
     assert timestamps is None
 
 
-def test_silero_speech_timestamps_uses_vad_iterator_and_reports_progress(monkeypatch) -> None:
+def test_silero_speech_timestamps_uses_vad_iterator_and_reports_progress(
+    monkeypatch,
+    fake_silero_import_module,
+) -> None:
     progress: list[tuple[float, int]] = []
 
     class FakeIterator:
@@ -257,28 +260,9 @@ def test_silero_speech_timestamps_uses_vad_iterator_and_reports_progress(monkeyp
                 return {"end": 900}
             return None
 
-    class FakeSilero:
-        @staticmethod
-        def load_silero_vad():
-            return object()
-
-        VADIterator = FakeIterator
-
-    class FakeTorch:
-        @staticmethod
-        def from_numpy(arr):
-            return arr
-
-    def fake_import_module(name: str):
-        if name == "silero_vad":
-            return FakeSilero
-        if name == "torch":
-            return FakeTorch
-        raise ImportError(name)
-
     monkeypatch.setattr(
         "webinar_transcriber.segmentation.importlib.import_module",
-        fake_import_module,
+        fake_silero_import_module(iterator_cls=FakeIterator),
     )
 
     timestamps = _silero_speech_timestamps(
@@ -299,27 +283,13 @@ def test_silero_speech_timestamps_uses_vad_iterator_and_reports_progress(monkeyp
     assert progress[-1][1] == 1
 
 
-def test_silero_speech_timestamps_requires_normalized_16khz_audio(monkeypatch) -> None:
-    class FakeSilero:
-        @staticmethod
-        def load_silero_vad():
-            return object()
-
-    class FakeTorch:
-        @staticmethod
-        def from_numpy(arr):
-            return arr
-
-    def fake_import_module(name: str):
-        if name == "silero_vad":
-            return FakeSilero
-        if name == "torch":
-            return FakeTorch
-        raise ImportError(name)
-
+def test_silero_speech_timestamps_requires_normalized_16khz_audio(
+    monkeypatch,
+    fake_silero_import_module,
+) -> None:
     monkeypatch.setattr(
         "webinar_transcriber.segmentation.importlib.import_module",
-        fake_import_module,
+        fake_silero_import_module(),
     )
 
     with pytest.raises(AssertionError, match="16000 Hz"):
@@ -333,7 +303,10 @@ def test_silero_speech_timestamps_requires_normalized_16khz_audio(monkeypatch) -
         )
 
 
-def test_silero_speech_timestamps_flushes_open_speech_at_end_of_stream(monkeypatch) -> None:
+def test_silero_speech_timestamps_flushes_open_speech_at_end_of_stream(
+    monkeypatch,
+    fake_silero_import_module,
+) -> None:
     class FakeIterator:
         def __init__(self, *_args, **_kwargs) -> None:
             self._calls = 0
@@ -345,28 +318,9 @@ def test_silero_speech_timestamps_flushes_open_speech_at_end_of_stream(monkeypat
                 return {"start": 200}
             return None
 
-    class FakeSilero:
-        @staticmethod
-        def load_silero_vad():
-            return object()
-
-        VADIterator = FakeIterator
-
-    class FakeTorch:
-        @staticmethod
-        def from_numpy(arr):
-            return arr
-
-    def fake_import_module(name: str):
-        if name == "silero_vad":
-            return FakeSilero
-        if name == "torch":
-            return FakeTorch
-        raise ImportError(name)
-
     monkeypatch.setattr(
         "webinar_transcriber.segmentation.importlib.import_module",
-        fake_import_module,
+        fake_silero_import_module(iterator_cls=FakeIterator),
     )
 
     timestamps = _silero_speech_timestamps(

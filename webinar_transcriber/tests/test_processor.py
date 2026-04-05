@@ -27,6 +27,7 @@ from webinar_transcriber.models import (
     TranscriptSegment,
 )
 from webinar_transcriber.processor import (
+    ProcessArtifacts,
     _asr_runtime_detail,
     _window_transcription_stage_detail,
     process_input,
@@ -34,6 +35,13 @@ from webinar_transcriber.processor import (
 from webinar_transcriber.ui import NullStageReporter
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
+EXPECTED_LLM_WARNING = (
+    "Section polish response returned an empty transcript text for section-1; kept original text."
+)
+EXPECTED_LLM_USAGE = {"input_tokens": 20, "output_tokens": 6, "total_tokens": 26}
+EXPECTED_LLM_SECTION_TEXT = (
+    "Agenda review, and project status update.\n\nNext step: please send the draft by Friday."
+)
 
 
 class FakeTranscriber(WhisperCppTranscriber):
@@ -591,7 +599,11 @@ def test_process_input_persists_intermediate_artifacts_on_failure(tmp_path) -> N
     assert not (output_dir / "report.json").exists()
 
 
-def test_process_input_polishes_report_sections_when_llm_succeeds(tmp_path, monkeypatch) -> None:
+@pytest.fixture
+def llm_success_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[ProcessArtifacts, RecordingReporter]:
     install_basic_windowing(monkeypatch)
     reporter = RecordingReporter()
 
@@ -644,12 +656,7 @@ def test_process_input_polishes_report_sections_when_llm_succeeds(tmp_path, monk
                     )
                 },
                 usage={"input_tokens": 12, "output_tokens": 3, "total_tokens": 15},
-                warnings=[
-                    (
-                        "Section polish response returned an empty transcript text "
-                        "for section-1; kept original text."
-                    )
-                ],
+                warnings=[EXPECTED_LLM_WARNING],
             )
 
         def polish_report_metadata(
@@ -675,49 +682,53 @@ def test_process_input_polishes_report_sections_when_llm_succeeds(tmp_path, monk
         reporter=reporter,
     )
 
-    assert artifacts.report.summary == ["Refined summary point."]
-    assert artifacts.report.action_items == ["Refined action item."]
-    assert artifacts.report.sections[0].title == "Refined section title"
+    return artifacts, reporter
+
+
+def test_process_input_updates_section_text_from_llm_output(llm_success_result) -> None:
+    artifacts, _reporter = llm_success_result
+
     assert artifacts.report.sections[0].tldr == (
         "Agenda update and next-step reminder for the draft delivery."
     )
-    assert artifacts.report.sections[0].transcript_text == (
-        "Agenda review, and project status update.\n\nNext step: please send the draft by Friday."
-    )
+    assert artifacts.report.sections[0].transcript_text == EXPECTED_LLM_SECTION_TEXT
+
+
+def test_process_input_updates_summary_and_action_items_from_llm(llm_success_result) -> None:
+    artifacts, _reporter = llm_success_result
+
+    assert artifacts.report.summary == ["Refined summary point."]
+    assert artifacts.report.action_items == ["Refined action item."]
+    assert artifacts.report.sections[0].title == "Refined section title"
+
+
+def test_process_input_aggregates_llm_usage_into_diagnostics(llm_success_result) -> None:
+    artifacts, reporter = llm_success_result
+
     assert artifacts.diagnostics.llm_enabled is True
     assert artifacts.diagnostics.llm_model == "test-llm-model"
     assert artifacts.diagnostics.llm_report_status == "applied"
-    expected_warning = (
-        "Section polish response returned an empty transcript text "
-        "for section-1; kept original text."
-    )
-    expected_usage = {"input_tokens": 20, "output_tokens": 6, "total_tokens": 26}
-    llm_report_finish = (
+    assert artifacts.diagnostics.warnings == [EXPECTED_LLM_WARNING]
+    assert artifacts.diagnostics.llm_report_usage == EXPECTED_LLM_USAGE
+    assert reporter.has_progress_event("start", "llm_report_sections", 1.0, None)
+    assert reporter.has_progress_event("advance", "llm_report_sections", 1.0, None)
+    assert reporter.has_event("finish", "llm_report_sections", "1 section")
+    assert (
         "finish",
         "llm_report",
         "1 summary bullet | 1 action item | 1 TL;DR | 26 tokens",
-    )
-
-    assert artifacts.diagnostics.warnings == [expected_warning]
-    assert artifacts.diagnostics.llm_report_usage == expected_usage
-    assert reporter.has_progress_event("start", "llm_report_sections", 1.0, None)
-    assert llm_report_finish in reporter.events
-    assert reporter.has_progress_event("advance", "llm_report_sections", 1.0, None)
-    llm_sections_start = (
+    ) in reporter.events
+    assert (
         "start",
         "llm_report_sections",
         "Polishing section text with LLM (openai | test-llm-model | 1 worker)",
-    )
-    llm_report_start = (
+    ) in reporter.events
+    assert (
         "start",
         "llm_report",
         "Polishing report summary with LLM (openai | test-llm-model)",
-    )
-
-    assert llm_sections_start in reporter.events
-    assert reporter.has_event("finish", "llm_report_sections", "1 section")
-    assert llm_report_start in reporter.events
-    assert reporter.warnings == [expected_warning]
+    ) in reporter.events
+    assert reporter.warnings == [EXPECTED_LLM_WARNING]
 
 
 def test_process_input_warns_when_llm_configuration_is_missing(tmp_path, monkeypatch) -> None:
