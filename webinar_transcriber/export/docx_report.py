@@ -1,16 +1,14 @@
 """DOCX export helpers."""
 
 import re
-from math import floor
 from pathlib import Path
 
 from docx import Document
 from docx.document import Document as DocxDocument
 from docx.shared import Inches
 
+from webinar_transcriber.export.formatting import section_timecode
 from webinar_transcriber.models import ReportDocument, ReportSection
-
-EN_DASH = "\N{EN DASH}"
 
 
 def write_docx_report(report: ReportDocument, output_path: Path) -> Path:
@@ -46,7 +44,7 @@ def _split_paragraphs(text: str) -> list[str]:
 
 def _add_section(document: DocxDocument, section: ReportSection) -> None:
     title = section.title
-    timecode = _section_timecode(section.start_sec, section.end_sec)
+    timecode = section_timecode(section.start_sec, section.end_sec)
     document.add_heading(f"{title} ({timecode})", level=2)
     _add_section_image(document, section.image_path)
     _add_section_tldr(document, section.tldr)
@@ -108,17 +106,3 @@ def _list_item_parts(text: str) -> tuple[str | None, str | None]:
         return number_match.group(1), "List Number"
 
     return None, None
-
-
-def _section_timecode(start_sec: float, end_sec: float) -> str:
-    return f"{_format_timecode(start_sec)}{EN_DASH}{_format_timecode(end_sec)}"
-
-
-def _format_timecode(total_sec: float) -> str:
-    clamped_sec = max(total_sec, 0.0)
-    rounded_sec = floor(clamped_sec)
-    hours, remainder = divmod(rounded_sec, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    if hours:
-        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-    return f"{minutes:02d}:{seconds:02d}"

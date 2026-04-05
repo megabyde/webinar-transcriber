@@ -7,6 +7,7 @@ import pytest
 from docx import Document
 
 from webinar_transcriber.export.docx_report import write_docx_report
+from webinar_transcriber.export.formatting import format_timecode
 from webinar_transcriber.export.json_report import write_json_report
 from webinar_transcriber.export.markdown import write_markdown_report
 from webinar_transcriber.export.subtitles import write_vtt_subtitles
@@ -24,6 +25,11 @@ EN_DASH = "\N{EN DASH}"
 def _style_name(paragraph) -> str | None:
     style = paragraph.style
     return None if style is None else style.name
+
+
+def test_format_timecode_formats_short_and_long_durations() -> None:
+    assert format_timecode(65.9) == "01:05"
+    assert format_timecode(3661.2) == "01:01:01"
 
 
 def test_write_docx_report_splits_blank_line_paragraphs(tmp_path: Path) -> None:

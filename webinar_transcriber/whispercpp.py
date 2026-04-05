@@ -18,7 +18,7 @@ from webinar_transcriber.models import DecodedWindow, InferenceWindow, Transcrip
 
 _WHISPER_SAMPLING_GREEDY: Final[int] = 0
 _TICKS_PER_SECOND: Final[float] = 100.0
-_GPU_BACKEND_PATTERN: Final = re.compile(
+GPU_BACKEND_PATTERN: Final = re.compile(
     r"(?i)\b(metal|mtl|cuda|vulkan|coreml)\b[^|]*?(?:=|:)\s*(?:1|true)"
 )
 _BACKEND_PLUGIN_GLOB: Final[str] = "libggml-*.so"
@@ -543,7 +543,7 @@ def _configure_context_params(
 
 
 def _system_info_supports_gpu(system_info: str) -> bool:
-    return _GPU_BACKEND_PATTERN.search(system_info) is not None
+    return GPU_BACKEND_PATTERN.search(system_info) is not None
 
 
 def _encode_optional_text(value: str | None) -> bytes | None:

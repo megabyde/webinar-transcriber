@@ -17,6 +17,8 @@ from webinar_transcriber.video.frames import (
     _normalize_extracted_frame,
 )
 from webinar_transcriber.video.scenes import (
+    TARGET_SAMPLE_HEIGHT,
+    TARGET_SAMPLE_WIDTH,
     _detect_scene_start_times,
     _estimate_sample_end_time,
     _iter_sampled_frames,
@@ -278,6 +280,34 @@ def test_iter_sampled_frames_raises_when_ffmpeg_exits_nonzero(
 
     with pytest.raises(MediaProcessingError, match="ffmpeg failed"):
         list(_iter_sampled_frames(FIXTURE_DIR / "sample-video.mp4"))
+
+
+def test_iter_sampled_frames_raises_when_ffmpeg_exits_nonzero_after_yielding_frames(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frame_size = TARGET_SAMPLE_WIDTH * TARGET_SAMPLE_HEIGHT
+
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.stdout = io.BytesIO(b"\x00" * frame_size)
+            self.stderr = io.BytesIO(b"ffmpeg failed late")
+
+        def wait(self) -> int:
+            return 1
+
+    monkeypatch.setattr(
+        "webinar_transcriber.video.scenes.subprocess.Popen",
+        lambda *_a, **_k: FakeProcess(),
+    )
+
+    iterator = iter(_iter_sampled_frames(FIXTURE_DIR / "sample-video.mp4"))
+    current_time, frame = next(iterator)
+
+    assert current_time == 0.0
+    assert frame.shape == (TARGET_SAMPLE_HEIGHT, TARGET_SAMPLE_WIDTH)
+
+    with pytest.raises(MediaProcessingError, match="ffmpeg failed late"):
+        list(iterator)
 
 
 def test_scene_sampling_helpers_cover_zero_duration_and_trailing_sample() -> None:
