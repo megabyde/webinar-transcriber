@@ -8,6 +8,7 @@ with the low-level library wrapper.
 from __future__ import annotations
 
 import importlib
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -26,6 +27,17 @@ DEFAULT_SPEECH_PAD_MS = 30
 DEFAULT_SPEECH_REGION_PAD_MS = 200
 DEFAULT_MIN_REPAIRED_REGION_SEC = 3.0
 DEFAULT_REPAIR_MAX_GAP_SEC = 0.9
+
+
+@dataclass(frozen=True)
+class VadSettings:
+    """Configuration for VAD-driven speech region planning."""
+
+    enabled: bool = True
+    threshold: float = DEFAULT_VAD_THRESHOLD
+    min_speech_duration_ms: int = DEFAULT_MIN_SPEECH_DURATION_MS
+    min_silence_duration_ms: int = DEFAULT_MIN_SILENCE_DURATION_MS
+    speech_region_pad_ms: int = DEFAULT_SPEECH_REGION_PAD_MS
 
 
 def detect_speech_regions(
