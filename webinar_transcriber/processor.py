@@ -202,6 +202,7 @@ def process_input(
                 preserved_audio_path,
                 audio_format=kept_audio_format,
             )
+    # Subsequent video, structure, and export stages intentionally run after temp audio cleanup.
 
     if media_asset.media_type == MediaType.VIDEO:
         active_reporter.progress_started(

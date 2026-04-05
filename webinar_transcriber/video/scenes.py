@@ -79,6 +79,8 @@ def _detect_scene_start_times(
         difference = float(np.abs(current_frame - accepted_frame).mean())
         if difference >= difference_threshold:
             scene_starts.append(float(current_time))
+            # Compare against the scene's anchor frame, not the previous sample,
+            # so gradual visual drift does not trigger spurious scene breaks.
             accepted_frame = current_frame
         if progress_callback is not None:
             progress_callback(len(scene_starts))
