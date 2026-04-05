@@ -41,7 +41,9 @@ def test_align_by_time_returns_empty_list_when_there_are_no_scenes() -> None:
     assert blocks == []
 
 
-def test_align_by_time_drops_segments_outside_all_scenes() -> None:
+def test_align_by_time_assigns_orphan_segments_to_nearest_blocks_and_warns() -> None:
+    warnings: list[str] = []
+
     blocks = align_by_time(
         transcript_segments=[
             TranscriptSegment(id="seg-1", text="Before", start_sec=0.0, end_sec=0.2),
@@ -53,9 +55,16 @@ def test_align_by_time_drops_segments_outside_all_scenes() -> None:
             Scene(id="scene-2", start_sec=2.0, end_sec=3.0),
         ],
         slide_frames=[],
+        warnings=warnings,
     )
 
-    assert [block.transcript_segment_ids for block in blocks] == [["seg-2"], []]
+    assert [block.transcript_segment_ids for block in blocks] == [["seg-1", "seg-2"], ["seg-3"]]
+    assert warnings == [
+        (
+            "Aligned 2 transcript segments to the nearest scene blocks because their "
+            "midpoints fell outside all scene ranges."
+        )
+    ]
 
 
 def test_align_by_time_keeps_empty_blocks_for_scenes_without_matches() -> None:

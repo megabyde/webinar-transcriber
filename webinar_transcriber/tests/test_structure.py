@@ -13,8 +13,10 @@ from webinar_transcriber.structure import (
     _audio_title_score,
     _build_audio_sections,
     _build_summary,
+    _derive_title,
     _extract_action_items,
     _fallback_summary,
+    _is_likely_interlude_text,
     _segment_key,
     _summary_filler_penalty,
     _summary_repetition_penalty,
@@ -470,6 +472,13 @@ class TestBuildReport:
         assert len(report.sections) == 1
         assert "единственной и уникальной" in report.sections[0].transcript_text
 
+    def test_does_not_mark_repetitive_technical_terms_as_interlude(self) -> None:
+        assert not _is_likely_interlude_text(
+            "HTTPS gRPC NCCL training pipeline gradient descent optimizer scheduler "
+            "dataloader tensor cluster review metrics throughput gRPC NCCL "
+            "optimizer scheduler tensor review"
+        )
+
 
 class TestAudioSectionHeuristics:
     def test_build_audio_sections_splits_when_target_duration_would_be_exceeded(self) -> None:
@@ -606,6 +615,54 @@ class TestSummaryAndActionHeuristics:
             "Please check the final numbers.",
         ]
 
+    def test_extract_action_items_prefers_higher_scored_later_candidates(self) -> None:
+        action_items = _extract_action_items([
+            TranscriptSegment(
+                id="segment-1",
+                text="Please send the draft",
+                start_sec=10.0,
+                end_sec=13.0,
+            ),
+            TranscriptSegment(
+                id="segment-2",
+                text="Please review the spreadsheet",
+                start_sec=123.0,
+                end_sec=126.0,
+            ),
+            TranscriptSegment(
+                id="segment-3",
+                text="Please update the tracker",
+                start_sec=126.0,
+                end_sec=129.0,
+            ),
+            TranscriptSegment(
+                id="segment-4",
+                text="Please share the recording",
+                start_sec=129.0,
+                end_sec=132.0,
+            ),
+            TranscriptSegment(
+                id="segment-5",
+                text="Please check the notes",
+                start_sec=132.0,
+                end_sec=135.0,
+            ),
+            TranscriptSegment(
+                id="segment-6",
+                text="Please remember the final numbers.",
+                start_sec=135.0,
+                end_sec=138.0,
+            ),
+        ])
+
+        assert action_items == [
+            "Please review the spreadsheet",
+            "Please update the tracker",
+            "Please share the recording",
+            "Please check the notes",
+            "Please remember the final numbers.",
+        ]
+
     def test_structure_scoring_helpers_cover_penalty_branches(self) -> None:
         repetitive_segment = TranscriptSegment(
             id="segment-1",
@@ -673,3 +730,6 @@ class TestSummaryAndActionHeuristics:
 
         assert repetition_penalty == -1.5
         assert summary == ["One", "Two", "Three"]
+
+    def test_derive_title_handles_windows_paths(self) -> None:
+        assert _derive_title(r"C:\recordings\weekly-sync.mp4") == "Weekly Sync"

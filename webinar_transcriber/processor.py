@@ -248,7 +248,12 @@ def process_input(
             "Extracting slide frames",
             detail=_count_label(len(slide_frames), singular="frame"),
         )
-        alignment_blocks = align_by_time(normalized_transcription.segments, scenes, slide_frames)
+        alignment_blocks = align_by_time(
+            normalized_transcription.segments,
+            scenes,
+            slide_frames,
+            warnings=warnings,
+        )
     else:
         scenes = []
 

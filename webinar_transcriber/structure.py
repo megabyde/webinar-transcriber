@@ -3,6 +3,7 @@
 import re
 from collections.abc import Callable
 from itertools import pairwise
+from pathlib import Path, PureWindowsPath
 
 from webinar_transcriber.models import (
     AlignmentBlock,
@@ -58,7 +59,7 @@ ACTION_ITEM_LIMIT = 5
 INTERLUDE_MIN_WORDS = 18
 MIN_INTERLUDE_DURATION_SEC = 30.0
 INTERLUDE_LOW_PUNCTUATION_DENSITY = 0.06
-INTERLUDE_LOW_UNIQUE_RATIO = 0.6
+INTERLUDE_LOW_UNIQUE_RATIO = 0.5
 INTERLUDE_REPEATED_BIGRAM_RATIO = 0.12
 TITLE_FILLER_WORDS = {
     "actually",
@@ -354,25 +355,29 @@ def _build_summary(segments: list[TranscriptSegment]) -> list[str]:
 
 
 def _extract_action_items(segments: list[TranscriptSegment]) -> list[str]:
-    action_items: list[str] = []
+    candidates: list[tuple[float, int, str]] = []
     seen_keys: set[str] = set()
 
-    for segment in segments:
+    for index, segment in enumerate(segments):
         text = segment.text.strip()
         if not text or not _has_action_item_cue(text):
             continue
-        if _action_item_score(segment) <= 0:
+        score = _action_item_score(segment)
+        if score <= 0:
             continue
+        candidates.append((score, index, text))
 
+    selected: list[tuple[int, str]] = []
+    for _score, index, text in sorted(candidates, key=lambda item: (-item[0], item[1])):
         key = _segment_key(text)
         if key in seen_keys:
             continue
         seen_keys.add(key)
-        action_items.append(text)
-        if len(action_items) == ACTION_ITEM_LIMIT:
+        selected.append((index, text))
+        if len(selected) == ACTION_ITEM_LIMIT:
             break
 
-    return action_items
+    return [text for _, text in sorted(selected, key=lambda item: item[0])]
 
 
 def _title_from_text(text: str, *, fallback: str) -> str:
@@ -535,7 +540,7 @@ def _has_action_item_cue(text: str) -> bool:
 
 
 def _derive_title(source_path: str) -> str:
-    stem = source_path.rsplit("/", maxsplit=1)[-1].rsplit(".", maxsplit=1)[0]
+    stem = PureWindowsPath(source_path).stem if "\\" in source_path else Path(source_path).stem
     return stem.replace("-", " ").replace("_", " ").strip().title() or "Transcription Report"
 
 
@@ -721,15 +726,17 @@ def _is_likely_interlude_text(text: str) -> bool:
         return True
 
     words = INTERLUDE_WORD_RE.findall(stripped.casefold())
+    original_words = INTERLUDE_WORD_RE.findall(stripped)
     if len(words) < INTERLUDE_MIN_WORDS:
         return False
 
     sample_size = min(len(words), 80)
     sampled_words = words[:sample_size]
+    sampled_original_words = original_words[:sample_size]
     punctuation_density = sum(1 for char in stripped if char in ".?!:;") / sample_size
     unique_ratio = len(set(sampled_words)) / sample_size
     repeated_bigram_ratio = _repeated_bigram_ratio(sampled_words)
-    noisy_word_ratio = _noisy_word_ratio(sampled_words)
+    noisy_word_ratio = _noisy_word_ratio(sampled_original_words)
 
     return bool(
         punctuation_density <= INTERLUDE_LOW_PUNCTUATION_DENSITY
@@ -762,9 +769,11 @@ def _noisy_word_ratio(words: list[str]) -> float:
 def _is_noisy_word(word: str) -> bool:
     if len(word) < 5:
         return False
+    if word.isupper():
+        return False
 
     vowels = RUSSIAN_VOWELS | LATIN_VOWELS
-    return not any(char in vowels for char in word)
+    return not any(char in vowels for char in word.casefold())
 
 
 def _interlude_title(detected_language: str | None) -> str:
