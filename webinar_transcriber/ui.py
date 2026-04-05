@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from time import perf_counter
 from typing import TYPE_CHECKING
 
@@ -23,72 +22,14 @@ from rich.progress import (
 from rich.table import Table
 from rich.text import Text
 
+from webinar_transcriber.reporter import NullStageReporter, StageEvent
+
 if TYPE_CHECKING:
     from pathlib import Path
 
     from rich.status import Status
 
     from webinar_transcriber.processor import ProcessArtifacts
-
-
-@dataclass
-class StageEvent:
-    """Structured representation of a stage transition."""
-
-    stage_key: str
-    label: str
-    started_at: float
-
-
-class NullStageReporter:
-    """No-op reporter used by tests and non-interactive code paths."""
-
-    def begin_run(self, input_path: Path, *, output_format: str) -> None:
-        """Record the start of a processing run."""
-
-    def stage_started(self, stage_key: str, label: str) -> None:
-        """Record that a stage has started."""
-
-    def stage_timing_started(self, stage_key: str, label: str) -> None:
-        """Record timing for a stage without rendering an active display."""
-
-    def progress_started(
-        self,
-        stage_key: str,
-        label: str,
-        *,
-        total: float,
-        count_label: str | None = None,
-        count_multiplier: float = 1.0,
-        rate_label: str | None = None,
-        rate_multiplier: float = 1.0,
-        detail: str | None = None,
-    ) -> None:
-        """Record that a determinate stage has started."""
-
-    def progress_advanced(
-        self,
-        stage_key: str,
-        *,
-        advance: float = 1.0,
-        detail: str | None = None,
-    ) -> None:
-        """Record that a determinate stage has advanced."""
-
-    def stage_finished(self, stage_key: str, label: str, *, detail: str | None = None) -> None:
-        """Record that a stage has finished."""
-
-    def warn(self, message: str) -> None:
-        """Record a warning."""
-
-    def interrupted(self) -> None:
-        """Record an interrupted run."""
-
-    def reset_active_display(self) -> None:
-        """Clear any in-progress spinner or progress bar without printing output."""
-
-    def complete_run(self, artifacts: ProcessArtifacts) -> None:
-        """Record run completion."""
 
 
 class RichStageReporter(NullStageReporter):

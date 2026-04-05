@@ -151,6 +151,7 @@ def test_extract_frame_wraps_timeout_with_media_processing_error(tmp_path, monke
 def test_extract_representative_frames_skips_failed_scene_but_still_reports_progress(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     progress_ticks: list[int] = []
     scenes = [
@@ -182,6 +183,7 @@ def test_extract_representative_frames_skips_failed_scene_but_still_reports_prog
 
     assert [frame.scene_id for frame in frames] == ["scene-2"]
     assert len(progress_ticks) == 2
+    assert "Frame extraction failed for scene-1 at 1.0s" in caplog.text
 
 
 def test_extract_frame_returns_false_when_ffmpeg_does_not_write_output(

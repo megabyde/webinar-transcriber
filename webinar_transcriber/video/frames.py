@@ -1,5 +1,6 @@
 """Representative frame extraction for detected scenes."""
 
+import logging
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -27,6 +28,11 @@ def extract_representative_frames(
         midpoint_sec = (scene.start_sec + scene.end_sec) / 2
         output_path = frames_dir / f"{scene.id}.png"
         if not _extract_frame(video_path, midpoint_sec, output_path):
+            logging.warning(
+                "Frame extraction failed for %s at %.1fs",
+                scene.id,
+                midpoint_sec,
+            )
             if progress_callback is not None:
                 progress_callback()
             continue
