@@ -438,7 +438,7 @@ class OpenAILLMProcessor(_BaseLLMProcessor):
             section_max_workers=section_max_workers,
             report_char_budget=report_char_budget,
         )
-        self._client = _build_openai_client(api_key)
+        self._client = openai.OpenAI(api_key=api_key)
 
     def _parse_structured_response(
         self,
@@ -545,10 +545,6 @@ def build_llm_processor_from_env() -> LLMProcessor:
             raise LLMConfigurationError(
                 "Unsupported LLM provider. Set LLM_PROVIDER to 'openai' or 'anthropic'."
             )
-
-
-def _build_openai_client(api_key: str) -> Any:
-    return openai.OpenAI(api_key=api_key)
 
 
 def _build_anthropic_client(api_key: str) -> Any:
