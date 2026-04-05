@@ -31,6 +31,8 @@ DEFAULT_WHISPER_CPP_MODEL_EXAMPLE = Path("models/whisper-cpp/ggml-large-v3-turbo
 _CARRYOVER_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 _CARRYOVER_WHITESPACE = re.compile(r"\s+")
 _CARRYOVER_TRAILING_NOISE = re.compile(r"[\(\[\{<\"'`]+$|[\s\-:,;]+$")
+_HALLUCINATION_PHRASE_PATTERN = re.compile(r"(?i)thank you for watching|subscribe|like and share")
+_CARRYOVER_WORD_RE = re.compile(r"[\w']+")
 
 
 def _read_sysctl_int(name: str) -> int | None:
@@ -298,7 +300,26 @@ def _carryover_drop_reason(
         return "fallback_used"
     if not decoded_window.text.strip():
         return "empty_text"
+    if _looks_like_hallucination(decoded_window.text):
+        return "hallucination_detected"
     return None
+
+
+def _looks_like_hallucination(text: str) -> bool:
+    if _HALLUCINATION_PHRASE_PATTERN.search(text):
+        return True
+
+    words = _CARRYOVER_WORD_RE.findall(text.casefold())
+    if not words:
+        return False
+
+    window_size = min(len(words), 10)
+    for start in range(len(words) - window_size + 1):
+        window = words[start : start + window_size]
+        repeated_ratio = (len(window) - len(set(window))) / len(window)
+        if repeated_ratio > 0.5:
+            return True
+    return False
 
 
 def _sanitize_prompt(prompt: str | None, *, max_tokens: int) -> str:

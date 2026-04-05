@@ -364,6 +364,24 @@ class TestPromptCarryover:
 
         assert carryover is None
 
+    def test_build_prompt_carryover_drops_known_hallucination_phrases(self) -> None:
+        carryover = build_prompt_carryover(
+            DecodedWindow(
+                window=InferenceWindow(
+                    window_id="window-3",
+                    region_index=0,
+                    start_sec=35.0,
+                    end_sec=52.0,
+                    overlap_sec=1.5,
+                ),
+                text="Thank you for watching, please like and share.",
+                segments=[],
+            ),
+            settings=PromptCarryoverSettings(),
+        )
+
+        assert carryover is None
+
     def test_device_name_from_system_info_prefers_enabled_backend(self) -> None:
         system_info = "WHISPER : MTL : EMBED_LIBRARY = 1 | CPU : NEON = 1 |"
 
@@ -394,6 +412,24 @@ class TestPromptCarryover:
 
         assert disabled_reason == "carryover_disabled"
         assert empty_text_reason == "empty_text"
+
+    def test_carryover_drop_reason_detects_repeated_hallucination_text(self) -> None:
+        repeated_reason = _carryover_drop_reason(
+            DecodedWindow(
+                window=InferenceWindow(
+                    window_id="window-4",
+                    region_index=0,
+                    start_sec=52.0,
+                    end_sec=70.0,
+                    overlap_sec=1.5,
+                ),
+                text="plan plan plan plan plan plan review review review review",
+                segments=[],
+            ),
+            settings=PromptCarryoverSettings(),
+        )
+
+        assert repeated_reason == "hallucination_detected"
 
     def test_sanitize_prompt_drops_missing_and_noise_only_prompts(self) -> None:
         assert _sanitize_prompt(None, max_tokens=8) == ""
