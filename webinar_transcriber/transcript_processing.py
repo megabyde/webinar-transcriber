@@ -48,7 +48,7 @@ def _should_flush_before_adding(
     current_start = current_segments[0].start_sec
     current_end = current_segments[-1].end_sec
     current_duration = max(0.0, current_end - current_start)
-    next_duration = max(0.0, next_segment.end_sec - current_start)
+    projected_group_duration = max(0.0, next_segment.end_sec - current_start)
     gap_duration = max(0.0, next_segment.start_sec - current_end)
     current_text = _merge_text(current_segments)
 
@@ -60,7 +60,7 @@ def _should_flush_before_adding(
         return True
     return bool(
         current_duration >= MIN_SEGMENT_DURATION_SEC
-        and next_duration > TARGET_SEGMENT_DURATION_SEC
+        and projected_group_duration > TARGET_SEGMENT_DURATION_SEC
         and STRONG_SENTENCE_END_RE.search(current_text)
     )
 

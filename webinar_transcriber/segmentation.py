@@ -106,7 +106,8 @@ def repair_speech_regions(
     if len(repaired) < 2 or min_duration <= 0:
         return repaired
 
-    while True:
+    max_iterations = len(repaired)
+    for _ in range(max_iterations):
         changed = False
         for i, region in enumerate(repaired):
             if (region.end_sec - region.start_sec) >= min_duration:
@@ -139,7 +140,9 @@ def repair_speech_regions(
             changed = True
             break
         if not changed:
-            return repaired
+            break
+
+    return repaired
 
 
 def normalized_audio_duration(samples: np.ndarray, sample_rate: int) -> float:
