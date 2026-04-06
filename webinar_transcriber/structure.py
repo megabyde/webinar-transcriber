@@ -260,27 +260,27 @@ def _should_start_new_audio_section(
     current_end = current_segments[-1].end_sec
     current_duration = current_end - current_start
     gap_duration = max(0.0, next_segment.start_sec - current_end)
-    next_duration = max(0.0, next_segment.end_sec - current_start)
+    projected_duration = max(0.0, next_segment.end_sec - current_start)
     current_chars = sum(len(segment.text.strip()) for segment in current_segments)
     ends_on_sentence_boundary = bool(
         STRONG_SENTENCE_END_RE.search(current_segments[-1].text.strip())
     )
-    hard_cap_exceeded = next_duration > (2 * TARGET_AUDIO_SECTION_DURATION_SEC)
+    hard_cap_exceeded = projected_duration > (2 * TARGET_AUDIO_SECTION_DURATION_SEC)
 
     if gap_duration >= AUDIO_SECTION_BREAK_GAP_SEC:
         return True
 
-    if (
-        current_duration >= MIN_AUDIO_SECTION_DURATION_SEC
-        and next_duration > TARGET_AUDIO_SECTION_DURATION_SEC
-    ):
-        return hard_cap_exceeded or ends_on_sentence_boundary
+    if current_duration < MIN_AUDIO_SECTION_DURATION_SEC:
+        return False
 
-    return (
-        current_duration >= MIN_AUDIO_SECTION_DURATION_SEC
-        and current_chars >= MAX_AUDIO_SECTION_CHARS
-        and (hard_cap_exceeded or ends_on_sentence_boundary)
+    split_budget_reached = (
+        projected_duration > TARGET_AUDIO_SECTION_DURATION_SEC
+        or current_chars >= MAX_AUDIO_SECTION_CHARS
     )
+    if not split_budget_reached:
+        return False
+
+    return hard_cap_exceeded or ends_on_sentence_boundary
 
 
 def _audio_section_from_segments(
