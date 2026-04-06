@@ -59,7 +59,7 @@ def test_should_start_new_audio_section_waits_for_sentence_boundary_before_soft_
         end_sec=310.0,
     )
 
-    assert _should_start_new_audio_section(current_segments, next_segment) is False
+    assert not _should_start_new_audio_section(current_segments, next_segment)
 
 
 def test_should_start_new_audio_section_splits_at_hard_cap_without_sentence_boundary() -> None:
@@ -78,11 +78,10 @@ def test_should_start_new_audio_section_splits_at_hard_cap_without_sentence_boun
         end_sec=610.0,
     )
 
-    assert _should_start_new_audio_section(current_segments, next_segment) is True
+    assert _should_start_new_audio_section(current_segments, next_segment)
 
 
-def test_should_start_new_audio_section_splits_when_char_limit_is_reached_at_sentence_boundary(
-) -> None:
+def test_should_start_new_audio_section_splits_at_char_limit_with_sentence_boundary() -> None:
     current_segments = [
         TranscriptSegment(
             id="segment-1",
@@ -98,7 +97,7 @@ def test_should_start_new_audio_section_splits_when_char_limit_is_reached_at_sen
         end_sec=150.0,
     )
 
-    assert _should_start_new_audio_section(current_segments, next_segment) is True
+    assert _should_start_new_audio_section(current_segments, next_segment)
 
 
 class TestBuildReport:
@@ -418,7 +417,7 @@ class TestBuildReport:
             ),
         )
 
-        assert report.sections[0].is_interlude is True
+        assert report.sections[0].is_interlude
         assert report.sections[0].title == "Музыкальная пауза"
         assert "transcript.json" in report.sections[0].transcript_text
         assert report.summary == [
@@ -455,7 +454,7 @@ class TestBuildReport:
             ),
         )
 
-        assert report.sections[0].is_interlude is True
+        assert report.sections[0].is_interlude
         assert report.sections[0].title == "Музыкальная пауза"
         assert report.sections[1].transcript_text == RU_BUDGET_DISCUSSION
 
@@ -481,7 +480,7 @@ class TestBuildReport:
             ),
         )
 
-        assert all(section.is_interlude is False for section in report.sections)
+        assert all(not section.is_interlude for section in report.sections)
         assert "Субтитры сделал DimaTorzok" in report.sections[0].transcript_text
 
     def test_does_not_mark_single_repetitive_speech_segment_as_interlude(self) -> None:
@@ -527,7 +526,7 @@ class TestBuildReport:
             ],
         )
 
-        assert all(section.is_interlude is False for section in report.sections)
+        assert all(not section.is_interlude for section in report.sections)
         assert len(report.sections) == 1
         assert "единственной и уникальной" in report.sections[0].transcript_text
 

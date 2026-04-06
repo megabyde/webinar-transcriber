@@ -67,7 +67,7 @@ def test_report_document_defaults_optional_collections() -> None:
 def test_diagnostics_defaults_empty_maps() -> None:
     diagnostics = Diagnostics()
 
-    assert diagnostics.llm_enabled is False
+    assert not diagnostics.llm_enabled
     assert diagnostics.llm_report_status == "disabled"
     assert diagnostics.llm_report_usage == {}
     assert diagnostics.stage_durations_sec == {}
@@ -109,7 +109,7 @@ def test_asr_pipeline_support_models_accept_expected_fields() -> None:
     assert speech_region.end_sec == 1.5
     assert decoded_window.window.window_id == "window-1"
     assert decoded_window.input_prompt == "hello"
-    assert diagnostics.carryover_enabled is True
+    assert diagnostics.carryover_enabled
     assert diagnostics.window_count == 4
 
 
