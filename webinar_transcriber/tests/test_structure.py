@@ -18,6 +18,7 @@ from webinar_transcriber.structure import (
     _fallback_summary,
     _is_likely_interlude_text,
     _segment_key,
+    _should_start_new_audio_section,
     _summary_filler_penalty,
     _summary_repetition_penalty,
     _summary_start_penalty,
@@ -40,6 +41,64 @@ RU_REPETITIVE_SPEECH = (
     "что вы вырабатываете модель, которая для этой единственной "
     "уникальной женщины становится единственной и уникальной."
 )
+
+
+def test_should_start_new_audio_section_waits_for_sentence_boundary_before_soft_limit() -> None:
+    current_segments = [
+        TranscriptSegment(
+            id="segment-1",
+            text="This section has enough duration but no sentence boundary",
+            start_sec=0.0,
+            end_sec=130.0,
+        )
+    ]
+    next_segment = TranscriptSegment(
+        id="segment-2",
+        text="More detail arrives immediately after that",
+        start_sec=130.0,
+        end_sec=310.0,
+    )
+
+    assert _should_start_new_audio_section(current_segments, next_segment) is False
+
+
+def test_should_start_new_audio_section_splits_at_hard_cap_without_sentence_boundary() -> None:
+    current_segments = [
+        TranscriptSegment(
+            id="segment-1",
+            text="This section keeps running without punctuation",
+            start_sec=0.0,
+            end_sec=350.0,
+        )
+    ]
+    next_segment = TranscriptSegment(
+        id="segment-2",
+        text="More detail arrives immediately after that",
+        start_sec=350.0,
+        end_sec=610.0,
+    )
+
+    assert _should_start_new_audio_section(current_segments, next_segment) is True
+
+
+def test_should_start_new_audio_section_splits_when_char_limit_is_reached_at_sentence_boundary(
+) -> None:
+    current_segments = [
+        TranscriptSegment(
+            id="segment-1",
+            text=f"{'a' * 3601}.",
+            start_sec=0.0,
+            end_sec=130.0,
+        )
+    ]
+    next_segment = TranscriptSegment(
+        id="segment-2",
+        text="A short follow-up sentence.",
+        start_sec=130.0,
+        end_sec=150.0,
+    )
+
+    assert _should_start_new_audio_section(current_segments, next_segment) is True
 
 
 class TestBuildReport:
