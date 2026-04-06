@@ -705,7 +705,7 @@ def test_process_input_updates_summary_and_action_items_from_llm(llm_success_res
 def test_process_input_aggregates_llm_usage_into_diagnostics(llm_success_result) -> None:
     artifacts, reporter = llm_success_result
 
-    assert artifacts.diagnostics.llm_enabled is True
+    assert artifacts.diagnostics.llm_enabled
     assert artifacts.diagnostics.llm_model == "test-llm-model"
     assert artifacts.diagnostics.llm_report_status == "applied"
     assert artifacts.diagnostics.warnings == [EXPECTED_LLM_WARNING]
@@ -749,7 +749,7 @@ def test_process_input_warns_when_llm_configuration_is_missing(tmp_path, monkeyp
             reporter=reporter,
         )
 
-    assert artifacts.diagnostics.llm_enabled is True
+    assert artifacts.diagnostics.llm_enabled
     assert artifacts.diagnostics.llm_model is None
     assert artifacts.diagnostics.llm_report_status == "fallback"
     assert artifacts.diagnostics.warnings == [

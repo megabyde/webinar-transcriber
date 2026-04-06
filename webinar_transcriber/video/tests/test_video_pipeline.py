@@ -197,7 +197,7 @@ def test_extract_frame_returns_false_when_ffmpeg_does_not_write_output(
 
     extracted = _extract_frame(FIXTURE_DIR / "sample-video.mp4", 1.0, tmp_path / "scene-1.png")
 
-    assert extracted is False
+    assert not extracted
 
 
 def test_detect_scenes_returns_single_zero_length_scene_when_no_samples(
@@ -234,7 +234,7 @@ def test_iter_sampled_frames_raises_when_ffmpeg_pipes_are_unavailable(
     with pytest.raises(MediaProcessingError, match="Could not open ffmpeg pipes"):
         list(_iter_sampled_frames(FIXTURE_DIR / "sample-video.mp4"))
 
-    assert process.killed is True
+    assert process.killed
 
 
 def test_iter_sampled_frames_raises_on_incomplete_frame_sample(
@@ -261,7 +261,7 @@ def test_iter_sampled_frames_raises_on_incomplete_frame_sample(
     with pytest.raises(MediaProcessingError, match="Incomplete frame sample returned by ffmpeg"):
         list(_iter_sampled_frames(FIXTURE_DIR / "sample-video.mp4"))
 
-    assert process.killed is True
+    assert process.killed
 
 
 def test_iter_sampled_frames_raises_when_ffmpeg_exits_nonzero(
