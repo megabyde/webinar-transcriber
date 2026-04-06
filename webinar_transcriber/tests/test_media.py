@@ -25,6 +25,47 @@ def test_probe_media_reads_audio_metadata() -> None:
     assert asset.sample_rate
 
 
+def test_probe_media_treats_attached_cover_art_as_audio_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "webinar_transcriber.media._run_command",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            ["ffprobe"],
+            0,
+            stdout="""
+            {
+              "format": {"duration": "42.5"},
+              "streams": [
+                {
+                  "codec_type": "audio",
+                  "sample_rate": "48000",
+                  "channels": 2,
+                  "duration": "42.5",
+                  "disposition": {"attached_pic": 0}
+                },
+                {
+                  "codec_type": "video",
+                  "width": 1280,
+                  "height": 720,
+                  "avg_frame_rate": "0/0",
+                  "disposition": {"attached_pic": 1}
+                }
+              ]
+            }
+            """,
+        ),
+    )
+
+    asset = probe_media(FIXTURE_DIR / "sample-audio.mp3")
+
+    assert asset.media_type is MediaType.AUDIO
+    assert asset.duration_sec == 42.5
+    assert asset.fps is None
+    assert asset.width is None
+    assert asset.height is None
+
+
 def test_extract_audio_creates_wav(tmp_path) -> None:
     output_path = extract_audio(FIXTURE_DIR / "sample-audio.mp3", tmp_path / "audio.wav")
 

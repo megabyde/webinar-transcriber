@@ -4,6 +4,7 @@ import json
 import subprocess
 from fractions import Fraction
 from pathlib import Path
+from typing import cast
 
 from webinar_transcriber.models import MediaAsset, MediaType
 
@@ -40,6 +41,13 @@ def _parse_frame_rate(raw_value: str | None) -> float | None:
     return float(Fraction(raw_value))
 
 
+def _is_attached_picture_stream(stream: dict[str, object]) -> bool:
+    disposition = stream.get("disposition")
+    if not isinstance(disposition, dict):
+        return False
+    return bool(cast("dict[str, object]", disposition).get("attached_pic"))
+
+
 def probe_media(input_path: Path) -> MediaAsset:
     """Inspect media with ffprobe and return normalized metadata."""
     result = _run_command(
@@ -55,7 +63,14 @@ def probe_media(input_path: Path) -> MediaAsset:
     payload = json.loads(result.stdout)
     streams = payload.get("streams", [])
     audio_stream = next((stream for stream in streams if stream.get("codec_type") == "audio"), None)
-    video_stream = next((stream for stream in streams if stream.get("codec_type") == "video"), None)
+    video_stream = next(
+        (
+            stream
+            for stream in streams
+            if stream.get("codec_type") == "video" and not _is_attached_picture_stream(stream)
+        ),
+        None,
+    )
 
     if audio_stream is None and video_stream is None:
         raise MediaProcessingError(f"No audio or video stream found in {input_path}.")
