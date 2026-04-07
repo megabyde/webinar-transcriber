@@ -1,25 +1,24 @@
 # Webinar Transcriber
 
-![Webinar Transcriber](docs/assets/logo.svg)
-
 [![CI][ci-badge]][ci-workflow] [![Python 3.12][python-badge]][python-home]
 [![Coverage 95%+][coverage-badge]][coverage-home] [![Ruff][ruff-badge]][ruff-home]
 [![uv][uv-badge]][uv-home] [![License MIT][license-badge]][license-home]
 
-`webinar-transcriber` is a local-first CLI for transcribing webinar videos with slides and
-audio-only recordings. The tool exports Markdown, DOCX, and JSON and supports automatic language
-detection.
+`webinar-transcriber` is a local-first CLI for turning webinar recordings into transcripts,
+structured notes, and machine-readable artifacts. It handles slide-based videos and audio-only
+recordings, writes Markdown, DOCX, JSON, and VTT outputs, and supports automatic language detection.
 
 ## Capabilities
 
-The tool supports:
+The tool is built for:
 
-- audio-only inputs
-- video inputs with scene detection and representative slide frames
-- Markdown, DOCX, and JSON outputs
+- audio-only recordings
+- video recordings with scene detection and representative slide frames
+- Markdown, DOCX, JSON, and subtitle outputs
+- deterministic local transcription with optional cloud LLM report polish
 
-The pipeline is intentionally conservative: local-first, CLI-only, and heuristic-driven for
-structuring and summaries.
+The default pipeline is intentionally conservative: local-first, CLI-only, and heuristic-driven for
+sectioning, summaries, and action items.
 
 ## Usage
 
@@ -40,14 +39,17 @@ webinar-transcriber extract-frames INPUT
 
 ### ASR Model
 
-The `--asr-model` option can override the `whisper.cpp` model path, for example
-`models/whisper-cpp/ggml-large-v3-turbo.bin`.
+Use `--asr-model` to override the `whisper.cpp` model path, for example:
+
+```bash
+webinar-transcriber process INPUT --asr-model models/whisper-cpp/ggml-large-v3-turbo.bin
+```
 
 By default, the app downloads the official `whisper.cpp` model into the standard Hugging Face cache
 and reuses that cached file on later runs.
 
-If you want a manual file instead of the cache-backed default, download it yourself. A direct
-download example:
+If you prefer a manually managed file instead of the cache-backed default, download it yourself. A
+direct download example:
 
 ```bash
 mkdir -p models/whisper-cpp
@@ -63,11 +65,7 @@ git clone https://github.com/ggml-org/whisper.cpp.git
 sh whisper.cpp/models/download-ggml-model.sh large-v3-turbo models/whisper-cpp
 ```
 
-If you store the model somewhere else, point the app at it explicitly:
-
-```bash
-webinar-transcriber process INPUT --asr-model /path/to/ggml-large-v3-turbo.bin
-```
+If you store the model somewhere else, point the app at it explicitly with `--asr-model`.
 
 ### Extra Artifacts
 
@@ -84,7 +82,7 @@ webinar-transcriber process INPUT --keep-audio --audio-format mp3
 
 ### ASR Tuning
 
-The VAD-aware whisper.cpp pipeline can be tuned from the CLI:
+The VAD-aware `whisper.cpp` pipeline can be tuned from the CLI:
 
 ```bash
 webinar-transcriber process INPUT \
@@ -116,12 +114,14 @@ The default ASR design is intentionally simple and deterministic:
 - Prompt carryover only reuses a small trusted suffix from the previous window.
 - Adjacent decoded windows are reconciled back into one final transcript in Python.
 
-This split keeps `whispercpp.py` thin, keeps segmentation policy in `segmentation.py`, and keeps
-carryover policy in `asr.py`.
+This split keeps `whispercpp.py` focused on the C API, `segmentation.py` focused on speech-region
+planning, and `asr.py` focused on prompt carryover and transcript assembly.
 
 ## Processing Behavior
 
 ### Pipeline
+
+The pipeline runs in this order:
 
 1. Probe input media with `ffprobe`.
 1. Prepare deterministic transcription audio with `ffmpeg`.
@@ -155,7 +155,8 @@ Supported providers:
 - `openai` (default)
 - `anthropic`
 
-LLM configuration comes only from environment variables.
+LLM configuration comes only from environment variables. There is no repository-specific secrets
+integration.
 
 OpenAI:
 
@@ -229,7 +230,7 @@ runs/<timestamp>_<basename>/
 ## Local Setup
 
 1. Install Python 3.12 and `uv`.
-1. Install the project:
+1. Install the project and development dependencies:
 
 ```bash
 make sync
@@ -243,8 +244,8 @@ Install native dependencies with Homebrew:
 brew install ffmpeg whisper-cpp
 ```
 
-Homebrew installs `libwhisper.dylib` in a standard location, so the default setup should work
-without extra configuration.
+Homebrew installs `libwhisper.dylib` in a standard location, so the default setup should usually
+work without extra configuration.
 
 ### Linux
 
@@ -262,7 +263,8 @@ for example:
 export WHISPER_CPP_LIB=/path/to/libwhisper.so
 ```
 
-You also need a local `whisper.cpp` model file as described in [ASR Model](#asr-model).
+You also need a local `whisper.cpp` model file, or the default cache-backed model described in
+[ASR Model](#asr-model).
 
 ## Development
 
@@ -287,7 +289,7 @@ make test
 ```
 
 The repository keeps tiny committed media fixtures so pipeline tests can run without network fetches
-or giant binary blobs.
+or large binary blobs.
 
 ## Package Shape
 

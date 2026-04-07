@@ -9,8 +9,8 @@ Keep repository documentation consolidated in:
 - `README.md` for user-facing usage, behavior, and artifact contracts
 - `AGENTS.md` for contributor and implementation guidance
 
-Do not add new standalone documentation files under `docs/` unless there is a strong reason.
-`docs/assets/` is still used for repository assets such as the banner.
+Do not add new standalone documentation files under `docs/` unless there is a strong reason. If
+repository assets are needed, keep them under `docs/assets/`.
 
 ## Stack
 
