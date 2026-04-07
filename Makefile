@@ -19,6 +19,7 @@ format: ## Format Markdown and Python sources
 lint: ## Run Markdown, Ruff, and type checks
 	uv run mdformat --check $(MD_FILES)
 	uv run pymarkdown scan $(MD_FILES)
+	uv run ruff format --check .
 	uv run ruff check .
 	uv run ty check webinar_transcriber
 
