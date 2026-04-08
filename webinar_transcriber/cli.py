@@ -148,7 +148,7 @@ def main() -> None:
 @click.option(
     "--llm",
     is_flag=True,
-    help="Enable optional OpenAI-based report enhancement.",
+    help="Enable optional provider-backed report enhancement.",
 )
 def process(
     input_path: Path,
