@@ -157,6 +157,42 @@ class TestWhisperCppTranscriber:
         assert transcriber.system_info == "METAL = 1"
         assert transcriber.library_path == "/usr/local/lib/libwhisper.so"
 
+    def test_transcriber_context_manager_closes_prepared_session(
+        self,
+        monkeypatch,
+        tmp_path,
+    ) -> None:
+        from webinar_transcriber.whispercpp import WhisperCppRuntimeDetails
+
+        model_path = tmp_path / "model.bin"
+        model_path.write_text("stub", encoding="utf-8")
+        close_calls: list[str] = []
+
+        class FakeSession:
+            runtime_details = WhisperCppRuntimeDetails(
+                library_path="/usr/local/lib/libwhisper.so",
+                system_info="CPU = 1",
+            )
+
+            def close(self) -> None:
+                close_calls.append("closed")
+
+        class FakeLibrary:
+            def __init__(self, _library_path, log_path=None) -> None:
+                self._library_path = _library_path
+                self._log_path = log_path
+
+            def create_session(self, _model_path):
+                return FakeSession()
+
+        monkeypatch.setattr("webinar_transcriber.asr.WhisperCppLibrary", FakeLibrary)
+
+        with WhisperCppTranscriber(model_name=str(model_path)) as transcriber:
+            transcriber.prepare_model()
+            assert transcriber.system_info == "CPU = 1"
+
+        assert close_calls == ["closed"]
+
     def test_whisper_cpp_transcriber_carries_input_prompt_into_decoded_windows(
         self,
         monkeypatch,

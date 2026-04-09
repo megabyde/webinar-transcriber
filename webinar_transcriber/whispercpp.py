@@ -10,11 +10,14 @@ import threading
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final, Self
 
 import numpy as np
 
 from webinar_transcriber.models import DecodedWindow, InferenceWindow, TranscriptSegment
+
+if TYPE_CHECKING:
+    from types import TracebackType
 
 _WHISPER_SAMPLING_GREEDY: Final[int] = 0
 _TICKS_PER_SECOND: Final[float] = 100.0
@@ -180,6 +183,9 @@ class WhisperCppSession:
     def runtime_details(self) -> WhisperCppRuntimeDetails:
         return self._runtime_details
 
+    def __enter__(self) -> Self:
+        return self
+
     def decode_window(
         self,
         audio_samples: np.ndarray,
@@ -205,6 +211,15 @@ class WhisperCppSession:
         self._library._lib.whisper_free_state(self._state)
         self._library._lib.whisper_free(self._context)
         self._closed = True
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        del exc_type, exc, traceback
+        self.close()
 
     def __del__(self) -> None:  # pragma: no cover - interpreter shutdown cleanup
         with suppress(Exception):

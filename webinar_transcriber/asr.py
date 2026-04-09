@@ -9,7 +9,7 @@ import subprocess
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 from webinar_transcriber.whispercpp import (
     GPU_BACKEND_PATTERN,
@@ -20,6 +20,7 @@ from webinar_transcriber.whispercpp import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from types import TracebackType
 
     from webinar_transcriber.models import DecodedWindow, InferenceWindow
 
@@ -157,6 +158,9 @@ class WhisperCppTranscriber:
     def set_log_path(self, log_path: Path) -> None:
         self._log_path = log_path
 
+    def __enter__(self) -> Self:
+        return self
+
     def prepare_model(self) -> None:
         self._model_path = self._resolve_model_path()
         self.close()
@@ -208,6 +212,15 @@ class WhisperCppTranscriber:
             self._session.close()
             self._session = None
         self._runtime = None
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        del exc_type, exc, traceback
+        self.close()
 
     def _ensure_session(self) -> WhisperCppSession:
         if self._session is None:

@@ -334,6 +334,58 @@ def test_process_input_keeps_normalized_audio_artifact(tmp_path, monkeypatch) ->
     assert kept_audio_path.read_bytes()[:4] == b"RIFF"
 
 
+def test_process_input_does_not_close_caller_supplied_transcriber(tmp_path, monkeypatch) -> None:
+    install_basic_windowing(monkeypatch)
+
+    class CloseTrackingTranscriber(FakeTranscriber):
+        def __init__(self) -> None:
+            super().__init__()
+            self.close_calls = 0
+
+        def close(self) -> None:
+            self.close_calls += 1
+
+    transcriber = CloseTrackingTranscriber()
+
+    process_input(
+        FIXTURE_DIR / "sample-audio.mp3",
+        output_dir=tmp_path / "run",
+        transcriber=transcriber,
+    )
+
+    assert transcriber.close_calls == 0
+
+
+def test_process_input_closes_owned_transcriber_on_failure(tmp_path, monkeypatch) -> None:
+    install_basic_windowing(monkeypatch)
+
+    class CloseTrackingTranscriber(FakeTranscriber):
+        def __init__(self) -> None:
+            super().__init__()
+            self.close_calls = 0
+
+        def close(self) -> None:
+            self.close_calls += 1
+
+    transcriber = CloseTrackingTranscriber()
+    monkeypatch.setattr(
+        "webinar_transcriber.processor.WhisperCppTranscriber",
+        lambda *args, **kwargs: transcriber,
+    )
+    monkeypatch.setattr(
+        "webinar_transcriber.processor.run_asr_pipeline",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("asr failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="asr failed"):
+        process_input(
+            FIXTURE_DIR / "sample-audio.mp3",
+            output_dir=tmp_path / "run",
+        )
+
+    assert transcriber.close_calls == 1
+
+
 def test_process_input_writes_video_scene_artifacts(tmp_path, monkeypatch) -> None:
     reporter = RecordingReporter()
     transcription_audio_path: Path | None = None

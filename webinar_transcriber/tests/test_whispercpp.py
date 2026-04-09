@@ -130,6 +130,32 @@ def test_whisper_cpp_library_decodes_window_with_fake_cdll(monkeypatch, tmp_path
     assert [segment.end_sec for segment in decoded_window.segments] == [1.5, 3.0]
 
 
+def test_whisper_cpp_session_context_manager_closes_native_handles(monkeypatch, tmp_path) -> None:
+    library_path = tmp_path / "libwhisper.dylib"
+    library_path.write_text("stub", encoding="utf-8")
+    model_path = tmp_path / "model.bin"
+    model_path.write_text("model", encoding="utf-8")
+    fake_cdll = FakeCDLL()
+    released_handles: list[tuple[str, int]] = []
+    fake_cdll.whisper_free_state = FakeFunction(
+        lambda state: released_handles.append(("state", state))
+    )
+    fake_cdll.whisper_free = FakeFunction(
+        lambda context: released_handles.append(("context", context))
+    )
+    monkeypatch.setattr("webinar_transcriber.whispercpp._load_backend_plugins", lambda: None)
+    monkeypatch.setattr(
+        "webinar_transcriber.whispercpp.ctypes.CDLL",
+        lambda _path, mode=0: fake_cdll,
+    )
+
+    library = WhisperCppLibrary(library_path)
+    with library.create_session(model_path) as session:
+        assert session.runtime_details.system_info == "METAL = 1"
+
+    assert released_handles == [("state", 2), ("context", 1)]
+
+
 def test_whisper_cpp_library_disables_gpu_when_system_info_has_no_backend(
     monkeypatch, tmp_path
 ) -> None:
