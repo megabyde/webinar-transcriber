@@ -10,26 +10,20 @@
 ## Overview
 
 `webinar-transcriber` is a local-first CLI for turning webinar recordings into transcripts,
-structured notes, and machine-readable artifacts. It supports audio-only recordings and slide-based
-videos, automatically detects language, and writes Markdown, DOCX, JSON, and VTT outputs.
+structured notes, subtitles, diagnostics, and machine-readable report artifacts. It handles both
+audio-only input and slide-based video, detects scenes for video runs, and keeps the core pipeline
+local with `ffmpeg`, Silero VAD, and `whisper.cpp`.
 
-It keeps the core pipeline local with `ffmpeg`, Silero VAD, and `whisper.cpp`, then builds sections,
-summaries, and action items with deterministic heuristics. If you want lighter cleanup or report
-polish, you can optionally add a provider-backed LLM pass on top of the local output instead of
-replacing the default flow.
-
-In practice, that means:
-
-- audio or slide-based video in
-- transcripts, reports, diagnostics, and subtitles out
-- scene detection and representative frames for video input
-- local-first transcription with optional OpenAI or Anthropic report refinement
+The default flow is deterministic: normalize the media, detect speech regions, transcribe locally,
+reconcile overlapping windows, and build report sections, summary bullets, and action items with
+heuristics. Optional provider-backed LLM refinement can polish section text and report metadata on
+top of that local output, but it does not replace the base pipeline.
 
 ## Install
 
 ### System Dependencies
 
-Install the native media and `whisper.cpp` runtime dependencies before running the CLI locally.
+Install the native media and `whisper.cpp` runtime dependencies before using the CLI.
 
 #### macOS
 
@@ -56,63 +50,67 @@ for example:
 export WHISPER_CPP_LIB=/path/to/libwhisper.so
 ```
 
-### Repo-Local Setup
+### Install the CLI
 
-Install the project and development dependencies:
+From this repository checkout:
 
 ```bash
-make sync
+uv tool install .
 ```
 
-All examples below assume you are running from this repository with
-`uv run webinar-transcriber ...`.
+If you update the checkout and want to refresh the installed command:
+
+```bash
+uv tool install --reinstall .
+```
+
+All usage examples below assume `webinar-transcriber` is available on your `PATH`.
 
 ## Usage
 
 ### Quick Start
 
-By default, `process` writes a fresh run directory under `runs/`. Use `--output-dir` to pick a
+By default, `process` writes a fresh run directory under `runs/`. Use `--output-dir` to choose a
 specific location.
 
 ```bash
-uv run webinar-transcriber process INPUT
-uv run webinar-transcriber process INPUT --llm
-uv run webinar-transcriber process INPUT --format docx
-uv run webinar-transcriber process INPUT --keep-audio --audio-format mp3
-uv run webinar-transcriber process INPUT --output-dir runs/custom-demo
-uv run webinar-transcriber extract-frames INPUT
+webinar-transcriber process INPUT
+webinar-transcriber process INPUT --format docx
+webinar-transcriber process INPUT --keep-audio --audio-format mp3
+webinar-transcriber process INPUT --output-dir runs/custom-demo
+webinar-transcriber extract-frames INPUT
 ```
 
 ### Cloud LLM
 
-The optional `--llm` flag enables provider-backed report refinement after deterministic sectioning:
+The optional `--llm` flag enables provider-backed report refinement after deterministic sectioning.
+It can:
 
-- section transcript polishing for punctuation, spelling, light cleanup, and paragraph breaks
-- summary, action items, and section title refinement
+- polish section transcript text with light cleanup and paragraphing
+- refine summary bullets, action items, section titles, and section TL;DRs
 
 Supported providers:
 
 - `openai` (default)
 - `anthropic`
 
-LLM configuration comes only from environment variables. There is no repository-specific secrets
-integration.
+LLM configuration comes only from environment variables.
 
 #### OpenAI
 
 ```bash
 OPENAI_API_KEY=... \
-    OPENAI_MODEL=gpt-5-mini \
-    uv run webinar-transcriber process INPUT --llm
+OPENAI_MODEL=gpt-5-mini \
+webinar-transcriber process INPUT --llm
 ```
 
 #### Anthropic
 
 ```bash
 LLM_PROVIDER=anthropic \
-    ANTHROPIC_API_KEY=... \
-    ANTHROPIC_MODEL=claude-sonnet-4-20250514 \
-    uv run webinar-transcriber process INPUT --llm
+ANTHROPIC_API_KEY=... \
+ANTHROPIC_MODEL=claude-sonnet-4-20250514 \
+webinar-transcriber process INPUT --llm
 ```
 
 ### What You Get
@@ -120,28 +118,33 @@ LLM_PROVIDER=anthropic \
 `process` always writes:
 
 - `metadata.json`, `transcript.json`, and `transcript.vtt`
-- `diagnostics.json` with ASR backend/model details, stage timings, counts, warnings, and optional
-  LLM metadata
+- `diagnostics.json` with stage timings, counts, warnings, ASR details, and optional LLM metadata
 - `report.json` regardless of `--format`
-- ASR planning/debug artifacts under `asr/`
+- ASR planning and decode artifacts under `asr/`
 
 Depending on options and input type, `process` also writes:
 
-- `report.md` and/or `report.docx` according to `--format`
+- `report.md` and/or `report.docx`
 - `transcription-audio.wav` or `transcription-audio.mp3` with `--keep-audio`
 - `scenes.json` and `frames/` for video input
 
-`extract-frames` writes `scenes.json` and `frames/` only.
+`extract-frames` writes only `scenes.json` and `frames/`.
 
 ### How It Works
 
-- probe the input and normalize it into transcription audio
-- detect speech regions and plan ASR windows
-- transcribe locally with `whisper.cpp`
-- reconcile adjacent windows into one transcript
-- detect scenes and extract representative frames for video input
-- build sections, summaries, and action items
-- optionally refine the report with an LLM
+1. Probe the input and prepare deterministic transcription audio. This means a mono, `16 kHz`,
+   `16-bit PCM WAV` file that the downstream pipeline can treat as a stable contract instead of
+   re-checking format details at every stage.
+1. Prepare the local `whisper.cpp` runtime. This loads the selected GGML model, resolves the
+   execution backend, and records runtime details for diagnostics and CLI progress reporting.
+1. Detect speech regions with Silero VAD.
+1. Expand and repair speech regions into ASR windows.
+1. Transcribe the windows locally with `whisper.cpp`.
+1. Reconcile adjacent windows into one transcript.
+1. Detect scenes and extract representative frames for video input.
+1. Build sections, summaries, and action items.
+1. Optionally polish the report with an LLM.
+1. Write report, subtitle, diagnostic, and intermediate artifacts.
 
 ## Advanced Usage
 
@@ -150,7 +153,7 @@ Depending on options and input type, `process` also writes:
 `webinar-transcriber` uses a `whisper.cpp` GGML model file. By default, it resolves
 `ggml-large-v3-turbo` from the standard Hugging Face cache and reuses the cached file on later runs.
 If you want to pin a different model file or keep models in a repo-local directory, download the
-`.bin` yourself and pass its path with `--asr-model`.
+`.bin` file yourself and pass its path with `--asr-model`.
 
 For example:
 
@@ -208,8 +211,8 @@ runs/<timestamp>_<basename>/
 ├─ transcription-audio.mp3 # optional via --keep-audio --audio-format mp3
 ├─ scenes.json             # video only
 ├─ diagnostics.json
-├─ report.md              # written for --format all or --format md
-├─ report.docx            # written for --format all or --format docx
+├─ report.md               # written for --format all or --format md
+├─ report.docx             # written for --format all or --format docx
 ├─ report.json
 └─ frames/                 # video only
 ```
@@ -227,10 +230,19 @@ runs/<timestamp>_<basename>/
 ### Local Setup
 
 1. Install Python 3.12 and `uv`.
-1. Install the project and development dependencies:
+1. Install project and development dependencies:
 
 ```bash
 make sync
+```
+
+### Running from a Checkout
+
+If you are developing inside the repository and do not want to install the CLI as a tool, use:
+
+```bash
+uv run webinar-transcriber --help
+uv run webinar-transcriber process INPUT
 ```
 
 ### Toolchain
@@ -254,6 +266,5 @@ make test
 ```
 
 The repository keeps tiny committed media fixtures so pipeline tests can run without network fetches
-or large binary blobs.
-
-Contributor and agent-specific repository guidance lives in [AGENTS.md](AGENTS.md).
+or large binary blobs. Contributor and agent-specific repository guidance lives in
+[AGENTS.md](AGENTS.md).

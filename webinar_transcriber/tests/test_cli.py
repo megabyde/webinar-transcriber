@@ -191,6 +191,8 @@ def test_process_help_describes_asr_options() -> None:
     assert "--audio-format" in result.output
     assert "--llm" in result.output
     assert "Override the whisper.cpp model path" in result.output
+    assert "provider-backed report" in result.output
+    assert "enhancement." in result.output
     assert "--asr-compute-type" not in result.output
     assert "--llm-model" not in result.output
 

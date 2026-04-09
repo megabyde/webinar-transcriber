@@ -1,5 +1,6 @@
 """Tests for transcription audio preparation and segmentation."""
 
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
@@ -17,6 +18,7 @@ from webinar_transcriber.segmentation import (
     repair_speech_regions,
 )
 from webinar_transcriber.transcription_audio import (
+    extract_audio,
     load_normalized_audio,
     prepared_transcription_audio,
     preserve_transcription_audio,
@@ -31,6 +33,31 @@ def test_prepared_transcription_audio_normalizes_audio_input_to_temp_wav() -> No
         assert audio_path.suffix == ".wav"
 
     assert not audio_path.exists()
+
+
+def test_extract_audio_creates_wav(tmp_path: Path) -> None:
+    output_path = extract_audio(FIXTURE_DIR / "sample-audio.mp3", tmp_path / "audio.wav")
+
+    assert output_path.exists()
+
+    probe = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "stream=codec_name",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(output_path),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert probe.returncode == 0
+    assert "pcm_s16le" in probe.stdout
 
 
 def test_prepared_transcription_audio_cleans_up_temp_wav() -> None:

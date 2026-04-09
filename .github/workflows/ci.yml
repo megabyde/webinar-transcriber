@@ -22,6 +22,11 @@ jobs:
           sudo apt-get install -y ffmpeg
       - name: Sync dependencies
         run: make sync
+      - name: Smoke CLI help
+        run: |
+          uv run webinar-transcriber --help
+          uv run webinar-transcriber process --help
+          uv run webinar-transcriber extract-frames --help
       - name: Run CI
         run: make check
       - name: Upload coverage
@@ -46,5 +51,10 @@ jobs:
           brew install ffmpeg
       - name: Sync dependencies
         run: make sync
+      - name: Smoke CLI help
+        run: |
+          uv run webinar-transcriber --help
+          uv run webinar-transcriber process --help
+          uv run webinar-transcriber extract-frames --help
       - name: Run smoke tests
         run: make test

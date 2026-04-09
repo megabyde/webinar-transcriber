@@ -1,4 +1,4 @@
-"""Media probing and normalization helpers."""
+"""Media probing helpers and shared command execution."""
 
 import json
 import subprocess
@@ -91,40 +91,3 @@ def probe_media(input_path: Path) -> MediaAsset:
         width=int(video_stream["width"]) if video_stream and video_stream.get("width") else None,
         height=int(video_stream["height"]) if video_stream and video_stream.get("height") else None,
     )
-
-
-def extract_audio(input_path: Path, output_path: Path) -> Path:
-    """Convert the input media into a mono 16 kHz WAV file."""
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    _run_command(
-        "ffmpeg",
-        "-y",
-        "-i",
-        str(input_path),
-        "-vn",
-        "-ac",
-        "1",
-        "-ar",
-        "16000",
-        "-c:a",
-        "pcm_s16le",
-        str(output_path),
-    )
-    return output_path
-
-
-def transcode_audio_to_mp3(input_path: Path, output_path: Path) -> Path:
-    """Convert normalized transcription audio into an MP3 artifact."""
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    _run_command(
-        "ffmpeg",
-        "-y",
-        "-i",
-        str(input_path),
-        "-codec:a",
-        "libmp3lame",
-        "-q:a",
-        "2",
-        str(output_path),
-    )
-    return output_path

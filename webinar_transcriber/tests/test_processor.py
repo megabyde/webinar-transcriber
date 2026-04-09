@@ -32,7 +32,6 @@ from webinar_transcriber.processor import (
     _window_transcription_stage_detail,
     process_input,
 )
-from webinar_transcriber.reporter import NullStageReporter
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 EXPECTED_LLM_WARNING = (
@@ -117,18 +116,18 @@ def install_basic_windowing(
         def load_audio(_path: Path) -> tuple[np.ndarray, int]:
             return np.zeros(sample_rate, dtype=np.float32), sample_rate
 
-    monkeypatch.setattr("webinar_transcriber.processor.load_normalized_audio", load_audio)
+    monkeypatch.setattr("webinar_transcriber.processor_asr.load_normalized_audio", load_audio)
     monkeypatch.setattr(
-        "webinar_transcriber.processor.detect_speech_regions",
+        "webinar_transcriber.processor_asr.detect_speech_regions",
         lambda *_args, **_kwargs: ([SpeechRegion(start_sec=0.0, end_sec=region_end_sec)], []),
     )
     monkeypatch.setattr(
-        "webinar_transcriber.processor.expand_speech_regions",
+        "webinar_transcriber.processor_asr.expand_speech_regions",
         lambda regions, **_kwargs: regions,
     )
 
 
-class RecordingReporter(NullStageReporter):
+class RecordingReporter:
     """Collect stage updates for assertions."""
 
     def __init__(self) -> None:
@@ -140,6 +139,9 @@ class RecordingReporter(NullStageReporter):
         self.events.append(("begin", input_path.name, output_format))
 
     def stage_started(self, stage_key: str, label: str) -> None:
+        self.events.append(("start", stage_key, label))
+
+    def stage_timing_started(self, stage_key: str, label: str) -> None:
         self.events.append(("start", stage_key, label))
 
     def progress_started(
@@ -172,7 +174,13 @@ class RecordingReporter(NullStageReporter):
     def warn(self, message: str) -> None:
         self.warnings.append(message)
 
-    def complete_run(self, artifacts) -> None:
+    def interrupted(self) -> None:
+        self.events.append(("interrupt", "", ""))
+
+    def reset_active_display(self) -> None:
+        self.events.append(("reset", "", ""))
+
+    def complete_run(self, artifacts: ProcessArtifacts) -> None:
         self.events.append((
             "complete",
             artifacts.layout.run_dir.name,
@@ -430,15 +438,15 @@ def test_process_input_runs_windowed_whispercpp_pipeline(tmp_path, monkeypatch) 
             ]
 
     monkeypatch.setattr(
-        "webinar_transcriber.processor.load_normalized_audio",
+        "webinar_transcriber.processor_asr.load_normalized_audio",
         lambda _path: (np.zeros(16_000, dtype=np.float32), 16_000),
     )
     monkeypatch.setattr(
-        "webinar_transcriber.processor.detect_speech_regions",
+        "webinar_transcriber.processor_asr.detect_speech_regions",
         lambda *_args, **_kwargs: ([SpeechRegion(start_sec=0.0, end_sec=6.0)], []),
     )
     monkeypatch.setattr(
-        "webinar_transcriber.processor.expand_speech_regions",
+        "webinar_transcriber.processor_asr.expand_speech_regions",
         lambda regions, **_kwargs: regions,
     )
     artifacts = process_input(
@@ -570,15 +578,15 @@ def test_process_input_persists_intermediate_artifacts_on_failure(tmp_path) -> N
             side_effect=RuntimeError("boom"),
         ),
         patch(
-            "webinar_transcriber.processor.load_normalized_audio",
+            "webinar_transcriber.processor_asr.load_normalized_audio",
             return_value=(np.zeros(16_000, dtype=np.float32), 16_000),
         ),
         patch(
-            "webinar_transcriber.processor.detect_speech_regions",
+            "webinar_transcriber.processor_asr.detect_speech_regions",
             return_value=([SpeechRegion(start_sec=0.0, end_sec=3.0)], []),
         ),
         patch(
-            "webinar_transcriber.processor.expand_speech_regions",
+            "webinar_transcriber.processor_asr.expand_speech_regions",
             side_effect=lambda regions, **_kwargs: regions,
         ),
         pytest.raises(RuntimeError, match="boom"),
@@ -736,7 +744,7 @@ def test_process_input_warns_when_llm_configuration_is_missing(tmp_path, monkeyp
     reporter = RecordingReporter()
 
     with patch(
-        "webinar_transcriber.processor.build_llm_processor_from_env",
+        "webinar_transcriber.processor_llm.build_llm_processor_from_env",
         side_effect=LLMConfigurationError(
             "Missing required LLM environment variables: OPENAI_API_KEY."
         ),

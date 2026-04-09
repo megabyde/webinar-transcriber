@@ -23,13 +23,16 @@ repository assets are needed, keep them under `docs/assets/`.
 
 ## Native Dependencies
 
-For local macOS development, use Homebrew:
+For local macOS runtime and development, use Homebrew:
 
 ```bash
-brew install ffmpeg
+brew install ffmpeg whisper-cpp
 ```
 
-The current pipeline does not require additional non-Python dependencies beyond `ffmpeg`.
+For Linux runtime, install `ffmpeg` plus a `libwhisper` package such as `libwhisper-cpp-dev`.
+
+CI and most tests only require `ffmpeg`. A full local CLI run also needs the `whisper.cpp` runtime
+library to be available.
 
 ## Verification
 
@@ -51,17 +54,20 @@ The package intentionally avoids deep nesting.
 - `webinar_transcriber/cli.py`: Click CLI entrypoints
 - `webinar_transcriber/processor.py`: high-level orchestration
 - `webinar_transcriber/asr.py`: ASR backend selection and normalization
-- `webinar_transcriber/media.py`: probing and transcription-audio preparation
+- `webinar_transcriber/media.py`: probing and shared ffmpeg/ffprobe command execution
+- `webinar_transcriber/transcription_audio.py`: deterministic transcription-audio preparation
 - `webinar_transcriber/structure.py`: report heuristics
+- `webinar_transcriber/reporter.py`: reporter protocol and no-op implementation
 - `webinar_transcriber/ui.py`: Rich progress reporting
 - `webinar_transcriber/video/`: scene detection and frame extraction
 - `webinar_transcriber/export/`: Markdown, DOCX, and JSON writers
 
 ## Runtime Contracts
 
-- `process` writes the full report artifact set.
+- Successful `process` runs write the report artifact set described in `README.md`.
 - `extract-frames` writes `scenes.json` and `frames/`.
-- `diagnostics.json` is currently success-only.
+- `diagnostics.json` is currently success-only; early failures can leave partial intermediate
+  artifacts without diagnostics or final report outputs.
 - Temporary audio extracted for transcription should stay outside the run directory.
 
 ## Testing Notes

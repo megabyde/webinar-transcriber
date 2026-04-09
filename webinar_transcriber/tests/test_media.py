@@ -1,4 +1,4 @@
-"""Tests for media probing and audio extraction."""
+"""Tests for media probing and shared media command helpers."""
 
 import subprocess
 from pathlib import Path
@@ -9,7 +9,6 @@ from webinar_transcriber.media import (
     MediaProcessingError,
     _parse_frame_rate,
     _run_command,
-    extract_audio,
     probe_media,
 )
 from webinar_transcriber.models import MediaType
@@ -64,31 +63,6 @@ def test_probe_media_treats_attached_cover_art_as_audio_only(
     assert asset.fps is None
     assert asset.width is None
     assert asset.height is None
-
-
-def test_extract_audio_creates_wav(tmp_path) -> None:
-    output_path = extract_audio(FIXTURE_DIR / "sample-audio.mp3", tmp_path / "audio.wav")
-
-    assert output_path.exists()
-
-    probe = subprocess.run(
-        [
-            "ffprobe",
-            "-v",
-            "error",
-            "-show_entries",
-            "stream=codec_name",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            str(output_path),
-        ],
-        capture_output=True,
-        check=False,
-        text=True,
-    )
-
-    assert probe.returncode == 0
-    assert "pcm_s16le" in probe.stdout
 
 
 def test_run_command_wraps_timeout_with_media_processing_error(monkeypatch) -> None:
