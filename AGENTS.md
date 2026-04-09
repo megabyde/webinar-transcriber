@@ -52,12 +52,13 @@ cache-permission failures.
 The package intentionally avoids deep nesting.
 
 - `webinar_transcriber/cli.py`: Click CLI entrypoints
-- `webinar_transcriber/processor.py`: high-level orchestration
+- `webinar_transcriber/processor.py` and `webinar_transcriber/processor_*`: high-level orchestration
+  and processor support helpers
 - `webinar_transcriber/asr.py`: ASR backend selection and normalization
 - `webinar_transcriber/llm/`: optional cloud LLM integrations
 - `webinar_transcriber/media.py`: probing and shared ffmpeg/ffprobe command execution
 - `webinar_transcriber/transcription_audio.py`: deterministic transcription-audio preparation
-- `webinar_transcriber/structure.py`: report heuristics
+- `webinar_transcriber/structure.py` and `webinar_transcriber/structure_*`: report heuristics
 - `webinar_transcriber/reporter.py`: reporter protocol and no-op implementation
 - `webinar_transcriber/ui.py`: Rich progress reporting
 - `webinar_transcriber/video/`: scene detection and frame extraction

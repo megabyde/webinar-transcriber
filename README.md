@@ -115,20 +115,20 @@ webinar-transcriber process INPUT --llm
 
 ### What You Get
 
-`process` always writes:
+Successful `process` runs write:
 
 - `metadata.json`, `transcript.json`, and `transcript.vtt`
 - `diagnostics.json` with stage timings, counts, warnings, ASR details, and optional LLM metadata
 - `report.json` regardless of `--format`
 - ASR planning and decode artifacts under `asr/`
 
-Depending on options and input type, `process` also writes:
+Depending on options and input type, successful `process` runs also write:
 
 - `report.md` and/or `report.docx`
 - `transcription-audio.wav` or `transcription-audio.mp3` with `--keep-audio`
 - `scenes.json` and `frames/` for video input
 
-`extract-frames` writes only `scenes.json` and `frames/`.
+Successful `extract-frames` runs write only `scenes.json` and `frames/`.
 
 ### How It Works
 
@@ -196,7 +196,7 @@ Silero VAD behavior can be tuned from the CLI:
 
 ### Output Layout
 
-`process` writes:
+Successful `process` runs write:
 
 ```text
 runs/<timestamp>_<basename>/
@@ -217,7 +217,7 @@ runs/<timestamp>_<basename>/
 └─ frames/                 # video only
 ```
 
-`extract-frames` writes:
+Successful `extract-frames` runs write:
 
 ```text
 runs/<timestamp>_<basename>/
