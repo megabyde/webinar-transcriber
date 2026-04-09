@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import anthropic
 import openai
@@ -12,7 +12,7 @@ import openai
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-from webinar_transcriber.llm_shared import (
+from .shared import (
     ACTION_ITEM_LIMIT,
     REPORT_POLISH_TOTAL_CHAR_BUDGET,
     SECTION_POLISH_MAX_WORKERS,
@@ -32,7 +32,6 @@ from webinar_transcriber.llm_shared import (
     _BaseLLMProcessor,
     _extract_json_text,
     _extract_usage,
-    _ProviderEnvConfig,
     _required_provider_env,
     _schema_label,
 )
@@ -102,7 +101,7 @@ class AnthropicLLMProcessor(_BaseLLMProcessor):
             section_max_workers=section_max_workers,
             report_char_budget=report_char_budget,
         )
-        self._client = _build_anthropic_client(api_key)
+        self._client = anthropic.Anthropic(api_key=api_key)
 
     def _parse_structured_response(
         self,
@@ -142,31 +141,20 @@ def build_llm_processor_from_env() -> LLMProcessor:
     match provider:
         case "openai":
             api_key, model_name = _required_provider_env(
-                _ProviderEnvConfig(
-                    provider_name="openai",
-                    api_key_env="OPENAI_API_KEY",
-                    model_env="OPENAI_MODEL",
-                )
+                api_key_env="OPENAI_API_KEY",
+                model_env="OPENAI_MODEL",
             )
             return OpenAILLMProcessor(api_key=api_key, model_name=model_name)
         case "anthropic":
             api_key, model_name = _required_provider_env(
-                _ProviderEnvConfig(
-                    provider_name="anthropic",
-                    api_key_env="ANTHROPIC_API_KEY",
-                    model_env="ANTHROPIC_MODEL",
-                )
+                api_key_env="ANTHROPIC_API_KEY",
+                model_env="ANTHROPIC_MODEL",
             )
             return AnthropicLLMProcessor(api_key=api_key, model_name=model_name)
         case _:
             raise LLMConfigurationError(
                 "Unsupported LLM provider. Set LLM_PROVIDER to 'openai' or 'anthropic'."
             )
-
-
-def _build_anthropic_client(api_key: str) -> Any:
-    """Construct the Anthropic client for the configured API key."""
-    return anthropic.Anthropic(api_key=api_key)
 
 
 __all__ = [

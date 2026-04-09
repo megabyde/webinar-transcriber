@@ -54,6 +54,7 @@ The package intentionally avoids deep nesting.
 - `webinar_transcriber/cli.py`: Click CLI entrypoints
 - `webinar_transcriber/processor.py`: high-level orchestration
 - `webinar_transcriber/asr.py`: ASR backend selection and normalization
+- `webinar_transcriber/llm/`: optional cloud LLM integrations
 - `webinar_transcriber/media.py`: probing and shared ffmpeg/ffprobe command execution
 - `webinar_transcriber/transcription_audio.py`: deterministic transcription-audio preparation
 - `webinar_transcriber/structure.py`: report heuristics

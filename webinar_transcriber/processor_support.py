@@ -25,7 +25,7 @@ from webinar_transcriber.models import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from webinar_transcriber.llm_shared import LLMReportPolishPlan
+    from webinar_transcriber.llm import LLMReportPolishPlan
     from webinar_transcriber.paths import RunLayout
     from webinar_transcriber.reporter import StageReporter
 

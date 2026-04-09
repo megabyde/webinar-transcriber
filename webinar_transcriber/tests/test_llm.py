@@ -99,8 +99,8 @@ def test_build_llm_processor_from_env_supports_anthropic(monkeypatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     monkeypatch.setenv("ANTHROPIC_MODEL", "claude-test")
     monkeypatch.setattr(
-        "webinar_transcriber.llm._build_anthropic_client",
-        lambda _api_key: fake_client,
+        "webinar_transcriber.llm.anthropic.Anthropic",
+        lambda api_key: fake_client,
     )
 
     processor = build_llm_processor_from_env()
@@ -283,7 +283,8 @@ def test_anthropic_llm_processor_polishes_report(monkeypatch) -> None:
         ),
     ])
     monkeypatch.setattr(
-        "webinar_transcriber.llm._build_anthropic_client", lambda _api_key: fake_client
+        "webinar_transcriber.llm.anthropic.Anthropic",
+        lambda api_key: fake_client,
     )
 
     processor = AnthropicLLMProcessor(api_key="test-key", model_name="claude-test")
