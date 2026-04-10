@@ -78,8 +78,14 @@ The package intentionally avoids deep nesting.
 - Prefer tiny deterministic fixtures committed to the repo.
 - Prefer `pytest` `monkeypatch` for simple state replacement and `unittest.mock.patch` when a test
   needs mock semantics such as `side_effect`, `return_value`, or call assertions.
+- Group related tests by behavior using `class Test...` when it improves scanability; keep helpers
+  and fakes scoped to the narrowest test class that uses them, and leave them module-level only when
+  they are intentionally shared across multiple test classes or fixtures.
 - CLI tests should generally monkeypatch the reporter and heavy runtime seams instead of invoking
   real media-processing work.
+- Use `pytest.mark.parametrize` when cases share the same setup and assertions and the test
+  naturally becomes a clear input/output table; avoid it when cases need materially different
+  fixtures, monkeypatching, or fake-object wiring.
 - Prefer asserting current observable behavior over asserting that recently removed options, fields,
   or artifacts are absent. Deletion-based assertions are usually shallow and brittle.
 - For predicate-style tests, prefer `assert expr` / `assert not expr`. Reserve `is True` /
