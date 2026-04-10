@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from webinar_transcriber.media import MediaProcessingError, _run_command
+from webinar_transcriber.media import MediaProcessingError, _run_ffmpeg
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -22,7 +22,7 @@ NORMALIZED_SAMPLE_RATE = 16_000
 def extract_audio(input_path: Path, output_path: Path) -> Path:
     """Convert the input media into a mono 16 kHz WAV file."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    _run_command(
+    _run_ffmpeg(
         "ffmpeg",
         "-y",
         "-i",
@@ -42,7 +42,7 @@ def extract_audio(input_path: Path, output_path: Path) -> Path:
 def transcode_audio_to_mp3(input_path: Path, output_path: Path) -> Path:
     """Convert normalized transcription audio into an MP3 artifact."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    _run_command(
+    _run_ffmpeg(
         "ffmpeg",
         "-y",
         "-i",

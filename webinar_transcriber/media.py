@@ -15,7 +15,7 @@ class MediaProcessingError(RuntimeError):
     """Raised when ffmpeg or ffprobe work cannot be completed."""
 
 
-def _run_command(
+def _run_ffmpeg(
     *args: str,
     timeout_sec: float = MEDIA_COMMAND_TIMEOUT_SEC,
 ) -> subprocess.CompletedProcess[str]:
@@ -50,7 +50,7 @@ def _is_attached_picture_stream(stream: dict[str, object]) -> bool:
 
 def probe_media(input_path: Path) -> MediaAsset:
     """Inspect media with ffprobe and return normalized metadata."""
-    result = _run_command(
+    result = _run_ffmpeg(
         "ffprobe",
         "-v",
         "error",

@@ -43,61 +43,60 @@ RU_REPETITIVE_SPEECH = (
 )
 
 
-def test_should_start_new_audio_section_waits_for_sentence_boundary_before_soft_limit() -> None:
-    current_segments = [
-        TranscriptSegment(
-            id="segment-1",
-            text="This section has enough duration but no sentence boundary",
-            start_sec=0.0,
-            end_sec=130.0,
+class TestAudioSectionBoundaries:
+    def test_waits_for_sentence_boundary_before_soft_limit(self) -> None:
+        current_segments = [
+            TranscriptSegment(
+                id="segment-1",
+                text="This section has enough duration but no sentence boundary",
+                start_sec=0.0,
+                end_sec=130.0,
+            )
+        ]
+        next_segment = TranscriptSegment(
+            id="segment-2",
+            text="More detail arrives immediately after that",
+            start_sec=130.0,
+            end_sec=310.0,
         )
-    ]
-    next_segment = TranscriptSegment(
-        id="segment-2",
-        text="More detail arrives immediately after that",
-        start_sec=130.0,
-        end_sec=310.0,
-    )
 
-    assert not _should_start_new_audio_section(current_segments, next_segment)
+        assert not _should_start_new_audio_section(current_segments, next_segment)
 
-
-def test_should_start_new_audio_section_splits_at_hard_cap_without_sentence_boundary() -> None:
-    current_segments = [
-        TranscriptSegment(
-            id="segment-1",
-            text="This section keeps running without punctuation",
-            start_sec=0.0,
-            end_sec=350.0,
+    def test_splits_at_hard_cap_without_sentence_boundary(self) -> None:
+        current_segments = [
+            TranscriptSegment(
+                id="segment-1",
+                text="This section keeps running without punctuation",
+                start_sec=0.0,
+                end_sec=350.0,
+            )
+        ]
+        next_segment = TranscriptSegment(
+            id="segment-2",
+            text="More detail arrives immediately after that",
+            start_sec=350.0,
+            end_sec=610.0,
         )
-    ]
-    next_segment = TranscriptSegment(
-        id="segment-2",
-        text="More detail arrives immediately after that",
-        start_sec=350.0,
-        end_sec=610.0,
-    )
 
-    assert _should_start_new_audio_section(current_segments, next_segment)
+        assert _should_start_new_audio_section(current_segments, next_segment)
 
-
-def test_should_start_new_audio_section_splits_at_char_limit_with_sentence_boundary() -> None:
-    current_segments = [
-        TranscriptSegment(
-            id="segment-1",
-            text=f"{'a' * 3601}.",
-            start_sec=0.0,
-            end_sec=130.0,
+    def test_splits_at_char_limit_with_sentence_boundary(self) -> None:
+        current_segments = [
+            TranscriptSegment(
+                id="segment-1",
+                text=f"{'a' * 3601}.",
+                start_sec=0.0,
+                end_sec=130.0,
+            )
+        ]
+        next_segment = TranscriptSegment(
+            id="segment-2",
+            text="A short follow-up sentence.",
+            start_sec=130.0,
+            end_sec=150.0,
         )
-    ]
-    next_segment = TranscriptSegment(
-        id="segment-2",
-        text="A short follow-up sentence.",
-        start_sec=130.0,
-        end_sec=150.0,
-    )
 
-    assert _should_start_new_audio_section(current_segments, next_segment)
+        assert _should_start_new_audio_section(current_segments, next_segment)
 
 
 class TestBuildReport:
