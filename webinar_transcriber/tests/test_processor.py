@@ -22,9 +22,9 @@ from webinar_transcriber.llm import (
 )
 from webinar_transcriber.models import (
     DecodedWindow,
-    MediaType,
     SpeechRegion,
     TranscriptSegment,
+    VideoAsset,
 )
 from webinar_transcriber.processor import (
     ProcessArtifacts,
@@ -418,7 +418,7 @@ class TestProcessInput:
             reporter=reporter,
         )
 
-        assert artifacts.media_asset.media_type == MediaType.VIDEO
+        assert isinstance(artifacts.media_asset, VideoAsset)
         assert not (artifacts.layout.run_dir / "audio.wav").exists()
         assert transcription_audio_path is not None
         assert not transcription_audio_path.exists()

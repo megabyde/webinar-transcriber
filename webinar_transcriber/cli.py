@@ -13,7 +13,7 @@ from webinar_transcriber.asr import (
     PromptCarryoverSettings,
 )
 from webinar_transcriber.media import MediaProcessingError, probe_media
-from webinar_transcriber.models import MediaType
+from webinar_transcriber.models import VideoAsset
 from webinar_transcriber.paths import OutputDirectoryExistsError, create_run_layout
 from webinar_transcriber.processor import process_input
 from webinar_transcriber.segmentation import (
@@ -242,7 +242,7 @@ def extract_frames(input_path: Path, output_dir: Path | None) -> None:
             "Probing media",
             detail=f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s",
         )
-        if media_asset.media_type != MediaType.VIDEO:
+        if not isinstance(media_asset, VideoAsset):
             raise CLIError("Frame extraction is only supported for video input.")
 
         reporter.progress_started(

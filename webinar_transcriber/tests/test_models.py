@@ -2,23 +2,23 @@
 
 from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
+    AudioAsset,
     DecodedWindow,
     Diagnostics,
     InferenceWindow,
-    MediaAsset,
     MediaType,
     ReportDocument,
     ReportSection,
     SpeechRegion,
     TranscriptSegment,
+    VideoAsset,
 )
 
 
 class TestCoreModels:
-    def test_media_asset_accepts_video_metadata(self) -> None:
-        asset = MediaAsset(
+    def test_video_asset_accepts_video_metadata(self) -> None:
+        asset = VideoAsset(
             path="demo.mp4",
-            media_type=MediaType.VIDEO,
             duration_sec=120.5,
             fps=30.0,
             width=1920,
@@ -28,6 +28,18 @@ class TestCoreModels:
         assert asset.media_type is MediaType.VIDEO
         assert asset.duration_sec == 120.5
         assert asset.width == 1920
+
+    def test_audio_asset_accepts_audio_metadata(self) -> None:
+        asset = AudioAsset(
+            path="demo.mp3",
+            duration_sec=42.0,
+            sample_rate=48_000,
+            channels=2,
+        )
+
+        assert asset.media_type is MediaType.AUDIO
+        assert asset.sample_rate == 48_000
+        assert asset.channels == 2
 
     def test_transcript_segment_accepts_timing_fields(self) -> None:
         segment = TranscriptSegment(

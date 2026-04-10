@@ -6,7 +6,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import cast
 
-from webinar_transcriber.models import MediaAsset, MediaType
+from webinar_transcriber.models import AudioAsset, MediaAsset, VideoAsset
 
 MEDIA_COMMAND_TIMEOUT_SEC = 300.0
 
@@ -75,19 +75,33 @@ def probe_media(input_path: Path) -> MediaAsset:
     if audio_stream is None and video_stream is None:
         raise MediaProcessingError(f"No audio or video stream found in {input_path}.")
 
-    media_type = MediaType.VIDEO if video_stream is not None else MediaType.AUDIO
-    audio_duration = audio_stream.get("duration") if audio_stream else None
-    duration_raw = payload.get("format", {}).get("duration") or audio_duration or "0"
-    sample_rate = audio_stream.get("sample_rate") if audio_stream else None
-    channels = audio_stream.get("channels") if audio_stream else None
+    audio_duration = None
+    parsed_sample_rate = None
+    parsed_channels = None
+    if audio_stream is not None:
+        audio_duration = audio_stream.get("duration")
+        if sample_rate := audio_stream.get("sample_rate"):
+            parsed_sample_rate = int(sample_rate)
+        if channels := audio_stream.get("channels"):
+            parsed_channels = int(channels)
 
-    return MediaAsset(
+    duration_raw = payload.get("format", {}).get("duration") or audio_duration or "0"
+    duration_sec = float(duration_raw)
+
+    if video_stream is None:
+        return AudioAsset(
+            path=str(input_path),
+            duration_sec=duration_sec,
+            sample_rate=parsed_sample_rate,
+            channels=parsed_channels,
+        )
+
+    return VideoAsset(
         path=str(input_path),
-        media_type=media_type,
-        duration_sec=float(duration_raw),
-        sample_rate=int(sample_rate) if sample_rate else None,
-        channels=int(channels) if channels else None,
-        fps=_parse_frame_rate(video_stream.get("avg_frame_rate")) if video_stream else None,
-        width=int(video_stream["width"]) if video_stream and video_stream.get("width") else None,
-        height=int(video_stream["height"]) if video_stream and video_stream.get("height") else None,
+        duration_sec=duration_sec,
+        sample_rate=parsed_sample_rate,
+        channels=parsed_channels,
+        fps=_parse_frame_rate(video_stream.get("avg_frame_rate")),
+        width=int(video_stream["width"]) if video_stream.get("width") else None,
+        height=int(video_stream["height"]) if video_stream.get("height") else None,
     )

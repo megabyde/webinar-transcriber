@@ -1,6 +1,7 @@
 """Typed models used across the processing pipeline."""
 
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -12,17 +13,31 @@ class MediaType(StrEnum):
     VIDEO = "video"
 
 
-class MediaAsset(BaseModel):
-    """Metadata for a probed audio or video asset."""
+class _BaseMediaAsset(BaseModel):
+    """Shared metadata for a probed media asset."""
 
     path: str
-    media_type: MediaType
     duration_sec: float = Field(ge=0)
     sample_rate: int | None = Field(default=None, ge=1)
     channels: int | None = Field(default=None, ge=1)
+
+
+class AudioAsset(_BaseMediaAsset):
+    """Metadata for a probed audio-only asset."""
+
+    media_type: Literal[MediaType.AUDIO] = MediaType.AUDIO
+
+
+class VideoAsset(_BaseMediaAsset):
+    """Metadata for a probed video asset."""
+
+    media_type: Literal[MediaType.VIDEO] = MediaType.VIDEO
     fps: float | None = Field(default=None, ge=0)
     width: int | None = Field(default=None, ge=1)
     height: int | None = Field(default=None, ge=1)
+
+
+MediaAsset = AudioAsset | VideoAsset
 
 
 class TranscriptSegment(BaseModel):

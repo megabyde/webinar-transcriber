@@ -2,10 +2,10 @@
 
 from webinar_transcriber.models import (
     AlignmentBlock,
-    MediaAsset,
-    MediaType,
+    AudioAsset,
     TranscriptionResult,
     TranscriptSegment,
+    VideoAsset,
 )
 from webinar_transcriber.structure import (
     _action_item_score,
@@ -102,7 +102,7 @@ class TestAudioSectionBoundaries:
 class TestBuildReport:
     def test_uses_alignment_block_title_hint_and_warnings(self) -> None:
         report = build_report(
-            MediaAsset(path="demo-file.mp4", media_type=MediaType.VIDEO, duration_sec=12.0),
+            VideoAsset(path="demo-file.mp4", duration_sec=12.0),
             TranscriptionResult(
                 detected_language="en",
                 segments=[
@@ -136,7 +136,7 @@ class TestBuildReport:
 
     def test_falls_back_for_empty_text_and_dedupes_summary(self) -> None:
         report = build_report(
-            MediaAsset(path="", media_type=MediaType.AUDIO, duration_sec=10.0),
+            AudioAsset(path="", duration_sec=10.0),
             TranscriptionResult(
                 segments=[
                     TranscriptSegment(id="segment-1", text="  ", start_sec=0.0, end_sec=1.0),
@@ -171,7 +171,7 @@ class TestBuildReport:
 
     def test_groups_audio_segments_into_larger_sections(self) -> None:
         report = build_report(
-            MediaAsset(path="demo.wav", media_type=MediaType.AUDIO, duration_sec=80.0),
+            AudioAsset(path="demo.wav", duration_sec=80.0),
             TranscriptionResult(
                 segments=[
                     TranscriptSegment(
@@ -205,7 +205,7 @@ class TestBuildReport:
 
     def test_uses_more_informative_audio_section_title(self) -> None:
         report = build_report(
-            MediaAsset(path="demo.wav", media_type=MediaType.AUDIO, duration_sec=260.0),
+            AudioAsset(path="demo.wav", duration_sec=260.0),
             TranscriptionResult(
                 segments=[
                     TranscriptSegment(
@@ -235,7 +235,7 @@ class TestBuildReport:
 
     def test_summary_skips_startup_chatter(self) -> None:
         report = build_report(
-            MediaAsset(path="demo.wav", media_type=MediaType.AUDIO, duration_sec=260.0),
+            AudioAsset(path="demo.wav", duration_sec=260.0),
             TranscriptionResult(
                 segments=[
                     TranscriptSegment(
@@ -282,7 +282,7 @@ class TestBuildReport:
 
     def test_extracts_russian_action_items(self) -> None:
         report = build_report(
-            MediaAsset(path="demo.wav", media_type=MediaType.AUDIO, duration_sec=120.0),
+            AudioAsset(path="demo.wav", duration_sec=120.0),
             TranscriptionResult(
                 segments=[
                     TranscriptSegment(
@@ -311,7 +311,7 @@ class TestBuildReport:
 
     def test_returns_no_audio_sections_for_blank_segments(self) -> None:
         report = build_report(
-            MediaAsset(path="demo.wav", media_type=MediaType.AUDIO, duration_sec=30.0),
+            AudioAsset(path="demo.wav", duration_sec=30.0),
             TranscriptionResult(
                 segments=[
                     TranscriptSegment(id="segment-1", text=" ", start_sec=0.0, end_sec=1.0),
@@ -324,7 +324,7 @@ class TestBuildReport:
 
     def test_splits_local_interlude_span_without_swallowing_surrounding_content(self) -> None:
         report = build_report(
-            MediaAsset(path="demo-file.mp4", media_type=MediaType.VIDEO, duration_sec=56.0),
+            VideoAsset(path="demo-file.mp4", duration_sec=56.0),
             TranscriptionResult(
                 detected_language="ru",
                 segments=[
@@ -384,7 +384,7 @@ class TestBuildReport:
 
     def test_renders_music_breaks_as_interludes_and_excludes_them_from_summary(self) -> None:
         report = build_report(
-            MediaAsset(path="demo.wav", media_type=MediaType.AUDIO, duration_sec=180.0),
+            AudioAsset(path="demo.wav", duration_sec=180.0),
             TranscriptionResult(
                 detected_language="ru",
                 segments=[
@@ -427,7 +427,7 @@ class TestBuildReport:
 
     def test_renders_long_interlude_candidate(self) -> None:
         report = build_report(
-            MediaAsset(path="demo.wav", media_type=MediaType.AUDIO, duration_sec=900.0),
+            AudioAsset(path="demo.wav", duration_sec=900.0),
             TranscriptionResult(
                 detected_language="ru",
                 segments=[
@@ -459,7 +459,7 @@ class TestBuildReport:
 
     def test_ignores_short_marker_only_interlude_candidate(self) -> None:
         report = build_report(
-            MediaAsset(path="demo.wav", media_type=MediaType.AUDIO, duration_sec=120.0),
+            AudioAsset(path="demo.wav", duration_sec=120.0),
             TranscriptionResult(
                 detected_language="ru",
                 segments=[
@@ -484,7 +484,7 @@ class TestBuildReport:
 
     def test_does_not_mark_single_repetitive_speech_segment_as_interlude(self) -> None:
         report = build_report(
-            MediaAsset(path="demo-file.mp4", media_type=MediaType.VIDEO, duration_sec=24.0),
+            VideoAsset(path="demo-file.mp4", duration_sec=24.0),
             TranscriptionResult(
                 detected_language="ru",
                 segments=[

@@ -19,10 +19,10 @@ from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
     Diagnostics,
     MediaAsset,
-    MediaType,
     ReportDocument,
     SlideFrame,
     TranscriptionResult,
+    VideoAsset,
 )
 from webinar_transcriber.paths import RunLayout, create_run_layout
 from webinar_transcriber.processor_asr import run_asr_pipeline
@@ -174,7 +174,7 @@ def process_input(
                 )
         # Subsequent video, structure, and export stages intentionally run after temp audio cleanup.
 
-        if media_asset.media_type == MediaType.VIDEO:
+        if isinstance(media_asset, VideoAsset):
             active_reporter.progress_started(
                 "detect_scenes",
                 "Detecting scenes",

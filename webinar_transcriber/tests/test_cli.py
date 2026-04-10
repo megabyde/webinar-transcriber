@@ -12,13 +12,14 @@ from webinar_transcriber import __version__
 from webinar_transcriber.asr import DEFAULT_ASR_THREADS, PromptCarryoverSettings
 from webinar_transcriber.cli import main
 from webinar_transcriber.models import (
+    AudioAsset,
     Diagnostics,
-    MediaAsset,
     MediaType,
     ReportDocument,
     Scene,
     SlideFrame,
     TranscriptionResult,
+    VideoAsset,
 )
 from webinar_transcriber.paths import OutputDirectoryExistsError, RunLayout
 from webinar_transcriber.processor import ProcessArtifacts
@@ -70,9 +71,8 @@ class TestProcessCommand:
             "webinar_transcriber.cli.process_input",
             return_value=ProcessArtifacts(
                 layout=RunLayout(run_dir=run_dir),
-                media_asset=MediaAsset(
+                media_asset=VideoAsset(
                     path=str(input_path),
-                    media_type=MediaType.VIDEO,
                     duration_sec=1.0,
                 ),
                 transcription=TranscriptionResult(detected_language="en"),
@@ -115,9 +115,8 @@ class TestProcessCommand:
             "webinar_transcriber.cli.process_input",
             return_value=ProcessArtifacts(
                 layout=RunLayout(run_dir=run_dir),
-                media_asset=MediaAsset(
+                media_asset=VideoAsset(
                     path=str(input_path),
-                    media_type=MediaType.VIDEO,
                     duration_sec=1.0,
                 ),
                 transcription=TranscriptionResult(detected_language="en"),
@@ -308,9 +307,8 @@ class TestExtractFramesCommand:
         )
         monkeypatch.setattr(
             "webinar_transcriber.cli.probe_media",
-            lambda _path: MediaAsset(
+            lambda _path: VideoAsset(
                 path=str(input_path),
-                media_type=MediaType.VIDEO,
                 duration_sec=2.0,
             ),
         )
@@ -351,9 +349,8 @@ class TestExtractFramesCommand:
         )
         monkeypatch.setattr(
             "webinar_transcriber.cli.probe_media",
-            lambda _path: MediaAsset(
+            lambda _path: AudioAsset(
                 path=str(input_path),
-                media_type=MediaType.AUDIO,
                 duration_sec=2.0,
             ),
         )
@@ -407,9 +404,8 @@ class TestExtractFramesCommand:
         )
         monkeypatch.setattr(
             "webinar_transcriber.cli.probe_media",
-            lambda _path: MediaAsset(
+            lambda _path: VideoAsset(
                 path=str(input_path),
-                media_type=MediaType.VIDEO,
                 duration_sec=2.0,
             ),
         )

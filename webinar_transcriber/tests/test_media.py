@@ -11,7 +11,7 @@ from webinar_transcriber.media import (
     _run_ffmpeg,
     probe_media,
 )
-from webinar_transcriber.models import MediaType
+from webinar_transcriber.models import AudioAsset, VideoAsset
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 
@@ -20,7 +20,7 @@ class TestProbeMedia:
     def test_reads_audio_metadata(self) -> None:
         asset = probe_media(FIXTURE_DIR / "sample-audio.mp3")
 
-        assert asset.media_type is MediaType.AUDIO
+        assert isinstance(asset, AudioAsset)
         assert asset.duration_sec > 0
         assert asset.sample_rate
 
@@ -59,16 +59,13 @@ class TestProbeMedia:
 
         asset = probe_media(FIXTURE_DIR / "sample-audio.mp3")
 
-        assert asset.media_type is MediaType.AUDIO
+        assert isinstance(asset, AudioAsset)
         assert asset.duration_sec == 42.5
-        assert asset.fps is None
-        assert asset.width is None
-        assert asset.height is None
 
     def test_reads_video_metadata(self) -> None:
         asset = probe_media(FIXTURE_DIR / "sample-video.mp4")
 
-        assert asset.media_type is MediaType.VIDEO
+        assert isinstance(asset, VideoAsset)
         assert asset.fps is not None
         assert asset.width is not None
         assert asset.height is not None
