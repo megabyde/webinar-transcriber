@@ -208,23 +208,29 @@ class TestProcessCommand:
         assert "--asr-compute-type" not in result.output
         assert "--llm-model" not in result.output
 
-    def test_process_command_rejects_missing_input(self, tmp_path) -> None:
+    @pytest.mark.parametrize(
+        ("path_name", "create_directory", "message"),
+        [
+            ("missing.wav", False, "Input file does not exist"),
+            ("input-dir", True, "Input path is not a file"),
+        ],
+    )
+    def test_process_command_rejects_invalid_input(
+        self,
+        tmp_path,
+        path_name: str,
+        create_directory: bool,
+        message: str,
+    ) -> None:
         runner = CliRunner()
+        input_path = tmp_path / path_name
+        if create_directory:
+            input_path.mkdir()
 
-        result = runner.invoke(main, ["process", str(tmp_path / "missing.wav")])
+        result = runner.invoke(main, ["process", str(input_path)])
 
         assert result.exit_code != 0
-        assert "Input file does not exist" in result.output
-
-    def test_process_command_rejects_directory_input(self, tmp_path) -> None:
-        runner = CliRunner()
-        input_dir = tmp_path / "input-dir"
-        input_dir.mkdir()
-
-        result = runner.invoke(main, ["process", str(input_dir)])
-
-        assert result.exit_code != 0
-        assert "Input path is not a file" in result.output
+        assert message in result.output
 
     def test_process_command_colors_top_level_errors(self, tmp_path) -> None:
         runner = CliRunner()
@@ -360,13 +366,29 @@ class TestExtractFramesCommand:
         assert result.exit_code != 0
         assert "only supported for video input" in result.output
 
-    def test_extract_frames_command_rejects_missing_input(self, tmp_path) -> None:
+    @pytest.mark.parametrize(
+        ("path_name", "create_directory", "message"),
+        [
+            ("missing.mp4", False, "Input file does not exist"),
+            ("input-dir", True, "Input path is not a file"),
+        ],
+    )
+    def test_extract_frames_command_rejects_invalid_input(
+        self,
+        tmp_path,
+        path_name: str,
+        create_directory: bool,
+        message: str,
+    ) -> None:
         runner = CliRunner()
+        input_path = tmp_path / path_name
+        if create_directory:
+            input_path.mkdir()
 
-        result = runner.invoke(main, ["extract-frames", str(tmp_path / "missing.mp4")])
+        result = runner.invoke(main, ["extract-frames", str(input_path)])
 
         assert result.exit_code != 0
-        assert "Input file does not exist" in result.output
+        assert message in result.output
 
     def test_extract_frames_command_resets_active_display_before_cli_errors(
         self,

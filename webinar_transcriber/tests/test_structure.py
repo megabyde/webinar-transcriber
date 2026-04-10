@@ -1,5 +1,7 @@
 """Tests for report structuring helpers."""
 
+import pytest
+
 from webinar_transcriber.models import (
     AlignmentBlock,
     AudioAsset,
@@ -44,59 +46,52 @@ RU_REPETITIVE_SPEECH = (
 
 
 class TestAudioSectionBoundaries:
-    def test_waits_for_sentence_boundary_before_soft_limit(self) -> None:
+    @pytest.mark.parametrize(
+        ("current_text", "current_end_sec", "next_end_sec", "expected"),
+        [
+            (
+                "This section has enough duration but no sentence boundary",
+                130.0,
+                310.0,
+                False,
+            ),
+            (
+                "This section keeps running without punctuation",
+                350.0,
+                610.0,
+                True,
+            ),
+            (
+                f"{'a' * 3601}.",
+                130.0,
+                150.0,
+                True,
+            ),
+        ],
+    )
+    def test_starts_new_audio_section_for_boundary_conditions(
+        self,
+        current_text: str,
+        current_end_sec: float,
+        next_end_sec: float,
+        expected: bool,
+    ) -> None:
         current_segments = [
             TranscriptSegment(
                 id="segment-1",
-                text="This section has enough duration but no sentence boundary",
+                text=current_text,
                 start_sec=0.0,
-                end_sec=130.0,
+                end_sec=current_end_sec,
             )
         ]
         next_segment = TranscriptSegment(
             id="segment-2",
             text="More detail arrives immediately after that",
-            start_sec=130.0,
-            end_sec=310.0,
+            start_sec=current_end_sec,
+            end_sec=next_end_sec,
         )
 
-        assert not _should_start_new_audio_section(current_segments, next_segment)
-
-    def test_splits_at_hard_cap_without_sentence_boundary(self) -> None:
-        current_segments = [
-            TranscriptSegment(
-                id="segment-1",
-                text="This section keeps running without punctuation",
-                start_sec=0.0,
-                end_sec=350.0,
-            )
-        ]
-        next_segment = TranscriptSegment(
-            id="segment-2",
-            text="More detail arrives immediately after that",
-            start_sec=350.0,
-            end_sec=610.0,
-        )
-
-        assert _should_start_new_audio_section(current_segments, next_segment)
-
-    def test_splits_at_char_limit_with_sentence_boundary(self) -> None:
-        current_segments = [
-            TranscriptSegment(
-                id="segment-1",
-                text=f"{'a' * 3601}.",
-                start_sec=0.0,
-                end_sec=130.0,
-            )
-        ]
-        next_segment = TranscriptSegment(
-            id="segment-2",
-            text="A short follow-up sentence.",
-            start_sec=130.0,
-            end_sec=150.0,
-        )
-
-        assert _should_start_new_audio_section(current_segments, next_segment)
+        assert _should_start_new_audio_section(current_segments, next_segment) == expected
 
 
 class TestBuildReport:

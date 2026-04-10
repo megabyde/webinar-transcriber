@@ -267,17 +267,41 @@ class TestBackendPluginLoading:
 
 
 class TestWhisperCppHelpers:
-    def test_system_info_helpers_and_encoding_helpers(self) -> None:
-        assert _system_info_supports_gpu("WHISPER : MTL : EMBED_LIBRARY = 1 | CPU : NEON = 1 |")
-        assert _system_info_supports_gpu("CUDA = 1")
-        assert not _system_info_supports_gpu(
-            "WHISPER : COREML = 0 | OPENVINO = 0 | CPU : NEON = 1 |"
-        )
-        assert _encode_optional_text(None) is None
-        assert _encode_optional_text("") is None
-        assert _encode_optional_text("ru") == b"ru"
-        assert _decode_c_string(None) == ""
-        assert _decode_c_string(b"\xfftest") == "\ufffdtest"
+    @pytest.mark.parametrize(
+        ("system_info", "expected"),
+        [
+            ("WHISPER : MTL : EMBED_LIBRARY = 1 | CPU : NEON = 1 |", True),
+            ("CUDA = 1", True),
+            ("WHISPER : COREML = 0 | OPENVINO = 0 | CPU : NEON = 1 |", False),
+        ],
+    )
+    def test_system_info_supports_gpu(self, system_info: str, expected: bool) -> None:
+        assert _system_info_supports_gpu(system_info) == expected
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            (None, None),
+            ("", None),
+            ("ru", b"ru"),
+        ],
+    )
+    def test_encode_optional_text(
+        self,
+        text: str | None,
+        expected: bytes | None,
+    ) -> None:
+        assert _encode_optional_text(text) == expected
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            (None, ""),
+            (b"\xfftest", "\ufffdtest"),
+        ],
+    )
+    def test_decode_c_string(self, value: bytes | None, expected: str) -> None:
+        assert _decode_c_string(value) == expected
 
     def test_library_log_callback_writes_to_log_file(self, tmp_path) -> None:
         log_path = tmp_path / "native.log"

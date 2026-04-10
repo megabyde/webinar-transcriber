@@ -114,6 +114,17 @@ class TestRunFfmpeg:
 
 
 class TestParseFrameRate:
-    def test_returns_none_for_missing_values(self) -> None:
-        assert _parse_frame_rate(None) is None
-        assert _parse_frame_rate("0/0") is None
+    @pytest.mark.parametrize(
+        ("raw_value", "expected"),
+        [
+            (None, None),
+            ("0/0", None),
+            ("30000/1001", pytest.approx(29.97002997002997)),
+        ],
+    )
+    def test_parses_optional_frame_rate(
+        self,
+        raw_value: str | None,
+        expected: float | None,
+    ) -> None:
+        assert _parse_frame_rate(raw_value) == expected
