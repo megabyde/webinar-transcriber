@@ -55,6 +55,7 @@ The package intentionally avoids deep nesting.
 - `webinar_transcriber/processor.py` and `webinar_transcriber/processor_*`: high-level orchestration
   and processor support helpers
 - `webinar_transcriber/asr.py`: ASR backend selection and normalization
+- `webinar_transcriber/whispercpp/`: low-level whisper.cpp ctypes wrapper and bindings
 - `webinar_transcriber/llm/`: optional cloud LLM integrations
 - `webinar_transcriber/media.py`: probing and shared ffmpeg/ffprobe command execution
 - `webinar_transcriber/transcription_audio.py`: deterministic transcription-audio preparation
