@@ -6,7 +6,7 @@ import re
 from pathlib import Path, PureWindowsPath
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.structure_constants import (
+from .constants import (
     ACTION_ITEM_LIMIT,
     ACTION_ITEM_PATTERNS,
     SUMMARY_ITEM_LIMIT,

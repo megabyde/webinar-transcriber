@@ -5,7 +5,7 @@ from __future__ import annotations
 from itertools import pairwise
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.structure_constants import (
+from .constants import (
     AUDIO_SECTION_BREAK_GAP_SEC,
     INTERLUDE_LOW_PUNCTUATION_DENSITY,
     INTERLUDE_LOW_UNIQUE_RATIO,

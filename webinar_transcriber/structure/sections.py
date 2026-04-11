@@ -5,18 +5,19 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from webinar_transcriber.models import ReportSection
-from webinar_transcriber.structure_constants import (
+from webinar_transcriber.transcript_processing import STRONG_SENTENCE_END_RE
+
+from .constants import (
     AUDIO_SECTION_BREAK_GAP_SEC,
     MAX_AUDIO_SECTION_CHARS,
     MIN_AUDIO_SECTION_DURATION_SEC,
     TARGET_AUDIO_SECTION_DURATION_SEC,
 )
-from webinar_transcriber.structure_interludes import _overlaps_interlude_ranges
-from webinar_transcriber.structure_scoring import (
+from .interludes import _overlaps_interlude_ranges
+from .scoring import (
     _audio_title_from_segments,
     _title_from_text,
 )
-from webinar_transcriber.transcript_processing import STRONG_SENTENCE_END_RE
 
 if TYPE_CHECKING:
     from collections.abc import Callable

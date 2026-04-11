@@ -58,7 +58,7 @@ The package intentionally avoids deep nesting.
 - `webinar_transcriber/llm/`: optional cloud LLM integrations
 - `webinar_transcriber/media.py`: probing and shared ffmpeg/ffprobe command execution
 - `webinar_transcriber/transcription_audio.py`: deterministic transcription-audio preparation
-- `webinar_transcriber/structure.py` and `webinar_transcriber/structure_*`: report heuristics
+- `webinar_transcriber/structure/`: report heuristics
 - `webinar_transcriber/reporter.py`: reporter protocol and no-op implementation
 - `webinar_transcriber/ui.py`: Rich progress reporting
 - `webinar_transcriber/video/`: scene detection and frame extraction

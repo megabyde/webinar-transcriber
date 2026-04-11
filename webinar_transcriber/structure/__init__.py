@@ -10,14 +10,15 @@ from webinar_transcriber.models import (
     ReportDocument,
     TranscriptionResult,
 )
-from webinar_transcriber.structure_interludes import (
+
+from .interludes import (
     _detect_interlude_ranges,
     _is_likely_interlude_text,
     _render_interlude_sections,
     _renderable_interlude_ranges,
     _segments_excluding_interludes,
 )
-from webinar_transcriber.structure_scoring import (
+from .scoring import (
     _action_item_score,
     _audio_title_from_segments,
     _audio_title_score,
@@ -32,7 +33,7 @@ from webinar_transcriber.structure_scoring import (
     _title_from_text,
     _title_from_words,
 )
-from webinar_transcriber.structure_sections import (
+from .sections import (
     _build_audio_sections,
     _build_sections_from_blocks,
     _should_start_new_audio_section,
