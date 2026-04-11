@@ -37,7 +37,7 @@ class TestBuildLlmProcessorFromEnv:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         monkeypatch.setenv("ANTHROPIC_MODEL", "claude-test")
         monkeypatch.setattr(
-            "webinar_transcriber.llm.anthropic.Anthropic",
+            "webinar_transcriber.llm.anthropic_backend.anthropic.Anthropic",
             lambda api_key: fake_client,
         )
 
@@ -99,7 +99,10 @@ class TestOpenAiLlmProcessor:
                 {"input_tokens": 12, "output_tokens": 8, "total_tokens": 20},
             ),
         ])
-        monkeypatch.setattr("webinar_transcriber.llm.openai.OpenAI", lambda api_key: fake_client)
+        monkeypatch.setattr(
+            "webinar_transcriber.llm.openai_backend.openai.OpenAI",
+            lambda api_key: fake_client,
+        )
 
         processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
         report = ReportDocument(
@@ -149,7 +152,10 @@ class TestOpenAiLlmProcessor:
                 {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5},
             ),
         ])
-        monkeypatch.setattr("webinar_transcriber.llm.openai.OpenAI", lambda api_key: fake_client)
+        monkeypatch.setattr(
+            "webinar_transcriber.llm.openai_backend.openai.OpenAI",
+            lambda api_key: fake_client,
+        )
 
         processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
         report = ReportDocument(
@@ -181,7 +187,10 @@ class TestOpenAiLlmProcessor:
                 usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
             ),
         ])
-        monkeypatch.setattr("webinar_transcriber.llm.openai.OpenAI", lambda api_key: fake_client)
+        monkeypatch.setattr(
+            "webinar_transcriber.llm.openai_backend.openai.OpenAI",
+            lambda api_key: fake_client,
+        )
 
         processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
         report = ReportDocument(
@@ -277,7 +286,7 @@ class TestAnthropicLlmProcessor:
             ),
         ])
         monkeypatch.setattr(
-            "webinar_transcriber.llm.anthropic.Anthropic",
+            "webinar_transcriber.llm.anthropic_backend.anthropic.Anthropic",
             lambda api_key: fake_client,
         )
 
