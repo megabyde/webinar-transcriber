@@ -6,7 +6,6 @@ from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from webinar_transcriber import processor_support
 from webinar_transcriber.align import align_by_time
 from webinar_transcriber.asr import (
     DEFAULT_ASR_THREADS,
@@ -25,21 +24,6 @@ from webinar_transcriber.models import (
     VideoAsset,
 )
 from webinar_transcriber.paths import RunLayout, create_run_layout
-from webinar_transcriber.processor_asr import run_asr_pipeline
-from webinar_transcriber.processor_llm import (
-    LLMRuntimeState,
-    maybe_polish_report,
-    resolve_llm_processor,
-)
-from webinar_transcriber.processor_support import (
-    build_diagnostics,
-    configure_asr_logging,
-    count_label,
-    progress_updater,
-    start_stage_timer,
-    write_json,
-    write_requested_artifacts,
-)
 from webinar_transcriber.reporter import NullStageReporter, StageReporter
 from webinar_transcriber.segmentation import VadSettings
 from webinar_transcriber.structure import build_report
@@ -51,6 +35,23 @@ from webinar_transcriber.video import (
     detect_scenes,
     estimate_sample_count,
     extract_representative_frames,
+)
+
+from . import support
+from .asr import run_asr_pipeline
+from .llm import (
+    LLMRuntimeState,
+    maybe_polish_report,
+    resolve_llm_processor,
+)
+from .support import (
+    build_diagnostics,
+    configure_asr_logging,
+    count_label,
+    progress_updater,
+    start_stage_timer,
+    write_json,
+    write_requested_artifacts,
 )
 
 if TYPE_CHECKING:
@@ -72,8 +73,8 @@ class ProcessArtifacts:
 
 DEFAULT_VAD_SETTINGS = VadSettings()
 DEFAULT_PROMPT_CARRYOVER_SETTINGS = PromptCarryoverSettings()
-_asr_runtime_detail = processor_support.asr_runtime_detail
-_window_transcription_stage_detail = processor_support.window_transcription_stage_detail
+_asr_runtime_detail = support.asr_runtime_detail
+_window_transcription_stage_detail = support.window_transcription_stage_detail
 
 
 def process_input(

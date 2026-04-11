@@ -9,14 +9,6 @@ from webinar_transcriber.models import (
     InferenceWindow,
     TranscriptionResult,
 )
-from webinar_transcriber.processor_support import (
-    asr_runtime_detail,
-    count_label,
-    progress_updater,
-    start_stage_timer,
-    window_transcription_stage_detail,
-    write_json,
-)
 from webinar_transcriber.reconciliation import reconcile_decoded_windows
 from webinar_transcriber.segmentation import (
     DEFAULT_SPEECH_PAD_MS,
@@ -27,6 +19,15 @@ from webinar_transcriber.segmentation import (
 )
 from webinar_transcriber.transcript_processing import normalize_transcription
 from webinar_transcriber.transcription_audio import load_normalized_audio
+
+from .support import (
+    asr_runtime_detail,
+    count_label,
+    progress_updater,
+    start_stage_timer,
+    window_transcription_stage_detail,
+    write_json,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path

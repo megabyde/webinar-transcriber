@@ -57,13 +57,13 @@ def install_basic_windowing(
         def load_audio(_path: Path) -> tuple[np.ndarray, int]:
             return np.zeros(sample_rate, dtype=np.float32), sample_rate
 
-    monkeypatch.setattr("webinar_transcriber.processor_asr.load_normalized_audio", load_audio)
+    monkeypatch.setattr("webinar_transcriber.processor.asr.load_normalized_audio", load_audio)
     monkeypatch.setattr(
-        "webinar_transcriber.processor_asr.detect_speech_regions",
+        "webinar_transcriber.processor.asr.detect_speech_regions",
         lambda *_args, **_kwargs: ([SpeechRegion(start_sec=0.0, end_sec=region_end_sec)], []),
     )
     monkeypatch.setattr(
-        "webinar_transcriber.processor_asr.expand_speech_regions",
+        "webinar_transcriber.processor.asr.expand_speech_regions",
         lambda regions, **_kwargs: regions,
     )
 
@@ -488,15 +488,15 @@ class TestProcessInput:
                 ]
 
         monkeypatch.setattr(
-            "webinar_transcriber.processor_asr.load_normalized_audio",
+            "webinar_transcriber.processor.asr.load_normalized_audio",
             lambda _path: (np.zeros(16_000, dtype=np.float32), 16_000),
         )
         monkeypatch.setattr(
-            "webinar_transcriber.processor_asr.detect_speech_regions",
+            "webinar_transcriber.processor.asr.detect_speech_regions",
             lambda *_args, **_kwargs: ([SpeechRegion(start_sec=0.0, end_sec=6.0)], []),
         )
         monkeypatch.setattr(
-            "webinar_transcriber.processor_asr.expand_speech_regions",
+            "webinar_transcriber.processor.asr.expand_speech_regions",
             lambda regions, **_kwargs: regions,
         )
         artifacts = process_input(
@@ -603,15 +603,15 @@ class TestProcessInput:
                 side_effect=RuntimeError("boom"),
             ),
             patch(
-                "webinar_transcriber.processor_asr.load_normalized_audio",
+                "webinar_transcriber.processor.asr.load_normalized_audio",
                 return_value=(np.zeros(16_000, dtype=np.float32), 16_000),
             ),
             patch(
-                "webinar_transcriber.processor_asr.detect_speech_regions",
+                "webinar_transcriber.processor.asr.detect_speech_regions",
                 return_value=([SpeechRegion(start_sec=0.0, end_sec=3.0)], []),
             ),
             patch(
-                "webinar_transcriber.processor_asr.expand_speech_regions",
+                "webinar_transcriber.processor.asr.expand_speech_regions",
                 side_effect=lambda regions, **_kwargs: regions,
             ),
             pytest.raises(RuntimeError, match="boom"),
@@ -790,7 +790,7 @@ class TestProcessInputLlm:
         reporter = RecordingReporter()
 
         with patch(
-            "webinar_transcriber.processor_llm.build_llm_processor_from_env",
+            "webinar_transcriber.processor.llm.build_llm_processor_from_env",
             side_effect=LLMConfigurationError(
                 "Missing required LLM environment variables: OPENAI_API_KEY."
             ),

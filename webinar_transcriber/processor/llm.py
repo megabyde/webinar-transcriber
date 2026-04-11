@@ -10,7 +10,9 @@ from webinar_transcriber.llm import (
     LLMProcessingError,
     build_llm_processor_from_env,
 )
-from webinar_transcriber.processor_support import (
+from webinar_transcriber.usage import merge_usage
+
+from .support import (
     count_label,
     llm_fallback_detail,
     llm_report_detail,
@@ -18,7 +20,6 @@ from webinar_transcriber.processor_support import (
     llm_stage_label,
     start_stage_timer,
 )
-from webinar_transcriber.usage import merge_usage
 
 if TYPE_CHECKING:
     from webinar_transcriber.llm import LLMProcessor

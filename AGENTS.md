@@ -52,8 +52,7 @@ cache-permission failures.
 The package intentionally avoids deep nesting.
 
 - `webinar_transcriber/cli.py`: Click CLI entrypoints
-- `webinar_transcriber/processor.py` and `webinar_transcriber/processor_*`: high-level orchestration
-  and processor support helpers
+- `webinar_transcriber/processor/`: high-level orchestration and processor support helpers
 - `webinar_transcriber/asr.py`: ASR backend selection and normalization
 - `webinar_transcriber/whispercpp/`: low-level whisper.cpp ctypes wrapper and bindings
 - `webinar_transcriber/llm/`: optional cloud LLM integrations
