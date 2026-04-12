@@ -15,7 +15,7 @@ from webinar_transcriber.export import (
     write_markdown_report,
     write_vtt_subtitles,
 )
-from webinar_transcriber.labels import count_label
+from webinar_transcriber.labels import count_label, optional_count_label
 from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
     Diagnostics,
@@ -169,13 +169,9 @@ def llm_report_detail(
 ) -> str:
     """Return the summary detail string for the report-polish stage."""
     parts = [
-        optional_count_detail(summary_count, singular="summary bullet", plural="summary bullets"),
-        optional_count_detail(
-            action_item_count,
-            singular="action item",
-            plural="action items",
-        ),
-        optional_count_detail(tldr_count, singular="TL;DR", plural="TL;DRs"),
+        optional_count_label(summary_count, "summary bullet"),
+        optional_count_label(action_item_count, "action item"),
+        optional_count_label(tldr_count, "TL;DR"),
         title_update_detail(title_count=title_count, section_count=section_count),
         token_usage_detail(usage),
     ]
@@ -204,19 +200,11 @@ def token_usage_detail(usage: dict[str, int]) -> str:
     return count_label(total_tokens, "token")
 
 
-def optional_count_detail(count: int, *, singular: str, plural: str) -> str:
-    """Return a count label only when the count is positive."""
-    if count <= 0:
-        return ""
-    return count_label(count, singular, plural=plural)
-
-
 def title_update_detail(*, title_count: int, section_count: int) -> str:
     """Return a title-update detail only when some but not all titles changed."""
     if title_count <= 0 or title_count == section_count:
         return ""
-    label = "title updated" if title_count == 1 else "titles updated"
-    return f"{title_count} {label}"
+    return count_label(title_count, "title updated", plural="titles updated")
 
 
 def build_diagnostics(

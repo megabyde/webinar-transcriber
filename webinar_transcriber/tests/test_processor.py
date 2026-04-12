@@ -38,6 +38,7 @@ from webinar_transcriber.processor import (
 )
 from webinar_transcriber.processor.support import (
     asr_runtime_detail,
+    title_update_detail,
     window_transcription_stage_detail,
 )
 
@@ -697,6 +698,10 @@ class TestProcessorHelpers:
         assert asr_runtime_detail(transcriber) == (
             "ggerganov/whisper.cpp/ggml-large-v3-turbo.bin (HF cache) | cpu"
         )
+
+    def test_title_update_detail_reports_partial_title_updates(self) -> None:
+        assert title_update_detail(title_count=1, section_count=2) == "1 title updated"
+        assert title_update_detail(title_count=2, section_count=3) == "2 titles updated"
 
 
 @pytest.fixture
