@@ -7,10 +7,10 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
-from webinar_transcriber.media import MediaProcessingError
+from webinar_transcriber.media import MEDIA_COMMAND_TIMEOUT_SEC, MediaProcessingError
 from webinar_transcriber.models import Scene, SlideFrame
 
-FRAME_EXTRACT_TIMEOUT_SEC = 300.0
+FRAME_EXTRACT_TIMEOUT_SEC = MEDIA_COMMAND_TIMEOUT_SEC
 
 
 def extract_representative_frames(
@@ -27,11 +27,13 @@ def extract_representative_frames(
     for index, scene in enumerate(scenes, start=1):
         midpoint_sec = (scene.start_sec + scene.end_sec) / 2
         output_path = frames_dir / f"{scene.id}.png"
-        if not _extract_frame(video_path, midpoint_sec, output_path):
+        extracted, failure_detail = _extract_frame(video_path, midpoint_sec, output_path)
+        if not extracted:
             logging.warning(
-                "Frame extraction failed for %s at %.1fs",
+                "Frame extraction failed for %s at %.1fs: %s",
                 scene.id,
                 midpoint_sec,
+                failure_detail,
             )
             if progress_callback is not None:
                 progress_callback()
@@ -52,7 +54,11 @@ def extract_representative_frames(
     return frames
 
 
-def _extract_frame(video_path: Path, timestamp_sec: float, output_path: Path) -> bool:
+def _extract_frame(
+    video_path: Path,
+    timestamp_sec: float,
+    output_path: Path,
+) -> tuple[bool, str | None]:
     try:
         result = subprocess.run(
             _frame_extract_command(video_path, timestamp_sec, output_path),
@@ -65,7 +71,11 @@ def _extract_frame(video_path: Path, timestamp_sec: float, output_path: Path) ->
         raise MediaProcessingError(
             f"ffmpeg frame extraction timed out after {FRAME_EXTRACT_TIMEOUT_SEC:g}s."
         ) from error
-    return result.returncode == 0 and output_path.exists()
+    if result.returncode != 0:
+        return False, result.stderr.strip() or f"ffmpeg exited with status {result.returncode}"
+    if not output_path.exists():
+        return False, f"ffmpeg did not write {output_path}"
+    return True, None
 
 
 def _frame_extract_command(video_path: Path, timestamp_sec: float, output_path: Path) -> list[str]:

@@ -161,11 +161,15 @@ class TestFrameExtraction:
             Scene(id="scene-2", start_sec=2.0, end_sec=4.0),
         ]
 
-        def fake_extract_frame(_video_path: Path, _timestamp_sec: float, output_path: Path) -> bool:
+        def fake_extract_frame(
+            _video_path: Path,
+            _timestamp_sec: float,
+            output_path: Path,
+        ) -> tuple[bool, str | None]:
             if output_path.stem == "scene-1":
-                return False
+                return False, f"ffmpeg did not write {output_path}"
             output_path.write_bytes(b"frame")
-            return True
+            return True, None
 
         monkeypatch.setattr(
             "webinar_transcriber.video.frames._extract_frame",
@@ -185,7 +189,9 @@ class TestFrameExtraction:
 
         assert [frame.scene_id for frame in frames] == ["scene-2"]
         assert len(progress_ticks) == 2
-        assert "Frame extraction failed for scene-1 at 1.0s" in caplog.text
+        assert "Frame extraction failed for scene-1 at 1.0s:" in caplog.text
+        assert "ffmpeg did not write" in caplog.text
+        assert "scene-1.png" in caplog.text
 
     def test_extract_frame_returns_false_when_ffmpeg_does_not_write_output(
         self,
@@ -197,9 +203,37 @@ class TestFrameExtraction:
             lambda *_args, **_kwargs: subprocess.CompletedProcess(["ffmpeg"], returncode=0),
         )
 
-        extracted = _extract_frame(FIXTURE_DIR / "sample-video.mp4", 1.0, tmp_path / "scene-1.png")
+        extracted, failure_detail = _extract_frame(
+            FIXTURE_DIR / "sample-video.mp4",
+            1.0,
+            tmp_path / "scene-1.png",
+        )
 
         assert not extracted
+        assert failure_detail == f"ffmpeg did not write {tmp_path / 'scene-1.png'}"
+
+    def test_extract_frame_returns_stderr_when_ffmpeg_exits_nonzero(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(
+            "webinar_transcriber.video.frames.subprocess.run",
+            lambda *_args, **_kwargs: subprocess.CompletedProcess(
+                ["ffmpeg"],
+                returncode=1,
+                stderr="decode failed",
+            ),
+        )
+
+        extracted, failure_detail = _extract_frame(
+            FIXTURE_DIR / "sample-video.mp4",
+            1.0,
+            tmp_path / "scene-1.png",
+        )
+
+        assert not extracted
+        assert failure_detail == "decode failed"
 
 
 class TestDetectScenesFallback:
