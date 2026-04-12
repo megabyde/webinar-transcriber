@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import importlib
-import os
-import re
-import subprocess
 from contextlib import suppress
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Self
 
+from webinar_transcriber.asr.carryover import build_prompt_carryover
+from webinar_transcriber.asr.config import (
+    DEFAULT_WHISPER_CPP_MODEL_EXAMPLE,
+    DEFAULT_WHISPER_CPP_MODEL_FILENAME,
+    DEFAULT_WHISPER_CPP_MODEL_REPO,
+    PromptCarryoverSettings,
+    WhisperDecodeSettings,
+)
 from webinar_transcriber.whispercpp import (
     GPU_BACKEND_PATTERN,
     WhisperCppLibrary,
@@ -23,65 +27,6 @@ if TYPE_CHECKING:
     from types import TracebackType
 
     from webinar_transcriber.models import DecodedWindow, InferenceWindow
-
-
-ASR_BACKEND_NAME = "whisper.cpp"
-DEFAULT_WHISPER_CPP_MODEL_REPO = "ggerganov/whisper.cpp"
-DEFAULT_WHISPER_CPP_MODEL_FILENAME = "ggml-large-v3-turbo.bin"
-DEFAULT_WHISPER_CPP_MODEL_EXAMPLE = Path("models/whisper-cpp/ggml-large-v3-turbo.bin")
-_CARRYOVER_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
-_CARRYOVER_WHITESPACE = re.compile(r"\s+")
-_CARRYOVER_TRAILING_NOISE = re.compile(r"[\(\[\{<\"'`]+$|[\s\-:,;]+$")
-_HALLUCINATION_PHRASE_PATTERN = re.compile(r"(?i)thank you for watching|subscribe|like and share")
-_CARRYOVER_WORD_RE = re.compile(r"[\w']+")
-
-
-def _read_sysctl_int(name: str) -> int | None:
-    try:
-        result = subprocess.run(
-            ["sysctl", "-n", name],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except (FileNotFoundError, PermissionError, subprocess.CalledProcessError):
-        return None
-
-    value = result.stdout.strip()
-    if not value.isdigit():
-        return None
-    parsed = int(value)
-    return parsed if parsed > 0 else None
-
-
-def default_asr_threads() -> int:
-    return (
-        _read_sysctl_int("hw.perflevel0.physicalcpu")
-        or _read_sysctl_int("hw.physicalcpu")
-        or os.cpu_count()
-        or 4
-    )
-
-
-DEFAULT_ASR_THREADS = default_asr_threads()
-DEFAULT_CARRYOVER_MAX_SENTENCES = 2
-DEFAULT_CARRYOVER_MAX_TOKENS = 64
-
-
-@dataclass(frozen=True)
-class PromptCarryoverSettings:
-    """Configuration for bounded prompt carryover between adjacent windows."""
-
-    enabled: bool = True
-    max_sentences: int = DEFAULT_CARRYOVER_MAX_SENTENCES
-    max_tokens: int = DEFAULT_CARRYOVER_MAX_TOKENS
-
-
-@dataclass(frozen=True)
-class WhisperDecodeSettings:
-    """Decode-time inference settings kept above the low-level whisper.cpp wrapper."""
-
-    carryover: PromptCarryoverSettings = PromptCarryoverSettings()
 
 
 def _missing_model_error_message(model_path: Path) -> str:
@@ -273,78 +218,3 @@ def _download_default_whisper_cpp_model() -> Path:
         ) from error
 
     return Path(downloaded_path)
-
-
-def build_prompt_carryover(
-    decoded_window: DecodedWindow,
-    *,
-    settings: PromptCarryoverSettings,
-) -> str | None:
-    """Return a bounded prompt suffix for the next window, or `None` when confidence is weak."""
-    if not settings.enabled or not _window_is_confident(decoded_window, settings=settings):
-        return None
-
-    sentences = [
-        stripped
-        for part in _CARRYOVER_SENTENCE_SPLIT.split(decoded_window.text)
-        if (stripped := part.strip())
-    ]
-    carryover = " ".join(sentences[-max(1, settings.max_sentences) :])
-    carryover = _sanitize_prompt(carryover, max_tokens=settings.max_tokens)
-    return carryover or None
-
-
-def _window_is_confident(
-    decoded_window: DecodedWindow,
-    *,
-    settings: PromptCarryoverSettings,
-) -> bool:
-    return _carryover_drop_reason(decoded_window, settings=settings) is None
-
-
-def _carryover_drop_reason(
-    decoded_window: DecodedWindow,
-    *,
-    settings: PromptCarryoverSettings,
-) -> str | None:
-    if not settings.enabled:
-        return "carryover_disabled"
-    if decoded_window.fallback_used:
-        return "fallback_used"
-    if not decoded_window.text.strip():
-        return "empty_text"
-    if _looks_like_hallucination(decoded_window.text):
-        return "hallucination_detected"
-    return None
-
-
-def _looks_like_hallucination(text: str) -> bool:
-    if _HALLUCINATION_PHRASE_PATTERN.search(text):
-        return True
-
-    words = _CARRYOVER_WORD_RE.findall(text.casefold())
-    if not words:
-        return False
-
-    window_size = min(len(words), 10)
-    for start in range(len(words) - window_size + 1):
-        window = words[start : start + window_size]
-        repeated_ratio = (len(window) - len(set(window))) / len(window)
-        if repeated_ratio > 0.5:
-            return True
-    return False
-
-
-def _sanitize_prompt(prompt: str | None, *, max_tokens: int) -> str:
-    if not prompt:
-        return ""
-
-    cleaned = _CARRYOVER_WHITESPACE.sub(" ", prompt.strip())
-    cleaned = _CARRYOVER_TRAILING_NOISE.sub("", cleaned).strip()
-    if not cleaned:
-        return ""
-
-    tokens = cleaned.split(" ")
-    token_limit = min(len(tokens), max(0, max_tokens))
-    tokens = tokens[-token_limit:] if token_limit else []
-    return " ".join(tokens)

@@ -122,9 +122,11 @@ class TestWhisperCppLibrary:
         library_path.write_text("stub", encoding="utf-8")
         model_path = tmp_path / "model.bin"
         model_path.write_text("model", encoding="utf-8")
-        monkeypatch.setattr("webinar_transcriber.whispercpp._load_backend_plugins", lambda: None)
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp.ctypes.CDLL",
+            "webinar_transcriber.whispercpp.library._load_backend_plugins", lambda: None
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.whispercpp.library.ctypes.CDLL",
             lambda _path, mode=0: self.FakeCDLL(),
         )
 
@@ -161,9 +163,11 @@ class TestWhisperCppLibrary:
         fake_cdll.whisper_free = self.FakeFunction(
             lambda context: released_handles.append(("context", context))
         )
-        monkeypatch.setattr("webinar_transcriber.whispercpp._load_backend_plugins", lambda: None)
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp.ctypes.CDLL",
+            "webinar_transcriber.whispercpp.library._load_backend_plugins", lambda: None
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.whispercpp.library.ctypes.CDLL",
             lambda _path, mode=0: fake_cdll,
         )
 
@@ -186,9 +190,11 @@ class TestWhisperCppLibrary:
         fake_cdll.whisper_print_system_info = self.FakeFunction(
             lambda: b"WHISPER : COREML = 0 | OPENVINO = 0 | "
         )
-        monkeypatch.setattr("webinar_transcriber.whispercpp._load_backend_plugins", lambda: None)
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp.ctypes.CDLL",
+            "webinar_transcriber.whispercpp.library._load_backend_plugins", lambda: None
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.whispercpp.library.ctypes.CDLL",
             lambda _path, mode=0: fake_cdll,
         )
 
@@ -217,18 +223,20 @@ class TestBackendPluginLoading:
 
         fake_ggml_library = FakeGgmlLibrary()
 
-        monkeypatch.setattr("webinar_transcriber.whispercpp._BACKEND_REGISTRATION_DONE", False)
-        monkeypatch.setattr("webinar_transcriber.whispercpp._GGML_LIBRARY_HANDLE", None)
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp._candidate_backend_plugin_paths",
+            "webinar_transcriber.whispercpp.library._BACKEND_REGISTRATION_DONE", False
+        )
+        monkeypatch.setattr("webinar_transcriber.whispercpp.library._GGML_LIBRARY_HANDLE", None)
+        monkeypatch.setattr(
+            "webinar_transcriber.whispercpp.library._candidate_backend_plugin_paths",
             lambda: [plugin_path],
         )
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp._resolve_ggml_library_path",
+            "webinar_transcriber.whispercpp.library._resolve_ggml_library_path",
             lambda: ggml_library_path,
         )
         with patch(
-            "webinar_transcriber.whispercpp.ctypes.CDLL",
+            "webinar_transcriber.whispercpp.library.ctypes.CDLL",
             return_value=fake_ggml_library,
         ) as cdll_mock:
             _load_backend_plugins()
@@ -242,23 +250,25 @@ class TestBackendPluginLoading:
         )
 
     def test_load_backend_plugins_returns_when_no_ggml_library(self, monkeypatch) -> None:
-        monkeypatch.setattr("webinar_transcriber.whispercpp._BACKEND_REGISTRATION_DONE", False)
-        monkeypatch.setattr("webinar_transcriber.whispercpp._GGML_LIBRARY_HANDLE", None)
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp._resolve_ggml_library_path",
+            "webinar_transcriber.whispercpp.library._BACKEND_REGISTRATION_DONE", False
+        )
+        monkeypatch.setattr("webinar_transcriber.whispercpp.library._GGML_LIBRARY_HANDLE", None)
+        monkeypatch.setattr(
+            "webinar_transcriber.whispercpp.library._resolve_ggml_library_path",
             lambda: None,
         )
 
         _load_backend_plugins()
 
-        from webinar_transcriber import whispercpp
+        from webinar_transcriber.whispercpp import library
 
-        assert whispercpp._BACKEND_REGISTRATION_DONE is True
-        assert whispercpp._GGML_LIBRARY_HANDLE is None
+        assert library._BACKEND_REGISTRATION_DONE is True
+        assert library._GGML_LIBRARY_HANDLE is None
 
     def test_resolve_ggml_library_path_uses_find_library(self, monkeypatch) -> None:
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp.ctypes.util.find_library",
+            "webinar_transcriber.whispercpp.library.ctypes.util.find_library",
             lambda _name: "libggml.so",
         )
         monkeypatch.setattr("pathlib.Path.exists", lambda self: False)
@@ -327,9 +337,11 @@ class TestWhisperCppLibraryFailures:
         fake_cdll.whisper_init_from_file_with_params = TestWhisperCppLibrary.FakeFunction(
             lambda *_args: 0
         )
-        monkeypatch.setattr("webinar_transcriber.whispercpp._load_backend_plugins", lambda: None)
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp.ctypes.CDLL",
+            "webinar_transcriber.whispercpp.library._load_backend_plugins", lambda: None
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.whispercpp.library.ctypes.CDLL",
             lambda _path, mode=0: fake_cdll,
         )
 
@@ -349,9 +361,11 @@ class TestWhisperCppLibraryFailures:
         model_path.write_text("model", encoding="utf-8")
         fake_cdll = TestWhisperCppLibrary.FakeCDLL()
         fake_cdll.whisper_init_state = TestWhisperCppLibrary.FakeFunction(lambda *_args: 0)
-        monkeypatch.setattr("webinar_transcriber.whispercpp._load_backend_plugins", lambda: None)
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp.ctypes.CDLL",
+            "webinar_transcriber.whispercpp.library._load_backend_plugins", lambda: None
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.whispercpp.library.ctypes.CDLL",
             lambda _path, mode=0: fake_cdll,
         )
 
@@ -371,9 +385,11 @@ class TestWhisperCppLibraryFailures:
         library_path = tmp_path / "libwhisper.dylib"
         library_path.write_text("stub", encoding="utf-8")
         fake_cdll = TestWhisperCppLibrary.FakeCDLL()
-        monkeypatch.setattr("webinar_transcriber.whispercpp._load_backend_plugins", lambda: None)
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp.ctypes.CDLL",
+            "webinar_transcriber.whispercpp.library._load_backend_plugins", lambda: None
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.whispercpp.library.ctypes.CDLL",
             lambda _path, mode=0: fake_cdll,
         )
         library = WhisperCppLibrary(library_path)

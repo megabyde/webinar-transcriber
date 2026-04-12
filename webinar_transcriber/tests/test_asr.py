@@ -84,10 +84,13 @@ class TestWhisperCppTranscriber:
                 return FakeSession()
 
         monkeypatch.setattr(
-            "webinar_transcriber.asr._download_default_whisper_cpp_model",
+            "webinar_transcriber.asr.transcriber._download_default_whisper_cpp_model",
             lambda: cached_model_path,
         )
-        monkeypatch.setattr("webinar_transcriber.asr.WhisperCppLibrary", FakeLibrary)
+        monkeypatch.setattr(
+            "webinar_transcriber.asr.transcriber.WhisperCppLibrary",
+            FakeLibrary,
+        )
 
         transcriber = WhisperCppTranscriber()
         transcriber.prepare_model()
@@ -97,7 +100,7 @@ class TestWhisperCppTranscriber:
 
     def test_prepare_model_reports_default_download_failure(self, monkeypatch) -> None:
         monkeypatch.setattr(
-            "webinar_transcriber.asr._download_default_whisper_cpp_model",
+            "webinar_transcriber.asr.transcriber._download_default_whisper_cpp_model",
             lambda: (_ for _ in ()).throw(RuntimeError("download failed")),
         )
 
@@ -116,7 +119,7 @@ class TestWhisperCppTranscriber:
         explicit_model_path = tmp_path / "missing.bin"
         download_calls: list[None] = []
         monkeypatch.setattr(
-            "webinar_transcriber.asr._download_default_whisper_cpp_model",
+            "webinar_transcriber.asr.transcriber._download_default_whisper_cpp_model",
             lambda: download_calls.append(None),  # type: ignore[return-value]
         )
 
@@ -148,7 +151,10 @@ class TestWhisperCppTranscriber:
 
                 return FakeSession()
 
-        monkeypatch.setattr("webinar_transcriber.asr.WhisperCppLibrary", FakeLibrary)
+        monkeypatch.setattr(
+            "webinar_transcriber.asr.transcriber.WhisperCppLibrary",
+            FakeLibrary,
+        )
 
         transcriber = WhisperCppTranscriber(model_name=str(model_path))
         transcriber.prepare_model()
@@ -185,7 +191,10 @@ class TestWhisperCppTranscriber:
             def create_session(self, _model_path):
                 return FakeSession()
 
-        monkeypatch.setattr("webinar_transcriber.asr.WhisperCppLibrary", FakeLibrary)
+        monkeypatch.setattr(
+            "webinar_transcriber.asr.transcriber.WhisperCppLibrary",
+            FakeLibrary,
+        )
 
         with WhisperCppTranscriber(model_name=str(model_path)) as transcriber:
             transcriber.prepare_model()
@@ -250,7 +259,10 @@ class TestWhisperCppTranscriber:
 
                 return FakeSession()
 
-        monkeypatch.setattr("webinar_transcriber.asr.WhisperCppLibrary", FakeLibrary)
+        monkeypatch.setattr(
+            "webinar_transcriber.asr.transcriber.WhisperCppLibrary",
+            FakeLibrary,
+        )
 
         transcriber = WhisperCppTranscriber(model_name=str(model_path), threads=6)
         decoded_windows = transcriber.transcribe_inference_windows(
@@ -297,7 +309,7 @@ class TestWhisperCppTranscriber:
         stdout: str,
     ) -> None:
         monkeypatch.setattr(
-            "webinar_transcriber.asr.subprocess.run",
+            "webinar_transcriber.asr.config.subprocess.run",
             lambda *_args, **_kwargs: type("Result", (), {"stdout": stdout})(),
         )
 
