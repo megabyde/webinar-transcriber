@@ -16,8 +16,14 @@ from webinar_transcriber.llm import (
     build_llm_processor_from_env,
 )
 from webinar_transcriber.llm.utils import (
+    anthropic_response_text,
+    extract_json_text,
+    extract_usage,
     normalize_polished_section_text,
     normalize_polished_section_tldr,
+    normalize_report_lines,
+    truncate_text,
+    validated_section_titles,
 )
 from webinar_transcriber.models import (
     MediaType,
@@ -352,3 +358,70 @@ class TestLlmNormalization:
         )
 
         assert normalized == "Bullet one spans whitespace.\n\nBullet two stays."
+
+    def test_normalize_report_lines_dedupes_and_limits_case_insensitively(self) -> None:
+        normalized = normalize_report_lines(
+            ["  First item  ", "first item", "", "Second item", "Third item"],
+            limit=2,
+        )
+
+        assert normalized == ["First item", "Second item"]
+
+    def test_truncate_text_preserves_short_text_and_trims_long_text(self) -> None:
+        assert truncate_text("Short text", 20) == "Short text"
+        assert truncate_text("This sentence is too long", 11) == "This sente…"
+
+    def test_validated_section_titles_rejects_duplicate_and_unknown_ids(self) -> None:
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Old title",
+                    start_sec=0.0,
+                    end_sec=10.0,
+                    transcript_text="Transcript.",
+                )
+            ],
+        )
+
+        with pytest.raises(LLMProcessingError, match="unknown section ID"):
+            validated_section_titles(
+                report,
+                [ReportSectionUpdate(id="section-x", title="Unexpected title")],
+            )
+
+        with pytest.raises(LLMProcessingError, match="duplicate section IDs"):
+            validated_section_titles(
+                report,
+                [
+                    ReportSectionUpdate(id="section-1", title="Title one"),
+                    ReportSectionUpdate(id="section-1", title="Title two"),
+                ],
+            )
+
+    def test_extract_usage_supports_dict_and_object_shapes(self) -> None:
+        assert extract_usage({"usage": "ignored"}) == {}
+        assert extract_usage(
+            type("Response", (), {"usage": {"input_tokens": 2, "other": 1}})()
+        ) == {"input_tokens": 2}
+
+        usage_obj = type("Usage", (), {"input_tokens": 3, "output_tokens": 4})()
+        response_obj = type("Response", (), {"usage": usage_obj})()
+        assert extract_usage(response_obj) == {
+            "input_tokens": 3,
+            "output_tokens": 4,
+            "total_tokens": 7,
+        }
+
+    def test_extract_json_text_supports_fenced_and_embedded_json(self) -> None:
+        assert extract_json_text('```json\n{"a": 1}\n```') == '{"a": 1}'
+        assert extract_json_text('prefix {"a": 1} suffix') == '{"a": 1}'
+
+    def test_anthropic_response_text_requires_text_content(self) -> None:
+        response = type("Response", (), {"content": [type("Block", (), {"type": "image"})()]})()
+
+        with pytest.raises(LLMProcessingError, match="did not contain text content"):
+            anthropic_response_text(response)
