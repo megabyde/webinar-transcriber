@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from webinar_transcriber.models import ReportSection
-from webinar_transcriber.transcript_processing import STRONG_SENTENCE_END_RE
+from webinar_transcriber.transcript.normalize import STRONG_SENTENCE_END_RE
 
 from .constants import (
     AUDIO_SECTION_BREAK_GAP_SEC,

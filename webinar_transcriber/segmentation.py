@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from webinar_transcriber.models import SpeechRegion
-from webinar_transcriber.transcription_audio import NORMALIZED_SAMPLE_RATE
+from webinar_transcriber.normalized_audio import NORMALIZED_SAMPLE_RATE
 
 if TYPE_CHECKING:
     from collections.abc import Callable

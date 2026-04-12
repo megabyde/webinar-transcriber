@@ -57,7 +57,8 @@ The package intentionally avoids deep nesting.
 - `webinar_transcriber/whispercpp/`: low-level whisper.cpp ctypes wrapper and bindings
 - `webinar_transcriber/llm/`: optional cloud LLM integrations
 - `webinar_transcriber/media.py`: probing and shared ffmpeg/ffprobe command execution
-- `webinar_transcriber/transcription_audio.py`: deterministic transcription-audio preparation
+- `webinar_transcriber/normalized_audio.py`: deterministic transcription-audio preparation
+- `webinar_transcriber/transcript/`: transcript normalization and window reconciliation
 - `webinar_transcriber/structure/`: report heuristics
 - `webinar_transcriber/reporter.py`: reporter protocol and no-op implementation
 - `webinar_transcriber/ui.py`: Rich progress reporting

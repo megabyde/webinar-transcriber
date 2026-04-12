@@ -9,6 +9,12 @@ import pytest
 
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.models import SpeechRegion
+from webinar_transcriber.normalized_audio import (
+    extract_audio,
+    load_normalized_audio,
+    prepared_transcription_audio,
+    preserve_transcription_audio,
+)
 from webinar_transcriber.segmentation import (
     _normalize_regions,
     _silero_speech_timestamps,
@@ -16,12 +22,6 @@ from webinar_transcriber.segmentation import (
     expand_speech_regions,
     normalized_audio_duration,
     repair_speech_regions,
-)
-from webinar_transcriber.transcription_audio import (
-    extract_audio,
-    load_normalized_audio,
-    prepared_transcription_audio,
-    preserve_transcription_audio,
 )
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
@@ -92,7 +92,7 @@ class TestTranscriptionAudio:
                 return output_path
 
             monkeypatch.setattr(
-                "webinar_transcriber.transcription_audio.transcode_audio_to_mp3",
+                "webinar_transcriber.normalized_audio.transcode_audio_to_mp3",
                 fake_transcode,
             )
             kept_audio_path = preserve_transcription_audio(
@@ -379,7 +379,7 @@ class TestTranscriptionAudio:
                     return b"\x00\x00"
 
             monkeypatch.setattr(
-                "webinar_transcriber.transcription_audio.wave.open",
+                "webinar_transcriber.normalized_audio.wave.open",
                 lambda *_args, **_kwargs: FakeWave(),
             )
 
@@ -425,7 +425,7 @@ class TestTranscriptionAudio:
                     return b"\x00\x00"
 
             monkeypatch.setattr(
-                "webinar_transcriber.transcription_audio.wave.open",
+                "webinar_transcriber.normalized_audio.wave.open",
                 lambda *_args, **_kwargs: FakeWave(),
             )
 

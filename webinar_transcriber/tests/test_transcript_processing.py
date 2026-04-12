@@ -1,7 +1,7 @@
 """Tests for transcript normalization helpers."""
 
 from webinar_transcriber.models import TranscriptionResult, TranscriptSegment
-from webinar_transcriber.transcript_processing import (
+from webinar_transcriber.transcript.normalize import (
     MAX_SEGMENT_CHARS,
     normalize_transcription,
 )

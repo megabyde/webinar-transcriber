@@ -23,13 +23,13 @@ from webinar_transcriber.models import (
     TranscriptionResult,
     VideoAsset,
 )
-from webinar_transcriber.paths import RunLayout, create_run_layout
-from webinar_transcriber.reporter import NullStageReporter, StageReporter
-from webinar_transcriber.segmentation import VadSettings
-from webinar_transcriber.transcription_audio import (
+from webinar_transcriber.normalized_audio import (
     prepared_transcription_audio,
     preserve_transcription_audio,
 )
+from webinar_transcriber.paths import RunLayout, create_run_layout
+from webinar_transcriber.reporter import NullStageReporter, StageReporter
+from webinar_transcriber.segmentation import VadSettings
 
 from . import asr as processor_asr
 from .llm import (

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Final, Self
 import numpy as np
 
 from webinar_transcriber.models import DecodedWindow, InferenceWindow, TranscriptSegment
-from webinar_transcriber.transcription_audio import sample_index_for_time
+from webinar_transcriber.normalized_audio import sample_index_for_time
 
 from . import bindings as _bindings
 

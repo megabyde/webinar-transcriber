@@ -9,7 +9,7 @@ from webinar_transcriber.models import (
     InferenceWindow,
     TranscriptionResult,
 )
-from webinar_transcriber.reconciliation import reconcile_decoded_windows
+from webinar_transcriber.normalized_audio import load_normalized_audio
 from webinar_transcriber.segmentation import (
     DEFAULT_SPEECH_PAD_MS,
     detect_speech_regions,
@@ -17,8 +17,8 @@ from webinar_transcriber.segmentation import (
     normalized_audio_duration,
     repair_speech_regions,
 )
-from webinar_transcriber.transcript_processing import normalize_transcription
-from webinar_transcriber.transcription_audio import load_normalized_audio
+from webinar_transcriber.transcript import reconcile_decoded_windows
+from webinar_transcriber.transcript.normalize import normalize_transcription
 
 from .support import (
     asr_runtime_detail,

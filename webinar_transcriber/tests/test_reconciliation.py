@@ -1,7 +1,7 @@
 """Tests for overlap reconciliation of decoded inference windows."""
 
 from webinar_transcriber.models import DecodedWindow, InferenceWindow, TranscriptSegment
-from webinar_transcriber.reconciliation import reconcile_decoded_windows
+from webinar_transcriber.transcript.reconcile import reconcile_decoded_windows
 
 
 class TestReconcileDecodedWindows:
