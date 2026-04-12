@@ -130,10 +130,7 @@ def normalize_polished_text(*, original_text: str, polished_text: str) -> str:
     if not cleaned:
         return ""
 
-    paragraphs = [
-        re.sub(r"\s+", " ", p) for block in re.split(r"\n\s*\n+", cleaned) if (p := block.strip())
-    ]
-    cleaned = "\n\n".join(paragraphs)
+    cleaned = _normalize_paragraph_blocks(cleaned)
     cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
 
     if not re.search(r"(?:\.{3}|…)\s*$", original_text.strip()):
@@ -168,8 +165,13 @@ def normalize_polished_section_tldr(tldr: str) -> str:
     if not cleaned:
         return ""
 
+    return _normalize_paragraph_blocks(cleaned)
+
+
+def _normalize_paragraph_blocks(text: str) -> str:
+    """Normalize blank-line paragraph blocks into stable spacing."""
     paragraphs = [
-        re.sub(r"\s+", " ", p) for block in re.split(r"\n\s*\n+", cleaned) if (p := block.strip())
+        re.sub(r"\s+", " ", p) for block in re.split(r"\n\s*\n+", text) if (p := block.strip())
     ]
     return "\n\n".join(paragraphs)
 

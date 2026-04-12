@@ -15,6 +15,10 @@ from webinar_transcriber.llm import (
     SectionTextResponse,
     build_llm_processor_from_env,
 )
+from webinar_transcriber.llm.utils import (
+    normalize_polished_section_text,
+    normalize_polished_section_tldr,
+)
 from webinar_transcriber.models import (
     MediaType,
     ReportDocument,
@@ -319,3 +323,32 @@ class TestAnthropicLlmProcessor:
             "section-1": "Agenda review and project status update.\n\nPlease listen."
         }
         assert result.usage == {"input_tokens": 17, "output_tokens": 12, "total_tokens": 29}
+
+
+class TestLlmNormalization:
+    def test_normalize_polished_section_text_collapses_paragraph_whitespace(self) -> None:
+        normalized = normalize_polished_section_text(
+            original_text="Original sentence.",
+            polished_text="  First   line \nwith spacing.\n\n  Second\tparagraph.  ",
+            section_id="section-1",
+        )
+
+        assert normalized == "First line with spacing.\n\nSecond paragraph."
+
+    def test_normalize_polished_section_text_rewrites_trailing_ellipsis_when_source_is_final(
+        self,
+    ) -> None:
+        normalized = normalize_polished_section_text(
+            original_text="Original sentence.",
+            polished_text="Rewritten sentence...",
+            section_id="section-1",
+        )
+
+        assert normalized == "Rewritten sentence."
+
+    def test_normalize_polished_section_tldr_uses_same_paragraph_normalization(self) -> None:
+        normalized = normalize_polished_section_tldr(
+            "  Bullet one \nspans whitespace.\n\n  Bullet two stays.  "
+        )
+
+        assert normalized == "Bullet one spans whitespace.\n\nBullet two stays."
