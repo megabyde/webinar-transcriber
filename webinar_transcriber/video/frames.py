@@ -25,7 +25,7 @@ def extract_representative_frames(
     frames: list[SlideFrame] = []
 
     for index, scene in enumerate(scenes, start=1):
-        midpoint_sec = (scene.start_sec + scene.end_sec) / 2
+        midpoint_sec = scene.midpoint
         output_path = frames_dir / f"{scene.id}.png"
         extracted, failure_detail = _extract_frame(video_path, midpoint_sec, output_path)
         if not extracted:

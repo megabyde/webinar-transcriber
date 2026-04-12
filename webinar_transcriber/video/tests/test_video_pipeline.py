@@ -193,6 +193,40 @@ class TestFrameExtraction:
         assert "ffmpeg did not write" in caplog.text
         assert "scene-1.png" in caplog.text
 
+    def test_extract_representative_frames_uses_scene_midpoint(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        captured_timestamps: list[float] = []
+
+        def fake_extract_frame(
+            _video_path: Path,
+            timestamp_sec: float,
+            output_path: Path,
+        ) -> tuple[bool, str | None]:
+            captured_timestamps.append(timestamp_sec)
+            output_path.write_bytes(b"frame")
+            return True, None
+
+        monkeypatch.setattr(
+            "webinar_transcriber.video.frames._extract_frame",
+            fake_extract_frame,
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.video.frames._normalize_extracted_frame",
+            lambda _p: None,
+        )
+
+        frames = extract_representative_frames(
+            FIXTURE_DIR / "sample-video.mp4",
+            [Scene(id="scene-1", start_sec=2.0, end_sec=5.0)],
+            tmp_path / "frames",
+        )
+
+        assert captured_timestamps == [3.5]
+        assert frames[0].timestamp_sec == 3.5
+
     def test_extract_frame_returns_false_when_ffmpeg_does_not_write_output(
         self,
         tmp_path: Path,

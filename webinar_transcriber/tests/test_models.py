@@ -9,6 +9,7 @@ from webinar_transcriber.models import (
     MediaType,
     ReportDocument,
     ReportSection,
+    Scene,
     SpeechRegion,
     TranscriptSegment,
     VideoAsset,
@@ -83,6 +84,11 @@ class TestCoreModels:
         assert report.action_items == []
         assert report.sections[0].title == "Overview"
         assert report.sections[0].tldr is None
+
+    def test_scene_exposes_midpoint(self) -> None:
+        scene = Scene(id="scene-1", start_sec=2.0, end_sec=5.0)
+
+        assert scene.midpoint == 3.5
 
     def test_diagnostics_defaults_empty_maps(self) -> None:
         diagnostics = Diagnostics()
