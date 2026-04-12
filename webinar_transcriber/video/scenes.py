@@ -12,7 +12,7 @@ from time import monotonic
 
 import numpy as np
 
-from webinar_transcriber.media import MediaProcessingError
+from webinar_transcriber.media import MEDIA_COMMAND_TIMEOUT_SEC, MediaProcessingError
 from webinar_transcriber.models import Scene
 
 SAMPLE_INTERVAL_SEC = 1.0
@@ -20,7 +20,7 @@ MIN_SCENE_LENGTH_SEC = 3.0
 DIFFERENCE_THRESHOLD = 12.0
 TARGET_SAMPLE_WIDTH = 160
 TARGET_SAMPLE_HEIGHT = 90
-SCENE_SAMPLE_TIMEOUT_SEC = 300.0
+SCENE_SAMPLE_TIMEOUT_SEC = MEDIA_COMMAND_TIMEOUT_SEC
 
 
 def detect_scenes(
@@ -103,29 +103,34 @@ def estimate_sample_count(duration_sec: float) -> int:
 
 def _iter_sampled_frames(video_path: Path) -> Iterable[tuple[float, np.ndarray]]:
     frame_size = TARGET_SAMPLE_WIDTH * TARGET_SAMPLE_HEIGHT
-    process = subprocess.Popen(
-        [
-            "ffmpeg",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-i",
-            str(video_path),
-            "-vf",
-            (
-                f"fps={1 / SAMPLE_INTERVAL_SEC:g},"
-                f"scale={TARGET_SAMPLE_WIDTH}:{TARGET_SAMPLE_HEIGHT},"
-                "format=gray"
-            ),
-            "-f",
-            "rawvideo",
-            "-pix_fmt",
-            "gray",
-            "-",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    try:
+        process = subprocess.Popen(
+            [
+                "ffmpeg",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-i",
+                str(video_path),
+                "-vf",
+                (
+                    f"fps={1 / SAMPLE_INTERVAL_SEC:g},"
+                    f"scale={TARGET_SAMPLE_WIDTH}:{TARGET_SAMPLE_HEIGHT},"
+                    "format=gray"
+                ),
+                "-f",
+                "rawvideo",
+                "-pix_fmt",
+                "gray",
+                "-",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except OSError as error:
+        raise MediaProcessingError(
+            f"Could not start ffmpeg for scene detection: {error}"
+        ) from error
 
     if process.stdout is None or process.stderr is None:
         process.kill()
@@ -133,6 +138,7 @@ def _iter_sampled_frames(video_path: Path) -> Iterable[tuple[float, np.ndarray]]
 
     sample_index = 0
     deadline = monotonic() + SCENE_SAMPLE_TIMEOUT_SEC
+    failure: BaseException | None = None
     try:
         while True:
             chunk = _read_with_timeout(
@@ -152,8 +158,16 @@ def _iter_sampled_frames(video_path: Path) -> Iterable[tuple[float, np.ndarray]]
             ))
             yield sample_index * SAMPLE_INTERVAL_SEC, frame.astype(np.float32)
             sample_index += 1
+    except BaseException as error:
+        failure = error
+        raise
     finally:
-        stderr_output = process.stderr.read().strip()
+        stderr_output = process.stderr.read()
+        stderr_text = (
+            stderr_output.decode(errors="replace").strip()
+            if isinstance(stderr_output, bytes)
+            else str(stderr_output).strip()
+        )
         try:
             return_code = process.wait(timeout=1.0)
         except TypeError:
@@ -161,8 +175,8 @@ def _iter_sampled_frames(video_path: Path) -> Iterable[tuple[float, np.ndarray]]
         except subprocess.TimeoutExpired:
             process.kill()
             return_code = process.wait()
-        if return_code != 0:
-            raise MediaProcessingError(stderr_output or "ffmpeg scene sampling failed.")
+        if return_code != 0 and failure is None:
+            raise MediaProcessingError(stderr_text or "ffmpeg scene sampling failed.")
 
 
 def _estimate_sample_end_time(last_sample_time: float) -> float:
