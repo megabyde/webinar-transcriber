@@ -1,5 +1,6 @@
 """Alignment helpers for transcript segments and video scenes."""
 
+from webinar_transcriber.labels import count_label
 from webinar_transcriber.models import (
     AlignmentBlock,
     Scene,
@@ -82,8 +83,7 @@ def _distance_to_block(midpoint_sec: float, block: AlignmentBlock) -> float:
 
 
 def _orphan_alignment_warning(*, orphan_count: int) -> str:
-    segment_label = "segment" if orphan_count == 1 else "segments"
     return (
-        f"Aligned {orphan_count} transcript {segment_label} to the nearest scene blocks "
-        "because their midpoints fell outside all scene ranges."
+        f"Aligned {count_label(orphan_count, 'transcript segment')} to the nearest "
+        "scene blocks because their midpoints fell outside all scene ranges."
     )

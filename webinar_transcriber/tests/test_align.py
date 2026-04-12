@@ -66,8 +66,8 @@ class TestAlignByTime:
         assert [block.transcript_segment_ids for block in blocks] == [["seg-1", "seg-2"], ["seg-3"]]
         assert warnings == [
             (
-                "Aligned 2 transcript segments to the nearest scene blocks because their "
-                "midpoints fell outside all scene ranges."
+                "Aligned 2 transcript segments to the nearest scene blocks "
+                "because their midpoints fell outside all scene ranges."
             )
         ]
 

@@ -12,6 +12,7 @@ import webinar_transcriber.structure as structure_runtime
 import webinar_transcriber.video as video_runtime
 from webinar_transcriber.align import align_by_time
 from webinar_transcriber.asr import DEFAULT_ASR_THREADS, PromptCarryoverSettings
+from webinar_transcriber.labels import count_label
 from webinar_transcriber.models import (
     AlignmentBlock,
     AsrPipelineDiagnostics,
@@ -40,7 +41,6 @@ from .llm import (
 from .support import (
     build_diagnostics,
     configure_asr_logging,
-    count_label,
     progress_updater,
     start_stage_timer,
     write_json,
@@ -204,7 +204,7 @@ def process_input(
                     duration_sec=media_asset.duration_sec,
                     progress_callback=lambda scene_count: active_reporter.progress_advanced(
                         "detect_scenes",
-                        detail=count_label(scene_count, singular="scene"),
+                        detail=count_label(scene_count, "scene"),
                     ),
                 )
                 timer.finish()
@@ -215,7 +215,7 @@ def process_input(
                 active_reporter.stage_finished(
                     "detect_scenes",
                     "Detecting scenes",
-                    detail=count_label(len(scenes), singular="scene"),
+                    detail=count_label(len(scenes), "scene"),
                 )
 
                 current_stage = "extract_frames"
@@ -235,7 +235,7 @@ def process_input(
                 active_reporter.stage_finished(
                     "extract_frames",
                     "Extracting slide frames",
-                    detail=count_label(len(slide_frames), singular="frame"),
+                    detail=count_label(len(slide_frames), "frame"),
                 )
                 alignment_blocks = align_by_time(
                     normalized_transcription.segments,
@@ -274,18 +274,18 @@ def process_input(
                 warnings=warnings,
                 progress_callback=lambda completed_count, section_count: on_structure_progress(
                     float(completed_count),
-                    detail=count_label(section_count, singular="section"),
+                    detail=count_label(section_count, "section"),
                 ),
             )
             finish_structure_progress(
                 float(structure_total),
-                detail=count_label(len(report.sections), singular="section"),
+                detail=count_label(len(report.sections), "section"),
             )
             timer.finish()
             active_reporter.stage_finished(
                 "structure",
                 "Structuring report",
-                detail=count_label(len(report.sections), singular="section"),
+                detail=count_label(len(report.sections), "section"),
             )
 
             if slide_frames:
@@ -412,13 +412,13 @@ def extract_frames_input(
         duration_sec=media_asset.duration_sec,
         progress_callback=lambda scene_count: active_reporter.progress_advanced(
             "detect_scenes",
-            detail=count_label(scene_count, singular="scene"),
+            detail=count_label(scene_count, "scene"),
         ),
     )
     active_reporter.stage_finished(
         "detect_scenes",
         "Detecting scenes",
-        detail=count_label(len(scenes), singular="scene"),
+        detail=count_label(len(scenes), "scene"),
     )
 
     active_reporter.progress_started(
@@ -435,7 +435,7 @@ def extract_frames_input(
     active_reporter.stage_finished(
         "extract_frames",
         "Extracting slide frames",
-        detail=count_label(len(slide_frames), singular="frame"),
+        detail=count_label(len(slide_frames), "frame"),
     )
     write_json(
         layout.scenes_path,

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from webinar_transcriber.labels import count_label
 from webinar_transcriber.models import (
     InferenceWindow,
     TranscriptionResult,
@@ -22,7 +23,6 @@ from webinar_transcriber.transcript.normalize import normalize_transcription
 
 from .support import (
     asr_runtime_detail,
-    count_label,
     progress_updater,
     start_stage_timer,
     window_transcription_stage_detail,
@@ -97,19 +97,19 @@ def run_asr_pipeline(
         speech_pad_ms=DEFAULT_SPEECH_PAD_MS,
         progress_callback=lambda completed_sec, detected_count: on_vad_progress(
             completed_sec,
-            detail=count_label(detected_count, singular="region"),
+            detail=count_label(detected_count, "region"),
         ),
     )
     finish_vad_progress(
         media_asset.duration_sec,
-        detail=count_label(len(speech_regions), singular="region"),
+        detail=count_label(len(speech_regions), "region"),
     )
     timer.finish()
     asr_pipeline.vad_region_count = len(speech_regions)
     reporter.stage_finished(
         "vad",
         "Detecting speech regions",
-        detail=count_label(len(speech_regions), singular="region"),
+        detail=count_label(len(speech_regions), "region"),
     )
     for warning in vad_warnings:
         warnings.append(warning)
@@ -151,8 +151,9 @@ def run_asr_pipeline(
         "prepare_speech_regions",
         "Preparing speech regions",
         detail=(
-            f"{len(speech_regions)} -> {len(expanded_regions)} regions"
-            f" | {count_label(len(windows), singular='window')}"
+            f"{count_label(len(speech_regions), 'region')} "
+            f"-> {count_label(len(expanded_regions), 'region')} "
+            f"| {count_label(len(windows), 'window')}"
         ),
     )
 
@@ -174,7 +175,7 @@ def run_asr_pipeline(
         windows,
         progress_callback=lambda completed_sec, segment_count: on_window_completed(
             completed_sec,
-            detail=count_label(segment_count, singular="segment"),
+            detail=count_label(segment_count, "segment"),
         ),
     )
     write_json(
@@ -205,7 +206,7 @@ def run_asr_pipeline(
     reporter.stage_finished(
         "reconcile",
         "Reconciling transcript windows",
-        detail=f"{len(transcription.segments)} segments",
+        detail=count_label(len(transcription.segments), "segment"),
     )
 
     write_json(layout.transcript_path, transcription.model_dump(mode="json"))

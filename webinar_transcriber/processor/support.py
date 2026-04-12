@@ -15,6 +15,7 @@ from webinar_transcriber.export import (
     write_markdown_report,
     write_vtt_subtitles,
 )
+from webinar_transcriber.labels import count_label
 from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
     Diagnostics,
@@ -96,13 +97,6 @@ def progress_updater(
     return update, finish
 
 
-def count_label(count: int, *, singular: str, plural: str | None = None) -> str:
-    """Return a compact singular/plural count label."""
-    resolved_plural = plural or f"{singular}s"
-    label = singular if count == 1 else resolved_plural
-    return f"{count} {label}"
-
-
 def configure_asr_logging(transcriber: WhisperCppTranscriber, layout: RunLayout) -> None:
     """Write whisper.cpp logs into the run directory."""
     transcriber.set_log_path(layout.run_dir / "whisper-cpp.log")
@@ -139,8 +133,7 @@ def window_transcription_stage_detail(
     elapsed_sec: float,
 ) -> str:
     """Return the transcribe-stage summary with window count and real-time factor."""
-    window_label = "window" if window_count == 1 else "windows"
-    details = [f"{window_count} {window_label}"]
+    details = [count_label(window_count, "window")]
     if total_duration_sec > 0 and elapsed_sec > 0:
         details.append(f"RTF {elapsed_sec / total_duration_sec:.2f}")
     return " | ".join(details)
@@ -197,9 +190,9 @@ def llm_fallback_detail(*, provider_name: str | None, model_name: str | None) ->
 
 def llm_report_plan_label_detail(plan: LLMReportPolishPlan) -> str:
     """Return the worker-count detail for the section-polish stage."""
-    parts = [count_label(plan.worker_count, singular="worker")]
+    parts = [count_label(plan.worker_count, "worker")]
     if plan.skipped_section_count > 0:
-        parts.append(count_label(plan.skipped_section_count, singular="skipped interlude"))
+        parts.append(count_label(plan.skipped_section_count, "skipped interlude"))
     return " | ".join(parts)
 
 
@@ -208,16 +201,14 @@ def token_usage_detail(usage: dict[str, int]) -> str:
     total_tokens = usage.get("total_tokens")
     if total_tokens is None:
         return ""
-    token_label = "token" if total_tokens == 1 else "tokens"
-    return f"{total_tokens} {token_label}"
+    return count_label(total_tokens, "token")
 
 
 def optional_count_detail(count: int, *, singular: str, plural: str) -> str:
     """Return a count label only when the count is positive."""
     if count <= 0:
         return ""
-    label = singular if count == 1 else plural
-    return f"{count} {label}"
+    return count_label(count, singular, plural=plural)
 
 
 def title_update_detail(*, title_count: int, section_count: int) -> str:

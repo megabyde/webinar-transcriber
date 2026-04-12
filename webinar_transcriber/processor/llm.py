@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from webinar_transcriber.labels import count_label
 from webinar_transcriber.llm import (
     LLMConfigurationError,
     LLMProcessingError,
@@ -13,7 +14,6 @@ from webinar_transcriber.llm import (
 from webinar_transcriber.usage import merge_usage
 
 from .support import (
-    count_label,
     llm_fallback_detail,
     llm_report_detail,
     llm_report_plan_label_detail,
@@ -128,11 +128,11 @@ def maybe_polish_report(
     for warning in section_result.warnings:
         warnings.append(warning)
         reporter.warn(warning)
-    section_detail = count_label(polish_plan.section_count, singular="section")
+    section_detail = count_label(polish_plan.section_count, "section")
     if polish_plan.skipped_section_count > 0:
         section_detail = " | ".join((
             section_detail,
-            count_label(polish_plan.skipped_section_count, singular="skipped interlude"),
+            count_label(polish_plan.skipped_section_count, "skipped interlude"),
         ))
     reporter.stage_finished(
         "llm_report_sections",
