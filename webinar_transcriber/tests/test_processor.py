@@ -371,11 +371,11 @@ class TestProcessInput:
 
         transcriber = CloseTrackingTranscriber()
         monkeypatch.setattr(
-            "webinar_transcriber.processor.WhisperCppTranscriber",
+            "webinar_transcriber.asr.WhisperCppTranscriber",
             lambda *args, **kwargs: transcriber,
         )
         monkeypatch.setattr(
-            "webinar_transcriber.processor.run_asr_pipeline",
+            "webinar_transcriber.processor.asr.run_asr_pipeline",
             lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("asr failed")),
         )
 
@@ -601,7 +601,7 @@ class TestProcessInput:
         output_dir = tmp_path / "failed-run"
         with (
             patch(
-                "webinar_transcriber.processor.build_report",
+                "webinar_transcriber.structure.build_report",
                 side_effect=RuntimeError("boom"),
             ),
             patch(
@@ -641,11 +641,11 @@ class TestProcessInput:
     def test_extract_frames_input_writes_scene_artifacts(self, tmp_path, monkeypatch) -> None:
         reporter = RecordingReporter()
         monkeypatch.setattr(
-            "webinar_transcriber.processor.probe_media",
+            "webinar_transcriber.media.probe_media",
             lambda _path: VideoAsset(path="demo.mp4", duration_sec=2.0),
         )
         monkeypatch.setattr(
-            "webinar_transcriber.processor.detect_scenes",
+            "webinar_transcriber.video.detect_scenes",
             lambda *_args, **_kwargs: [
                 Scene(
                     id="scene-1",
@@ -655,7 +655,7 @@ class TestProcessInput:
             ],
         )
         monkeypatch.setattr(
-            "webinar_transcriber.processor.extract_representative_frames",
+            "webinar_transcriber.video.extract_representative_frames",
             lambda *_args, **_kwargs: [],
         )
 

@@ -6,13 +6,12 @@ from contextlib import nullcontext, suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import webinar_transcriber.asr as asr_runtime
+import webinar_transcriber.media as media_runtime
+import webinar_transcriber.structure as structure_runtime
+import webinar_transcriber.video as video_runtime
 from webinar_transcriber.align import align_by_time
-from webinar_transcriber.asr import (
-    DEFAULT_ASR_THREADS,
-    PromptCarryoverSettings,
-    WhisperCppTranscriber,
-)
-from webinar_transcriber.media import MediaProcessingError, probe_media
+from webinar_transcriber.asr import DEFAULT_ASR_THREADS, PromptCarryoverSettings
 from webinar_transcriber.models import (
     AlignmentBlock,
     AsrPipelineDiagnostics,
@@ -27,18 +26,12 @@ from webinar_transcriber.models import (
 from webinar_transcriber.paths import RunLayout, create_run_layout
 from webinar_transcriber.reporter import NullStageReporter, StageReporter
 from webinar_transcriber.segmentation import VadSettings
-from webinar_transcriber.structure import build_report
 from webinar_transcriber.transcription_audio import (
     prepared_transcription_audio,
     preserve_transcription_audio,
 )
-from webinar_transcriber.video import (
-    detect_scenes,
-    estimate_sample_count,
-    extract_representative_frames,
-)
 
-from .asr import run_asr_pipeline
+from . import asr as processor_asr
 from .llm import (
     LLMRuntimeState,
     maybe_polish_report,
@@ -57,6 +50,7 @@ from .support import (
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from webinar_transcriber.asr import WhisperCppTranscriber
     from webinar_transcriber.llm import LLMProcessor
 
 
@@ -118,7 +112,7 @@ def process_input(
     asr_pipeline = AsrPipelineDiagnostics(vad_enabled=vad.enabled, threads=asr_threads)
     asr_pipeline.carryover_enabled = carryover.enabled
 
-    active_transcriber = transcriber or WhisperCppTranscriber(
+    active_transcriber = transcriber or asr_runtime.WhisperCppTranscriber(
         model_name=asr_model,
         threads=asr_threads,
         carryover_settings=carryover,
@@ -144,7 +138,7 @@ def process_input(
             current_stage = "probe_media"
             active_reporter.stage_started("probe_media", "Probing media")
             timer = start_stage_timer(stage_timings, "probe_media")
-            media_asset = probe_media(input_path)
+            media_asset = media_runtime.probe_media(input_path)
             timer.finish()
             write_json(layout.metadata_path, {"media": media_asset.model_dump(mode="json")})
             active_reporter.stage_finished(
@@ -164,7 +158,7 @@ def process_input(
                     detail=str(audio_path.name),
                 )
                 current_stage = "asr"
-                asr_result = run_asr_pipeline(
+                asr_result = processor_asr.run_asr_pipeline(
                     audio_path=audio_path,
                     media_asset=media_asset,
                     transcriber=active_transcriber,
@@ -200,12 +194,12 @@ def process_input(
                 active_reporter.progress_started(
                     "detect_scenes",
                     "Detecting scenes",
-                    total=estimate_sample_count(media_asset.duration_sec),
+                    total=video_runtime.estimate_sample_count(media_asset.duration_sec),
                     count_label="s",
                     detail="0 scenes",
                 )
                 timer = start_stage_timer(stage_timings, "detect_scenes")
-                scenes = detect_scenes(
+                scenes = video_runtime.detect_scenes(
                     input_path,
                     duration_sec=media_asset.duration_sec,
                     progress_callback=lambda scene_count: active_reporter.progress_advanced(
@@ -231,7 +225,7 @@ def process_input(
                     total=len(scenes),
                 )
                 timer = start_stage_timer(stage_timings, "extract_frames")
-                slide_frames = extract_representative_frames(
+                slide_frames = video_runtime.extract_representative_frames(
                     input_path,
                     scenes,
                     layout.frames_dir,
@@ -273,7 +267,7 @@ def process_input(
             )
 
             timer = start_stage_timer(stage_timings, "structure")
-            report = build_report(
+            report = structure_runtime.build_report(
                 media_asset,
                 normalized_transcription,
                 alignment_blocks=alignment_blocks,
@@ -395,23 +389,25 @@ def extract_frames_input(
     )
 
     active_reporter.stage_started("probe_media", "Probing media")
-    media_asset = probe_media(input_path)
+    media_asset = media_runtime.probe_media(input_path)
     active_reporter.stage_finished(
         "probe_media",
         "Probing media",
         detail=f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s",
     )
     if not isinstance(media_asset, VideoAsset):
-        raise MediaProcessingError("Frame extraction is only supported for video input.")
+        raise media_runtime.MediaProcessingError(
+            "Frame extraction is only supported for video input."
+        )
 
     active_reporter.progress_started(
         "detect_scenes",
         "Detecting scenes",
-        total=estimate_sample_count(media_asset.duration_sec),
+        total=video_runtime.estimate_sample_count(media_asset.duration_sec),
         count_label="s",
         detail="0 scenes",
     )
-    scenes = detect_scenes(
+    scenes = video_runtime.detect_scenes(
         input_path,
         duration_sec=media_asset.duration_sec,
         progress_callback=lambda scene_count: active_reporter.progress_advanced(
@@ -430,7 +426,7 @@ def extract_frames_input(
         "Extracting slide frames",
         total=len(scenes),
     )
-    slide_frames = extract_representative_frames(
+    slide_frames = video_runtime.extract_representative_frames(
         input_path,
         scenes,
         layout.frames_dir,
