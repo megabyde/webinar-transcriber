@@ -48,6 +48,20 @@ class TranscriptSegment(BaseModel):
     start_sec: float = Field(ge=0)
     end_sec: float = Field(ge=0)
 
+    @property
+    def midpoint(self) -> float:
+        """Return the midpoint of the segment on the transcript timeline."""
+        return self.start_sec + ((self.end_sec - self.start_sec) / 2.0)
+
+    def __lt__(self, other: object) -> bool:
+        """Keep segment ordering deterministic without repeating tuple keys at call sites."""
+        if not isinstance(other, TranscriptSegment):
+            return NotImplemented
+        return self._sort_key() < other._sort_key()
+
+    def _sort_key(self) -> tuple[float, float, str]:
+        return (self.start_sec, self.end_sec, self.id)
+
 
 class TranscriptionResult(BaseModel):
     """Full normalized transcription output."""

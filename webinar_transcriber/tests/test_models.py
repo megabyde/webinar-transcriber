@@ -53,6 +53,16 @@ class TestCoreModels:
         assert segment.end_sec == 1.2
         assert segment.text == "hello world"
 
+    def test_transcript_segment_exposes_midpoint(self) -> None:
+        segment = TranscriptSegment(
+            id="seg-1",
+            text="hello world",
+            start_sec=1.0,
+            end_sec=2.2,
+        )
+
+        assert segment.midpoint == 1.6
+
     def test_report_document_defaults_optional_collections(self) -> None:
         report = ReportDocument(
             title="Demo",
@@ -131,3 +141,14 @@ class TestCoreModels:
         window_ids = [window.window_id for window in sorted(windows)]
 
         assert window_ids == ["window-1", "window-2", "window-3"]
+
+    def test_transcript_segment_is_ordered_by_timeline(self) -> None:
+        segments = [
+            TranscriptSegment(id="seg-3", text="third", start_sec=2.0, end_sec=3.0),
+            TranscriptSegment(id="seg-2", text="second", start_sec=0.0, end_sec=2.0),
+            TranscriptSegment(id="seg-1", text="first", start_sec=0.0, end_sec=1.0),
+        ]
+
+        segment_ids = [segment.id for segment in sorted(segments)]
+
+        assert segment_ids == ["seg-1", "seg-2", "seg-3"]

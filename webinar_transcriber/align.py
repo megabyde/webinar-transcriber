@@ -26,7 +26,7 @@ def align_by_time(
         scene_segments = [
             segment
             for segment in transcript_segments
-            if scene.start_sec <= ((segment.start_sec + segment.end_sec) / 2) < scene.end_sec
+            if scene.start_sec <= segment.midpoint < scene.end_sec
         ]
         assigned_segment_ids.update(segment.id for segment in scene_segments)
         segments_by_block.append(list(scene_segments))
@@ -49,18 +49,14 @@ def align_by_time(
     ]
     if orphan_segments and blocks:
         for segment in orphan_segments:
-            midpoint = (segment.start_sec + segment.end_sec) / 2
             nearest_block_index = min(
                 range(len(blocks)),
-                key=lambda index: _distance_to_block(midpoint, blocks[index]),
+                key=lambda index: _distance_to_block(segment.midpoint, blocks[index]),
             )
             segments_by_block[nearest_block_index].append(segment)
 
         for block, block_segments in zip(blocks, segments_by_block, strict=False):
-            ordered_segments = sorted(
-                block_segments,
-                key=lambda segment: (segment.start_sec, segment.end_sec, segment.id),
-            )
+            ordered_segments = sorted(block_segments)
             block.transcript_segment_ids = [segment.id for segment in ordered_segments]
             block.transcript_text = " ".join(
                 segment.text for segment in ordered_segments if segment.text

@@ -71,6 +71,23 @@ class TestAlignByTime:
             )
         ]
 
+    def test_orders_orphan_segments_by_timeline_within_blocks(self) -> None:
+        blocks = align_by_time(
+            transcript_segments=[
+                TranscriptSegment(id="seg-2", text="Later", start_sec=2.6, end_sec=2.8),
+                TranscriptSegment(id="seg-1", text="Earlier", start_sec=0.0, end_sec=0.2),
+                TranscriptSegment(id="seg-3", text="Inside", start_sec=1.2, end_sec=1.6),
+            ],
+            scenes=[
+                Scene(id="scene-1", start_sec=1.0, end_sec=2.0),
+                Scene(id="scene-2", start_sec=2.0, end_sec=2.5),
+            ],
+            slide_frames=[],
+        )
+
+        assert blocks[0].transcript_segment_ids == ["seg-1", "seg-3"]
+        assert blocks[0].transcript_text == "Earlier Inside"
+
     def test_keeps_empty_blocks_for_scenes_without_matches(self) -> None:
         blocks = align_by_time(
             transcript_segments=[
