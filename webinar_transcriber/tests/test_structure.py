@@ -9,24 +9,26 @@ from webinar_transcriber.models import (
     TranscriptSegment,
     VideoAsset,
 )
-from webinar_transcriber.structure import (
+from webinar_transcriber.structure import build_report
+from webinar_transcriber.structure.interludes import _is_likely_interlude_text
+from webinar_transcriber.structure.scoring import (
     _action_item_score,
     _audio_title_from_segments,
     _audio_title_score,
-    _build_audio_sections,
     _build_summary,
     _derive_title,
     _extract_action_items,
     _fallback_summary,
-    _is_likely_interlude_text,
     _segment_key,
-    _should_start_new_audio_section,
     _summary_filler_penalty,
     _summary_repetition_penalty,
     _summary_start_penalty,
     _title_from_text,
     _title_from_words,
-    build_report,
+)
+from webinar_transcriber.structure.sections import (
+    _build_audio_sections,
+    _should_start_new_audio_section,
 )
 
 RU_SEND_FILE = "Пожалуйста, пришлите итоговый файл до пятницы."

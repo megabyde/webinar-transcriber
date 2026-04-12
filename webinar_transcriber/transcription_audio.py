@@ -11,29 +11,37 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from webinar_transcriber.media import MediaProcessingError, _run_ffmpeg
+from webinar_transcriber.media import MediaProcessingError, run_media_command
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
 NORMALIZED_SAMPLE_RATE = 16_000
+NORMALIZED_CHANNELS = 1
+NORMALIZED_SAMPLE_WIDTH_BYTES = 2
+NORMALIZED_AUDIO_CODEC = "pcm_s16le"
+
+
+def sample_index_for_time(time_sec: float) -> int:
+    """Return the normalized-audio sample index for one timestamp."""
+    return max(0, round(time_sec * NORMALIZED_SAMPLE_RATE))
 
 
 def extract_audio(input_path: Path, output_path: Path) -> Path:
     """Convert the input media into a mono 16 kHz WAV file."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    _run_ffmpeg(
+    run_media_command(
         "ffmpeg",
         "-y",
         "-i",
         str(input_path),
         "-vn",
         "-ac",
-        "1",
+        str(NORMALIZED_CHANNELS),
         "-ar",
-        "16000",
+        str(NORMALIZED_SAMPLE_RATE),
         "-c:a",
-        "pcm_s16le",
+        NORMALIZED_AUDIO_CODEC,
         str(output_path),
     )
     return output_path
@@ -42,7 +50,7 @@ def extract_audio(input_path: Path, output_path: Path) -> Path:
 def transcode_audio_to_mp3(input_path: Path, output_path: Path) -> Path:
     """Convert normalized transcription audio into an MP3 artifact."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    _run_ffmpeg(
+    run_media_command(
         "ffmpeg",
         "-y",
         "-i",
@@ -93,9 +101,9 @@ def load_normalized_audio(audio_path: Path) -> tuple[np.ndarray, int]:
         raise MediaProcessingError(
             f"Expected {NORMALIZED_SAMPLE_RATE} Hz transcription audio, got {sample_rate} Hz."
         )
-    if channels != 1:
+    if channels != NORMALIZED_CHANNELS:
         raise MediaProcessingError(f"Expected mono transcription audio, got {channels} channels.")
-    if sample_width != 2:
+    if sample_width != NORMALIZED_SAMPLE_WIDTH_BYTES:
         raise MediaProcessingError(
             f"Expected 16-bit PCM transcription audio, got {sample_width * 8}-bit."
         )

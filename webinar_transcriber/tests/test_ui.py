@@ -100,7 +100,7 @@ class TestRichStageReporter:
         assert "Sections" in output
         assert "Warnings" in output
 
-    def test_stage_timing_started_records_elapsed_time_without_spinner(
+    def test_stage_started_records_elapsed_time(
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -109,7 +109,7 @@ class TestRichStageReporter:
         perf_values = iter([10.0, 13.5])
         monkeypatch.setattr("webinar_transcriber.ui.perf_counter", lambda: next(perf_values))
 
-        reporter.stage_timing_started("llm_report", "Polishing report")
+        reporter.stage_started("llm_report", "Polishing report")
         reporter.stage_finished("llm_report", "Polishing report")
 
         output = console.export_text()

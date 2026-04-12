@@ -11,8 +11,8 @@ from click.testing import CliRunner
 from webinar_transcriber import __version__
 from webinar_transcriber.asr import DEFAULT_ASR_THREADS, PromptCarryoverSettings
 from webinar_transcriber.cli import main
+from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.models import (
-    AudioAsset,
     Diagnostics,
     MediaType,
     ReportDocument,
@@ -22,7 +22,7 @@ from webinar_transcriber.models import (
     VideoAsset,
 )
 from webinar_transcriber.paths import OutputDirectoryExistsError, RunLayout
-from webinar_transcriber.processor import ProcessArtifacts
+from webinar_transcriber.processor import FrameExtractionArtifacts, ProcessArtifacts
 from webinar_transcriber.segmentation import VadSettings
 
 
@@ -304,35 +304,26 @@ class TestExtractFramesCommand:
         run_dir.mkdir()
         (run_dir / "frames").mkdir()
         frame_path.write_text("png", encoding="utf-8")
-
         scenes = [Scene(id="scene-1", start_sec=0.0, end_sec=2.0)]
-
         monkeypatch.setattr(
-            "webinar_transcriber.cli.create_run_layout",
-            lambda **kwargs: RunLayout(run_dir=run_dir),
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.cli.probe_media",
-            lambda _path: VideoAsset(
-                path=str(input_path),
-                duration_sec=2.0,
+            "webinar_transcriber.cli.extract_frames_input",
+            lambda *_args, **_kwargs: FrameExtractionArtifacts(
+                layout=RunLayout(run_dir=run_dir),
+                media_asset=VideoAsset(path=str(input_path), duration_sec=2.0),
+                scenes=scenes,
+                slide_frames=[
+                    SlideFrame(
+                        id="frame-1",
+                        scene_id="scene-1",
+                        image_path=str(frame_path),
+                        timestamp_sec=1.0,
+                    )
+                ],
             ),
         )
-        monkeypatch.setattr("webinar_transcriber.cli.estimate_sample_count", lambda _duration: 2)
-        monkeypatch.setattr(
-            "webinar_transcriber.cli.detect_scenes",
-            lambda *_args, **_kwargs: scenes,
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.cli.extract_representative_frames",
-            lambda *_args, **_kwargs: [
-                SlideFrame(
-                    id="frame-1",
-                    scene_id="scene-1",
-                    image_path=str(frame_path),
-                    timestamp_sec=1.0,
-                )
-            ],
+        (run_dir / "scenes.json").write_text(
+            json.dumps({"scenes": [scene.model_dump(mode="json") for scene in scenes]}),
+            encoding="utf-8",
         )
 
         result = runner.invoke(main, ["extract-frames", str(input_path)])
@@ -346,18 +337,10 @@ class TestExtractFramesCommand:
         runner = CliRunner()
         input_path = tmp_path / "demo.wav"
         input_path.write_text("stub", encoding="utf-8")
-        run_dir = tmp_path / "frames-run"
-        run_dir.mkdir()
-
         monkeypatch.setattr(
-            "webinar_transcriber.cli.create_run_layout",
-            lambda **kwargs: RunLayout(run_dir=run_dir),
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.cli.probe_media",
-            lambda _path: AudioAsset(
-                path=str(input_path),
-                duration_sec=2.0,
+            "webinar_transcriber.cli.extract_frames_input",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                MediaProcessingError("Frame extraction is only supported for video input.")
             ),
         )
 
@@ -400,7 +383,7 @@ class TestExtractFramesCommand:
 
         with (
             patch(
-                "webinar_transcriber.cli.create_run_layout",
+                "webinar_transcriber.cli.extract_frames_input",
                 side_effect=OutputDirectoryExistsError(
                     "Output directory already exists: frames-run"
                 ),
@@ -417,26 +400,10 @@ class TestExtractFramesCommand:
         runner = CliRunner()
         input_path = tmp_path / "demo.mp4"
         input_path.write_text("stub", encoding="utf-8")
-        run_dir = tmp_path / "frames-run"
-        run_dir.mkdir()
-
         monkeypatch.setattr(
-            "webinar_transcriber.cli.create_run_layout",
-            lambda **kwargs: RunLayout(run_dir=run_dir),
+            "webinar_transcriber.cli.extract_frames_input",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(KeyboardInterrupt),
         )
-        monkeypatch.setattr(
-            "webinar_transcriber.cli.probe_media",
-            lambda _path: VideoAsset(
-                path=str(input_path),
-                duration_sec=2.0,
-            ),
-        )
-        monkeypatch.setattr("webinar_transcriber.cli.estimate_sample_count", lambda _duration: 2)
-
-        def interrupted_detect_scenes(*_args, **_kwargs) -> list[Scene]:
-            raise KeyboardInterrupt
-
-        monkeypatch.setattr("webinar_transcriber.cli.detect_scenes", interrupted_detect_scenes)
 
         result = runner.invoke(main, ["extract-frames", str(input_path)])
 

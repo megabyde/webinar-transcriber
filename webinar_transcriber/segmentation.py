@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from webinar_transcriber.models import SpeechRegion
+from webinar_transcriber.transcription_audio import NORMALIZED_SAMPLE_RATE
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -203,7 +204,7 @@ def _silero_speech_timestamps(
         return None
     silero_vad, torch = modules
 
-    assert sample_rate == 16_000, "Silero VAD expects normalized 16000 Hz audio."
+    assert sample_rate == NORMALIZED_SAMPLE_RATE, "Silero VAD expects normalized 16000 Hz audio."
 
     speech_model = silero_vad.load_silero_vad()
     iterator = silero_vad.VADIterator(

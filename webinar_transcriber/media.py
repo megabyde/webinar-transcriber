@@ -15,7 +15,7 @@ class MediaProcessingError(RuntimeError):
     """Raised when ffmpeg or ffprobe work cannot be completed."""
 
 
-def _run_ffmpeg(
+def run_media_command(
     *args: str,
     timeout_sec: float = MEDIA_COMMAND_TIMEOUT_SEC,
 ) -> subprocess.CompletedProcess[str]:
@@ -105,3 +105,6 @@ def probe_media(input_path: Path) -> MediaAsset:
         width=int(video_stream["width"]) if video_stream.get("width") else None,
         height=int(video_stream["height"]) if video_stream.get("height") else None,
     )
+
+
+_run_ffmpeg = run_media_command

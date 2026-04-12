@@ -1,9 +1,14 @@
 """Scene detection for webinar videos."""
 
+import io
 import math
+import os
+import select
 import subprocess
 from collections.abc import Callable, Iterable
+from contextlib import suppress
 from pathlib import Path
+from time import monotonic
 
 import numpy as np
 
@@ -15,6 +20,7 @@ MIN_SCENE_LENGTH_SEC = 3.0
 DIFFERENCE_THRESHOLD = 12.0
 TARGET_SAMPLE_WIDTH = 160
 TARGET_SAMPLE_HEIGHT = 90
+SCENE_SAMPLE_TIMEOUT_SEC = 300.0
 
 
 def detect_scenes(
@@ -126,9 +132,14 @@ def _iter_sampled_frames(video_path: Path) -> Iterable[tuple[float, np.ndarray]]
         raise MediaProcessingError("Could not open ffmpeg pipes for scene detection.")
 
     sample_index = 0
+    deadline = monotonic() + SCENE_SAMPLE_TIMEOUT_SEC
     try:
         while True:
-            chunk = process.stdout.read(frame_size)
+            chunk = _read_with_timeout(
+                process,
+                frame_size=frame_size,
+                deadline=deadline,
+            )
             if len(chunk) == 0:
                 break
             if len(chunk) != frame_size:
@@ -143,7 +154,13 @@ def _iter_sampled_frames(video_path: Path) -> Iterable[tuple[float, np.ndarray]]
             sample_index += 1
     finally:
         stderr_output = process.stderr.read().strip()
-        return_code = process.wait()
+        try:
+            return_code = process.wait(timeout=1.0)
+        except TypeError:
+            return_code = process.wait()
+        except subprocess.TimeoutExpired:
+            process.kill()
+            return_code = process.wait()
         if return_code != 0:
             raise MediaProcessingError(stderr_output or "ffmpeg scene sampling failed.")
 
@@ -152,3 +169,43 @@ def _estimate_sample_end_time(last_sample_time: float) -> float:
     if last_sample_time <= 0:
         return 0.0
     return last_sample_time + SAMPLE_INTERVAL_SEC
+
+
+def _read_with_timeout(
+    process: subprocess.Popen[bytes],
+    *,
+    frame_size: int,
+    deadline: float,
+) -> bytes:
+    if process.stdout is None:
+        raise MediaProcessingError("Could not open ffmpeg pipes for scene detection.")
+
+    chunk = bytearray()
+    while len(chunk) < frame_size:
+        remaining_sec = deadline - monotonic()
+        if remaining_sec <= 0:
+            process.kill()
+            with suppress(ProcessLookupError):
+                process.wait()
+            raise MediaProcessingError(
+                f"ffmpeg scene sampling timed out after {SCENE_SAMPLE_TIMEOUT_SEC:g}s."
+            )
+
+        try:
+            ready, _, _ = select.select([process.stdout], [], [], min(1.0, remaining_sec))
+        except (AttributeError, io.UnsupportedOperation):
+            data = process.stdout.read(frame_size - len(chunk))
+            if len(data) == 0:
+                return bytes(chunk)
+            chunk.extend(data)
+            continue
+        if not ready:
+            continue
+
+        bytes_needed = frame_size - len(chunk)
+        data = os.read(process.stdout.fileno(), bytes_needed)
+        if len(data) == 0:
+            return bytes(chunk)
+        chunk.extend(data)
+
+    return bytes(chunk)

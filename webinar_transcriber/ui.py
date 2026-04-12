@@ -57,11 +57,6 @@ class RichStageReporter(NullStageReporter):
         )
         self._active_status.start()
 
-    def stage_timing_started(self, stage_key: str, label: str) -> None:
-        self._stop_active_display()
-        self._stage_count += 1
-        self._active_event = self._new_stage_event(stage_key, label)
-
     def progress_started(
         self,
         stage_key: str,

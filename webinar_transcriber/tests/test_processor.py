@@ -22,15 +22,20 @@ from webinar_transcriber.llm import (
 )
 from webinar_transcriber.models import (
     DecodedWindow,
+    Scene,
     SpeechRegion,
     TranscriptSegment,
     VideoAsset,
 )
 from webinar_transcriber.processor import (
+    FrameExtractionArtifacts,
     ProcessArtifacts,
-    _asr_runtime_detail,
-    _window_transcription_stage_detail,
+    extract_frames_input,
     process_input,
+)
+from webinar_transcriber.processor.support import (
+    asr_runtime_detail,
+    window_transcription_stage_detail,
 )
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
@@ -80,9 +85,6 @@ class RecordingReporter:
         self.events.append(("begin", input_path.name, output_format))
 
     def stage_started(self, stage_key: str, label: str) -> None:
-        self.events.append(("start", stage_key, label))
-
-    def stage_timing_started(self, stage_key: str, label: str) -> None:
         self.events.append(("start", stage_key, label))
 
     def progress_started(
@@ -628,13 +630,52 @@ class TestProcessInput:
         assert (output_dir / "asr" / "speech_regions.json").exists()
         assert (output_dir / "asr" / "expanded_regions.json").exists()
         assert (output_dir / "asr" / "decoded_windows.json").exists()
-        assert not (output_dir / "diagnostics.json").exists()
+        diagnostics_payload = json.loads(
+            (output_dir / "diagnostics.json").read_text(encoding="utf-8")
+        )
+        assert diagnostics_payload["status"] == "failed"
+        assert diagnostics_payload["failed_stage"] == "structure"
+        assert diagnostics_payload["error"] == "boom"
         assert not (output_dir / "report.json").exists()
+
+    def test_extract_frames_input_writes_scene_artifacts(self, tmp_path, monkeypatch) -> None:
+        reporter = RecordingReporter()
+        monkeypatch.setattr(
+            "webinar_transcriber.processor.probe_media",
+            lambda _path: VideoAsset(path="demo.mp4", duration_sec=2.0),
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.processor.detect_scenes",
+            lambda *_args, **_kwargs: [
+                Scene(
+                    id="scene-1",
+                    start_sec=0.0,
+                    end_sec=2.0,
+                )
+            ],
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.processor.extract_representative_frames",
+            lambda *_args, **_kwargs: [],
+        )
+
+        artifacts = extract_frames_input(
+            FIXTURE_DIR / "sample-video.mp4",
+            output_dir=tmp_path / "frames-run",
+            reporter=reporter,
+        )
+
+        assert isinstance(artifacts, FrameExtractionArtifacts)
+        assert artifacts.layout.scenes_path.exists()
+        assert json.loads(artifacts.layout.scenes_path.read_text(encoding="utf-8")) == {
+            "scenes": [{"id": "scene-1", "start_sec": 0.0, "end_sec": 2.0}]
+        }
+        assert reporter.has_event("finish", "detect_scenes", "1 scene")
 
 
 class TestProcessorHelpers:
     def test_window_transcription_stage_detail_reports_rtf(self) -> None:
-        detail = _window_transcription_stage_detail(
+        detail = window_transcription_stage_detail(
             window_count=1,
             total_duration_sec=12.5,
             elapsed_sec=2.5,
@@ -650,7 +691,7 @@ class TestProcessorHelpers:
             "ggml-large-v3-turbo.bin"
         )
 
-        assert _asr_runtime_detail(transcriber) == (
+        assert asr_runtime_detail(transcriber) == (
             "ggerganov/whisper.cpp/ggml-large-v3-turbo.bin (HF cache) | cpu"
         )
 

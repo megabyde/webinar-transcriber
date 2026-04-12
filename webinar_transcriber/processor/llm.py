@@ -96,10 +96,10 @@ def maybe_polish_report(
     reporter.progress_started(
         "llm_report_sections",
         section_label,
-        total=max(float(polish_plan.section_count), 1.0),
+        total=max(float(polish_plan.section_count + polish_plan.skipped_section_count), 1.0),
         count_label="sections",
     )
-    timer = start_stage_timer(stage_timings, "llm_report")
+    timer = start_stage_timer(stage_timings, "llm_report_sections")
     try:
         section_result = llm_processor.polish_report_sections_with_progress(
             report,
@@ -133,6 +133,7 @@ def maybe_polish_report(
         detail=count_label(len(section_result.section_transcripts), singular="section"),
     )
     reporter.stage_started("llm_report", summary_label)
+    timer = start_stage_timer(stage_timings, "llm_report_metadata")
 
     try:
         metadata_result = llm_processor.polish_report_metadata(
@@ -155,7 +156,8 @@ def maybe_polish_report(
         llm_runtime.report_latency_sec = report_latency_sec
         return report, llm_runtime
 
-    report_latency_sec = timer.finish()
+    metadata_elapsed_sec = timer.finish()
+    report_latency_sec = stage_timings.get("llm_report_sections", 0.0) + metadata_elapsed_sec
     usage = merge_usage(section_result.usage, metadata_result.usage)
     report.summary = metadata_result.summary
     report.action_items = metadata_result.action_items

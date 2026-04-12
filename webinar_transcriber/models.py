@@ -134,7 +134,6 @@ class ReportSection(BaseModel):
     end_sec: float = Field(ge=0)
     tldr: str | None = None
     transcript_text: str
-    bullet_points: list[str] = Field(default_factory=list)
     frame_id: str | None = None
     image_path: str | None = None
     is_interlude: bool = False
@@ -171,6 +170,9 @@ class AsrPipelineDiagnostics(BaseModel):
 class Diagnostics(BaseModel):
     """Execution metadata recorded for a processing run."""
 
+    status: str = "succeeded"
+    failed_stage: str | None = None
+    error: str | None = None
     asr_backend: str | None = None
     asr_model: str | None = None
     llm_enabled: bool = False

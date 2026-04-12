@@ -5,7 +5,6 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.models import ReportDocument, ReportSection
 from webinar_transcriber.usage import merge_usage, merge_usage_into
 
 from .contracts import (
@@ -37,6 +36,8 @@ from .utils import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
+
+    from webinar_transcriber.models import ReportDocument, ReportSection
 
 
 class _BaseLLMProcessor:
@@ -98,30 +99,9 @@ class _BaseLLMProcessor:
         section_transcripts: dict[str, str],
     ) -> LLMReportMetadataResult:
         """Polish report summary, action items, and section titles."""
-        polished_report = ReportDocument(
-            title=report.title,
-            source_file=report.source_file,
-            media_type=report.media_type,
-            detected_language=report.detected_language,
-            summary=list(report.summary),
-            action_items=list(report.action_items),
-            sections=[
-                ReportSection(
-                    id=section.id,
-                    title=section.title,
-                    start_sec=section.start_sec,
-                    end_sec=section.end_sec,
-                    tldr=section.tldr,
-                    transcript_text=section_transcripts.get(section.id, section.transcript_text),
-                    bullet_points=list(section.bullet_points),
-                    frame_id=section.frame_id,
-                    image_path=section.image_path,
-                    is_interlude=section.is_interlude,
-                )
-                for section in report.sections
-            ],
-            warnings=list(report.warnings),
-        )
+        polished_report = report.model_copy(deep=True)
+        for section in polished_report.sections:
+            section.transcript_text = section_transcripts.get(section.id, section.transcript_text)
         payload = build_report_polish_payload(
             polished_report,
             total_char_budget=self._report_char_budget,
@@ -172,9 +152,11 @@ class _BaseLLMProcessor:
 
     def report_polish_plan(self, report: ReportDocument) -> LLMReportPolishPlan:
         """Return concurrency details for report polishing."""
+        polishable_sections = [section for section in report.sections if not section.is_interlude]
         return LLMReportPolishPlan(
-            section_count=len(report.sections),
-            worker_count=min(self._section_max_workers, max(len(report.sections), 1)),
+            section_count=len(polishable_sections),
+            worker_count=min(self._section_max_workers, max(len(polishable_sections), 1)),
+            skipped_section_count=len(report.sections) - len(polishable_sections),
         )
 
     def _polish_section_texts(

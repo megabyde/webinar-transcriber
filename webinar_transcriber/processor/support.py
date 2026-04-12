@@ -197,8 +197,10 @@ def llm_fallback_detail(*, provider_name: str | None, model_name: str | None) ->
 
 def llm_report_plan_label_detail(plan: LLMReportPolishPlan) -> str:
     """Return the worker-count detail for the section-polish stage."""
-    worker_label = "worker" if plan.worker_count == 1 else "workers"
-    return f"{plan.worker_count} {worker_label}"
+    parts = [count_label(plan.worker_count, singular="worker")]
+    if plan.skipped_section_count > 0:
+        parts.append(count_label(plan.skipped_section_count, singular="skipped interlude"))
+    return " | ".join(parts)
 
 
 def token_usage_detail(usage: dict[str, int]) -> str:
@@ -228,6 +230,9 @@ def title_update_detail(*, title_count: int, section_count: int) -> str:
 
 def build_diagnostics(
     *,
+    status: str = "succeeded",
+    failed_stage: str | None = None,
+    error: str | None = None,
     asr_model: str | None,
     llm_enabled: bool,
     llm_model: str | None,
@@ -245,6 +250,9 @@ def build_diagnostics(
 ) -> Diagnostics:
     """Build the final diagnostics payload for one processing run."""
     return Diagnostics(
+        status=status,
+        failed_stage=failed_stage,
+        error=error,
         asr_backend=ASR_BACKEND_NAME,
         asr_model=asr_model,
         llm_enabled=llm_enabled,

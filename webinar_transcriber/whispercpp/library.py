@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Final, Self
 import numpy as np
 
 from webinar_transcriber.models import DecodedWindow, InferenceWindow, TranscriptSegment
+from webinar_transcriber.transcription_audio import sample_index_for_time
 
 from . import bindings as _bindings
 
@@ -175,8 +176,8 @@ class WhisperCppLibrary:
         prompt: str | None,
         language_hint: str | None,
     ) -> DecodedWindow:
-        start_index = max(0, round(window.start_sec * 16_000))
-        end_index = min(len(audio_samples), round(window.end_sec * 16_000))
+        start_index = sample_index_for_time(window.start_sec)
+        end_index = min(len(audio_samples), sample_index_for_time(window.end_sec))
         window_samples = np.ascontiguousarray(
             audio_samples[start_index:end_index], dtype=np.float32
         )

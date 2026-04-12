@@ -29,9 +29,6 @@ class StageReporter(Protocol):
     def stage_started(self, stage_key: str, label: str) -> None:
         """Record that a stage has started."""
 
-    def stage_timing_started(self, stage_key: str, label: str) -> None:
-        """Record timing for a stage without rendering an active display."""
-
     def progress_started(
         self,
         stage_key: str,
@@ -79,9 +76,6 @@ class NullStageReporter:
 
     def stage_started(self, stage_key: str, label: str) -> None:
         """Record that a stage has started."""
-
-    def stage_timing_started(self, stage_key: str, label: str) -> None:
-        """Record timing for a stage without rendering an active display."""
 
     def progress_started(
         self,

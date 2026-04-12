@@ -1,6 +1,5 @@
 """Command line interface for webinar-transcriber."""
 
-import json
 from pathlib import Path
 
 import click
@@ -12,10 +11,9 @@ from webinar_transcriber.asr import (
     DEFAULT_CARRYOVER_MAX_TOKENS,
     PromptCarryoverSettings,
 )
-from webinar_transcriber.media import MediaProcessingError, probe_media
-from webinar_transcriber.models import VideoAsset
-from webinar_transcriber.paths import OutputDirectoryExistsError, create_run_layout
-from webinar_transcriber.processor import process_input
+from webinar_transcriber.media import MediaProcessingError
+from webinar_transcriber.paths import OutputDirectoryExistsError
+from webinar_transcriber.processor import extract_frames_input, process_input
 from webinar_transcriber.segmentation import (
     DEFAULT_MIN_SILENCE_DURATION_MS,
     DEFAULT_MIN_SPEECH_DURATION_MS,
@@ -24,11 +22,6 @@ from webinar_transcriber.segmentation import (
     VadSettings,
 )
 from webinar_transcriber.ui import RichStageReporter
-from webinar_transcriber.video import (
-    detect_scenes,
-    estimate_sample_count,
-    extract_representative_frames,
-)
 
 
 class CLIError(click.ClickException):
@@ -228,60 +221,10 @@ def extract_frames(input_path: Path, output_dir: Path | None) -> None:
     reporter = RichStageReporter()
 
     try:
-        reporter.begin_run(input_path, output_format="frames")
-        reporter.stage_started("prepare_run_dir", "Preparing run directory")
-        layout = create_run_layout(input_path=input_path, output_dir=output_dir)
-        reporter.stage_finished(
-            "prepare_run_dir", "Preparing run directory", detail=str(layout.run_dir)
-        )
-
-        reporter.stage_started("probe_media", "Probing media")
-        media_asset = probe_media(input_path)
-        reporter.stage_finished(
-            "probe_media",
-            "Probing media",
-            detail=f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s",
-        )
-        if not isinstance(media_asset, VideoAsset):
-            raise CLIError("Frame extraction is only supported for video input.")
-
-        reporter.progress_started(
-            "detect_scenes",
-            "Detecting scenes",
-            total=estimate_sample_count(media_asset.duration_sec),
-            count_label="s",
-            detail="0 scenes",
-        )
-        scenes = detect_scenes(
+        artifacts = extract_frames_input(
             input_path,
-            duration_sec=media_asset.duration_sec,
-            progress_callback=lambda scene_count: reporter.progress_advanced(
-                "detect_scenes",
-                detail=f"{scene_count} {'scene' if scene_count == 1 else 'scenes'}",
-            ),
-        )
-        reporter.stage_finished("detect_scenes", "Detecting scenes", detail=f"{len(scenes)} scenes")
-
-        reporter.progress_started(
-            "extract_frames",
-            "Extracting slide frames",
-            total=len(scenes),
-        )
-        frames = extract_representative_frames(
-            input_path,
-            scenes,
-            layout.frames_dir,
-            progress_callback=lambda: reporter.progress_advanced("extract_frames"),
-        )
-        reporter.stage_finished(
-            "extract_frames",
-            "Extracting slide frames",
-            detail=f"{len(frames)} frames",
-        )
-
-        layout.scenes_path.write_text(
-            json.dumps({"scenes": [scene.model_dump(mode="json") for scene in scenes]}, indent=2),
-            encoding="utf-8",
+            output_dir=output_dir,
+            reporter=reporter,
         )
     except KeyboardInterrupt:
         reporter.interrupted()
@@ -290,4 +233,4 @@ def extract_frames(input_path: Path, output_dir: Path | None) -> None:
         reporter.reset_active_display()
         raise CLIError(str(error)) from error
 
-    click.echo(f"Extracted {len(frames)} frames into {layout.run_dir}.")
+    click.echo(f"Extracted {len(artifacts.slide_frames)} frames into {artifacts.layout.run_dir}.")
