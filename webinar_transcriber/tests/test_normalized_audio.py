@@ -1,4 +1,4 @@
-"""Tests for transcription audio preparation and segmentation."""
+"""Tests for normalized-audio preparation and segmentation."""
 
 import subprocess
 from pathlib import Path
@@ -27,7 +27,7 @@ from webinar_transcriber.segmentation import (
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 
 
-class TestTranscriptionAudio:
+class TestNormalizedAudio:
     def test_prepared_transcription_audio_normalizes_audio_input_to_temp_wav(self) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
             assert audio_path.exists()
