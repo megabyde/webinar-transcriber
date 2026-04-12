@@ -1,5 +1,6 @@
 """Tests for the whisper.cpp ASR adapter."""
 
+import subprocess
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
@@ -312,6 +313,17 @@ class TestWhisperCppTranscriber:
             "webinar_transcriber.asr.config.subprocess.run",
             lambda *_args, **_kwargs: type("Result", (), {"stdout": stdout})(),
         )
+
+        assert _read_sysctl_int("hw.physicalcpu") is None
+
+    def test_read_sysctl_int_returns_none_on_timeout(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        def fake_run(*_args, **_kwargs):
+            raise subprocess.TimeoutExpired(cmd=["sysctl"], timeout=1.0)
+
+        monkeypatch.setattr("webinar_transcriber.asr.config.subprocess.run", fake_run)
 
         assert _read_sysctl_int("hw.physicalcpu") is None
 

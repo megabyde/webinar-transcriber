@@ -13,6 +13,7 @@ DEFAULT_WHISPER_CPP_MODEL_FILENAME = "ggml-large-v3-turbo.bin"
 DEFAULT_WHISPER_CPP_MODEL_EXAMPLE = Path("models/whisper-cpp/ggml-large-v3-turbo.bin")
 DEFAULT_CARRYOVER_MAX_SENTENCES = 2
 DEFAULT_CARRYOVER_MAX_TOKENS = 64
+SYSCTL_TIMEOUT_SEC = 1.0
 
 
 def _read_sysctl_int(name: str) -> int | None:
@@ -22,8 +23,14 @@ def _read_sysctl_int(name: str) -> int | None:
             check=True,
             capture_output=True,
             text=True,
+            timeout=SYSCTL_TIMEOUT_SEC,
         )
-    except (FileNotFoundError, PermissionError, subprocess.CalledProcessError):
+    except (
+        FileNotFoundError,
+        PermissionError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+    ):
         return None
 
     value = result.stdout.strip()

@@ -96,7 +96,7 @@ def maybe_polish_report(
     reporter.progress_started(
         "llm_report_sections",
         section_label,
-        total=max(float(polish_plan.section_count + polish_plan.skipped_section_count), 1.0),
+        total=max(float(polish_plan.section_count), 1.0),
         count_label="sections",
     )
     timer = start_stage_timer(stage_timings, "llm_report_sections")
@@ -127,10 +127,16 @@ def maybe_polish_report(
     for warning in section_result.warnings:
         warnings.append(warning)
         reporter.warn(warning)
+    section_detail = count_label(polish_plan.section_count, singular="section")
+    if polish_plan.skipped_section_count > 0:
+        section_detail = " | ".join((
+            section_detail,
+            count_label(polish_plan.skipped_section_count, singular="skipped interlude"),
+        ))
     reporter.stage_finished(
         "llm_report_sections",
         section_label,
-        detail=count_label(len(section_result.section_transcripts), singular="section"),
+        detail=section_detail,
     )
     reporter.stage_started("llm_report", summary_label)
     timer = start_stage_timer(stage_timings, "llm_report_metadata")
@@ -172,7 +178,7 @@ def maybe_polish_report(
         "llm_report",
         summary_label,
         detail=llm_report_detail(
-            section_count=len(section_result.section_transcripts),
+            section_count=polish_plan.section_count,
             tldr_count=len(section_result.section_tldrs),
             title_count=len(metadata_result.section_titles),
             summary_count=len(metadata_result.summary),

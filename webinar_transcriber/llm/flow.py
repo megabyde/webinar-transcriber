@@ -187,8 +187,6 @@ class _BaseLLMProcessor:
                 warnings.append(
                     f"Skipped LLM section polish for likely music/interlude section {section.id}."
                 )
-                if progress_callback is not None:
-                    progress_callback(1)
             for future in as_completed(future_to_section):
                 section = future_to_section[future]
                 try:

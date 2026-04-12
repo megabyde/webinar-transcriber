@@ -240,7 +240,7 @@ class TestOpenAiLlmProcessor:
         assert result.warnings == [
             "Skipped LLM section polish for likely music/interlude section section-1."
         ]
-        assert progress_updates == [1, 1]
+        assert progress_updates == [1]
 
 
 class TestAnthropicLlmProcessor:

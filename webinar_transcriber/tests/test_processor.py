@@ -22,6 +22,9 @@ from webinar_transcriber.llm import (
 )
 from webinar_transcriber.models import (
     DecodedWindow,
+    MediaType,
+    ReportDocument,
+    ReportSection,
     Scene,
     SpeechRegion,
     TranscriptSegment,
@@ -825,6 +828,117 @@ class TestProcessInputLlm:
             "Polishing report summary with LLM (openai | test-llm-model)",
         ) in reporter.events
         assert reporter.warnings == [EXPECTED_LLM_WARNING]
+
+    def test_reports_only_polishable_sections_in_llm_progress(self, tmp_path, monkeypatch) -> None:
+        install_basic_windowing(monkeypatch)
+        reporter = RecordingReporter()
+        monkeypatch.setattr(
+            "webinar_transcriber.structure.build_report",
+            lambda *_args, **_kwargs: ReportDocument(
+                title="Demo",
+                source_file="sample-audio.mp3",
+                media_type=MediaType.AUDIO,
+                detected_language="en",
+                sections=[
+                    ReportSection(
+                        id="section-1",
+                        title="Music Interlude",
+                        start_sec=0.0,
+                        end_sec=1.0,
+                        transcript_text=(
+                            "Music interlude. The raw transcript is preserved in transcript.json."
+                        ),
+                        is_interlude=True,
+                    ),
+                    ReportSection(
+                        id="section-2",
+                        title="Agenda",
+                        start_sec=1.0,
+                        end_sec=3.0,
+                        transcript_text="Agenda review and project status update.",
+                    ),
+                ],
+            ),
+        )
+
+        class FakeLLMProcessor:
+            provider_name = "openai"
+            model_name = "test-llm-model"
+
+            def report_polish_plan(self, report) -> LLMReportPolishPlan:
+                del report
+                return LLMReportPolishPlan(
+                    section_count=1,
+                    worker_count=1,
+                    skipped_section_count=1,
+                )
+
+            def polish_report(self, report):
+                raise AssertionError("process_input should call phase-specific methods")
+
+            def polish_report_sections_with_progress(
+                self,
+                report,
+                *,
+                progress_callback: Callable[[int], None] | None = None,
+            ) -> LLMSectionPolishResult:
+                del report
+                if progress_callback is not None:
+                    progress_callback(1)
+                return LLMSectionPolishResult(
+                    section_tldrs={"section-2": "Agenda recap."},
+                    section_transcripts={
+                        "section-1": (
+                            "Music interlude. The raw transcript is preserved in transcript.json."
+                        ),
+                        "section-2": EXPECTED_LLM_SECTION_TEXT,
+                    },
+                    usage={"input_tokens": 12, "output_tokens": 3, "total_tokens": 15},
+                    warnings=[
+                        "Skipped LLM section polish for likely music/interlude section section-1."
+                    ],
+                )
+
+            def polish_report_metadata(
+                self,
+                report,
+                *,
+                section_transcripts: dict[str, str],
+            ) -> LLMReportMetadataResult:
+                assert report.sections[1].id == "section-2"
+                assert section_transcripts["section-2"] == EXPECTED_LLM_SECTION_TEXT
+                return LLMReportMetadataResult(
+                    summary=["Refined summary point."],
+                    action_items=["Refined action item."],
+                    section_titles={"section-2": "Refined section title"},
+                    usage={"input_tokens": 8, "output_tokens": 3, "total_tokens": 11},
+                )
+
+        artifacts = process_input(
+            FIXTURE_DIR / "sample-audio.mp3",
+            output_dir=tmp_path / "llm-interlude-run",
+            transcriber=TestProcessInput.FakeTranscriber(),
+            llm_processor=cast("LLMProcessor", FakeLLMProcessor()),
+            enable_llm=True,
+            reporter=reporter,
+        )
+
+        assert reporter.has_progress_event("start", "llm_report_sections", 1.0, None)
+        assert reporter.progress_stage_events("advance", "llm_report_sections") == [
+            ("advance", "llm_report_sections", 1.0, None)
+        ]
+        assert reporter.has_event(
+            "finish",
+            "llm_report_sections",
+            "1 section | 1 skipped interlude",
+        )
+        assert reporter.has_event(
+            "finish",
+            "llm_report",
+            "1 summary bullet | 1 action item | 1 TL;DR | 26 tokens",
+        )
+        assert artifacts.report.sections[0].transcript_text.startswith("Music interlude.")
+        assert artifacts.report.sections[1].title == "Refined section title"
 
     def test_warns_when_llm_configuration_is_missing(self, tmp_path, monkeypatch) -> None:
         install_basic_windowing(monkeypatch)
