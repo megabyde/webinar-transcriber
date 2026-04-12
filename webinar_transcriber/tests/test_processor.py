@@ -809,6 +809,13 @@ class TestProcessInputLlm:
         assert artifacts.diagnostics.llm_report_status == "applied"
         assert artifacts.diagnostics.warnings == [EXPECTED_LLM_WARNING]
         assert artifacts.diagnostics.llm_report_usage == EXPECTED_LLM_USAGE
+        assert "llm_report_sections" in artifacts.diagnostics.stage_durations_sec
+        assert "llm_report_metadata" in artifacts.diagnostics.stage_durations_sec
+        assert artifacts.diagnostics.llm_report_latency_sec == pytest.approx(
+            artifacts.diagnostics.stage_durations_sec["llm_report_sections"]
+            + artifacts.diagnostics.stage_durations_sec["llm_report_metadata"],
+            abs=1e-4,
+        )
         assert reporter.has_progress_event("start", "llm_report_sections", 1.0, None)
         assert reporter.has_progress_event("advance", "llm_report_sections", 1.0, None)
         assert reporter.has_event("finish", "llm_report_sections", "1 section")
@@ -1016,3 +1023,71 @@ class TestProcessInputLlm:
         assert artifacts.diagnostics.llm_report_status == "fallback"
         assert "Report polishing failed: backend timeout" in artifacts.diagnostics.warnings
         assert fallback_finish in reporter.events
+
+    def test_records_both_llm_stage_timings_when_metadata_polish_falls_back(
+        self,
+        tmp_path,
+        monkeypatch,
+    ) -> None:
+        install_basic_windowing(monkeypatch)
+        reporter = RecordingReporter()
+
+        class FakeLLMProcessor:
+            provider_name = "openai"
+            model_name = "test-llm-model"
+
+            def report_polish_plan(self, report) -> LLMReportPolishPlan:
+                return LLMReportPolishPlan(
+                    section_count=len(report.sections),
+                    worker_count=1,
+                )
+
+            def polish_report_sections_with_progress(
+                self,
+                report,
+                *,
+                progress_callback: Callable[[int], None] | None = None,
+            ) -> LLMSectionPolishResult:
+                if progress_callback is not None:
+                    progress_callback(len(report.sections))
+                return LLMSectionPolishResult(
+                    section_tldrs={},
+                    section_transcripts={
+                        section.id: section.transcript_text for section in report.sections
+                    },
+                    usage={"input_tokens": 12, "output_tokens": 3, "total_tokens": 15},
+                    warnings=[],
+                )
+
+            def polish_report_metadata(
+                self,
+                report,
+                *,
+                section_transcripts: dict[str, str],
+            ) -> LLMReportMetadataResult:
+                del report, section_transcripts
+                raise LLMProcessingError("metadata polish failed")
+
+        artifacts = process_input(
+            FIXTURE_DIR / "sample-audio.mp3",
+            output_dir=tmp_path / "llm-metadata-fallback-run",
+            transcriber=TestProcessInput.FakeTranscriber(),
+            llm_processor=cast("LLMProcessor", FakeLLMProcessor()),
+            enable_llm=True,
+            reporter=reporter,
+        )
+
+        assert artifacts.diagnostics.llm_report_status == "fallback"
+        assert artifacts.diagnostics.warnings == ["metadata polish failed"]
+        assert "llm_report_sections" in artifacts.diagnostics.stage_durations_sec
+        assert "llm_report_metadata" in artifacts.diagnostics.stage_durations_sec
+        assert artifacts.diagnostics.llm_report_latency_sec == pytest.approx(
+            artifacts.diagnostics.stage_durations_sec["llm_report_sections"]
+            + artifacts.diagnostics.stage_durations_sec["llm_report_metadata"],
+            abs=1e-4,
+        )
+        assert reporter.has_event(
+            "finish",
+            "llm_report",
+            "openai | test-llm-model | fallback",
+        )

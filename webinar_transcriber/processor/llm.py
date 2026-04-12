@@ -124,6 +124,7 @@ def maybe_polish_report(
         llm_runtime.report_latency_sec = report_latency_sec
         return report, llm_runtime
 
+    section_elapsed_sec = timer.finish()
     for warning in section_result.warnings:
         warnings.append(warning)
         reporter.warn(warning)
@@ -147,7 +148,8 @@ def maybe_polish_report(
             section_transcripts=section_result.section_transcripts,
         )
     except LLMProcessingError as error:
-        report_latency_sec = timer.finish()
+        metadata_elapsed_sec = timer.finish()
+        report_latency_sec = section_elapsed_sec + metadata_elapsed_sec
         warnings.append(str(error))
         reporter.warn(str(error))
         reporter.stage_finished(
@@ -163,7 +165,7 @@ def maybe_polish_report(
         return report, llm_runtime
 
     metadata_elapsed_sec = timer.finish()
-    report_latency_sec = stage_timings.get("llm_report_sections", 0.0) + metadata_elapsed_sec
+    report_latency_sec = section_elapsed_sec + metadata_elapsed_sec
     usage = merge_usage(section_result.usage, metadata_result.usage)
     report.summary = metadata_result.summary
     report.action_items = metadata_result.action_items
