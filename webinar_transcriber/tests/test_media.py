@@ -8,8 +8,8 @@ import pytest
 from webinar_transcriber.media import (
     MediaProcessingError,
     _parse_frame_rate,
-    _run_ffmpeg,
     probe_media,
+    run_media_command,
 )
 from webinar_transcriber.models import AudioAsset, VideoAsset
 
@@ -29,7 +29,7 @@ class TestProbeMedia:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            "webinar_transcriber.media._run_ffmpeg",
+            "webinar_transcriber.media.run_media_command",
             lambda *_args, **_kwargs: subprocess.CompletedProcess(
                 ["ffprobe"],
                 0,
@@ -75,7 +75,7 @@ class TestProbeMedia:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr(
-            "webinar_transcriber.media._run_ffmpeg",
+            "webinar_transcriber.media.run_media_command",
             lambda *_args, **_kwargs: subprocess.CompletedProcess(
                 ["ffprobe"],
                 0,
@@ -87,7 +87,7 @@ class TestProbeMedia:
             probe_media(FIXTURE_DIR / "sample-audio.mp3")
 
 
-class TestRunFfmpeg:
+class TestRunMediaCommand:
     def test_wraps_timeout_with_media_processing_error(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -98,7 +98,7 @@ class TestRunFfmpeg:
         monkeypatch.setattr("webinar_transcriber.media.subprocess.run", fake_run)
 
         with pytest.raises(MediaProcessingError, match=r"ffprobe timed out after 300s\."):
-            _run_ffmpeg("ffprobe")
+            run_media_command("ffprobe")
 
     def test_raises_default_error_when_process_fails_without_stderr(
         self,
@@ -110,7 +110,7 @@ class TestRunFfmpeg:
         )
 
         with pytest.raises(MediaProcessingError, match="External media command failed"):
-            _run_ffmpeg("ffprobe")
+            run_media_command("ffprobe")
 
 
 class TestParseFrameRate:
