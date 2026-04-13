@@ -67,8 +67,7 @@ The package intentionally avoids deep nesting.
 
 ## Runtime Contracts
 
-- Successful `process` runs write the report artifact set described in `README.md`.
-- `extract-frames` writes `scenes.json` and `frames/`.
+- Successful default CLI runs write the report artifact set described in `README.md`.
 - `diagnostics.json` is currently success-only; early failures can leave partial intermediate
   artifacts without diagnostics or final report outputs.
 - Temporary audio extracted for transcription should stay outside the run directory.

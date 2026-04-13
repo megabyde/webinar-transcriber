@@ -70,15 +70,14 @@ All usage examples below assume `webinar-transcriber` is available on your `PATH
 
 ### Quick Start
 
-By default, `process` writes a fresh run directory under `runs/`. Use `--output-dir` to choose a
-specific location.
+By default, `webinar-transcriber` writes a fresh run directory under `runs/`. Use `--output-dir` to
+choose a specific location.
 
 ```bash
-webinar-transcriber process INPUT
-webinar-transcriber process INPUT --format docx
-webinar-transcriber process INPUT --keep-audio --audio-format mp3
-webinar-transcriber process INPUT --output-dir runs/custom-demo
-webinar-transcriber extract-frames INPUT
+webinar-transcriber INPUT
+webinar-transcriber INPUT --format docx
+webinar-transcriber INPUT --keep-audio --audio-format mp3
+webinar-transcriber INPUT --output-dir runs/custom-demo
 ```
 
 ### Cloud LLM
@@ -101,7 +100,7 @@ LLM configuration comes only from environment variables.
 ```bash
 OPENAI_API_KEY=... \
 OPENAI_MODEL=gpt-5-mini \
-webinar-transcriber process INPUT --llm
+webinar-transcriber INPUT --llm
 ```
 
 #### Anthropic
@@ -110,25 +109,23 @@ webinar-transcriber process INPUT --llm
 LLM_PROVIDER=anthropic \
 ANTHROPIC_API_KEY=... \
 ANTHROPIC_MODEL=claude-sonnet-4-20250514 \
-webinar-transcriber process INPUT --llm
+webinar-transcriber INPUT --llm
 ```
 
 ### What You Get
 
-Successful `process` runs write:
+Successful default runs write:
 
 - `metadata.json`, `transcript.json`, and `transcript.vtt`
 - `diagnostics.json` with stage timings, counts, warnings, ASR details, and optional LLM metadata
 - `report.json` regardless of `--format`
 - ASR planning and decode artifacts under `asr/`
 
-Depending on options and input type, successful `process` runs also write:
+Depending on options and input type, successful default runs also write:
 
 - `report.md` and/or `report.docx`
 - `transcription-audio.wav` or `transcription-audio.mp3` with `--keep-audio`
 - `scenes.json` and `frames/` for video input
-
-Successful `extract-frames` runs write only `scenes.json` and `frames/`.
 
 ### How It Works
 
@@ -158,7 +155,7 @@ If you want to pin a different model file or keep models in a repo-local directo
 For example:
 
 ```bash
-webinar-transcriber process INPUT --asr-model models/whisper-cpp/ggml-large-v3-turbo.bin
+webinar-transcriber INPUT --asr-model models/whisper-cpp/ggml-large-v3-turbo.bin
 ```
 
 To manage the file yourself, download it directly:
@@ -196,7 +193,7 @@ Silero VAD behavior can be tuned from the CLI:
 
 ### Output Layout
 
-Successful `process` runs write:
+Successful default runs write:
 
 ```text
 runs/<timestamp>_<basename>/
@@ -217,14 +214,6 @@ runs/<timestamp>_<basename>/
 └─ frames/                 # video only
 ```
 
-Successful `extract-frames` runs write:
-
-```text
-runs/<timestamp>_<basename>/
-├─ scenes.json
-└─ frames/
-```
-
 ## Development
 
 ### Local Setup
@@ -242,7 +231,7 @@ If you are developing inside the repository and do not want to install the CLI a
 
 ```bash
 uv run webinar-transcriber --help
-uv run webinar-transcriber process INPUT
+uv run webinar-transcriber INPUT
 ```
 
 ### Toolchain

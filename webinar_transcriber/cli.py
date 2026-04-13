@@ -13,7 +13,7 @@ from webinar_transcriber.asr import (
 )
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
-from webinar_transcriber.processor import extract_frames_input, process_input
+from webinar_transcriber.processor import process_input
 from webinar_transcriber.segmentation import (
     DEFAULT_MIN_SILENCE_DURATION_MS,
     DEFAULT_MIN_SPEECH_DURATION_MS,
@@ -33,13 +33,8 @@ class CLIError(click.ClickException):
         click.echo(f" {self.format_message()}", err=True, file=stream)
 
 
-@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(version=__version__, prog_name="webinar-transcriber")
-def main() -> None:
-    """Run the webinar-transcriber CLI."""
-
-
-@main.command(short_help="Process an audio or video input.")
 @click.argument("input_path", type=click.Path(path_type=Path))
 @click.option(
     "--output-dir",
@@ -139,7 +134,7 @@ def main() -> None:
     help="Format for the kept transcription audio artifact.",
 )
 @click.option("--llm", is_flag=True, help="Enable optional provider-backed report enhancement.")
-def process(
+def main(
     input_path: Path,
     output_dir: Path | None,
     output_format: str,
@@ -196,33 +191,3 @@ def process(
     except (MediaProcessingError, OutputDirectoryExistsError) as error:
         reporter.reset_active_display()
         raise CLIError(str(error)) from error
-
-
-@main.command("extract-frames", short_help="Extract representative frames from a video.")
-@click.argument("input_path", type=click.Path(path_type=Path))
-@click.option(
-    "--output-dir",
-    type=click.Path(path_type=Path),
-    default=None,
-    help="Write extracted frames to a specific output directory.",
-)
-def extract_frames(input_path: Path, output_dir: Path | None) -> None:
-    """Detect scenes and extract representative frames from a video input."""
-    if not input_path.exists():
-        raise CLIError(f"Input file does not exist: {input_path}")
-
-    if not input_path.is_file():
-        raise CLIError(f"Input path is not a file: {input_path}")
-
-    reporter = RichStageReporter()
-
-    try:
-        artifacts = extract_frames_input(input_path, output_dir=output_dir, reporter=reporter)
-    except KeyboardInterrupt:
-        reporter.interrupted()
-        raise click.exceptions.Exit(130) from None
-    except (MediaProcessingError, OutputDirectoryExistsError) as error:
-        reporter.reset_active_display()
-        raise CLIError(str(error)) from error
-
-    click.echo(f"Extracted {len(artifacts.slide_frames)} frames into {artifacts.layout.run_dir}.")
