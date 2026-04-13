@@ -3,6 +3,7 @@
 import json
 
 import pytest
+from pydantic import BaseModel
 
 from webinar_transcriber.llm import (
     AnthropicLLMProcessor,
@@ -15,6 +16,7 @@ from webinar_transcriber.llm import (
     SectionTextResponse,
     build_llm_processor_from_env,
 )
+from webinar_transcriber.llm.flow import _BaseLLMProcessor
 from webinar_transcriber.llm.utils import (
     anthropic_response_text,
     extract_json_text,
@@ -22,6 +24,7 @@ from webinar_transcriber.llm.utils import (
     normalize_polished_section_text,
     normalize_polished_section_tldr,
     normalize_report_lines,
+    schema_label,
     truncate_text,
     validated_section_titles,
 )
@@ -58,6 +61,21 @@ class TestBuildLlmProcessorFromEnv:
 
         with pytest.raises(LLMConfigurationError, match="Unsupported LLM provider"):
             build_llm_processor_from_env()
+
+    def test_defaults_to_openai(self, monkeypatch) -> None:
+        fake_client = TestOpenAiLlmProcessor.FakeClient([])
+        monkeypatch.delenv("LLM_PROVIDER", raising=False)
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("OPENAI_MODEL", "gpt-test")
+        monkeypatch.setattr(
+            "webinar_transcriber.llm.openai_backend.openai.OpenAI", lambda api_key: fake_client
+        )
+
+        processor = build_llm_processor_from_env()
+
+        assert isinstance(processor, OpenAILLMProcessor)
+        assert processor.provider_name == "openai"
+        assert processor.model_name == "gpt-test"
 
 
 class TestOpenAiLlmProcessor:
@@ -176,6 +194,27 @@ class TestOpenAiLlmProcessor:
 
         with pytest.raises(LLMProcessingError):
             processor.polish_report(report)
+
+    def test_rejects_non_matching_section_schema(self, monkeypatch) -> None:
+        fake_client = self.FakeClient([
+            self.FakeResponse(
+                output_parsed=object(),
+                usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
+            )
+        ])
+        monkeypatch.setattr(
+            "webinar_transcriber.llm.openai_backend.openai.OpenAI", lambda api_key: fake_client
+        )
+
+        processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
+
+        with pytest.raises(LLMProcessingError, match="Section polish response did not match"):
+            processor._parse_structured_response(
+                system_prompt="system",
+                user_payload={"id": "section-1"},
+                response_model=SectionTextResponse,
+                error_prefix="Section polishing failed",
+            )
 
     def test_skips_interlude_section_text_polish(self, monkeypatch) -> None:
         progress_updates: list[int] = []
@@ -316,6 +355,152 @@ class TestAnthropicLlmProcessor:
         }
         assert result.usage == {"input_tokens": 17, "output_tokens": 12, "total_tokens": 29}
 
+    def test_rejects_invalid_json_response(self, monkeypatch) -> None:
+        fake_client = self.FakeClient([
+            self.FakeResponse(
+                "[]",
+                usage=type("Usage", (), {"input_tokens": 5, "output_tokens": 4})(),
+            )
+        ])
+        monkeypatch.setattr(
+            "webinar_transcriber.llm.anthropic_backend.anthropic.Anthropic",
+            lambda api_key: fake_client,
+        )
+
+        processor = AnthropicLLMProcessor(api_key="test-key", model_name="claude-test")
+
+        with pytest.raises(LLMProcessingError, match="Section polish response did not match"):
+            processor._parse_structured_response(
+                system_prompt="system",
+                user_payload={"id": "section-1"},
+                response_model=SectionTextResponse,
+                error_prefix="Section polishing failed",
+            )
+
+
+class TestLlmFlow:
+    class StubProcessor(_BaseLLMProcessor):
+        def __init__(self, responses: dict[str, object]) -> None:
+            super().__init__(provider_name="stub", model_name="stub-model")
+            self._responses = responses
+
+        def _parse_structured_response(self, **kwargs):
+            section_id = kwargs["user_payload"].get("id")
+            response = self._responses[section_id]
+            if isinstance(response, Exception):
+                raise response
+            return response
+
+    def test_returns_empty_section_result_for_report_without_sections(self) -> None:
+        processor = self.StubProcessor({})
+        report = ReportDocument(title="Demo", source_file="demo.wav", media_type=MediaType.AUDIO)
+
+        result = processor.polish_report_sections_with_progress(report)
+
+        assert result.section_transcripts == {}
+        assert result.section_tldrs == {}
+        assert result.usage == {}
+        assert result.warnings == []
+
+    def test_keeps_interlude_tldr_during_section_polish(self) -> None:
+        processor = self.StubProcessor({
+            "section-2": (
+                SectionTextResponse(tldr="Agenda recap.", transcript_text="Agenda review."),
+                {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5},
+            )
+        })
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Music Interlude",
+                    start_sec=0.0,
+                    end_sec=5.0,
+                    transcript_text="Interlude placeholder.",
+                    tldr="Keep me.",
+                    is_interlude=True,
+                ),
+                ReportSection(
+                    id="section-2",
+                    title="Agenda",
+                    start_sec=5.0,
+                    end_sec=12.0,
+                    transcript_text="Agenda review.",
+                ),
+            ],
+        )
+
+        result = processor.polish_report_sections_with_progress(report)
+
+        assert result.section_transcripts["section-1"] == "Interlude placeholder."
+        assert result.section_tldrs == {"section-1": "Keep me.", "section-2": "Agenda recap."}
+        assert result.usage == {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5}
+
+    def test_turns_section_polish_errors_into_warnings(self) -> None:
+        processor = self.StubProcessor({
+            "section-1": LLMProcessingError("bad section"),
+        })
+        progress_updates: list[int] = []
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Agenda",
+                    start_sec=0.0,
+                    end_sec=12.0,
+                    transcript_text="Agenda review.",
+                    tldr="Existing recap.",
+                )
+            ],
+        )
+
+        result = processor.polish_report_sections_with_progress(
+            report, progress_callback=lambda advance: progress_updates.append(advance)
+        )
+
+        assert result.section_transcripts == {"section-1": "Agenda review."}
+        assert result.section_tldrs == {"section-1": "Existing recap."}
+        assert result.usage == {}
+        assert result.warnings == ["bad section"]
+        assert progress_updates == [1]
+
+    def test_warns_when_section_polish_returns_empty_transcript(self) -> None:
+        processor = self.StubProcessor({
+            "section-1": (
+                SectionTextResponse(tldr="Recap.", transcript_text="   "),
+                {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5},
+            )
+        })
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Agenda",
+                    start_sec=0.0,
+                    end_sec=12.0,
+                    transcript_text="Agenda review.",
+                )
+            ],
+        )
+
+        result = processor.polish_report_sections_with_progress(report)
+
+        assert result.section_transcripts == {"section-1": "Agenda review."}
+        assert result.section_tldrs == {"section-1": "Recap."}
+        assert result.warnings == [
+            "Section polish response returned an empty transcript text for section-1; "
+            "kept original text."
+        ]
+
 
 class TestLlmNormalization:
     def test_normalize_polished_section_text_collapses_paragraph_whitespace(self) -> None:
@@ -338,12 +523,43 @@ class TestLlmNormalization:
 
         assert normalized == "Rewritten sentence."
 
+    def test_normalize_polished_section_text_preserves_ellipsis_for_incomplete_source(self) -> None:
+        normalized = normalize_polished_section_text(
+            original_text="Original sentence...",
+            polished_text="Rewritten sentence...",
+            section_id="section-1",
+        )
+
+        assert normalized == "Rewritten sentence..."
+
+    def test_normalize_polished_section_text_keeps_original_when_polished_text_is_blank(
+        self,
+    ) -> None:
+        normalized = normalize_polished_section_text(
+            original_text="Original sentence.",
+            polished_text="   ",
+            section_id="section-1",
+        )
+
+        assert normalized == "Original sentence."
+
+    def test_normalize_polished_section_text_rejects_suspiciously_short_output(self) -> None:
+        with pytest.raises(LLMProcessingError, match="looked truncated for section-1"):
+            normalize_polished_section_text(
+                original_text="Long original text. " * 8,
+                polished_text="Too short.",
+                section_id="section-1",
+            )
+
     def test_normalize_polished_section_tldr_uses_same_paragraph_normalization(self) -> None:
         normalized = normalize_polished_section_tldr(
             "  Bullet one \nspans whitespace.\n\n  Bullet two stays.  "
         )
 
         assert normalized == "Bullet one spans whitespace.\n\nBullet two stays."
+
+    def test_normalize_polished_section_tldr_returns_blank_for_blank_input(self) -> None:
+        assert normalize_polished_section_tldr("   ") == ""
 
     def test_normalize_report_lines_dedupes_and_limits_case_insensitively(self) -> None:
         normalized = normalize_report_lines(
@@ -386,7 +602,11 @@ class TestLlmNormalization:
                 ],
             )
 
+        with pytest.raises(LLMProcessingError, match="empty section title"):
+            validated_section_titles(report, [ReportSectionUpdate(id="section-1", title="   ")])
+
     def test_extract_usage_supports_dict_and_object_shapes(self) -> None:
+        assert extract_usage(type("Response", (), {})()) == {}
         assert extract_usage({"usage": "ignored"}) == {}
         assert extract_usage(
             type("Response", (), {"usage": {"input_tokens": 2, "other": 1}})()
@@ -400,12 +620,30 @@ class TestLlmNormalization:
             "total_tokens": 7,
         }
 
+        usage_with_total = type("Usage", (), {"input_tokens": 3, "total_tokens": 9})()
+        assert extract_usage(type("Response", (), {"usage": usage_with_total})()) == {
+            "input_tokens": 3,
+            "total_tokens": 9,
+        }
+
     def test_extract_json_text_supports_fenced_and_embedded_json(self) -> None:
         assert extract_json_text('```json\n{"a": 1}\n```') == '{"a": 1}'
         assert extract_json_text('prefix {"a": 1} suffix') == '{"a": 1}'
+        assert extract_json_text("  plain text  ") == "plain text"
 
     def test_anthropic_response_text_requires_text_content(self) -> None:
         response = type("Response", (), {"content": [type("Block", (), {"type": "image"})()]})()
 
         with pytest.raises(LLMProcessingError, match="did not contain text content"):
             anthropic_response_text(response)
+
+        with pytest.raises(LLMProcessingError, match="did not contain text content"):
+            anthropic_response_text(type("Response", (), {"content": "invalid"})())
+
+    def test_schema_label_covers_known_and_fallback_models(self) -> None:
+        class OtherResponse(BaseModel):
+            value: str
+
+        assert schema_label(SectionTextResponse) == "Section polish"
+        assert schema_label(ReportPolishResponse) == "Report polish"
+        assert schema_label(OtherResponse) == "Structured LLM"

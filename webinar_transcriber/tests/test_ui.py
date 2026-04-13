@@ -1,5 +1,6 @@
 """Tests for terminal progress helpers."""
 
+from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 
@@ -54,6 +55,14 @@ class TestFormatHelpers:
 
 
 class TestRichStageReporter:
+    def test_begin_run_prints_input_name(self) -> None:
+        console = Console(record=True, width=100)
+        reporter = RichStageReporter(console=console)
+
+        reporter.begin_run(Path("demo.wav"))
+
+        assert "Starting demo.wav" in console.export_text()
+
     def test_complete_run_renders_completion_panel(self) -> None:
         console = Console(record=True, width=100)
         reporter = RichStageReporter(console=console)
@@ -145,6 +154,14 @@ class TestRichStageReporter:
 
         task = reporter._active_progress.tasks[reporter._active_task_id]
         assert task.completed == 0
+
+    def test_progress_advanced_ignores_active_stage_without_progress_display(self) -> None:
+        reporter = RichStageReporter(console=Console(record=True, width=100))
+        reporter._active_event = reporter._new_stage_event("extract_frames", "Extracting frames")
+
+        reporter.progress_advanced("extract_frames", advance=1.0)
+
+        assert reporter._active_progress is None
 
     def test_stage_finished_without_matching_active_event_reports_zero_elapsed(self) -> None:
         console = Console(record=True, width=100)

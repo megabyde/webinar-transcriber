@@ -5,7 +5,7 @@ from pathlib import Path
 
 from docx import Document
 
-from webinar_transcriber.export.docx_report import write_docx_report
+from webinar_transcriber.export.docx_report import _add_text_blocks, write_docx_report
 from webinar_transcriber.export.formatting import format_timecode
 from webinar_transcriber.export.json_report import write_json_report
 from webinar_transcriber.export.markdown import write_markdown_report
@@ -92,6 +92,34 @@ class TestDocxReport:
         assert ("Second point.", "List Number") in paragraph_data
         assert ("Third point.", "List Number") in paragraph_data
 
+    def test_formats_multiline_and_blank_tldr_blocks(self, tmp_path: Path) -> None:
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Section 1",
+                    start_sec=0.0,
+                    end_sec=5.0,
+                    tldr="\n\n- Bullet point.\ncontinued\n\n\n",
+                    transcript_text="Transcript body.",
+                )
+            ],
+        )
+
+        output_path = tmp_path / "report.docx"
+        write_docx_report(report, output_path)
+
+        document = Document(str(output_path))
+        paragraph_data = [
+            (paragraph.text, _style_name(paragraph)) for paragraph in document.paragraphs
+        ]
+
+        assert ("Bullet point.\ncontinued", "List Bullet") in paragraph_data
+        assert ("Transcript", "Normal") in paragraph_data
+
     def test_skips_missing_section_image(self, tmp_path: Path, caplog) -> None:
         report = ReportDocument(
             title="Demo",
@@ -115,6 +143,13 @@ class TestDocxReport:
 
         assert output_path.exists()
         assert "Section image does not exist" in caplog.text
+
+    def test_add_text_blocks_skips_blank_paragraphs(self) -> None:
+        document = Document()
+
+        _add_text_blocks(document, "  \n  ")
+
+        assert [paragraph.text for paragraph in document.paragraphs] == []
 
 
 class TestMarkdownReport:

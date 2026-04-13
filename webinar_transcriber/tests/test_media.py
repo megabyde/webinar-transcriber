@@ -7,6 +7,7 @@ import pytest
 
 from webinar_transcriber.media import (
     MediaProcessingError,
+    _is_attached_picture_stream,
     _parse_frame_rate,
     probe_media,
     run_media_command,
@@ -112,3 +113,8 @@ class TestParseFrameRate:
         self, raw_value: str | None, expected: float | None
     ) -> None:
         assert _parse_frame_rate(raw_value) == expected
+
+
+class TestAttachedPictureStream:
+    def test_returns_false_when_disposition_is_not_a_mapping(self) -> None:
+        assert not _is_attached_picture_stream({"disposition": "attached"})

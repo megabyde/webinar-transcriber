@@ -12,6 +12,7 @@ from webinar_transcriber.whispercpp import (
     WhisperCppError,
     WhisperCppLibrary,
     WhisperCppSession,
+    _candidate_backend_plugin_paths,
     _decode_c_string,
     _encode_optional_text,
     _library_log_callback,
@@ -51,6 +52,35 @@ class TestResolveLibraryPath:
 
         with pytest.raises(WhisperCppError, match="shared library does not exist"):
             resolve_library_path(tmp_path / "missing.dylib")
+
+    def test_resolve_library_path_uses_candidate_default_path(self, monkeypatch) -> None:
+        monkeypatch.delenv("WHISPER_CPP_LIB", raising=False)
+        monkeypatch.setattr(
+            "pathlib.Path.exists",
+            lambda self: self == Path("build/libwhisper.so"),
+        )
+
+        assert resolve_library_path() == Path("build/libwhisper.so")
+
+    def test_resolve_library_path_uses_find_library_and_raises_when_not_found(
+        self, monkeypatch
+    ) -> None:
+        monkeypatch.delenv("WHISPER_CPP_LIB", raising=False)
+        monkeypatch.setattr("pathlib.Path.exists", lambda self: False)
+        monkeypatch.setattr(
+            "webinar_transcriber.whispercpp.library.ctypes.util.find_library",
+            lambda _name: "libwhisper.so",
+        )
+
+        assert resolve_library_path() == Path("libwhisper.so")
+
+        monkeypatch.setattr(
+            "webinar_transcriber.whispercpp.library.ctypes.util.find_library",
+            lambda _name: None,
+        )
+
+        with pytest.raises(WhisperCppError, match=r"Could not find a whisper\.cpp shared library"):
+            resolve_library_path()
 
 
 class TestWhisperCppLibrary:
@@ -263,6 +293,43 @@ class TestBackendPluginLoading:
 
         assert _resolve_ggml_library_path() == Path("libggml.so")
 
+    def test_candidate_backend_plugin_paths_covers_explicit_and_globbed_layouts(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        explicit_ggml_dir = tmp_path / "ggml"
+        explicit_ggml_plugin = explicit_ggml_dir / "nested" / "libggml-metal.so"
+        explicit_ggml_plugin.parent.mkdir(parents=True)
+        explicit_ggml_plugin.write_text("stub", encoding="utf-8")
+
+        explicit_root_dir = tmp_path / "plugins"
+        globbed_plugin = explicit_root_dir / "version" / "libexec" / "libggml-cuda.so"
+        globbed_plugin.parent.mkdir(parents=True)
+        globbed_plugin.write_text("stub", encoding="utf-8")
+
+        monkeypatch.setenv("GGML_BACKEND_LIB_DIR", str(explicit_ggml_dir))
+        plugin_paths = _candidate_backend_plugin_paths()
+        assert explicit_ggml_plugin in plugin_paths
+
+        monkeypatch.setenv("GGML_BACKEND_LIB_DIR", str(explicit_root_dir))
+        plugin_paths = _candidate_backend_plugin_paths()
+        assert globbed_plugin in plugin_paths
+
+    def test_resolve_ggml_library_path_uses_candidate_and_returns_none_when_absent(
+        self, monkeypatch
+    ) -> None:
+        monkeypatch.setattr(
+            "pathlib.Path.exists",
+            lambda self: self == Path("/usr/local/lib/libggml.so"),
+        )
+        assert _resolve_ggml_library_path() == Path("/usr/local/lib/libggml.so")
+
+        monkeypatch.setattr("pathlib.Path.exists", lambda self: False)
+        monkeypatch.setattr(
+            "webinar_transcriber.whispercpp.library.ctypes.util.find_library",
+            lambda _name: None,
+        )
+        assert _resolve_ggml_library_path() is None
+
 
 class TestWhisperCppHelpers:
     @pytest.mark.parametrize(
@@ -291,6 +358,17 @@ class TestWhisperCppHelpers:
         _library_log_callback(0, b"native line\n", None)
 
         assert "native line" in log_path.read_text(encoding="utf-8")
+        _set_log_sink_path(None)
+
+    def test_library_log_callback_ignores_missing_sink_and_empty_text(self, tmp_path) -> None:
+        _set_log_sink_path(None)
+        _library_log_callback(0, b"ignored\n", None)
+
+        log_path = tmp_path / "native.log"
+        _set_log_sink_path(log_path)
+        _library_log_callback(0, None, None)
+
+        assert not log_path.exists()
         _set_log_sink_path(None)
 
 

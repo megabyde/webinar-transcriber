@@ -1,7 +1,7 @@
 """Tests for deterministic scene alignment."""
 
-from webinar_transcriber.align import align_by_time
-from webinar_transcriber.models import Scene, SlideFrame, TranscriptSegment
+from webinar_transcriber.align import _distance_to_block, align_by_time
+from webinar_transcriber.models import AlignmentBlock, Scene, SlideFrame, TranscriptSegment
 
 
 class TestAlignByTime:
@@ -97,3 +97,15 @@ class TestAlignByTime:
         assert blocks[0].transcript_segment_ids == []
         assert blocks[0].transcript_text == ""
         assert blocks[1].transcript_segment_ids == ["seg-1"]
+
+    def test_distance_to_block_is_zero_for_midpoint_inside_block(self) -> None:
+        block = AlignmentBlock(
+            id="block-1",
+            start_sec=1.0,
+            end_sec=2.0,
+            transcript_segment_ids=[],
+            transcript_text="",
+            scene_id="scene-1",
+        )
+
+        assert _distance_to_block(1.5, block) == 0.0

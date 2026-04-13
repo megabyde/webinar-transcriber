@@ -14,8 +14,10 @@ from webinar_transcriber.normalized_audio import (
     load_normalized_audio,
     prepared_transcription_audio,
     preserve_transcription_audio,
+    transcode_audio_to_mp3,
 )
 from webinar_transcriber.segmentation import (
+    _consume_vad_event,
     _normalize_regions,
     _silero_speech_timestamps,
     detect_speech_regions,
@@ -99,6 +101,49 @@ class TestNormalizedAudio:
         assert kept_audio_path == expected_output
         assert kept_audio_path.read_text(encoding="utf-8") == "mp3"
 
+    def test_transcode_audio_to_mp3_invokes_ffmpeg(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        calls: list[tuple[str, ...]] = []
+
+        def fake_run_media_command(*args: str, **_kwargs) -> subprocess.CompletedProcess[str]:
+            calls.append(args)
+            output_path = Path(args[-1])
+            output_path.write_text("mp3", encoding="utf-8")
+            return subprocess.CompletedProcess(args, 0, stdout="")
+
+        monkeypatch.setattr(
+            "webinar_transcriber.normalized_audio.run_media_command", fake_run_media_command
+        )
+
+        output_path = transcode_audio_to_mp3(
+            tmp_path / "input.wav", tmp_path / "nested" / "audio.mp3"
+        )
+
+        assert output_path == tmp_path / "nested" / "audio.mp3"
+        assert output_path.read_text(encoding="utf-8") == "mp3"
+        assert calls == [
+            (
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(tmp_path / "input.wav"),
+                "-codec:a",
+                "libmp3lame",
+                "-q:a",
+                "2",
+                str(tmp_path / "nested" / "audio.mp3"),
+            )
+        ]
+
+    def test_preserve_transcription_audio_rejects_unknown_output_format(
+        self, tmp_path: Path
+    ) -> None:
+        with pytest.raises(ValueError, match="Unsupported transcription audio format"):
+            preserve_transcription_audio(
+                tmp_path / "input.wav", tmp_path / "audio.ogg", audio_format="ogg"
+            )
+
     def test_load_normalized_audio_returns_mono_float32_samples(self) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
             samples, sample_rate = load_normalized_audio(audio_path)
@@ -173,6 +218,17 @@ class TestNormalizedAudio:
             (2.8, 4.0),
         ]
 
+    def test_expand_speech_regions_returns_empty_for_empty_or_zero_duration(self) -> None:
+        assert expand_speech_regions([], pad_ms=200, audio_duration_sec=4.0) == []
+        assert (
+            expand_speech_regions(
+                [SpeechRegion(start_sec=0.0, end_sec=1.0)],
+                pad_ms=200,
+                audio_duration_sec=0.0,
+            )
+            == []
+        )
+
     def test_repair_speech_regions_merges_short_region_until_it_reaches_min_duration(self) -> None:
         repaired = repair_speech_regions([
             SpeechRegion(start_sec=0.0, end_sec=1.0),
@@ -214,6 +270,15 @@ class TestNormalizedAudio:
         ])
         assert [(region.start_sec, region.end_sec) for region in normalized] == [(0.0, 2.0)]
 
+    def test_normalize_regions_drops_non_positive_duration_regions(self) -> None:
+        normalized = _normalize_regions([
+            SpeechRegion(start_sec=1.0, end_sec=1.0),
+            SpeechRegion(start_sec=2.0, end_sec=1.0),
+            SpeechRegion(start_sec=3.0, end_sec=4.0),
+        ])
+
+        assert normalized == [SpeechRegion(start_sec=3.0, end_sec=4.0)]
+
     def test_silero_speech_timestamps_returns_none_when_module_missing(self) -> None:
         with patch(
             "webinar_transcriber.segmentation.importlib.import_module", side_effect=ImportError
@@ -228,6 +293,14 @@ class TestNormalizedAudio:
             )
 
         assert timestamps is None
+
+    def test_fake_silero_import_module_raises_for_unknown_import(
+        self, fake_silero_import_module
+    ) -> None:
+        fake_import_module = fake_silero_import_module()
+
+        with pytest.raises(ImportError, match="other"):
+            fake_import_module("other")
 
     def test_silero_speech_timestamps_uses_vad_iterator_and_reports_progress(
         self, monkeypatch, fake_silero_import_module
@@ -321,6 +394,17 @@ class TestNormalizedAudio:
         )
 
         assert timestamps == [{"start": 200, "end": 1_600}]
+
+    def test_consume_vad_event_keeps_start_when_end_is_missing(self) -> None:
+        assert (
+            _consume_vad_event(
+                [],
+                event={"foo": 1},
+                start_sample=10,
+                min_speech_samples=5.0,
+            )
+            == 10
+        )
 
     def test_load_normalized_audio_rejects_wrong_sample_rate(self, monkeypatch, tmp_path) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:

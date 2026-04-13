@@ -10,7 +10,13 @@ from webinar_transcriber.models import (
     VideoAsset,
 )
 from webinar_transcriber.structure import build_report
-from webinar_transcriber.structure.interludes import _is_likely_interlude_text
+from webinar_transcriber.structure.interludes import (
+    _detect_interlude_ranges,
+    _interlude_note,
+    _interlude_title,
+    _is_likely_interlude_text,
+    _repeated_bigram_ratio,
+)
 from webinar_transcriber.structure.scoring import (
     _action_item_score,
     _audio_title_from_segments,
@@ -28,6 +34,7 @@ from webinar_transcriber.structure.scoring import (
 )
 from webinar_transcriber.structure.sections import (
     _build_audio_sections,
+    _sections_from_block,
     _should_start_new_audio_section,
 )
 
@@ -469,8 +476,65 @@ class TestBuildReport:
             "optimizer scheduler tensor review"
         )
 
+    def test_detect_interlude_ranges_splits_runs_at_large_gaps(self) -> None:
+        ranges = _detect_interlude_ranges([
+            TranscriptSegment(
+                id="segment-1",
+                text="Lyrics interlude chorus verse.",
+                start_sec=0.0,
+                end_sec=20.0,
+            ),
+            TranscriptSegment(
+                id="segment-2",
+                text="Lyrics interlude chorus verse.",
+                start_sec=40.0,
+                end_sec=60.0,
+            ),
+        ])
+
+        assert ranges == [(0.0, 20.0), (40.0, 60.0)]
+
+    def test_interlude_helpers_cover_blank_text_and_localized_rendering(self) -> None:
+        assert not _is_likely_interlude_text("   ")
+        assert _interlude_title("en") == "Music Interlude"
+        assert _interlude_note("en").startswith("Music or spoken-performance interlude.")
+
+    def test_repeated_bigram_ratio_returns_zero_for_too_few_words(self) -> None:
+        assert _repeated_bigram_ratio(["one", "two", "three"]) == 0.0
+
 
 class TestAudioSectionHeuristics:
+    def test_build_audio_sections_flushes_speech_before_interlude_tail(self) -> None:
+        progress_updates: list[tuple[int, int]] = []
+
+        sections = _build_audio_sections(
+            [
+                TranscriptSegment(
+                    id="segment-1",
+                    text="Agenda review and project status update.",
+                    start_sec=0.0,
+                    end_sec=20.0,
+                ),
+                TranscriptSegment(
+                    id="segment-2",
+                    text="Lyrics interlude chorus verse.",
+                    start_sec=20.0,
+                    end_sec=40.0,
+                ),
+            ],
+            interlude_ranges=[(20.0, 40.0)],
+            progress_callback=lambda index, section_count: progress_updates.append((
+                index,
+                section_count,
+            )),
+        )
+
+        assert [(section.is_interlude, section.transcript_text) for section in sections] == [
+            (False, "Agenda review and project status update."),
+            (True, "Lyrics interlude chorus verse."),
+        ]
+        assert progress_updates == [(1, 1), (2, 2)]
+
     def test_build_audio_sections_splits_when_target_duration_would_be_exceeded(self) -> None:
         sections = _build_audio_sections([
             TranscriptSegment(
@@ -488,6 +552,47 @@ class TestAudioSectionHeuristics:
             (0.0, 140.0),
             (140.5, 320.0),
         ]
+
+    def test_does_not_split_before_budget_or_gap_threshold_is_reached(self) -> None:
+        current_segments = [
+            TranscriptSegment(
+                id="segment-1",
+                text="Agenda review without a sentence break",
+                start_sec=0.0,
+                end_sec=140.0,
+            )
+        ]
+        next_segment = TranscriptSegment(
+            id="segment-2",
+            text="More detail arrives immediately after that",
+            start_sec=140.2,
+            end_sec=200.0,
+        )
+
+        assert not _should_start_new_audio_section(current_segments, next_segment)
+
+    def test_sections_from_block_uses_title_hint_when_segment_ids_are_missing(self) -> None:
+        block = AlignmentBlock(
+            id="block-1",
+            start_sec=0.0,
+            end_sec=10.0,
+            transcript_segment_ids=["missing-segment"],
+            transcript_text="Fallback block text",
+            scene_id="scene-1",
+            frame_id="frame-1",
+            title_hint="Slide Title",
+        )
+
+        sections = _sections_from_block(
+            block,
+            block_segments=[],
+            interlude_ranges=[],
+            next_section_index=1,
+        )
+
+        assert len(sections) == 1
+        assert sections[0].title == "Slide Title"
+        assert sections[0].frame_id == "frame-1"
 
     def test_title_helpers_fall_back_for_empty_or_filler_only_text(self) -> None:
         filler_segments = [

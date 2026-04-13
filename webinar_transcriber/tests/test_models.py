@@ -126,3 +126,10 @@ class TestCoreModels:
         segment_ids = [segment.id for segment in sorted(segments)]
 
         assert segment_ids == ["seg-1", "seg-2", "seg-3"]
+
+    def test_model_ordering_returns_not_implemented_for_other_types(self) -> None:
+        segment = TranscriptSegment(id="seg-1", text="first", start_sec=0.0, end_sec=1.0)
+        window = InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)
+
+        assert segment.__lt__(object()) is NotImplemented
+        assert window.__lt__(object()) is NotImplemented

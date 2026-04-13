@@ -3,6 +3,7 @@
 import io
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 
 import numpy as np
@@ -383,6 +384,33 @@ class TestIterSampledFrames:
         ):
             list(_iter_sampled_frames(FIXTURE_DIR / "sample-video.mp4"))
 
+    def test_iter_sampled_frames_kills_process_when_wait_timeout_requires_fallback(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class FakeProcess:
+            def __init__(self) -> None:
+                self.stdout = io.BytesIO(b"")
+                self.stderr = io.BytesIO()
+                self.killed = False
+                self._wait_calls = 0
+
+            def kill(self) -> None:
+                self.killed = True
+
+            def wait(self, timeout: float | None = None) -> int:
+                self._wait_calls += 1
+                if timeout is not None and self._wait_calls == 1:
+                    raise subprocess.TimeoutExpired(cmd=["ffmpeg"], timeout=timeout)
+                return 0
+
+        process = FakeProcess()
+        monkeypatch.setattr(
+            "webinar_transcriber.video.scenes.subprocess.Popen", lambda *_a, **_k: process
+        )
+
+        assert list(_iter_sampled_frames(FIXTURE_DIR / "sample-video.mp4")) == []
+        assert process.killed
+
 
 class TestSceneSamplingTimeout:
     def test_read_with_timeout_kills_process_and_wraps_timeout(self) -> None:
@@ -407,6 +435,30 @@ class TestSceneSamplingTimeout:
 
         assert process.killed
         assert process.waited
+
+    def test_read_with_timeout_rejects_missing_stdout(self) -> None:
+        process = cast("subprocess.Popen[bytes]", SimpleNamespace(stdout=None))
+
+        with pytest.raises(MediaProcessingError, match="Could not open ffmpeg pipes"):
+            _read_with_timeout(process, frame_size=1, deadline=1.0)
+
+    def test_read_with_timeout_retries_when_select_returns_no_ready_streams(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class FakeStdout:
+            def fileno(self) -> int:
+                return 1
+
+        process = cast("subprocess.Popen[bytes]", SimpleNamespace(stdout=FakeStdout()))
+        select_calls = iter([([], [], []), ([process.stdout], [], [])])
+
+        monkeypatch.setattr(
+            "webinar_transcriber.video.scenes.select.select",
+            lambda *_args, **_kwargs: next(select_calls),
+        )
+        monkeypatch.setattr("webinar_transcriber.video.scenes.os.read", lambda _fd, _n: b"x")
+
+        assert _read_with_timeout(process, frame_size=1, deadline=float("inf")) == b"x"
 
 
 class TestSceneSamplingHelpers:

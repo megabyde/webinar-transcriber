@@ -3,6 +3,7 @@
 import json
 from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 from unittest.mock import patch
 
@@ -17,10 +18,11 @@ from webinar_transcriber.llm import (
     LLMProcessor,
     LLMReportMetadataResult,
     LLMReportPolishPlan,
-    LLMReportPolishResult,
     LLMSectionPolishResult,
 )
+from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.models import (
+    AudioAsset,
     DecodedWindow,
     MediaType,
     ReportDocument,
@@ -36,11 +38,16 @@ from webinar_transcriber.processor import (
     extract_frames_input,
     process_input,
 )
+from webinar_transcriber.processor.llm import LLMRuntimeState, resolve_llm_processor
 from webinar_transcriber.processor.support import (
+    asr_model_label,
     asr_runtime_detail,
+    hf_cache_repo_label,
     title_update_detail,
+    token_usage_detail,
     window_transcription_stage_detail,
 )
+from webinar_transcriber.reporter import NullStageReporter
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 EXPECTED_LLM_WARNING = (
@@ -77,7 +84,7 @@ def install_basic_windowing(
     )
 
 
-class RecordingReporter:
+class RecordingReporter(NullStageReporter):
     """Collect stage updates for assertions."""
 
     def __init__(self) -> None:
@@ -117,12 +124,6 @@ class RecordingReporter:
     def warn(self, message: str) -> None:
         self.warnings.append(message)
 
-    def interrupted(self) -> None:
-        self.events.append(("interrupt", "", ""))
-
-    def reset_active_display(self) -> None:
-        self.events.append(("reset", "", ""))
-
     def complete_run(self, artifacts: ProcessArtifacts) -> None:
         self.events.append((
             "complete",
@@ -140,9 +141,6 @@ class RecordingReporter:
             event[0] == event_type and event[1] == stage_key and predicate(event[2])
             for event in self.events
         )
-
-    def stage_events(self, event_type: str, stage_key: str) -> list[tuple[str, str, str]]:
-        return [event for event in self.events if event[0] == event_type and event[1] == stage_key]
 
     def has_progress_event(
         self, event_type: str, stage_key: str, value: float, detail: str | None
@@ -206,9 +204,9 @@ class TestProcessInput:
             self, audio_samples, windows, *, progress_callback=None
         ) -> list[DecodedWindow]:
             del audio_samples
-            if progress_callback is not None:
-                for window in windows:
-                    progress_callback(window.end_sec, len(self._segments))
+            assert progress_callback is not None
+            for window in windows:
+                progress_callback(window.end_sec, len(self._segments))
             return [
                 DecodedWindow(
                     window=w,
@@ -419,9 +417,9 @@ class TestProcessInput:
                 self, audio_samples, windows, *, progress_callback=None
             ) -> list[DecodedWindow]:
                 del audio_samples
-                if progress_callback is not None:
-                    for window in windows:
-                        progress_callback(window.end_sec, 2)
+                assert progress_callback is not None
+                for window in windows:
+                    progress_callback(window.end_sec, 2)
                 return [
                     DecodedWindow(
                         window=windows[0],
@@ -614,6 +612,46 @@ class TestProcessInput:
         }
         assert reporter.has_event("finish", "detect_scenes", "1 scene")
 
+    def test_extract_frames_input_rejects_audio_input(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.setattr(
+            "webinar_transcriber.media.probe_media",
+            lambda _path: AudioAsset(path="demo.mp3", duration_sec=2.0),
+        )
+
+        with pytest.raises(
+            MediaProcessingError, match="Frame extraction is only supported for video input"
+        ):
+            extract_frames_input(
+                FIXTURE_DIR / "sample-audio.mp3", output_dir=tmp_path / "frames-run"
+            )
+
+    def test_forwards_vad_warnings_to_reporter(self, tmp_path, monkeypatch) -> None:
+        reporter = RecordingReporter()
+        monkeypatch.setattr(
+            "webinar_transcriber.processor.asr.load_normalized_audio",
+            lambda _path: (np.zeros(16_000, dtype=np.float32), 16_000),
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.processor.asr.detect_speech_regions",
+            lambda *_args, **_kwargs: (
+                [SpeechRegion(start_sec=0.0, end_sec=6.0)],
+                ["Silero warning"],
+            ),
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.processor.asr.expand_speech_regions",
+            lambda regions, **_kwargs: regions,
+        )
+
+        process_input(
+            FIXTURE_DIR / "sample-audio.mp3",
+            output_dir=tmp_path / "warning-run",
+            transcriber=self.FakeTranscriber(),
+            reporter=reporter,
+        )
+
+        assert reporter.warnings == ["Silero warning"]
+
 
 class TestProcessorHelpers:
     def test_window_transcription_stage_detail_reports_rtf(self) -> None:
@@ -639,6 +677,40 @@ class TestProcessorHelpers:
         assert title_update_detail(title_count=1, section_count=2) == "1 title updated"
         assert title_update_detail(title_count=2, section_count=3) == "2 titles updated"
 
+    def test_asr_model_label_uses_basename_for_non_hf_absolute_paths(self) -> None:
+        assert asr_model_label("/tmp/models/local-model.bin") == "local-model.bin"
+
+    def test_hf_cache_repo_label_returns_none_for_non_hf_path(self) -> None:
+        assert hf_cache_repo_label(Path("/tmp/models/local-model.bin")) is None
+
+    def test_token_usage_detail_returns_blank_without_total_tokens(self) -> None:
+        assert token_usage_detail({"input_tokens": 2}) == ""
+
+    def test_resolve_llm_processor_uses_environment_processor_details(self, monkeypatch) -> None:
+        reporter = RecordingReporter()
+        warnings: list[str] = []
+        fake_processor = cast(
+            "LLMProcessor", SimpleNamespace(provider_name="openai", model_name="gpt-test")
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.processor.llm.build_llm_processor_from_env",
+            lambda: fake_processor,
+        )
+
+        resolved, runtime = resolve_llm_processor(
+            enable_llm=True,
+            llm_processor=None,
+            reporter=reporter,
+            warnings=warnings,
+            llm_runtime=LLMRuntimeState(),
+        )
+
+        assert resolved is fake_processor
+        assert runtime.provider_name == "openai"
+        assert runtime.model_name == "gpt-test"
+        assert runtime.report_status == "disabled"
+        assert warnings == []
+
 
 @pytest.fixture
 def llm_success_result(
@@ -654,26 +726,11 @@ def llm_success_result(
         def report_polish_plan(self, report) -> LLMReportPolishPlan:
             return LLMReportPolishPlan(section_count=len(report.sections), worker_count=1)
 
-        def polish_report(self, report):
-            section_result = self.polish_report_sections_with_progress(report)
-            metadata_result = self.polish_report_metadata(
-                report, section_transcripts=section_result.section_transcripts
-            )
-            return LLMReportPolishResult(
-                summary=metadata_result.summary,
-                action_items=metadata_result.action_items,
-                section_titles=metadata_result.section_titles,
-                section_tldrs=section_result.section_tldrs,
-                section_transcripts=section_result.section_transcripts,
-                usage={"input_tokens": 20, "output_tokens": 6, "total_tokens": 26},
-                warnings=section_result.warnings,
-            )
-
         def polish_report_sections_with_progress(
             self, report, *, progress_callback: Callable[[int], None] | None = None
         ) -> LLMSectionPolishResult:
-            if progress_callback is not None:
-                progress_callback(len(report.sections))
+            assert progress_callback is not None
+            progress_callback(len(report.sections))
             return LLMSectionPolishResult(
                 section_tldrs={
                     "section-1": "Agenda update and next-step reminder for the draft delivery."
@@ -802,15 +859,12 @@ class TestProcessInputLlm:
                 del report
                 return LLMReportPolishPlan(section_count=1, worker_count=1, skipped_section_count=1)
 
-            def polish_report(self, report):
-                raise AssertionError("process_input should call phase-specific methods")
-
             def polish_report_sections_with_progress(
                 self, report, *, progress_callback: Callable[[int], None] | None = None
             ) -> LLMSectionPolishResult:
                 del report
-                if progress_callback is not None:
-                    progress_callback(1)
+                assert progress_callback is not None
+                progress_callback(1)
                 return LLMSectionPolishResult(
                     section_tldrs={"section-2": "Agenda recap."},
                     section_transcripts={
@@ -896,14 +950,11 @@ class TestProcessInputLlm:
             def report_polish_plan(self, report) -> LLMReportPolishPlan:
                 return LLMReportPolishPlan(section_count=len(report.sections), worker_count=1)
 
-            def polish_report(self, report):
-                raise LLMProcessingError("Report polishing failed: backend timeout")
-
             def polish_report_sections_with_progress(
                 self, report, *, progress_callback: Callable[[int], None] | None = None
             ):
-                if progress_callback is not None:
-                    progress_callback(len(report.sections))
+                assert progress_callback is not None
+                progress_callback(len(report.sections))
                 raise LLMProcessingError("Report polishing failed: backend timeout")
 
             def polish_report_metadata(self, report, *, section_transcripts: dict[str, str]):
@@ -941,8 +992,8 @@ class TestProcessInputLlm:
             def polish_report_sections_with_progress(
                 self, report, *, progress_callback: Callable[[int], None] | None = None
             ) -> LLMSectionPolishResult:
-                if progress_callback is not None:
-                    progress_callback(len(report.sections))
+                assert progress_callback is not None
+                progress_callback(len(report.sections))
                 return LLMSectionPolishResult(
                     section_tldrs={},
                     section_transcripts={

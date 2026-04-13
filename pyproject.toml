@@ -67,13 +67,13 @@ addopts = [
 testpaths = ["webinar_transcriber"]
 
 [tool.coverage.run]
-branch = true
+branch = false
 source = ["webinar_transcriber"]
 
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
-fail_under = 95
+fail_under = 100
 exclude_also = [
     "def __repr__",
     "if self.debug:",

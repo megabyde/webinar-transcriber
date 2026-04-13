@@ -1,6 +1,7 @@
 """Tests for the whisper.cpp ASR adapter."""
 
 import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
@@ -18,6 +19,7 @@ from webinar_transcriber.asr import (
     _sanitize_prompt,
     build_prompt_carryover,
 )
+from webinar_transcriber.asr.transcriber import _download_default_whisper_cpp_model
 from webinar_transcriber.models import DecodedWindow, InferenceWindow, TranscriptSegment
 
 if TYPE_CHECKING:
@@ -320,6 +322,41 @@ class TestWhisperCppTranscriber:
 
         assert [window.text for window in decoded_windows] == ["agenda review"]
 
+    def test_download_default_model_requires_huggingface_hub_dependency(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            "webinar_transcriber.asr.transcriber.importlib.import_module",
+            lambda _name: (_ for _ in ()).throw(ModuleNotFoundError("missing")),
+        )
+
+        with pytest.raises(RuntimeError, match="huggingface_hub is not installed"):
+            WhisperCppTranscriber()._resolve_model_path()
+
+    def test_download_default_model_wraps_backend_failures(self, monkeypatch) -> None:
+        class FakeHub:
+            @staticmethod
+            def hf_hub_download(**_kwargs):
+                raise RuntimeError("backend failed")
+
+        monkeypatch.setattr(
+            "webinar_transcriber.asr.transcriber.importlib.import_module",
+            lambda _name: FakeHub,
+        )
+
+        with pytest.raises(
+            RuntimeError, match=r"Automatic download of the default whisper\.cpp model"
+        ):
+            WhisperCppTranscriber()._resolve_model_path()
+
+    def test_download_default_model_returns_downloaded_path(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            "webinar_transcriber.asr.transcriber.importlib.import_module",
+            lambda _name: type(
+                "FakeHub", (), {"hf_hub_download": staticmethod(lambda **_kwargs: "/tmp/model.bin")}
+            ),
+        )
+
+        assert _download_default_whisper_cpp_model() == Path("/tmp/model.bin")
+
 
 class TestPromptCarryover:
     def test_build_prompt_carryover_uses_last_sentences_and_token_budget(self) -> None:
@@ -420,6 +457,23 @@ class TestPromptCarryover:
         )
 
         assert repeated_reason == "hallucination_detected"
+
+    def test_carryover_drop_reason_keeps_punctuation_only_text(self) -> None:
+        reason = _carryover_drop_reason(
+            DecodedWindow(
+                window=InferenceWindow(
+                    window_id="window-5",
+                    region_index=0,
+                    start_sec=0.0,
+                    end_sec=1.0,
+                ),
+                text="(((",
+                segments=[],
+            ),
+            settings=PromptCarryoverSettings(),
+        )
+
+        assert reason is None
 
     def test_sanitize_prompt_drops_missing_and_noise_only_prompts(self) -> None:
         assert _sanitize_prompt(None, max_tokens=8) == ""
