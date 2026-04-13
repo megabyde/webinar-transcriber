@@ -50,8 +50,7 @@ def build_report(
         )
     )
     sections = _render_interlude_sections(
-        sections,
-        detected_language=transcription.detected_language,
+        sections, detected_language=transcription.detected_language
     )
     report_segments = _segments_excluding_interludes(transcription.segments, sections)
     summary = _build_summary(report_segments)

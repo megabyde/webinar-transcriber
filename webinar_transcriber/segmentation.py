@@ -85,10 +85,7 @@ def detect_speech_regions(
 
 
 def expand_speech_regions(
-    regions: list[SpeechRegion],
-    *,
-    pad_ms: int,
-    audio_duration_sec: float,
+    regions: list[SpeechRegion], *, pad_ms: int, audio_duration_sec: float
 ) -> list[SpeechRegion]:
     """Apply ASR-specific context padding and merge overlaps after clipping to audio bounds."""
     if not regions or audio_duration_sec <= 0:
@@ -138,17 +135,11 @@ def repair_speech_regions(
 
             if left_gap <= right_gap:
                 repaired[i - 1 : i + 1] = [
-                    SpeechRegion(
-                        start_sec=repaired[i - 1].start_sec,
-                        end_sec=region.end_sec,
-                    )
+                    SpeechRegion(start_sec=repaired[i - 1].start_sec, end_sec=region.end_sec)
                 ]
             else:
                 repaired[i : i + 2] = [
-                    SpeechRegion(
-                        start_sec=region.start_sec,
-                        end_sec=repaired[i + 1].end_sec,
-                    )
+                    SpeechRegion(start_sec=region.start_sec, end_sec=repaired[i + 1].end_sec)
                 ]
             changed = True
             break
@@ -181,8 +172,7 @@ def _normalize_regions(regions: list[SpeechRegion]) -> list[SpeechRegion]:
         previous = merged[-1]
         if region.start_sec <= previous.end_sec:
             merged[-1] = SpeechRegion(
-                start_sec=previous.start_sec,
-                end_sec=max(previous.end_sec, region.end_sec),
+                start_sec=previous.start_sec, end_sec=max(previous.end_sec, region.end_sec)
             )
             continue
         merged.append(region)

@@ -74,10 +74,7 @@ def prepared_transcription_audio(input_path: Path) -> Iterator[Path]:
 
 
 def preserve_transcription_audio(
-    audio_path: Path,
-    output_path: Path,
-    *,
-    audio_format: str = "wav",
+    audio_path: Path, output_path: Path, *, audio_format: str = "wav"
 ) -> Path:
     """Persist prepared transcription audio as a run artifact."""
     output_path.parent.mkdir(parents=True, exist_ok=True)

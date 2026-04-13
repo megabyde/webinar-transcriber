@@ -1,10 +1,7 @@
 """Tests for transcript normalization helpers."""
 
 from webinar_transcriber.models import TranscriptionResult, TranscriptSegment
-from webinar_transcriber.transcript.normalize import (
-    MAX_SEGMENT_CHARS,
-    normalize_transcription,
-)
+from webinar_transcriber.transcript.normalize import MAX_SEGMENT_CHARS, normalize_transcription
 
 
 class TestNormalizeTranscription:
@@ -17,10 +14,7 @@ class TestNormalizeTranscription:
                 TranscriptSegment(id="segment-3", text="всем.", start_sec=1.0, end_sec=1.6),
                 TranscriptSegment(id="segment-4", text="", start_sec=1.6, end_sec=1.8),
                 TranscriptSegment(
-                    id="segment-5",
-                    text="Это новая часть.",
-                    start_sec=3.0,
-                    end_sec=6.0,
+                    id="segment-5", text="Это новая часть.", start_sec=3.0, end_sec=6.0
                 ),
             ],
         )
@@ -40,16 +34,10 @@ class TestNormalizeTranscription:
         transcription = TranscriptionResult(
             segments=[
                 TranscriptSegment(
-                    id="segment-1",
-                    text="Короткая фраза.",
-                    start_sec=0.0,
-                    end_sec=1.0,
+                    id="segment-1", text="Короткая фраза.", start_sec=0.0, end_sec=1.0
                 ),
                 TranscriptSegment(
-                    id="segment-2",
-                    text="Следующая фраза.",
-                    start_sec=2.5,
-                    end_sec=3.5,
+                    id="segment-2", text="Следующая фраза.", start_sec=2.5, end_sec=3.5
                 ),
             ]
         )
@@ -79,10 +67,7 @@ class TestNormalizeTranscription:
             segments=[
                 TranscriptSegment(id="segment-1", text="Длинный блок", start_sec=0.0, end_sec=16.0),
                 TranscriptSegment(
-                    id="segment-2",
-                    text="Следующий блок",
-                    start_sec=16.1,
-                    end_sec=17.0,
+                    id="segment-2", text="Следующий блок", start_sec=16.1, end_sec=17.0
                 ),
             ]
         )
@@ -98,10 +83,7 @@ class TestNormalizeTranscription:
         transcription = TranscriptionResult(
             segments=[
                 TranscriptSegment(
-                    id="segment-1",
-                    text="x" * MAX_SEGMENT_CHARS,
-                    start_sec=0.0,
-                    end_sec=1.0,
+                    id="segment-1", text="x" * MAX_SEGMENT_CHARS, start_sec=0.0, end_sec=1.0
                 ),
                 TranscriptSegment(id="segment-2", text="tail", start_sec=1.1, end_sec=2.0),
             ]

@@ -108,26 +108,17 @@ class LLMProcessor(Protocol):
         """Return polished summary, action items, and section titles."""
 
     def polish_report_sections_with_progress(
-        self,
-        report: ReportDocument,
-        *,
-        progress_callback: Callable[[int], None] | None = None,
+        self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
     ) -> LLMSectionPolishResult:
         """Return polished section text with per-section progress updates."""
 
     def polish_report_metadata(
-        self,
-        report: ReportDocument,
-        *,
-        section_transcripts: dict[str, str],
+        self, report: ReportDocument, *, section_transcripts: dict[str, str]
     ) -> LLMReportMetadataResult:
         """Return polished summary, action items, and section titles."""
 
     def polish_report_with_progress(
-        self,
-        report: ReportDocument,
-        *,
-        progress_callback: Callable[[int], None] | None = None,
+        self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
     ) -> LLMReportPolishResult:
         """Return polished report fields with per-section progress updates."""
 

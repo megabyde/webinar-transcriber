@@ -14,10 +14,7 @@ from .constants import (
     TARGET_AUDIO_SECTION_DURATION_SEC,
 )
 from .interludes import _overlaps_interlude_ranges
-from .scoring import (
-    _audio_title_from_segments,
-    _title_from_text,
-)
+from .scoring import _audio_title_from_segments, _title_from_text
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -74,28 +71,19 @@ def _build_audio_sections(
         if _overlaps_interlude_ranges(segment, resolved_interlude_ranges):
             if current_speech_segments:
                 sections.append(
-                    _audio_section_from_segments(
-                        current_speech_segments,
-                        len(sections) + 1,
-                    )
+                    _audio_section_from_segments(current_speech_segments, len(sections) + 1)
                 )
                 current_speech_segments = []
             current_interlude_segments.append(segment)
         else:
             if current_interlude_segments:
                 sections.append(
-                    _interlude_section_from_segments(
-                        current_interlude_segments,
-                        len(sections) + 1,
-                    )
+                    _interlude_section_from_segments(current_interlude_segments, len(sections) + 1)
                 )
                 current_interlude_segments = []
             if _should_start_new_audio_section(current_speech_segments, segment):
                 sections.append(
-                    _audio_section_from_segments(
-                        current_speech_segments,
-                        len(sections) + 1,
-                    )
+                    _audio_section_from_segments(current_speech_segments, len(sections) + 1)
                 )
                 current_speech_segments = []
             current_speech_segments.append(segment)
@@ -106,10 +94,7 @@ def _build_audio_sections(
         sections.append(_audio_section_from_segments(current_speech_segments, len(sections) + 1))
     if current_interlude_segments:
         sections.append(
-            _interlude_section_from_segments(
-                current_interlude_segments,
-                len(sections) + 1,
-            )
+            _interlude_section_from_segments(current_interlude_segments, len(sections) + 1)
         )
 
     return sections
@@ -152,26 +137,15 @@ def _audio_section_from_segments(
     segments: list[TranscriptSegment], section_index: int
 ) -> ReportSection:
     title = _audio_title_from_segments(segments, fallback=f"Section {section_index}")
-    return _section_from_segments(
-        segments,
-        section_index=section_index,
-        title=title,
-    )
+    return _section_from_segments(segments, section_index=section_index, title=title)
 
 
 def _interlude_section_from_segments(
-    segments: list[TranscriptSegment],
-    section_index: int,
-    *,
-    frame_id: str | None = None,
+    segments: list[TranscriptSegment], section_index: int, *, frame_id: str | None = None
 ) -> ReportSection:
     title = f"Section {section_index}"
     return _section_from_segments(
-        segments,
-        section_index=section_index,
-        title=title,
-        frame_id=frame_id,
-        is_interlude=True,
+        segments, section_index=section_index, title=title, frame_id=frame_id, is_interlude=True
     )
 
 
@@ -238,26 +212,18 @@ def _sections_from_block(
         if is_interlude:
             sections.append(
                 _interlude_section_from_segments(
-                    run_segments,
-                    section_index,
-                    frame_id=block.frame_id,
+                    run_segments, section_index, frame_id=block.frame_id
                 )
             )
             continue
 
         run_text = " ".join(segment.text for segment in run_segments)
-        title = _title_from_text(
-            run_text,
-            fallback=f"Slide {section_index}",
-        )
+        title = _title_from_text(run_text, fallback=f"Slide {section_index}")
         if block.title_hint:
             title = _title_from_text(block.title_hint, fallback=title)
         sections.append(
             _section_from_segments(
-                run_segments,
-                section_index=section_index,
-                title=title,
-                frame_id=block.frame_id,
+                run_segments, section_index=section_index, title=title, frame_id=block.frame_id
             )
         )
 

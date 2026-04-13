@@ -55,9 +55,7 @@ def extract_representative_frames(
 
 
 def _extract_frame(
-    video_path: Path,
-    timestamp_sec: float,
-    output_path: Path,
+    video_path: Path, timestamp_sec: float, output_path: Path
 ) -> tuple[bool, str | None]:
     try:
         result = subprocess.run(

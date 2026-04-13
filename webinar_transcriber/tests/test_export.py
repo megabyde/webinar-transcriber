@@ -226,18 +226,12 @@ class TestSubtitles:
         transcription = TranscriptionResult(
             segments=[
                 TranscriptSegment(
-                    id="segment-1",
-                    text="First subtitle.",
-                    start_sec=0.0,
-                    end_sec=1.25,
+                    id="segment-1", text="First subtitle.", start_sec=0.0, end_sec=1.25
                 ),
                 TranscriptSegment(
-                    id="segment-2",
-                    text="Second subtitle.",
-                    start_sec=61.5,
-                    end_sec=62.75,
+                    id="segment-2", text="Second subtitle.", start_sec=61.5, end_sec=62.75
                 ),
-            ],
+            ]
         )
 
         output_path = tmp_path / "transcript.vtt"

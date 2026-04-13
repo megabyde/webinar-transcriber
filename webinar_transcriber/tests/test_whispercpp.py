@@ -34,9 +34,7 @@ class TestResolveLibraryPath:
         assert resolve_library_path() == library_path
 
     def test_resolve_library_path_raises_for_missing_env_target(
-        self,
-        monkeypatch,
-        tmp_path,
+        self, monkeypatch, tmp_path
     ) -> None:
         monkeypatch.setenv("WHISPER_CPP_LIB", str(tmp_path / "missing.so"))
 
@@ -44,8 +42,7 @@ class TestResolveLibraryPath:
             resolve_library_path()
 
     def test_resolve_library_path_uses_direct_argument_and_errors_when_missing(
-        self,
-        tmp_path,
+        self, tmp_path
     ) -> None:
         library_path = tmp_path / "libwhisper.dylib"
         library_path.write_text("stub", encoding="utf-8")
@@ -147,9 +144,7 @@ class TestWhisperCppLibrary:
         assert [segment.end_sec for segment in decoded_window.segments] == [1.5, 3.0]
 
     def test_whisper_cpp_session_context_manager_closes_native_handles(
-        self,
-        monkeypatch,
-        tmp_path,
+        self, monkeypatch, tmp_path
     ) -> None:
         library_path = tmp_path / "libwhisper.dylib"
         library_path.write_text("stub", encoding="utf-8")
@@ -167,8 +162,7 @@ class TestWhisperCppLibrary:
             "webinar_transcriber.whispercpp.library._load_backend_plugins", lambda: None
         )
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp.library.ctypes.CDLL",
-            lambda _path, mode=0: fake_cdll,
+            "webinar_transcriber.whispercpp.library.ctypes.CDLL", lambda _path, mode=0: fake_cdll
         )
 
         library = WhisperCppLibrary(library_path)
@@ -178,9 +172,7 @@ class TestWhisperCppLibrary:
         assert released_handles == [("state", 2), ("context", 1)]
 
     def test_whisper_cpp_library_disables_gpu_when_system_info_has_no_backend(
-        self,
-        monkeypatch,
-        tmp_path,
+        self, monkeypatch, tmp_path
     ) -> None:
         library_path = tmp_path / "libwhisper.dylib"
         library_path.write_text("stub", encoding="utf-8")
@@ -194,8 +186,7 @@ class TestWhisperCppLibrary:
             "webinar_transcriber.whispercpp.library._load_backend_plugins", lambda: None
         )
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp.library.ctypes.CDLL",
-            lambda _path, mode=0: fake_cdll,
+            "webinar_transcriber.whispercpp.library.ctypes.CDLL", lambda _path, mode=0: fake_cdll
         )
 
         library = WhisperCppLibrary(library_path)
@@ -236,14 +227,12 @@ class TestBackendPluginLoading:
             lambda: ggml_library_path,
         )
         with patch(
-            "webinar_transcriber.whispercpp.library.ctypes.CDLL",
-            return_value=fake_ggml_library,
+            "webinar_transcriber.whispercpp.library.ctypes.CDLL", return_value=fake_ggml_library
         ) as cdll_mock:
             _load_backend_plugins()
 
         cdll_mock.assert_called_once_with(
-            str(ggml_library_path),
-            mode=getattr(ctypes, "RTLD_GLOBAL", 0),
+            str(ggml_library_path), mode=getattr(ctypes, "RTLD_GLOBAL", 0)
         )
         fake_ggml_library.ggml_backend_load_all_from_path.assert_called_once_with(
             str(plugin_path.parent).encode("utf-8")
@@ -255,8 +244,7 @@ class TestBackendPluginLoading:
         )
         monkeypatch.setattr("webinar_transcriber.whispercpp.library._GGML_LIBRARY_HANDLE", None)
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp.library._resolve_ggml_library_path",
-            lambda: None,
+            "webinar_transcriber.whispercpp.library._resolve_ggml_library_path", lambda: None
         )
 
         _load_backend_plugins()
@@ -288,28 +276,11 @@ class TestWhisperCppHelpers:
     def test_system_info_supports_gpu(self, system_info: str, expected: bool) -> None:
         assert _system_info_supports_gpu(system_info) == expected
 
-    @pytest.mark.parametrize(
-        ("text", "expected"),
-        [
-            (None, None),
-            ("", None),
-            ("ru", b"ru"),
-        ],
-    )
-    def test_encode_optional_text(
-        self,
-        text: str | None,
-        expected: bytes | None,
-    ) -> None:
+    @pytest.mark.parametrize(("text", "expected"), [(None, None), ("", None), ("ru", b"ru")])
+    def test_encode_optional_text(self, text: str | None, expected: bytes | None) -> None:
         assert _encode_optional_text(text) == expected
 
-    @pytest.mark.parametrize(
-        ("value", "expected"),
-        [
-            (None, ""),
-            (b"\xfftest", "\ufffdtest"),
-        ],
-    )
+    @pytest.mark.parametrize(("value", "expected"), [(None, ""), (b"\xfftest", "\ufffdtest")])
     def test_decode_c_string(self, value: bytes | None, expected: str) -> None:
         assert _decode_c_string(value) == expected
 
@@ -325,9 +296,7 @@ class TestWhisperCppHelpers:
 
 class TestWhisperCppLibraryFailures:
     def test_whisper_cpp_library_raises_when_context_init_fails(
-        self,
-        monkeypatch,
-        tmp_path,
+        self, monkeypatch, tmp_path
     ) -> None:
         library_path = tmp_path / "libwhisper.dylib"
         library_path.write_text("stub", encoding="utf-8")
@@ -341,8 +310,7 @@ class TestWhisperCppLibraryFailures:
             "webinar_transcriber.whispercpp.library._load_backend_plugins", lambda: None
         )
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp.library.ctypes.CDLL",
-            lambda _path, mode=0: fake_cdll,
+            "webinar_transcriber.whispercpp.library.ctypes.CDLL", lambda _path, mode=0: fake_cdll
         )
 
         library = WhisperCppLibrary(library_path)
@@ -350,11 +318,7 @@ class TestWhisperCppLibraryFailures:
         with pytest.raises(WhisperCppError, match=r"Failed to initialize whisper\.cpp model"):
             library.create_session(model_path)
 
-    def test_whisper_cpp_library_raises_when_state_init_fails(
-        self,
-        monkeypatch,
-        tmp_path,
-    ) -> None:
+    def test_whisper_cpp_library_raises_when_state_init_fails(self, monkeypatch, tmp_path) -> None:
         library_path = tmp_path / "libwhisper.dylib"
         library_path.write_text("stub", encoding="utf-8")
         model_path = tmp_path / "model.bin"
@@ -365,22 +329,18 @@ class TestWhisperCppLibraryFailures:
             "webinar_transcriber.whispercpp.library._load_backend_plugins", lambda: None
         )
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp.library.ctypes.CDLL",
-            lambda _path, mode=0: fake_cdll,
+            "webinar_transcriber.whispercpp.library.ctypes.CDLL", lambda _path, mode=0: fake_cdll
         )
 
         library = WhisperCppLibrary(library_path)
 
         with pytest.raises(
-            WhisperCppError,
-            match=r"Failed to initialize whisper\.cpp runtime state",
+            WhisperCppError, match=r"Failed to initialize whisper\.cpp runtime state"
         ):
             library.create_session(model_path)
 
     def test_decode_window_handles_empty_input_and_inference_failure(
-        self,
-        monkeypatch,
-        tmp_path,
+        self, monkeypatch, tmp_path
     ) -> None:
         library_path = tmp_path / "libwhisper.dylib"
         library_path.write_text("stub", encoding="utf-8")
@@ -389,8 +349,7 @@ class TestWhisperCppLibraryFailures:
             "webinar_transcriber.whispercpp.library._load_backend_plugins", lambda: None
         )
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp.library.ctypes.CDLL",
-            lambda _path, mode=0: fake_cdll,
+            "webinar_transcriber.whispercpp.library.ctypes.CDLL", lambda _path, mode=0: fake_cdll
         )
         library = WhisperCppLibrary(library_path)
 
@@ -412,12 +371,7 @@ class TestWhisperCppLibraryFailures:
                 ctypes.c_void_p(1),
                 ctypes.c_void_p(2),
                 np.zeros(16_000, dtype=np.float32),
-                InferenceWindow(
-                    window_id="window-2",
-                    region_index=0,
-                    start_sec=0.0,
-                    end_sec=1.0,
-                ),
+                InferenceWindow(window_id="window-2", region_index=0, start_sec=0.0, end_sec=1.0),
                 threads=2,
                 prompt=None,
                 language_hint=None,

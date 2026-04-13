@@ -6,10 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from webinar_transcriber.labels import count_label
-from webinar_transcriber.models import (
-    InferenceWindow,
-    TranscriptionResult,
-)
+from webinar_transcriber.models import InferenceWindow, TranscriptionResult
 from webinar_transcriber.normalized_audio import load_normalized_audio
 from webinar_transcriber.segmentation import (
     DEFAULT_SPEECH_PAD_MS,
@@ -65,26 +62,17 @@ def run_asr_pipeline(
     transcriber.prepare_model()
     timer.finish()
     reporter.stage_finished(
-        "prepare_asr",
-        "Preparing ASR model",
-        detail=asr_runtime_detail(transcriber),
+        "prepare_asr", "Preparing ASR model", detail=asr_runtime_detail(transcriber)
     )
 
     audio_samples, sample_rate = load_normalized_audio(audio_path)
     asr_pipeline.normalized_audio_duration_sec = normalized_audio_duration(
-        audio_samples,
-        sample_rate,
+        audio_samples, sample_rate
     )
     reporter.progress_started(
-        "vad",
-        "Detecting speech regions",
-        total=media_asset.duration_sec,
-        count_label="s",
+        "vad", "Detecting speech regions", total=media_asset.duration_sec, count_label="s"
     )
-    on_vad_progress, finish_vad_progress = progress_updater(
-        reporter,
-        stage_key="vad",
-    )
+    on_vad_progress, finish_vad_progress = progress_updater(reporter, stage_key="vad")
 
     timer = start_stage_timer(stage_timings, "vad")
     speech_regions, vad_warnings = detect_speech_regions(
@@ -96,20 +84,14 @@ def run_asr_pipeline(
         min_silence_duration_ms=vad.min_silence_duration_ms,
         speech_pad_ms=DEFAULT_SPEECH_PAD_MS,
         progress_callback=lambda completed_sec, detected_count: on_vad_progress(
-            completed_sec,
-            detail=count_label(detected_count, "region"),
+            completed_sec, detail=count_label(detected_count, "region")
         ),
     )
-    finish_vad_progress(
-        media_asset.duration_sec,
-        detail=count_label(len(speech_regions), "region"),
-    )
+    finish_vad_progress(media_asset.duration_sec, detail=count_label(len(speech_regions), "region"))
     timer.finish()
     asr_pipeline.vad_region_count = len(speech_regions)
     reporter.stage_finished(
-        "vad",
-        "Detecting speech regions",
-        detail=count_label(len(speech_regions), "region"),
+        "vad", "Detecting speech regions", detail=count_label(len(speech_regions), "region")
     )
     for warning in vad_warnings:
         warnings.append(warning)
@@ -165,8 +147,7 @@ def run_asr_pipeline(
         detail="0 segments",
     )
     on_window_completed, finish_transcribe_progress = progress_updater(
-        reporter,
-        stage_key="transcribe",
+        reporter, stage_key="transcribe"
     )
 
     timer = start_stage_timer(stage_timings, "transcribe")
@@ -174,8 +155,7 @@ def run_asr_pipeline(
         audio_samples,
         windows,
         progress_callback=lambda completed_sec, segment_count: on_window_completed(
-            completed_sec,
-            detail=count_label(segment_count, "segment"),
+            completed_sec, detail=count_label(segment_count, "segment")
         ),
     )
     write_json(
@@ -212,6 +192,5 @@ def run_asr_pipeline(
     write_json(layout.transcript_path, transcription.model_dump(mode="json"))
     normalized_transcription = normalize_transcription(transcription)
     return AsrPipelineResult(
-        transcription=transcription,
-        normalized_transcription=normalized_transcription,
+        transcription=transcription, normalized_transcription=normalized_transcription
     )

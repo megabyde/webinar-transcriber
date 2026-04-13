@@ -1,10 +1,6 @@
 """ASR adapter built on top of the whisper.cpp C API."""
 
-from .carryover import (
-    _carryover_drop_reason,
-    _sanitize_prompt,
-    build_prompt_carryover,
-)
+from .carryover import _carryover_drop_reason, _sanitize_prompt, build_prompt_carryover
 from .config import (
     ASR_BACKEND_NAME,
     DEFAULT_ASR_THREADS,

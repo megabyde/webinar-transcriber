@@ -33,14 +33,12 @@ def normalize_transcription(transcription: TranscriptionResult) -> Transcription
         merged_segments.append(_merge_segment_group(current_segments, len(merged_segments) + 1))
 
     return TranscriptionResult(
-        detected_language=transcription.detected_language,
-        segments=merged_segments,
+        detected_language=transcription.detected_language, segments=merged_segments
     )
 
 
 def _should_flush_before_adding(
-    current_segments: list[TranscriptSegment],
-    next_segment: TranscriptSegment,
+    current_segments: list[TranscriptSegment], next_segment: TranscriptSegment
 ) -> bool:
     if not current_segments:
         return False
@@ -65,10 +63,7 @@ def _should_flush_before_adding(
     )
 
 
-def _merge_segment_group(
-    segments: list[TranscriptSegment],
-    merged_index: int,
-) -> TranscriptSegment:
+def _merge_segment_group(segments: list[TranscriptSegment], merged_index: int) -> TranscriptSegment:
     return TranscriptSegment(
         id=f"segment-{merged_index}",
         text=_merge_text(segments),

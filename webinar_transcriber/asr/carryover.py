@@ -18,9 +18,7 @@ _CARRYOVER_WORD_RE = re.compile(r"[\w']+")
 
 
 def build_prompt_carryover(
-    decoded_window: DecodedWindow,
-    *,
-    settings: PromptCarryoverSettings,
+    decoded_window: DecodedWindow, *, settings: PromptCarryoverSettings
 ) -> str | None:
     """Return a bounded prompt suffix for the next window, or `None` when confidence is weak."""
     if not settings.enabled or not _window_is_confident(decoded_window, settings=settings):
@@ -37,17 +35,13 @@ def build_prompt_carryover(
 
 
 def _window_is_confident(
-    decoded_window: DecodedWindow,
-    *,
-    settings: PromptCarryoverSettings,
+    decoded_window: DecodedWindow, *, settings: PromptCarryoverSettings
 ) -> bool:
     return _carryover_drop_reason(decoded_window, settings=settings) is None
 
 
 def _carryover_drop_reason(
-    decoded_window: DecodedWindow,
-    *,
-    settings: PromptCarryoverSettings,
+    decoded_window: DecodedWindow, *, settings: PromptCarryoverSettings
 ) -> str | None:
     if not settings.enabled:
         return "carryover_disabled"

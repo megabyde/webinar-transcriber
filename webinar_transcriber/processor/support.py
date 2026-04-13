@@ -77,9 +77,7 @@ def write_json(output_path: Path, payload: dict[str, object]) -> None:
 
 
 def progress_updater(
-    reporter: StageReporter,
-    *,
-    stage_key: str,
+    reporter: StageReporter, *, stage_key: str
 ) -> tuple[Callable[..., None], Callable[..., None]]:
     """Return progress update helpers that only advance monotonically."""
     completed = 0.0
@@ -127,10 +125,7 @@ def asr_runtime_detail(transcriber: WhisperCppTranscriber) -> str:
 
 
 def window_transcription_stage_detail(
-    *,
-    window_count: int,
-    total_duration_sec: float,
-    elapsed_sec: float,
+    *, window_count: int, total_duration_sec: float, elapsed_sec: float
 ) -> str:
     """Return the transcribe-stage summary with window count and real-time factor."""
     details = [count_label(window_count, "window")]
@@ -146,11 +141,7 @@ def llm_runtime_detail(*, provider_name: str | None, model_name: str | None) -> 
 
 
 def llm_stage_label(
-    base_label: str,
-    *,
-    provider_name: str | None,
-    model_name: str | None,
-    detail: str | None = None,
+    base_label: str, *, provider_name: str | None, model_name: str | None, detail: str | None = None
 ) -> str:
     """Return one stage label decorated with provider/model details."""
     runtime_detail = llm_runtime_detail(provider_name=provider_name, model_name=model_name)

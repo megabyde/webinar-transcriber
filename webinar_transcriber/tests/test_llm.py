@@ -25,11 +25,7 @@ from webinar_transcriber.llm.utils import (
     truncate_text,
     validated_section_titles,
 )
-from webinar_transcriber.models import (
-    MediaType,
-    ReportDocument,
-    ReportSection,
-)
+from webinar_transcriber.models import MediaType, ReportDocument, ReportSection
 
 
 class TestBuildLlmProcessorFromEnv:
@@ -103,15 +99,14 @@ class TestOpenAiLlmProcessor:
                     summary=["Improved summary."],
                     action_items=["Send the updated draft by Friday."],
                     section_updates=[
-                        ReportSectionUpdate(id="section-1", title="Improved overview"),
+                        ReportSectionUpdate(id="section-1", title="Improved overview")
                     ],
                 ),
                 {"input_tokens": 12, "output_tokens": 8, "total_tokens": 20},
             ),
         ])
         monkeypatch.setattr(
-            "webinar_transcriber.llm.openai_backend.openai.OpenAI",
-            lambda api_key: fake_client,
+            "webinar_transcriber.llm.openai_backend.openai.OpenAI", lambda api_key: fake_client
         )
 
         processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
@@ -148,23 +143,19 @@ class TestOpenAiLlmProcessor:
         fake_client = self.FakeClient([
             self.FakeResponse(
                 output_parsed=SectionTextResponse(
-                    tldr="Agenda recap.",
-                    transcript_text="Agenda review and project status update.",
+                    tldr="Agenda recap.", transcript_text="Agenda review and project status update."
                 ),
                 usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
             ),
             self.FakeResponse(
                 ReportPolishResponse(
-                    section_updates=[
-                        ReportSectionUpdate(id="section-x", title="Unexpected title"),
-                    ]
+                    section_updates=[ReportSectionUpdate(id="section-x", title="Unexpected title")]
                 ),
                 {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5},
             ),
         ])
         monkeypatch.setattr(
-            "webinar_transcriber.llm.openai_backend.openai.OpenAI",
-            lambda api_key: fake_client,
+            "webinar_transcriber.llm.openai_backend.openai.OpenAI", lambda api_key: fake_client
         )
 
         processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
@@ -191,15 +182,13 @@ class TestOpenAiLlmProcessor:
         fake_client = self.FakeClient([
             self.FakeResponse(
                 output_parsed=SectionTextResponse(
-                    tldr="Agenda recap.",
-                    transcript_text="Agenda review and project status update.",
+                    tldr="Agenda recap.", transcript_text="Agenda review and project status update."
                 ),
                 usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
-            ),
+            )
         ])
         monkeypatch.setattr(
-            "webinar_transcriber.llm.openai_backend.openai.OpenAI",
-            lambda api_key: fake_client,
+            "webinar_transcriber.llm.openai_backend.openai.OpenAI", lambda api_key: fake_client
         )
 
         processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
@@ -229,8 +218,7 @@ class TestOpenAiLlmProcessor:
         )
 
         result = processor.polish_report_sections_with_progress(
-            report,
-            progress_callback=lambda advance: progress_updates.append(advance),
+            report, progress_callback=lambda advance: progress_updates.append(advance)
         )
 
         assert len(fake_client.responses.calls) == 1
@@ -288,9 +276,7 @@ class TestAnthropicLlmProcessor:
                 json.dumps({
                     "summary": ["Improved summary."],
                     "action_items": ["Send the updated draft by Friday."],
-                    "section_updates": [
-                        {"id": "section-1", "title": "Improved overview"},
-                    ],
+                    "section_updates": [{"id": "section-1", "title": "Improved overview"}],
                 }),
                 usage=type("Usage", (), {"input_tokens": 12, "output_tokens": 8})(),
             ),
@@ -361,8 +347,7 @@ class TestLlmNormalization:
 
     def test_normalize_report_lines_dedupes_and_limits_case_insensitively(self) -> None:
         normalized = normalize_report_lines(
-            ["  First item  ", "first item", "", "Second item", "Third item"],
-            limit=2,
+            ["  First item  ", "first item", "", "Second item", "Third item"], limit=2
         )
 
         assert normalized == ["First item", "Second item"]
@@ -389,8 +374,7 @@ class TestLlmNormalization:
 
         with pytest.raises(LLMProcessingError, match="unknown section ID"):
             validated_section_titles(
-                report,
-                [ReportSectionUpdate(id="section-x", title="Unexpected title")],
+                report, [ReportSectionUpdate(id="section-x", title="Unexpected title")]
             )
 
         with pytest.raises(LLMProcessingError, match="duplicate section IDs"):

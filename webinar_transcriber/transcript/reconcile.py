@@ -69,14 +69,10 @@ def reconcile_decoded_windows(
                 current_tokens[index].source_segment_id for index in drop_current
             }
             duplicate_segments_dropped += _fully_dropped_segment_count(
-                merged_tokens,
-                drop_previous,
-                previous_segment_ids,
+                merged_tokens, drop_previous, previous_segment_ids
             )
             duplicate_segments_dropped += _fully_dropped_segment_count(
-                current_tokens,
-                drop_current,
-                current_segment_ids,
+                current_tokens, drop_current, current_segment_ids
             )
             merged_tokens = [
                 token for index, token in enumerate(merged_tokens) if index not in drop_previous
@@ -142,8 +138,7 @@ def _window_tokens(decoded_window: DecodedWindow, *, window_order: int) -> list[
 
 
 def _duplicate_token_indices(
-    previous_tokens: list[_TokenPiece],
-    current_tokens: list[_TokenPiece],
+    previous_tokens: list[_TokenPiece], current_tokens: list[_TokenPiece]
 ) -> tuple[set[int], set[int]]:
     if not previous_tokens or not current_tokens:
         return set(), set()
@@ -186,8 +181,7 @@ def _duplicate_token_indices(
 
 
 def _align_overlap(
-    previous_overlap: list[tuple[int, _TokenPiece]],
-    current_overlap: list[tuple[int, _TokenPiece]],
+    previous_overlap: list[tuple[int, _TokenPiece]], current_overlap: list[tuple[int, _TokenPiece]]
 ) -> list[tuple[int, int]]:
     # This uses an O(n^2) LCS table and assumes overlap regions stay short.
     previous_filtered = [(index, token) for index, token in previous_overlap if token.normalized]
@@ -239,9 +233,7 @@ def _group_match_runs(matches: list[tuple[int, int]]) -> list[list[tuple[int, in
 
 
 def _fully_dropped_segment_count(
-    tokens: list[_TokenPiece],
-    dropped_indices: set[int],
-    candidate_segment_ids: set[str],
+    tokens: list[_TokenPiece], dropped_indices: set[int], candidate_segment_ids: set[str]
 ) -> int:
     fully_dropped = 0
     for segment_id in candidate_segment_ids:
@@ -257,18 +249,13 @@ def _mean_edge_distance(overlap: list[tuple[int, _TokenPiece]]) -> float:
     if not overlap:
         return 0.0
     distances = [
-        min(
-            token.center_sec - token.window_start_sec,
-            token.window_end_sec - token.center_sec,
-        )
+        min(token.center_sec - token.window_start_sec, token.window_end_sec - token.center_sec)
         for _, token in overlap
     ]
     return sum(distances) / len(distances)
 
 
-def _segments_from_tokens(
-    tokens: list[_TokenPiece],
-) -> tuple[list[TranscriptSegment], int]:
+def _segments_from_tokens(tokens: list[_TokenPiece]) -> tuple[list[TranscriptSegment], int]:
     if not tokens:
         return [], 0
 
@@ -295,10 +282,7 @@ def _segments_from_tokens(
             return
         segments.append(
             TranscriptSegment(
-                id=f"segment-{segment_index}",
-                text=text,
-                start_sec=start_sec,
-                end_sec=end_sec,
+                id=f"segment-{segment_index}", text=text, start_sec=start_sec, end_sec=end_sec
             )
         )
 

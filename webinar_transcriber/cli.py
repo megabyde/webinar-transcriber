@@ -138,11 +138,7 @@ def main() -> None:
     show_default=True,
     help="Format for the kept transcription audio artifact.",
 )
-@click.option(
-    "--llm",
-    is_flag=True,
-    help="Enable optional provider-backed report enhancement.",
-)
+@click.option("--llm", is_flag=True, help="Enable optional provider-backed report enhancement.")
 def process(
     input_path: Path,
     output_dir: Path | None,
@@ -221,11 +217,7 @@ def extract_frames(input_path: Path, output_dir: Path | None) -> None:
     reporter = RichStageReporter()
 
     try:
-        artifacts = extract_frames_input(
-            input_path,
-            output_dir=output_dir,
-            reporter=reporter,
-        )
+        artifacts = extract_frames_input(input_path, output_dir=output_dir, reporter=reporter)
     except KeyboardInterrupt:
         reporter.interrupted()
         raise click.exceptions.Exit(130) from None

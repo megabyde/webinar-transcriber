@@ -141,11 +141,7 @@ def _iter_sampled_frames(video_path: Path) -> Iterable[tuple[float, np.ndarray]]
     failure: BaseException | None = None
     try:
         while True:
-            chunk = _read_with_timeout(
-                process,
-                frame_size=frame_size,
-                deadline=deadline,
-            )
+            chunk = _read_with_timeout(process, frame_size=frame_size, deadline=deadline)
             if len(chunk) == 0:
                 break
             if len(chunk) != frame_size:
@@ -186,10 +182,7 @@ def _estimate_sample_end_time(last_sample_time: float) -> float:
 
 
 def _read_with_timeout(
-    process: subprocess.Popen[bytes],
-    *,
-    frame_size: int,
-    deadline: float,
+    process: subprocess.Popen[bytes], *, frame_size: int, deadline: float
 ) -> bytes:
     if process.stdout is None:
         raise MediaProcessingError("Could not open ffmpeg pipes for scene detection.")

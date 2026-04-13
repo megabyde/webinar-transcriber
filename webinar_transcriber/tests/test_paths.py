@@ -16,10 +16,7 @@ class TestRunLayout:
         input_path = tmp_path / "Weekly Webinar!.mp4"
         input_path.write_text("demo", encoding="utf-8")
 
-        layout = build_run_layout(
-            input_path=input_path,
-            now=datetime(2026, 3, 18, 20, 30, 45),
-        )
+        layout = build_run_layout(input_path=input_path, now=datetime(2026, 3, 18, 20, 30, 45))
 
         assert layout.run_dir.name == "20260318-203045-000000_weekly-webinar"
         assert layout.markdown_report_path.name == "report.md"

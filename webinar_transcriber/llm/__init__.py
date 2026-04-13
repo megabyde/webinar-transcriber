@@ -18,11 +18,7 @@ from .contracts import (
     SectionTextResponse,
 )
 from .openai_backend import OpenAILLMProcessor
-from .prompts import (
-    ACTION_ITEM_LIMIT,
-    REPORT_POLISH_TOTAL_CHAR_BUDGET,
-    SECTION_POLISH_MAX_WORKERS,
-)
+from .prompts import ACTION_ITEM_LIMIT, REPORT_POLISH_TOTAL_CHAR_BUDGET, SECTION_POLISH_MAX_WORKERS
 from .utils import required_provider_env
 
 
@@ -32,14 +28,12 @@ def build_llm_processor_from_env() -> LLMProcessor:
     match provider:
         case "openai":
             api_key, model_name = required_provider_env(
-                api_key_env="OPENAI_API_KEY",
-                model_env="OPENAI_MODEL",
+                api_key_env="OPENAI_API_KEY", model_env="OPENAI_MODEL"
             )
             return OpenAILLMProcessor(api_key=api_key, model_name=model_name)
         case "anthropic":
             api_key, model_name = required_provider_env(
-                api_key_env="ANTHROPIC_API_KEY",
-                model_env="ANTHROPIC_MODEL",
+                api_key_env="ANTHROPIC_API_KEY", model_env="ANTHROPIC_MODEL"
             )
             return AnthropicLLMProcessor(api_key=api_key, model_name=model_name)
         case _:

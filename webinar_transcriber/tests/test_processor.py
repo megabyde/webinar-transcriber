@@ -107,11 +107,7 @@ class RecordingReporter:
         self.progress_events.append(("start", stage_key, total, detail))
 
     def progress_advanced(
-        self,
-        stage_key: str,
-        *,
-        advance: float = 1.0,
-        detail: str | None = None,
+        self, stage_key: str, *, advance: float = 1.0, detail: str | None = None
     ) -> None:
         self.progress_events.append(("advance", stage_key, advance, detail))
 
@@ -138,10 +134,7 @@ class RecordingReporter:
         return (event_type, stage_key, detail) in self.events
 
     def has_event_detail(
-        self,
-        event_type: str,
-        stage_key: str,
-        predicate: Callable[[str], bool],
+        self, event_type: str, stage_key: str, predicate: Callable[[str], bool]
     ) -> bool:
         return any(
             event[0] == event_type and event[1] == stage_key and predicate(event[2])
@@ -152,19 +145,12 @@ class RecordingReporter:
         return [event for event in self.events if event[0] == event_type and event[1] == stage_key]
 
     def has_progress_event(
-        self,
-        event_type: str,
-        stage_key: str,
-        value: float,
-        detail: str | None,
+        self, event_type: str, stage_key: str, value: float, detail: str | None
     ) -> bool:
         return (event_type, stage_key, value, detail) in self.progress_events
 
     def has_progress_event_detail(
-        self,
-        event_type: str,
-        stage_key: str,
-        predicate: Callable[[str | None], bool],
+        self, event_type: str, stage_key: str, predicate: Callable[[str | None], bool]
     ) -> bool:
         return any(
             event[0] == event_type and event[1] == stage_key and predicate(event[3])
@@ -172,9 +158,7 @@ class RecordingReporter:
         )
 
     def progress_stage_events(
-        self,
-        event_type: str,
-        stage_key: str,
+        self, event_type: str, stage_key: str
     ) -> list[tuple[str, str, float, str | None]]:
         return [
             event
@@ -188,10 +172,7 @@ class TestProcessInput:
         """Stable whisper-style test double for deterministic transcripts."""
 
         def __init__(
-            self,
-            *,
-            detected_language: str = "en",
-            segments: list[TranscriptSegment] | None = None,
+            self, *, detected_language: str = "en", segments: list[TranscriptSegment] | None = None
         ) -> None:
             super().__init__(model_name="test-model")
             self._detected_language = detected_language
@@ -222,11 +203,7 @@ class TestProcessInput:
             """No-op test hook for the ASR preparation stage."""
 
         def transcribe_inference_windows(
-            self,
-            audio_samples,
-            windows,
-            *,
-            progress_callback=None,
+            self, audio_samples, windows, *, progress_callback=None
         ) -> list[DecodedWindow]:
             del audio_samples
             if progress_callback is not None:
@@ -285,9 +262,7 @@ class TestProcessInput:
         assert reporter.has_event("finish", "prepare_asr", "test-model | cpu")
         assert any(event[0] == "complete" for event in reporter.events)
         assert reporter.has_event_detail(
-            "finish",
-            "transcribe",
-            lambda detail: "window" in detail and "RTF" in detail,
+            "finish", "transcribe", lambda detail: "window" in detail and "RTF" in detail
         )
         transcribe_start_events = reporter.progress_stage_events("start", "transcribe")
         assert transcribe_start_events == [
@@ -296,9 +271,7 @@ class TestProcessInput:
         vad_start_events = reporter.progress_stage_events("start", "vad")
         assert vad_start_events == [("start", "vad", artifacts.media_asset.duration_sec, None)]
         assert reporter.has_progress_event_detail(
-            "advance",
-            "transcribe",
-            lambda detail: detail == "2 segments",
+            "advance", "transcribe", lambda detail: detail == "2 segments"
         )
         structure_start_events = reporter.progress_stage_events("start", "structure")
         assert structure_start_events == [
@@ -310,14 +283,10 @@ class TestProcessInput:
             )
         ]
         assert reporter.has_progress_event_detail(
-            "advance",
-            "structure",
-            lambda detail: detail == "1 section",
+            "advance", "structure", lambda detail: detail == "1 section"
         )
         assert reporter.has_progress_event_detail(
-            "advance",
-            "vad",
-            lambda detail: detail == "1 region",
+            "advance", "vad", lambda detail: detail == "1 region"
         )
         assert diagnostics_payload["asr_backend"] == "whisper.cpp"
         assert diagnostics_payload["asr_model"] == "test-model"
@@ -355,9 +324,7 @@ class TestProcessInput:
         transcriber = CloseTrackingTranscriber()
 
         process_input(
-            FIXTURE_DIR / "sample-audio.mp3",
-            output_dir=tmp_path / "run",
-            transcriber=transcriber,
+            FIXTURE_DIR / "sample-audio.mp3", output_dir=tmp_path / "run", transcriber=transcriber
         )
 
         assert transcriber.close_calls == 0
@@ -375,8 +342,7 @@ class TestProcessInput:
 
         transcriber = CloseTrackingTranscriber()
         monkeypatch.setattr(
-            "webinar_transcriber.asr.WhisperCppTranscriber",
-            lambda *args, **kwargs: transcriber,
+            "webinar_transcriber.asr.WhisperCppTranscriber", lambda *args, **kwargs: transcriber
         )
         monkeypatch.setattr(
             "webinar_transcriber.processor.asr.run_asr_pipeline",
@@ -384,10 +350,7 @@ class TestProcessInput:
         )
 
         with pytest.raises(RuntimeError, match="asr failed"):
-            process_input(
-                FIXTURE_DIR / "sample-audio.mp3",
-                output_dir=tmp_path / "run",
-            )
+            process_input(FIXTURE_DIR / "sample-audio.mp3", output_dir=tmp_path / "run")
 
         assert transcriber.close_calls == 1
 
@@ -435,15 +398,10 @@ class TestProcessInput:
         assert artifacts.report.sections[0].image_path
         assert reporter.has_progress_event("start", "detect_scenes", 2, "0 scenes")
         assert reporter.has_progress_event_detail(
-            "advance",
-            "detect_scenes",
-            lambda detail: detail == "1 scene" or detail == "2 scenes",
+            "advance", "detect_scenes", lambda detail: detail == "1 scene" or detail == "2 scenes"
         )
         assert reporter.has_progress_event(
-            "start",
-            "extract_frames",
-            artifacts.diagnostics.item_counts["scenes"],
-            None,
+            "start", "extract_frames", artifacts.diagnostics.item_counts["scenes"], None
         )
 
     def test_runs_windowed_whispercpp_pipeline(self, tmp_path, monkeypatch) -> None:
@@ -458,11 +416,7 @@ class TestProcessInput:
                 return None
 
             def transcribe_inference_windows(
-                self,
-                audio_samples,
-                windows,
-                *,
-                progress_callback=None,
+                self, audio_samples, windows, *, progress_callback=None
             ) -> list[DecodedWindow]:
                 del audio_samples
                 if progress_callback is not None:
@@ -579,11 +533,7 @@ class TestProcessInput:
                 return None
 
             def transcribe_inference_windows(
-                self,
-                audio_samples,
-                windows,
-                *,
-                progress_callback=None,
+                self, audio_samples, windows, *, progress_callback=None
             ) -> list[DecodedWindow]:
                 del audio_samples, progress_callback
                 return [
@@ -604,10 +554,7 @@ class TestProcessInput:
 
         output_dir = tmp_path / "failed-run"
         with (
-            patch(
-                "webinar_transcriber.structure.build_report",
-                side_effect=RuntimeError("boom"),
-            ),
+            patch("webinar_transcriber.structure.build_report", side_effect=RuntimeError("boom")),
             patch(
                 "webinar_transcriber.processor.asr.load_normalized_audio",
                 return_value=(np.zeros(16_000, dtype=np.float32), 16_000),
@@ -650,23 +597,14 @@ class TestProcessInput:
         )
         monkeypatch.setattr(
             "webinar_transcriber.video.detect_scenes",
-            lambda *_args, **_kwargs: [
-                Scene(
-                    id="scene-1",
-                    start_sec=0.0,
-                    end_sec=2.0,
-                )
-            ],
+            lambda *_args, **_kwargs: [Scene(id="scene-1", start_sec=0.0, end_sec=2.0)],
         )
         monkeypatch.setattr(
-            "webinar_transcriber.video.extract_representative_frames",
-            lambda *_args, **_kwargs: [],
+            "webinar_transcriber.video.extract_representative_frames", lambda *_args, **_kwargs: []
         )
 
         artifacts = extract_frames_input(
-            FIXTURE_DIR / "sample-video.mp4",
-            output_dir=tmp_path / "frames-run",
-            reporter=reporter,
+            FIXTURE_DIR / "sample-video.mp4", output_dir=tmp_path / "frames-run", reporter=reporter
         )
 
         assert isinstance(artifacts, FrameExtractionArtifacts)
@@ -680,9 +618,7 @@ class TestProcessInput:
 class TestProcessorHelpers:
     def test_window_transcription_stage_detail_reports_rtf(self) -> None:
         detail = window_transcription_stage_detail(
-            window_count=1,
-            total_duration_sec=12.5,
-            elapsed_sec=2.5,
+            window_count=1, total_duration_sec=12.5, elapsed_sec=2.5
         )
 
         assert detail == "1 window | RTF 0.20"
@@ -706,8 +642,7 @@ class TestProcessorHelpers:
 
 @pytest.fixture
 def llm_success_result(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[ProcessArtifacts, RecordingReporter]:
     install_basic_windowing(monkeypatch)
     reporter = RecordingReporter()
@@ -717,16 +652,12 @@ def llm_success_result(
         model_name = "test-llm-model"
 
         def report_polish_plan(self, report) -> LLMReportPolishPlan:
-            return LLMReportPolishPlan(
-                section_count=len(report.sections),
-                worker_count=1,
-            )
+            return LLMReportPolishPlan(section_count=len(report.sections), worker_count=1)
 
         def polish_report(self, report):
             section_result = self.polish_report_sections_with_progress(report)
             metadata_result = self.polish_report_metadata(
-                report,
-                section_transcripts=section_result.section_transcripts,
+                report, section_transcripts=section_result.section_transcripts
             )
             return LLMReportPolishResult(
                 summary=metadata_result.summary,
@@ -734,19 +665,12 @@ def llm_success_result(
                 section_titles=metadata_result.section_titles,
                 section_tldrs=section_result.section_tldrs,
                 section_transcripts=section_result.section_transcripts,
-                usage={
-                    "input_tokens": 20,
-                    "output_tokens": 6,
-                    "total_tokens": 26,
-                },
+                usage={"input_tokens": 20, "output_tokens": 6, "total_tokens": 26},
                 warnings=section_result.warnings,
             )
 
         def polish_report_sections_with_progress(
-            self,
-            report,
-            *,
-            progress_callback: Callable[[int], None] | None = None,
+            self, report, *, progress_callback: Callable[[int], None] | None = None
         ) -> LLMSectionPolishResult:
             if progress_callback is not None:
                 progress_callback(len(report.sections))
@@ -765,10 +689,7 @@ def llm_success_result(
             )
 
         def polish_report_metadata(
-            self,
-            report,
-            *,
-            section_transcripts: dict[str, str],
+            self, report, *, section_transcripts: dict[str, str]
         ) -> LLMReportMetadataResult:
             assert "section-1" in section_transcripts
             return LLMReportMetadataResult(
@@ -879,20 +800,13 @@ class TestProcessInputLlm:
 
             def report_polish_plan(self, report) -> LLMReportPolishPlan:
                 del report
-                return LLMReportPolishPlan(
-                    section_count=1,
-                    worker_count=1,
-                    skipped_section_count=1,
-                )
+                return LLMReportPolishPlan(section_count=1, worker_count=1, skipped_section_count=1)
 
             def polish_report(self, report):
                 raise AssertionError("process_input should call phase-specific methods")
 
             def polish_report_sections_with_progress(
-                self,
-                report,
-                *,
-                progress_callback: Callable[[int], None] | None = None,
+                self, report, *, progress_callback: Callable[[int], None] | None = None
             ) -> LLMSectionPolishResult:
                 del report
                 if progress_callback is not None:
@@ -912,10 +826,7 @@ class TestProcessInputLlm:
                 )
 
             def polish_report_metadata(
-                self,
-                report,
-                *,
-                section_transcripts: dict[str, str],
+                self, report, *, section_transcripts: dict[str, str]
             ) -> LLMReportMetadataResult:
                 assert report.sections[1].id == "section-2"
                 assert section_transcripts["section-2"] == EXPECTED_LLM_SECTION_TEXT
@@ -940,14 +851,10 @@ class TestProcessInputLlm:
             ("advance", "llm_report_sections", 1.0, None)
         ]
         assert reporter.has_event(
-            "finish",
-            "llm_report_sections",
-            "1 section | 1 skipped interlude",
+            "finish", "llm_report_sections", "1 section | 1 skipped interlude"
         )
         assert reporter.has_event(
-            "finish",
-            "llm_report",
-            "1 summary bullet | 1 action item | 1 TL;DR | 26 tokens",
+            "finish", "llm_report", "1 summary bullet | 1 action item | 1 TL;DR | 26 tokens"
         )
         assert artifacts.report.sections[0].transcript_text.startswith("Music interlude.")
         assert artifacts.report.sections[1].title == "Refined section title"
@@ -987,30 +894,19 @@ class TestProcessInputLlm:
             model_name = "test-llm-model"
 
             def report_polish_plan(self, report) -> LLMReportPolishPlan:
-                return LLMReportPolishPlan(
-                    section_count=len(report.sections),
-                    worker_count=1,
-                )
+                return LLMReportPolishPlan(section_count=len(report.sections), worker_count=1)
 
             def polish_report(self, report):
                 raise LLMProcessingError("Report polishing failed: backend timeout")
 
             def polish_report_sections_with_progress(
-                self,
-                report,
-                *,
-                progress_callback: Callable[[int], None] | None = None,
+                self, report, *, progress_callback: Callable[[int], None] | None = None
             ):
                 if progress_callback is not None:
                     progress_callback(len(report.sections))
                 raise LLMProcessingError("Report polishing failed: backend timeout")
 
-            def polish_report_metadata(
-                self,
-                report,
-                *,
-                section_transcripts: dict[str, str],
-            ):
+            def polish_report_metadata(self, report, *, section_transcripts: dict[str, str]):
                 raise AssertionError("metadata polish should not run after section failure")
 
         artifacts = process_input(
@@ -1030,9 +926,7 @@ class TestProcessInputLlm:
         assert fallback_finish in reporter.events
 
     def test_records_both_llm_stage_timings_when_metadata_polish_falls_back(
-        self,
-        tmp_path,
-        monkeypatch,
+        self, tmp_path, monkeypatch
     ) -> None:
         install_basic_windowing(monkeypatch)
         reporter = RecordingReporter()
@@ -1042,16 +936,10 @@ class TestProcessInputLlm:
             model_name = "test-llm-model"
 
             def report_polish_plan(self, report) -> LLMReportPolishPlan:
-                return LLMReportPolishPlan(
-                    section_count=len(report.sections),
-                    worker_count=1,
-                )
+                return LLMReportPolishPlan(section_count=len(report.sections), worker_count=1)
 
             def polish_report_sections_with_progress(
-                self,
-                report,
-                *,
-                progress_callback: Callable[[int], None] | None = None,
+                self, report, *, progress_callback: Callable[[int], None] | None = None
             ) -> LLMSectionPolishResult:
                 if progress_callback is not None:
                     progress_callback(len(report.sections))
@@ -1065,10 +953,7 @@ class TestProcessInputLlm:
                 )
 
             def polish_report_metadata(
-                self,
-                report,
-                *,
-                section_transcripts: dict[str, str],
+                self, report, *, section_transcripts: dict[str, str]
             ) -> LLMReportMetadataResult:
                 del report, section_transcripts
                 raise LLMProcessingError("metadata polish failed")
@@ -1091,8 +976,4 @@ class TestProcessInputLlm:
             + artifacts.diagnostics.stage_durations_sec["llm_report_metadata"],
             abs=1e-4,
         )
-        assert reporter.has_event(
-            "finish",
-            "llm_report",
-            "openai | test-llm-model | fallback",
-        )
+        assert reporter.has_event("finish", "llm_report", "openai | test-llm-model | fallback")

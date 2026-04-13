@@ -69,8 +69,7 @@ class TestNormalizedAudio:
     def test_preserve_transcription_audio_copies_wav_output(self, tmp_path: Path) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
             kept_audio_path = preserve_transcription_audio(
-                audio_path,
-                tmp_path / "transcription-audio.wav",
+                audio_path, tmp_path / "transcription-audio.wav"
             )
 
         assert kept_audio_path.exists()
@@ -78,9 +77,7 @@ class TestNormalizedAudio:
         assert kept_audio_path.read_bytes()[:4] == b"RIFF"
 
     def test_preserve_transcription_audio_transcodes_mp3_output(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        tmp_path: Path,
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
             expected_output = tmp_path / "transcription-audio.mp3"
@@ -92,13 +89,10 @@ class TestNormalizedAudio:
                 return output_path
 
             monkeypatch.setattr(
-                "webinar_transcriber.normalized_audio.transcode_audio_to_mp3",
-                fake_transcode,
+                "webinar_transcriber.normalized_audio.transcode_audio_to_mp3", fake_transcode
             )
             kept_audio_path = preserve_transcription_audio(
-                audio_path,
-                expected_output,
-                audio_format="mp3",
+                audio_path, expected_output, audio_format="mp3"
             )
 
         assert calls == [(audio_path, expected_output)]
@@ -115,8 +109,7 @@ class TestNormalizedAudio:
         assert samples.size > 0
 
     def test_detect_speech_regions_falls_back_to_full_audio_without_silero(
-        self,
-        monkeypatch,
+        self, monkeypatch
     ) -> None:
         monkeypatch.setattr(
             "webinar_transcriber.segmentation._silero_speech_timestamps",
@@ -124,11 +117,7 @@ class TestNormalizedAudio:
         )
 
         samples = np.zeros(16_000, dtype=np.float32)
-        regions, warnings = detect_speech_regions(
-            samples,
-            16_000,
-            enabled=True,
-        )
+        regions, warnings = detect_speech_regions(samples, 16_000, enabled=True)
 
         assert len(regions) == 1
         assert regions[0].start_sec == 0.0
@@ -137,9 +126,7 @@ class TestNormalizedAudio:
 
     def test_detect_speech_regions_returns_empty_for_zero_duration(self) -> None:
         regions, warnings = detect_speech_regions(
-            np.zeros(0, dtype=np.float32),
-            16_000,
-            enabled=True,
+            np.zeros(0, dtype=np.float32), 16_000, enabled=True
         )
 
         assert regions == []
@@ -147,9 +134,7 @@ class TestNormalizedAudio:
 
     def test_detect_speech_regions_returns_full_audio_when_vad_disabled(self) -> None:
         regions, warnings = detect_speech_regions(
-            np.zeros(8_000, dtype=np.float32),
-            16_000,
-            enabled=False,
+            np.zeros(8_000, dtype=np.float32), 16_000, enabled=False
         )
 
         assert len(regions) == 1
@@ -163,9 +148,7 @@ class TestNormalizedAudio:
         )
 
         regions, warnings = detect_speech_regions(
-            np.zeros(16_000, dtype=np.float32),
-            16_000,
-            enabled=True,
+            np.zeros(16_000, dtype=np.float32), 16_000, enabled=True
         )
 
         assert regions == []
@@ -233,8 +216,7 @@ class TestNormalizedAudio:
 
     def test_silero_speech_timestamps_returns_none_when_module_missing(self) -> None:
         with patch(
-            "webinar_transcriber.segmentation.importlib.import_module",
-            side_effect=ImportError,
+            "webinar_transcriber.segmentation.importlib.import_module", side_effect=ImportError
         ):
             timestamps = _silero_speech_timestamps(
                 np.zeros(16_000, dtype=np.float32),
@@ -248,21 +230,13 @@ class TestNormalizedAudio:
         assert timestamps is None
 
     def test_silero_speech_timestamps_uses_vad_iterator_and_reports_progress(
-        self,
-        monkeypatch,
-        fake_silero_import_module,
+        self, monkeypatch, fake_silero_import_module
     ) -> None:
         progress: list[tuple[float, int]] = []
 
         class FakeIterator:
             def __init__(
-                self,
-                _model,
-                *,
-                threshold,
-                sampling_rate,
-                min_silence_duration_ms,
-                speech_pad_ms,
+                self, _model, *, threshold, sampling_rate, min_silence_duration_ms, speech_pad_ms
             ) -> None:
                 assert threshold == 0.5
                 assert sampling_rate == 16_000
@@ -302,13 +276,10 @@ class TestNormalizedAudio:
         assert progress[-1][1] == 1
 
     def test_silero_speech_timestamps_requires_normalized_16khz_audio(
-        self,
-        monkeypatch,
-        fake_silero_import_module,
+        self, monkeypatch, fake_silero_import_module
     ) -> None:
         monkeypatch.setattr(
-            "webinar_transcriber.segmentation.importlib.import_module",
-            fake_silero_import_module(),
+            "webinar_transcriber.segmentation.importlib.import_module", fake_silero_import_module()
         )
 
         with pytest.raises(AssertionError, match="16000 Hz"):
@@ -322,9 +293,7 @@ class TestNormalizedAudio:
             )
 
     def test_silero_speech_timestamps_flushes_open_speech_at_end_of_stream(
-        self,
-        monkeypatch,
-        fake_silero_import_module,
+        self, monkeypatch, fake_silero_import_module
     ) -> None:
         class FakeIterator:
             def __init__(self, *_args, **_kwargs) -> None:
@@ -388,17 +357,10 @@ class TestNormalizedAudio:
 
     @pytest.mark.parametrize(
         ("channels", "sample_width", "message"),
-        [
-            (2, 2, "Expected mono transcription audio"),
-            (1, 1, "Expected 16-bit PCM"),
-        ],
+        [(2, 2, "Expected mono transcription audio"), (1, 1, "Expected 16-bit PCM")],
     )
     def test_load_normalized_audio_rejects_invalid_channel_or_sample_width(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        channels: int,
-        sample_width: int,
-        message: str,
+        self, monkeypatch: pytest.MonkeyPatch, channels: int, sample_width: int, message: str
     ) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
 

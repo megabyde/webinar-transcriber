@@ -71,10 +71,7 @@ class _BaseLLMProcessor:
         return self.polish_report_with_progress(report)
 
     def polish_report_sections_with_progress(
-        self,
-        report: ReportDocument,
-        *,
-        progress_callback: Callable[[int], None] | None = None,
+        self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
     ) -> LLMSectionPolishResult:
         """Polish section transcript text with per-section progress updates."""
         usage_totals: dict[str, int] = {}
@@ -93,18 +90,14 @@ class _BaseLLMProcessor:
         )
 
     def polish_report_metadata(
-        self,
-        report: ReportDocument,
-        *,
-        section_transcripts: dict[str, str],
+        self, report: ReportDocument, *, section_transcripts: dict[str, str]
     ) -> LLMReportMetadataResult:
         """Polish report summary, action items, and section titles."""
         polished_report = report.model_copy(deep=True)
         for section in polished_report.sections:
             section.transcript_text = section_transcripts.get(section.id, section.transcript_text)
         payload = build_report_polish_payload(
-            polished_report,
-            total_char_budget=self._report_char_budget,
+            polished_report, total_char_budget=self._report_char_budget
         )
         parsed, usage = self._parse_structured_response(
             system_prompt=REPORT_POLISH_SYSTEM_PROMPT,
@@ -115,28 +108,20 @@ class _BaseLLMProcessor:
 
         return LLMReportMetadataResult(
             summary=normalize_report_lines(parsed.summary, limit=SUMMARY_ITEM_LIMIT),
-            action_items=normalize_report_lines(
-                parsed.action_items,
-                limit=ACTION_ITEM_LIMIT,
-            ),
+            action_items=normalize_report_lines(parsed.action_items, limit=ACTION_ITEM_LIMIT),
             section_titles=validated_section_titles(report, parsed.section_updates),
             usage=usage,
         )
 
     def polish_report_with_progress(
-        self,
-        report: ReportDocument,
-        *,
-        progress_callback: Callable[[int], None] | None = None,
+        self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
     ) -> LLMReportPolishResult:
         """Polish section text first, then polish report summary and section titles."""
         section_result = self.polish_report_sections_with_progress(
-            report,
-            progress_callback=progress_callback,
+            report, progress_callback=progress_callback
         )
         metadata_result = self.polish_report_metadata(
-            report,
-            section_transcripts=section_result.section_transcripts,
+            report, section_transcripts=section_result.section_transcripts
         )
         usage_totals = merge_usage(section_result.usage, metadata_result.usage)
 
@@ -204,14 +189,10 @@ class _BaseLLMProcessor:
                 if progress_callback is not None:
                     progress_callback(1)
 
-        return _SectionPolishOutputs(
-            transcripts=polished_transcripts,
-            tldrs=polished_tldrs,
-        )
+        return _SectionPolishOutputs(transcripts=polished_transcripts, tldrs=polished_tldrs)
 
     def _polish_section_text(
-        self,
-        section: ReportSection,
+        self, section: ReportSection
     ) -> tuple[str, str, dict[str, int], list[str]]:
         payload = {
             "id": section.id,

@@ -1,12 +1,7 @@
 """Alignment helpers for transcript segments and video scenes."""
 
 from webinar_transcriber.labels import count_label
-from webinar_transcriber.models import (
-    AlignmentBlock,
-    Scene,
-    SlideFrame,
-    TranscriptSegment,
-)
+from webinar_transcriber.models import AlignmentBlock, Scene, SlideFrame, TranscriptSegment
 
 
 def align_by_time(
@@ -63,9 +58,7 @@ def align_by_time(
             ).strip()
 
         if warnings is not None:
-            warnings.append(
-                _orphan_alignment_warning(orphan_count=len(orphan_segments)),
-            )
+            warnings.append(_orphan_alignment_warning(orphan_count=len(orphan_segments)))
 
     return blocks
 

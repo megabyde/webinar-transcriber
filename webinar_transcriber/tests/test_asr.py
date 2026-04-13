@@ -40,11 +40,7 @@ class TestWhisperCppTranscriber:
         assert "--asr-model" in message
         assert "README.md" in message
 
-    def test_prepare_model_missing_default_model_is_actionable(
-        self,
-        tmp_path,
-        monkeypatch,
-    ) -> None:
+    def test_prepare_model_missing_default_model_is_actionable(self, tmp_path, monkeypatch) -> None:
         with pytest.raises(RuntimeError, match="model file does not exist") as error:
             WhisperCppTranscriber(
                 model_name=str(tmp_path / "missing-default-model.bin")
@@ -54,9 +50,7 @@ class TestWhisperCppTranscriber:
         assert str(DEFAULT_WHISPER_CPP_MODEL_EXAMPLE) in message
 
     def test_prepare_model_downloads_default_model_into_hf_cache(
-        self,
-        tmp_path,
-        monkeypatch,
+        self, tmp_path, monkeypatch
     ) -> None:
         cached_model_path = tmp_path / "hf-cache" / "ggml-large-v3-turbo.bin"
         cached_model_path.parent.mkdir(parents=True)
@@ -75,8 +69,7 @@ class TestWhisperCppTranscriber:
 
                 class FakeSession:
                     runtime_details = WhisperCppRuntimeDetails(
-                        library_path="/usr/local/lib/libwhisper.so",
-                        system_info="CPU = 1",
+                        library_path="/usr/local/lib/libwhisper.so", system_info="CPU = 1"
                     )
 
                     def close(self) -> None:
@@ -88,10 +81,7 @@ class TestWhisperCppTranscriber:
             "webinar_transcriber.asr.transcriber._download_default_whisper_cpp_model",
             lambda: cached_model_path,
         )
-        monkeypatch.setattr(
-            "webinar_transcriber.asr.transcriber.WhisperCppLibrary",
-            FakeLibrary,
-        )
+        monkeypatch.setattr("webinar_transcriber.asr.transcriber.WhisperCppLibrary", FakeLibrary)
 
         transcriber = WhisperCppTranscriber()
         transcriber.prepare_model()
@@ -113,9 +103,7 @@ class TestWhisperCppTranscriber:
         assert str(DEFAULT_WHISPER_CPP_MODEL_EXAMPLE) in message
 
     def test_prepare_model_does_not_download_explicit_model_path(
-        self,
-        tmp_path,
-        monkeypatch,
+        self, tmp_path, monkeypatch
     ) -> None:
         explicit_model_path = tmp_path / "missing.bin"
         download_calls: list[None] = []
@@ -143,8 +131,7 @@ class TestWhisperCppTranscriber:
 
                 class FakeSession:
                     runtime_details = WhisperCppRuntimeDetails(
-                        library_path="/usr/local/lib/libwhisper.so",
-                        system_info="METAL = 1",
+                        library_path="/usr/local/lib/libwhisper.so", system_info="METAL = 1"
                     )
 
                     def close(self) -> None:
@@ -152,10 +139,7 @@ class TestWhisperCppTranscriber:
 
                 return FakeSession()
 
-        monkeypatch.setattr(
-            "webinar_transcriber.asr.transcriber.WhisperCppLibrary",
-            FakeLibrary,
-        )
+        monkeypatch.setattr("webinar_transcriber.asr.transcriber.WhisperCppLibrary", FakeLibrary)
 
         transcriber = WhisperCppTranscriber(model_name=str(model_path))
         transcriber.prepare_model()
@@ -165,9 +149,7 @@ class TestWhisperCppTranscriber:
         assert transcriber.library_path == "/usr/local/lib/libwhisper.so"
 
     def test_transcriber_context_manager_closes_prepared_session(
-        self,
-        monkeypatch,
-        tmp_path,
+        self, monkeypatch, tmp_path
     ) -> None:
         from webinar_transcriber.whispercpp import WhisperCppRuntimeDetails
 
@@ -177,8 +159,7 @@ class TestWhisperCppTranscriber:
 
         class FakeSession:
             runtime_details = WhisperCppRuntimeDetails(
-                library_path="/usr/local/lib/libwhisper.so",
-                system_info="CPU = 1",
+                library_path="/usr/local/lib/libwhisper.so", system_info="CPU = 1"
             )
 
             def close(self) -> None:
@@ -192,10 +173,7 @@ class TestWhisperCppTranscriber:
             def create_session(self, _model_path):
                 return FakeSession()
 
-        monkeypatch.setattr(
-            "webinar_transcriber.asr.transcriber.WhisperCppLibrary",
-            FakeLibrary,
-        )
+        monkeypatch.setattr("webinar_transcriber.asr.transcriber.WhisperCppLibrary", FakeLibrary)
 
         with WhisperCppTranscriber(model_name=str(model_path)) as transcriber:
             transcriber.prepare_model()
@@ -204,9 +182,7 @@ class TestWhisperCppTranscriber:
         assert close_calls == ["closed"]
 
     def test_whisper_cpp_transcriber_carries_input_prompt_into_decoded_windows(
-        self,
-        monkeypatch,
-        tmp_path,
+        self, monkeypatch, tmp_path
     ) -> None:
         model_path = tmp_path / "model.bin"
         model_path.write_text("stub", encoding="utf-8")
@@ -222,18 +198,11 @@ class TestWhisperCppTranscriber:
 
                 class FakeSession:
                     runtime_details = WhisperCppRuntimeDetails(
-                        library_path="/usr/local/lib/libwhisper.so",
-                        system_info="CPU = 1",
+                        library_path="/usr/local/lib/libwhisper.so", system_info="CPU = 1"
                     )
 
                     def decode_window(
-                        self,
-                        audio_samples,
-                        window,
-                        *,
-                        threads,
-                        prompt=None,
-                        language_hint=None,
+                        self, audio_samples, window, *, threads, prompt=None, language_hint=None
                     ):
                         del audio_samples, language_hint
                         assert threads == 6
@@ -247,10 +216,7 @@ class TestWhisperCppTranscriber:
                             language="ru",
                             segments=[
                                 TranscriptSegment(
-                                    id="segment-1",
-                                    text="agenda review",
-                                    start_sec=0.0,
-                                    end_sec=1.0,
+                                    id="segment-1", text="agenda review", start_sec=0.0, end_sec=1.0
                                 )
                             ],
                         )
@@ -260,27 +226,14 @@ class TestWhisperCppTranscriber:
 
                 return FakeSession()
 
-        monkeypatch.setattr(
-            "webinar_transcriber.asr.transcriber.WhisperCppLibrary",
-            FakeLibrary,
-        )
+        monkeypatch.setattr("webinar_transcriber.asr.transcriber.WhisperCppLibrary", FakeLibrary)
 
         transcriber = WhisperCppTranscriber(model_name=str(model_path), threads=6)
         decoded_windows = transcriber.transcribe_inference_windows(
             np.zeros(16_000, dtype=np.float32),
             [
-                InferenceWindow(
-                    window_id="window-1",
-                    region_index=0,
-                    start_sec=0.0,
-                    end_sec=1.0,
-                ),
-                InferenceWindow(
-                    window_id="window-2",
-                    region_index=0,
-                    start_sec=1.0,
-                    end_sec=2.0,
-                ),
+                InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
+                InferenceWindow(window_id="window-2", region_index=0, start_sec=1.0, end_sec=2.0),
             ],
             progress_callback=lambda completed_sec, _segment_count: progress_updates.append(
                 completed_sec
@@ -305,9 +258,7 @@ class TestWhisperCppTranscriber:
 
     @pytest.mark.parametrize("stdout", ["abc", "0"])
     def test_read_sysctl_int_returns_none_for_invalid_or_nonpositive_values(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        stdout: str,
+        self, monkeypatch: pytest.MonkeyPatch, stdout: str
     ) -> None:
         monkeypatch.setattr(
             "webinar_transcriber.asr.config.subprocess.run",
@@ -316,10 +267,7 @@ class TestWhisperCppTranscriber:
 
         assert _read_sysctl_int("hw.physicalcpu") is None
 
-    def test_read_sysctl_int_returns_none_on_timeout(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+    def test_read_sysctl_int_returns_none_on_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
         def fake_run(*_args, **_kwargs):
             raise subprocess.TimeoutExpired(cmd=["sysctl"], timeout=1.0)
 
@@ -337,13 +285,7 @@ class TestWhisperCppTranscriber:
     def test_transcribe_inference_windows_reuses_existing_session_without_prepare(self) -> None:
         class FakeSession:
             def decode_window(
-                self,
-                audio_samples,
-                window,
-                *,
-                threads,
-                prompt=None,
-                language_hint=None,
+                self, audio_samples, window, *, threads, prompt=None, language_hint=None
             ):
                 del audio_samples, threads, prompt, language_hint
                 return DecodedWindow(
@@ -373,14 +315,7 @@ class TestWhisperCppTranscriber:
 
         decoded_windows = transcriber.transcribe_inference_windows(
             np.zeros(16_000, dtype=np.float32),
-            [
-                InferenceWindow(
-                    window_id="window-1",
-                    region_index=0,
-                    start_sec=0.0,
-                    end_sec=1.0,
-                )
-            ],
+            [InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
         )
 
         assert [window.text for window in decoded_windows] == ["agenda review"]
@@ -452,22 +387,17 @@ class TestPromptCarryover:
     def test_carryover_drop_reason_covers_disabled_and_empty_windows(self) -> None:
         decoded_window = DecodedWindow(
             window=InferenceWindow(
-                window_id="window-1",
-                region_index=0,
-                start_sec=0.0,
-                end_sec=1.0,
+                window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0
             ),
             text="",
             segments=[],
         )
 
         disabled_reason = _carryover_drop_reason(
-            decoded_window,
-            settings=PromptCarryoverSettings(enabled=False),
+            decoded_window, settings=PromptCarryoverSettings(enabled=False)
         )
         empty_text_reason = _carryover_drop_reason(
-            decoded_window,
-            settings=PromptCarryoverSettings(),
+            decoded_window, settings=PromptCarryoverSettings()
         )
 
         assert disabled_reason == "carryover_disabled"

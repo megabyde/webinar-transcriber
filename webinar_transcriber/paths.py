@@ -78,10 +78,7 @@ class RunLayout:
 
 
 def build_run_layout(
-    input_path: Path,
-    output_dir: Path | None = None,
-    *,
-    now: datetime | None = None,
+    input_path: Path, output_dir: Path | None = None, *, now: datetime | None = None
 ) -> RunLayout:
     """Return the run layout without touching the filesystem."""
     if output_dir is None:
@@ -98,10 +95,7 @@ def build_run_layout(
 
 
 def create_run_layout(
-    input_path: Path,
-    output_dir: Path | None = None,
-    *,
-    now: datetime | None = None,
+    input_path: Path, output_dir: Path | None = None, *, now: datetime | None = None
 ) -> RunLayout:
     """Create the run directory and return its layout."""
     layout = build_run_layout(input_path=input_path, output_dir=output_dir, now=now)

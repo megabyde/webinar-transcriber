@@ -143,8 +143,7 @@ class WhisperCppTranscriber:
             )
             decoded_segment_count += len(decoded_window.segments)
             next_carryover = build_prompt_carryover(
-                decoded_window,
-                settings=self._decode_settings.carryover,
+                decoded_window, settings=self._decode_settings.carryover
             )
             language_hint = language_hint or decoded_window.language
             carryover_prompt = next_carryover
@@ -209,8 +208,7 @@ def _download_default_whisper_cpp_model() -> Path:
 
     try:
         downloaded_path = huggingface_hub.hf_hub_download(
-            repo_id=DEFAULT_WHISPER_CPP_MODEL_REPO,
-            filename=DEFAULT_WHISPER_CPP_MODEL_FILENAME,
+            repo_id=DEFAULT_WHISPER_CPP_MODEL_REPO, filename=DEFAULT_WHISPER_CPP_MODEL_FILENAME
         )
     except Exception as error:  # pragma: no cover - network/backend specific
         raise RuntimeError(

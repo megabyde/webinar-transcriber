@@ -23,9 +23,7 @@ if TYPE_CHECKING:
 
 
 def _render_interlude_sections(
-    sections: list[ReportSection],
-    *,
-    detected_language: str | None,
+    sections: list[ReportSection], *, detected_language: str | None
 ) -> list[ReportSection]:
     rendered_sections: list[ReportSection] = []
 
@@ -48,8 +46,7 @@ def _render_interlude_sections(
 
 
 def _segments_excluding_interludes(
-    segments: list[TranscriptSegment],
-    sections: list[ReportSection],
+    segments: list[TranscriptSegment], sections: list[ReportSection]
 ) -> list[TranscriptSegment]:
     interlude_ranges = [
         (section.start_sec, section.end_sec) for section in sections if section.is_interlude
@@ -94,8 +91,7 @@ def _detect_interlude_ranges(segments: list[TranscriptSegment]) -> list[tuple[fl
 
 
 def _append_interlude_range(
-    ranges: list[tuple[float, float]],
-    segments: list[TranscriptSegment],
+    ranges: list[tuple[float, float]], segments: list[TranscriptSegment]
 ) -> None:
     if not segments:
         return
@@ -107,9 +103,7 @@ def _append_interlude_range(
     ranges.append((start_sec, end_sec))
 
 
-def _renderable_interlude_ranges(
-    ranges: list[tuple[float, float]],
-) -> list[tuple[float, float]]:
+def _renderable_interlude_ranges(ranges: list[tuple[float, float]]) -> list[tuple[float, float]]:
     return [
         (start_sec, end_sec)
         for start_sec, end_sec in ranges
@@ -118,8 +112,7 @@ def _renderable_interlude_ranges(
 
 
 def _overlaps_interlude_ranges(
-    segment: TranscriptSegment,
-    interlude_ranges: list[tuple[float, float]],
+    segment: TranscriptSegment, interlude_ranges: list[tuple[float, float]]
 ) -> bool:
     return any(
         segment.start_sec < end_sec and segment.end_sec > start_sec

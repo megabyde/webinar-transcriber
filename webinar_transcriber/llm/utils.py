@@ -30,10 +30,7 @@ def required_provider_env(*, api_key_env: str, model_env: str) -> tuple[str, str
     model_name = os.environ.get(model_env)
     missing_vars = [
         env_name
-        for env_name, value in (
-            (api_key_env, api_key),
-            (model_env, model_name),
-        )
+        for env_name, value in ((api_key_env, api_key), (model_env, model_name))
         if not value
     ]
     if missing_vars:
@@ -45,15 +42,12 @@ def required_provider_env(*, api_key_env: str, model_env: str) -> tuple[str, str
 
 
 def build_report_polish_payload(
-    report: ReportDocument,
-    *,
-    total_char_budget: int,
+    report: ReportDocument, *, total_char_budget: int
 ) -> dict[str, object]:
     """Build the report-polish payload with a per-section excerpt budget."""
     section_count = max(len(report.sections), 1)
     per_section_budget = min(
-        REPORT_SECTION_EXCERPT_LIMIT,
-        max(200, total_char_budget // section_count),
+        REPORT_SECTION_EXCERPT_LIMIT, max(200, total_char_budget // section_count)
     )
 
     return {
@@ -104,8 +98,7 @@ def truncate_text(text: str, max_chars: int) -> str:
 
 
 def validated_section_titles(
-    report: ReportDocument,
-    section_titles: Sequence[ReportSectionUpdate],
+    report: ReportDocument, section_titles: Sequence[ReportSectionUpdate]
 ) -> dict[str, str]:
     """Validate returned section-title updates against the existing report."""
     valid_ids = {section.id for section in report.sections}
@@ -140,16 +133,10 @@ def normalize_polished_text(*, original_text: str, polished_text: str) -> str:
 
 
 def normalize_polished_section_text(
-    *,
-    original_text: str,
-    polished_text: str,
-    section_id: str,
+    *, original_text: str, polished_text: str, section_id: str
 ) -> str:
     """Normalize polished section text and reject suspiciously truncated output."""
-    cleaned = normalize_polished_text(
-        original_text=original_text,
-        polished_text=polished_text,
-    )
+    cleaned = normalize_polished_text(original_text=original_text, polished_text=polished_text)
     if not cleaned:
         return original_text
     if len(cleaned) < 20 and len(original_text.strip()) > 100:
@@ -203,10 +190,7 @@ def extract_usage(response: object) -> dict[str, int]:
 
 
 def anthropic_structured_prompt(
-    *,
-    system_prompt: str,
-    user_payload: Mapping[str, object],
-    response_model: type[BaseModel],
+    *, system_prompt: str, user_payload: Mapping[str, object], response_model: type[BaseModel]
 ) -> str:
     """Build the Anthropic prompt that embeds the target JSON schema."""
     schema = json.dumps(response_model.model_json_schema(), ensure_ascii=False)

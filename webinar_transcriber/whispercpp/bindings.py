@@ -15,17 +15,11 @@ _GGML_LOG_CALLBACK_TYPE = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_char_p, 
 
 
 class _WhisperAhead(ctypes.Structure):
-    _fields_ = [
-        ("n_text_layer", ctypes.c_int),
-        ("n_head", ctypes.c_int),
-    ]
+    _fields_ = [("n_text_layer", ctypes.c_int), ("n_head", ctypes.c_int)]
 
 
 class _WhisperAheads(ctypes.Structure):
-    _fields_ = [
-        ("n_heads", ctypes.c_size_t),
-        ("heads", ctypes.POINTER(_WhisperAhead)),
-    ]
+    _fields_ = [("n_heads", ctypes.c_size_t), ("heads", ctypes.POINTER(_WhisperAhead))]
 
 
 class _WhisperContextParams(ctypes.Structure):
@@ -42,10 +36,7 @@ class _WhisperContextParams(ctypes.Structure):
 
 
 class _WhisperGrammarElement(ctypes.Structure):
-    _fields_ = [
-        ("type", ctypes.c_int),
-        ("value", ctypes.c_uint32),
-    ]
+    _fields_ = [("type", ctypes.c_int), ("value", ctypes.c_uint32)]
 
 
 class _WhisperVadParams(ctypes.Structure):
@@ -64,10 +55,7 @@ class _WhisperGreedyParams(ctypes.Structure):
 
 
 class _WhisperBeamSearchParams(ctypes.Structure):
-    _fields_ = [
-        ("beam_size", ctypes.c_int),
-        ("patience", ctypes.c_float),
-    ]
+    _fields_ = [("beam_size", ctypes.c_int), ("patience", ctypes.c_float)]
 
 
 class _WhisperFullParams(ctypes.Structure):
@@ -172,11 +160,7 @@ def _configure_signatures(library: ctypes.CDLL) -> None:
     library.whisper_print_system_info.restype = ctypes.c_char_p
 
 
-def _configure_context_params(
-    context_params: _WhisperContextParams,
-    *,
-    system_info: str,
-) -> None:
+def _configure_context_params(context_params: _WhisperContextParams, *, system_info: str) -> None:
     use_gpu = _system_info_supports_gpu(system_info)
     context_params.use_gpu = use_gpu
     if not use_gpu:

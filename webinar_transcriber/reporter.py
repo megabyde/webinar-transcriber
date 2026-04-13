@@ -44,11 +44,7 @@ class StageReporter(Protocol):
         """Record that a determinate stage has started."""
 
     def progress_advanced(
-        self,
-        stage_key: str,
-        *,
-        advance: float = 1.0,
-        detail: str | None = None,
+        self, stage_key: str, *, advance: float = 1.0, detail: str | None = None
     ) -> None:
         """Record that a determinate stage has advanced."""
 
@@ -92,11 +88,7 @@ class NullStageReporter:
         """Record that a determinate stage has started."""
 
     def progress_advanced(
-        self,
-        stage_key: str,
-        *,
-        advance: float = 1.0,
-        detail: str | None = None,
+        self, stage_key: str, *, advance: float = 1.0, detail: str | None = None
     ) -> None:
         """Record that a determinate stage has advanced."""
 

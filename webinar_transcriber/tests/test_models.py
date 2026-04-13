@@ -18,49 +18,28 @@ from webinar_transcriber.models import (
 
 class TestCoreModels:
     def test_video_asset_accepts_video_metadata(self) -> None:
-        asset = VideoAsset(
-            path="demo.mp4",
-            duration_sec=120.5,
-            fps=30.0,
-            width=1920,
-            height=1080,
-        )
+        asset = VideoAsset(path="demo.mp4", duration_sec=120.5, fps=30.0, width=1920, height=1080)
 
         assert asset.media_type is MediaType.VIDEO
         assert asset.duration_sec == 120.5
         assert asset.width == 1920
 
     def test_audio_asset_accepts_audio_metadata(self) -> None:
-        asset = AudioAsset(
-            path="demo.mp3",
-            duration_sec=42.0,
-            sample_rate=48_000,
-            channels=2,
-        )
+        asset = AudioAsset(path="demo.mp3", duration_sec=42.0, sample_rate=48_000, channels=2)
 
         assert asset.media_type is MediaType.AUDIO
         assert asset.sample_rate == 48_000
         assert asset.channels == 2
 
     def test_transcript_segment_accepts_timing_fields(self) -> None:
-        segment = TranscriptSegment(
-            id="seg-1",
-            text="hello world",
-            start_sec=0.0,
-            end_sec=1.2,
-        )
+        segment = TranscriptSegment(id="seg-1", text="hello world", start_sec=0.0, end_sec=1.2)
 
         assert segment.start_sec == 0.0
         assert segment.end_sec == 1.2
         assert segment.text == "hello world"
 
     def test_transcript_segment_exposes_midpoint(self) -> None:
-        segment = TranscriptSegment(
-            id="seg-1",
-            text="hello world",
-            start_sec=1.0,
-            end_sec=2.2,
-        )
+        segment = TranscriptSegment(id="seg-1", text="hello world", start_sec=1.0, end_sec=2.2)
 
         assert segment.midpoint == 1.6
 
@@ -104,24 +83,13 @@ class TestCoreModels:
     def test_asr_pipeline_support_models_accept_expected_fields(self) -> None:
         speech_region = SpeechRegion(start_sec=0.0, end_sec=1.5)
         window = InferenceWindow(
-            window_id="window-1",
-            region_index=0,
-            start_sec=0.0,
-            end_sec=1.5,
-            overlap_sec=0.3,
+            window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.5, overlap_sec=0.3
         )
         decoded_window = DecodedWindow(
             window=window,
             input_prompt="hello",
             text="hello",
-            segments=[
-                TranscriptSegment(
-                    id="segment-1",
-                    text="hello",
-                    start_sec=0.0,
-                    end_sec=1.0,
-                )
-            ],
+            segments=[TranscriptSegment(id="segment-1", text="hello", start_sec=0.0, end_sec=1.0)],
         )
         diagnostics = AsrPipelineDiagnostics(
             normalized_audio_duration_sec=120.0,

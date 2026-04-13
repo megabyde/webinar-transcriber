@@ -15,59 +15,38 @@ if TYPE_CHECKING:
 class TestFormatHelpers:
     def test_format_count_renders_frame_counter(self) -> None:
         count_text = _format_count(
-            completed=74.0,
-            total=100.0,
-            count_label="frames",
-            count_multiplier=100.0,
+            completed=74.0, total=100.0, count_label="frames", count_multiplier=100.0
         )
 
         assert count_text == "7400/10000 frames"
 
     def test_format_count_renders_compact_seconds_suffix(self) -> None:
         count_text = _format_count(
-            completed=74.0,
-            total=100.0,
-            count_label="s",
-            count_multiplier=1.0,
+            completed=74.0, total=100.0, count_label="s", count_multiplier=1.0
         )
 
         assert count_text == "74/100s"
 
     def test_rate_text_for_update_renders_frames_per_second(self) -> None:
         rate_text = _rate_text_for_update(
-            completed=74.0,
-            now=2.0,
-            started_at=1.0,
-            rate_label="frames/s",
-            rate_multiplier=100.0,
+            completed=74.0, now=2.0, started_at=1.0, rate_label="frames/s", rate_multiplier=100.0
         )
 
         assert rate_text == "7400 frames/s"
 
     def test_rate_text_for_update_hides_empty_values(self) -> None:
         rate_text = _rate_text_for_update(
-            completed=0.0,
-            now=2.0,
-            started_at=1.0,
-            rate_label="frames/s",
-            rate_multiplier=100.0,
+            completed=0.0, now=2.0, started_at=1.0, rate_label="frames/s", rate_multiplier=100.0
         )
 
         assert rate_text == ""
 
     def test_count_and_rate_helpers_hide_empty_values(self) -> None:
         formatted_count = _format_count(
-            completed=3.0,
-            total=None,
-            count_label="frames",
-            count_multiplier=1.0,
+            completed=3.0, total=None, count_label="frames", count_multiplier=1.0
         )
         rate_text = _rate_text_for_update(
-            completed=3.0,
-            now=2.0,
-            started_at=2.0,
-            rate_label="frames/s",
-            rate_multiplier=1.0,
+            completed=3.0, now=2.0, started_at=2.0, rate_label="frames/s", rate_multiplier=1.0
         )
 
         assert formatted_count == ""
@@ -83,9 +62,7 @@ class TestRichStageReporter:
             SimpleNamespace(
                 layout=SimpleNamespace(run_dir="runs/example"),
                 report=SimpleNamespace(
-                    detected_language="ru",
-                    sections=[object(), object()],
-                    warnings=["warning one"],
+                    detected_language="ru", sections=[object(), object()], warnings=["warning one"]
                 ),
             ),
         )
@@ -100,10 +77,7 @@ class TestRichStageReporter:
         assert "Sections" in output
         assert "Warnings" in output
 
-    def test_stage_started_records_elapsed_time(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+    def test_stage_started_records_elapsed_time(self, monkeypatch: pytest.MonkeyPatch) -> None:
         console = Console(record=True, width=100)
         reporter = RichStageReporter(console=console)
         perf_values = iter([10.0, 13.5])
@@ -117,8 +91,7 @@ class TestRichStageReporter:
         assert "(3.50s)" in output
 
     def test_progress_updates_compute_rate_and_preserve_detail(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         console = Console(record=True, width=100)
         reporter = RichStageReporter(console=console)

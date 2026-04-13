@@ -8,9 +8,7 @@ import webinar_transcriber
 class TestResolveVersion:
     def test_uses_generated_version_file(self, monkeypatch) -> None:
         monkeypatch.setattr(
-            webinar_transcriber,
-            "import_module",
-            lambda _name: SimpleNamespace(__version__="1.2.3"),
+            webinar_transcriber, "import_module", lambda _name: SimpleNamespace(__version__="1.2.3")
         )
 
         assert webinar_transcriber._resolve_version() == "1.2.3"

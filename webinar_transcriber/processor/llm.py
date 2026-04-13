@@ -104,8 +104,7 @@ def maybe_polish_report(
         section_result = llm_processor.polish_report_sections_with_progress(
             report,
             progress_callback=lambda advance: reporter.progress_advanced(
-                "llm_report_sections",
-                advance=float(advance),
+                "llm_report_sections", advance=float(advance)
             ),
         )
     except LLMProcessingError as error:
@@ -116,8 +115,7 @@ def maybe_polish_report(
             "llm_report_sections",
             section_label,
             detail=llm_fallback_detail(
-                provider_name=llm_runtime.provider_name,
-                model_name=llm_runtime.model_name,
+                provider_name=llm_runtime.provider_name, model_name=llm_runtime.model_name
             ),
         )
         llm_runtime.report_status = "fallback"
@@ -134,18 +132,13 @@ def maybe_polish_report(
             section_detail,
             count_label(polish_plan.skipped_section_count, "skipped interlude"),
         ))
-    reporter.stage_finished(
-        "llm_report_sections",
-        section_label,
-        detail=section_detail,
-    )
+    reporter.stage_finished("llm_report_sections", section_label, detail=section_detail)
     reporter.stage_started("llm_report", summary_label)
     timer = start_stage_timer(stage_timings, "llm_report_metadata")
 
     try:
         metadata_result = llm_processor.polish_report_metadata(
-            report,
-            section_transcripts=section_result.section_transcripts,
+            report, section_transcripts=section_result.section_transcripts
         )
     except LLMProcessingError as error:
         metadata_elapsed_sec = timer.finish()
@@ -156,8 +149,7 @@ def maybe_polish_report(
             "llm_report",
             summary_label,
             detail=llm_fallback_detail(
-                provider_name=llm_runtime.provider_name,
-                model_name=llm_runtime.model_name,
+                provider_name=llm_runtime.provider_name, model_name=llm_runtime.model_name
             ),
         )
         llm_runtime.report_status = "fallback"
@@ -173,8 +165,7 @@ def maybe_polish_report(
         section.title = metadata_result.section_titles.get(section.id, section.title)
         section.tldr = section_result.section_tldrs.get(section.id, section.tldr)
         section.transcript_text = section_result.section_transcripts.get(
-            section.id,
-            section.transcript_text,
+            section.id, section.transcript_text
         )
     reporter.stage_finished(
         "llm_report",

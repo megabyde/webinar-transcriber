@@ -24,10 +24,7 @@ class TestProbeMedia:
         assert asset.duration_sec > 0
         assert asset.sample_rate
 
-    def test_treats_attached_cover_art_as_audio_only(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+    def test_treats_attached_cover_art_as_audio_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             "webinar_transcriber.media.run_media_command",
             lambda *_args, **_kwargs: subprocess.CompletedProcess(
@@ -70,16 +67,11 @@ class TestProbeMedia:
         assert asset.width is not None
         assert asset.height is not None
 
-    def test_raises_when_ffprobe_reports_no_streams(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+    def test_raises_when_ffprobe_reports_no_streams(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             "webinar_transcriber.media.run_media_command",
             lambda *_args, **_kwargs: subprocess.CompletedProcess(
-                ["ffprobe"],
-                0,
-                stdout='{"format": {"duration": "1.0"}, "streams": []}',
+                ["ffprobe"], 0, stdout='{"format": {"duration": "1.0"}, "streams": []}'
             ),
         )
 
@@ -89,8 +81,7 @@ class TestProbeMedia:
 
 class TestRunMediaCommand:
     def test_wraps_timeout_with_media_processing_error(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         def fake_run(*_args, **_kwargs):
             raise subprocess.TimeoutExpired(cmd=["ffprobe"], timeout=12.5)
@@ -101,8 +92,7 @@ class TestRunMediaCommand:
             run_media_command("ffprobe")
 
     def test_raises_default_error_when_process_fails_without_stderr(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(
             "webinar_transcriber.media.subprocess.run",
@@ -116,15 +106,9 @@ class TestRunMediaCommand:
 class TestParseFrameRate:
     @pytest.mark.parametrize(
         ("raw_value", "expected"),
-        [
-            (None, None),
-            ("0/0", None),
-            ("30000/1001", pytest.approx(29.97002997002997)),
-        ],
+        [(None, None), ("0/0", None), ("30000/1001", pytest.approx(29.97002997002997))],
     )
     def test_parses_optional_frame_rate(
-        self,
-        raw_value: str | None,
-        expected: float | None,
+        self, raw_value: str | None, expected: float | None
     ) -> None:
         assert _parse_frame_rate(raw_value) == expected

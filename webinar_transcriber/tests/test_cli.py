@@ -71,15 +71,10 @@ class TestProcessCommand:
             "webinar_transcriber.cli.process_input",
             return_value=ProcessArtifacts(
                 layout=RunLayout(run_dir=run_dir),
-                media_asset=VideoAsset(
-                    path=str(input_path),
-                    duration_sec=1.0,
-                ),
+                media_asset=VideoAsset(path=str(input_path), duration_sec=1.0),
                 transcription=TranscriptionResult(detected_language="en"),
                 report=ReportDocument(
-                    title="Demo",
-                    source_file=str(input_path),
-                    media_type=MediaType.VIDEO,
+                    title="Demo", source_file=str(input_path), media_type=MediaType.VIDEO
                 ),
                 diagnostics=Diagnostics(),
             ),
@@ -115,15 +110,10 @@ class TestProcessCommand:
             "webinar_transcriber.cli.process_input",
             return_value=ProcessArtifacts(
                 layout=RunLayout(run_dir=run_dir),
-                media_asset=VideoAsset(
-                    path=str(input_path),
-                    duration_sec=1.0,
-                ),
+                media_asset=VideoAsset(path=str(input_path), duration_sec=1.0),
                 transcription=TranscriptionResult(detected_language="en"),
                 report=ReportDocument(
-                    title="Demo",
-                    source_file=str(input_path),
-                    media_type=MediaType.VIDEO,
+                    title="Demo", source_file=str(input_path), media_type=MediaType.VIDEO
                 ),
                 diagnostics=Diagnostics(),
             ),
@@ -171,11 +161,7 @@ class TestProcessCommand:
                 min_silence_duration_ms=500,
                 speech_region_pad_ms=220,
             ),
-            carryover=PromptCarryoverSettings(
-                enabled=False,
-                max_sentences=1,
-                max_tokens=32,
-            ),
+            carryover=PromptCarryoverSettings(enabled=False, max_sentences=1, max_tokens=32),
             asr_threads=6,
             keep_audio=True,
             kept_audio_format="mp3",
@@ -216,11 +202,7 @@ class TestProcessCommand:
         ],
     )
     def test_process_command_rejects_invalid_input(
-        self,
-        tmp_path,
-        path_name: str,
-        create_directory: bool,
-        message: str,
+        self, tmp_path, path_name: str, create_directory: bool, message: str
     ) -> None:
         runner = CliRunner()
         input_path = tmp_path / path_name
@@ -284,10 +266,7 @@ class TestProcessCommand:
         input_path = tmp_path / "demo.wav"
         input_path.write_text("stub", encoding="utf-8")
 
-        with patch(
-            "webinar_transcriber.cli.process_input",
-            side_effect=KeyboardInterrupt,
-        ):
+        with patch("webinar_transcriber.cli.process_input", side_effect=KeyboardInterrupt):
             result = runner.invoke(main, ["process", str(input_path)])
 
         assert result.exit_code == 130
@@ -357,11 +336,7 @@ class TestExtractFramesCommand:
         ],
     )
     def test_extract_frames_command_rejects_invalid_input(
-        self,
-        tmp_path,
-        path_name: str,
-        create_directory: bool,
-        message: str,
+        self, tmp_path, path_name: str, create_directory: bool, message: str
     ) -> None:
         runner = CliRunner()
         input_path = tmp_path / path_name
@@ -373,10 +348,7 @@ class TestExtractFramesCommand:
         assert result.exit_code != 0
         assert message in result.output
 
-    def test_extract_frames_command_resets_active_display_before_cli_errors(
-        self,
-        tmp_path,
-    ) -> None:
+    def test_extract_frames_command_resets_active_display_before_cli_errors(self, tmp_path) -> None:
         runner = CliRunner()
         input_path = tmp_path / "demo.mp4"
         input_path.write_text("stub", encoding="utf-8")

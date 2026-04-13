@@ -49,9 +49,7 @@ class AnthropicLLMProcessor(_BaseLLMProcessor):
         error_prefix: str,
     ) -> tuple[SchemaModelT, dict[str, int]]:
         prompt = anthropic_structured_prompt(
-            system_prompt=system_prompt,
-            user_payload=user_payload,
-            response_model=response_model,
+            system_prompt=system_prompt, user_payload=user_payload, response_model=response_model
         )
         try:
             response = self._client.messages.create(

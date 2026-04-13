@@ -51,39 +51,17 @@ class TestAudioSectionBoundaries:
     @pytest.mark.parametrize(
         ("current_text", "current_end_sec", "next_end_sec", "expected"),
         [
-            (
-                "This section has enough duration but no sentence boundary",
-                130.0,
-                310.0,
-                False,
-            ),
-            (
-                "This section keeps running without punctuation",
-                350.0,
-                610.0,
-                True,
-            ),
-            (
-                f"{'a' * 3601}.",
-                130.0,
-                150.0,
-                True,
-            ),
+            ("This section has enough duration but no sentence boundary", 130.0, 310.0, False),
+            ("This section keeps running without punctuation", 350.0, 610.0, True),
+            (f"{'a' * 3601}.", 130.0, 150.0, True),
         ],
     )
     def test_starts_new_audio_section_for_boundary_conditions(
-        self,
-        current_text: str,
-        current_end_sec: float,
-        next_end_sec: float,
-        expected: bool,
+        self, current_text: str, current_end_sec: float, next_end_sec: float, expected: bool
     ) -> None:
         current_segments = [
             TranscriptSegment(
-                id="segment-1",
-                text=current_text,
-                start_sec=0.0,
-                end_sec=current_end_sec,
+                id="segment-1", text=current_text, start_sec=0.0, end_sec=current_end_sec
             )
         ]
         next_segment = TranscriptSegment(
@@ -104,10 +82,7 @@ class TestBuildReport:
                 detected_language="en",
                 segments=[
                     TranscriptSegment(
-                        id="segment-1",
-                        text="Agenda overview",
-                        start_sec=0.0,
-                        end_sec=2.0,
+                        id="segment-1", text="Agenda overview", start_sec=0.0, end_sec=2.0
                     )
                 ],
             ),
@@ -138,24 +113,15 @@ class TestBuildReport:
                 segments=[
                     TranscriptSegment(id="segment-1", text="  ", start_sec=0.0, end_sec=1.0),
                     TranscriptSegment(
-                        id="segment-2",
-                        text="Repeat me.",
-                        start_sec=1.0,
-                        end_sec=2.0,
+                        id="segment-2", text="Repeat me.", start_sec=1.0, end_sec=2.0
                     ),
                     TranscriptSegment(
-                        id="segment-3",
-                        text="Repeat me.",
-                        start_sec=2.0,
-                        end_sec=3.0,
+                        id="segment-3", text="Repeat me.", start_sec=2.0, end_sec=3.0
                     ),
                     TranscriptSegment(
-                        id="segment-4",
-                        text="Please follow up.",
-                        start_sec=3.0,
-                        end_sec=4.0,
+                        id="segment-4", text="Please follow up.", start_sec=3.0, end_sec=4.0
                     ),
-                ],
+                ]
             ),
         )
 
@@ -189,7 +155,7 @@ class TestBuildReport:
                         start_sec=30.0,
                         end_sec=39.0,
                     ),
-                ],
+                ]
             ),
         )
 
@@ -223,7 +189,7 @@ class TestBuildReport:
                         start_sec=22.0,
                         end_sec=34.0,
                     ),
-                ],
+                ]
             ),
         )
 
@@ -265,7 +231,7 @@ class TestBuildReport:
                         start_sec=144.0,
                         end_sec=154.0,
                     ),
-                ],
+                ]
             ),
         )
 
@@ -283,24 +249,15 @@ class TestBuildReport:
             TranscriptionResult(
                 segments=[
                     TranscriptSegment(
-                        id="segment-1",
-                        text=RU_SEND_FILE,
-                        start_sec=65.0,
-                        end_sec=72.0,
+                        id="segment-1", text=RU_SEND_FILE, start_sec=65.0, end_sec=72.0
                     ),
                     TranscriptSegment(
-                        id="segment-2",
-                        text=RU_CHECK_NUMBERS,
-                        start_sec=72.0,
-                        end_sec=79.0,
+                        id="segment-2", text=RU_CHECK_NUMBERS, start_sec=72.0, end_sec=79.0
                     ),
                     TranscriptSegment(
-                        id="segment-3",
-                        text=RU_BUDGET_DISCUSSION,
-                        start_sec=79.0,
-                        end_sec=88.0,
+                        id="segment-3", text=RU_BUDGET_DISCUSSION, start_sec=79.0, end_sec=88.0
                     ),
-                ],
+                ]
             ),
         )
 
@@ -313,7 +270,7 @@ class TestBuildReport:
                 segments=[
                     TranscriptSegment(id="segment-1", text=" ", start_sec=0.0, end_sec=1.0),
                     TranscriptSegment(id="segment-2", text="", start_sec=1.0, end_sec=2.0),
-                ],
+                ]
             ),
         )
 
@@ -356,12 +313,7 @@ class TestBuildReport:
                     id="block-1",
                     start_sec=0.0,
                     end_sec=56.0,
-                    transcript_segment_ids=[
-                        "segment-1",
-                        "segment-2",
-                        "segment-3",
-                        "segment-4",
-                    ],
+                    transcript_segment_ids=["segment-1", "segment-2", "segment-3", "segment-4"],
                     transcript_text="placeholder",
                     scene_id="scene-1",
                     frame_id="frame-1",
@@ -373,10 +325,7 @@ class TestBuildReport:
         assert report.sections[0].title != "Музыкальная пауза"
         assert report.sections[1].title == "Музыкальная пауза"
         assert report.sections[2].transcript_text == RU_SEND_FILE
-        assert report.summary == [
-            RU_BUDGET_DISCUSSION,
-            RU_SEND_FILE,
-        ]
+        assert report.summary == [RU_BUDGET_DISCUSSION, RU_SEND_FILE]
         assert report.action_items == [RU_SEND_FILE]
 
     def test_renders_music_breaks_as_interludes_and_excludes_them_from_summary(self) -> None:
@@ -441,10 +390,7 @@ class TestBuildReport:
                         end_sec=700.0,
                     ),
                     TranscriptSegment(
-                        id="segment-3",
-                        text=RU_BUDGET_DISCUSSION,
-                        start_sec=700.0,
-                        end_sec=760.0,
+                        id="segment-3", text=RU_BUDGET_DISCUSSION, start_sec=700.0, end_sec=760.0
                     ),
                 ],
             ),
@@ -467,10 +413,7 @@ class TestBuildReport:
                         end_sec=18.0,
                     ),
                     TranscriptSegment(
-                        id="segment-2",
-                        text=RU_BUDGET_DISCUSSION,
-                        start_sec=18.0,
-                        end_sec=60.0,
+                        id="segment-2", text=RU_BUDGET_DISCUSSION, start_sec=18.0, end_sec=60.0
                     ),
                 ],
             ),
@@ -492,10 +435,7 @@ class TestBuildReport:
                         end_sec=8.0,
                     ),
                     TranscriptSegment(
-                        id="segment-2",
-                        text=RU_REPETITIVE_SPEECH,
-                        start_sec=8.0,
-                        end_sec=16.0,
+                        id="segment-2", text=RU_REPETITIVE_SPEECH, start_sec=8.0, end_sec=16.0
                     ),
                     TranscriptSegment(
                         id="segment-3",
@@ -510,11 +450,7 @@ class TestBuildReport:
                     id="block-1",
                     start_sec=0.0,
                     end_sec=24.0,
-                    transcript_segment_ids=[
-                        "segment-1",
-                        "segment-2",
-                        "segment-3",
-                    ],
+                    transcript_segment_ids=["segment-1", "segment-2", "segment-3"],
                     transcript_text="placeholder",
                     scene_id="scene-1",
                     frame_id="frame-1",
@@ -538,10 +474,7 @@ class TestAudioSectionHeuristics:
     def test_build_audio_sections_splits_when_target_duration_would_be_exceeded(self) -> None:
         sections = _build_audio_sections([
             TranscriptSegment(
-                id="segment-1",
-                text="Long section opening.",
-                start_sec=0.0,
-                end_sec=140.0,
+                id="segment-1", text="Long section opening.", start_sec=0.0, end_sec=140.0
             ),
             TranscriptSegment(
                 id="segment-2",
@@ -560,17 +493,11 @@ class TestAudioSectionHeuristics:
         filler_segments = [
             TranscriptSegment(id="segment-1", text="So, okay, well.", start_sec=0.0, end_sec=5.0),
             TranscriptSegment(
-                id="segment-2",
-                text="Just like okay right.",
-                start_sec=5.0,
-                end_sec=10.0,
+                id="segment-2", text="Just like okay right.", start_sec=5.0, end_sec=10.0
             ),
         ]
 
-        filler_title = _audio_title_from_segments(
-            filler_segments,
-            fallback="Fallback Title",
-        )
+        filler_title = _audio_title_from_segments(filler_segments, fallback="Fallback Title")
 
         assert _title_from_text("   ", fallback="Fallback Title") == "Fallback Title"
         assert _audio_title_from_segments([], fallback="Fallback Title") == "Fallback Title"
@@ -580,16 +507,10 @@ class TestAudioSectionHeuristics:
 
     def test_audio_title_score_covers_repetition_penalty_bands(self) -> None:
         heavy_repetition = TranscriptSegment(
-            id="segment-1",
-            text="Plan plan plan plan",
-            start_sec=0.0,
-            end_sec=4.0,
+            id="segment-1", text="Plan plan plan plan", start_sec=0.0, end_sec=4.0
         )
         medium_repetition = TranscriptSegment(
-            id="segment-2",
-            text="Plan plan budget budget",
-            start_sec=4.0,
-            end_sec=8.0,
+            id="segment-2", text="Plan plan budget budget", start_sec=4.0, end_sec=8.0
         )
 
         assert _audio_title_score(heavy_repetition) < _audio_title_score(medium_repetition)
@@ -618,16 +539,10 @@ class TestSummaryAndActionHeuristics:
         action_items = _extract_action_items([
             TranscriptSegment(id="segment-1", text="TODO", start_sec=120.0, end_sec=121.0),
             TranscriptSegment(
-                id="segment-2",
-                text="Please send the notes.",
-                start_sec=121.0,
-                end_sec=124.0,
+                id="segment-2", text="Please send the notes.", start_sec=121.0, end_sec=124.0
             ),
             TranscriptSegment(
-                id="segment-3",
-                text="Please send the notes.",
-                start_sec=124.0,
-                end_sec=127.0,
+                id="segment-3", text="Please send the notes.", start_sec=124.0, end_sec=127.0
             ),
             TranscriptSegment(
                 id="segment-4",
@@ -636,16 +551,10 @@ class TestSummaryAndActionHeuristics:
                 end_sec=130.0,
             ),
             TranscriptSegment(
-                id="segment-5",
-                text="Please update the tracker.",
-                start_sec=130.0,
-                end_sec=133.0,
+                id="segment-5", text="Please update the tracker.", start_sec=130.0, end_sec=133.0
             ),
             TranscriptSegment(
-                id="segment-6",
-                text="Please share the recording.",
-                start_sec=133.0,
-                end_sec=136.0,
+                id="segment-6", text="Please share the recording.", start_sec=133.0, end_sec=136.0
             ),
             TranscriptSegment(
                 id="segment-7",
@@ -672,34 +581,19 @@ class TestSummaryAndActionHeuristics:
     def test_extract_action_items_prefers_higher_scored_later_candidates(self) -> None:
         action_items = _extract_action_items([
             TranscriptSegment(
-                id="segment-1",
-                text="Please send the draft",
-                start_sec=10.0,
-                end_sec=13.0,
+                id="segment-1", text="Please send the draft", start_sec=10.0, end_sec=13.0
             ),
             TranscriptSegment(
-                id="segment-2",
-                text="Please review the spreadsheet",
-                start_sec=123.0,
-                end_sec=126.0,
+                id="segment-2", text="Please review the spreadsheet", start_sec=123.0, end_sec=126.0
             ),
             TranscriptSegment(
-                id="segment-3",
-                text="Please update the tracker",
-                start_sec=126.0,
-                end_sec=129.0,
+                id="segment-3", text="Please update the tracker", start_sec=126.0, end_sec=129.0
             ),
             TranscriptSegment(
-                id="segment-4",
-                text="Please share the recording",
-                start_sec=129.0,
-                end_sec=132.0,
+                id="segment-4", text="Please share the recording", start_sec=129.0, end_sec=132.0
             ),
             TranscriptSegment(
-                id="segment-5",
-                text="Please check the notes",
-                start_sec=132.0,
-                end_sec=135.0,
+                id="segment-5", text="Please check the notes", start_sec=132.0, end_sec=135.0
             ),
             TranscriptSegment(
                 id="segment-6",
@@ -719,10 +613,7 @@ class TestSummaryAndActionHeuristics:
 
     def test_structure_scoring_helpers_cover_penalty_branches(self) -> None:
         repetitive_segment = TranscriptSegment(
-            id="segment-1",
-            text="So so so so.",
-            start_sec=0.0,
-            end_sec=10.0,
+            id="segment-1", text="So so so so.", start_sec=0.0, end_sec=10.0
         )
         filler_heavy_segment = TranscriptSegment(
             id="segment-2",

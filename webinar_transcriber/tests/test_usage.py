@@ -6,9 +6,7 @@ from webinar_transcriber.usage import merge_usage, merge_usage_into
 class TestMergeUsage:
     def test_sums_matching_keys_across_dicts(self) -> None:
         merged = merge_usage(
-            {"input_tokens": 10, "total_tokens": 14},
-            {"output_tokens": 4, "total_tokens": 4},
-            {},
+            {"input_tokens": 10, "total_tokens": 14}, {"output_tokens": 4, "total_tokens": 4}, {}
         )
 
         assert merged == {"input_tokens": 10, "output_tokens": 4, "total_tokens": 18}

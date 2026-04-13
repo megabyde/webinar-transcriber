@@ -16,16 +16,11 @@ class MediaProcessingError(RuntimeError):
 
 
 def run_media_command(
-    *args: str,
-    timeout_sec: float = MEDIA_COMMAND_TIMEOUT_SEC,
+    *args: str, timeout_sec: float = MEDIA_COMMAND_TIMEOUT_SEC
 ) -> subprocess.CompletedProcess[str]:
     try:
         result = subprocess.run(
-            args,
-            capture_output=True,
-            check=False,
-            text=True,
-            timeout=timeout_sec,
+            args, capture_output=True, check=False, text=True, timeout=timeout_sec
         )
     except subprocess.TimeoutExpired as error:
         command_name = Path(args[0]).name if args else "External media command"

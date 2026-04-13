@@ -33,11 +33,7 @@ from webinar_transcriber.reporter import NullStageReporter, StageReporter
 from webinar_transcriber.segmentation import VadSettings
 
 from . import asr as processor_asr
-from .llm import (
-    LLMRuntimeState,
-    maybe_polish_report,
-    resolve_llm_processor,
-)
+from .llm import LLMRuntimeState, maybe_polish_report, resolve_llm_processor
 from .support import (
     build_diagnostics,
     configure_asr_logging,
@@ -113,9 +109,7 @@ def process_input(
     asr_pipeline.carryover_enabled = carryover.enabled
 
     active_transcriber = transcriber or asr_runtime.WhisperCppTranscriber(
-        model_name=asr_model,
-        threads=asr_threads,
-        carryover_settings=carryover,
+        model_name=asr_model, threads=asr_threads, carryover_settings=carryover
     )
     transcriber_scope = (
         active_transcriber if transcriber is None else nullcontext(active_transcriber)
@@ -129,9 +123,7 @@ def process_input(
             layout = create_run_layout(input_path=input_path, output_dir=output_dir)
             timer.finish()
             active_reporter.stage_finished(
-                "prepare_run_dir",
-                "Preparing run directory",
-                detail=str(layout.run_dir),
+                "prepare_run_dir", "Preparing run directory", detail=str(layout.run_dir)
             )
             configure_asr_logging(active_transcriber, layout)
 
@@ -153,9 +145,7 @@ def process_input(
             with prepared_transcription_audio(input_path) as audio_path:
                 timer.finish()
                 active_reporter.stage_finished(
-                    "prepare_transcription_audio",
-                    "Preparing audio",
-                    detail=str(audio_path.name),
+                    "prepare_transcription_audio", "Preparing audio", detail=str(audio_path.name)
                 )
                 current_stage = "asr"
                 asr_result = processor_asr.run_asr_pipeline(
@@ -182,9 +172,7 @@ def process_input(
                 if keep_audio:
                     preserved_audio_path = layout.transcription_audio_path(kept_audio_format)
                     preserve_transcription_audio(
-                        audio_path,
-                        preserved_audio_path,
-                        audio_format=kept_audio_format,
+                        audio_path, preserved_audio_path, audio_format=kept_audio_format
                     )
             # Subsequent video, structure, and export stages intentionally run after temp audio
             # cleanup.
@@ -203,8 +191,7 @@ def process_input(
                     input_path,
                     duration_sec=media_asset.duration_sec,
                     progress_callback=lambda scene_count: active_reporter.progress_advanced(
-                        "detect_scenes",
-                        detail=count_label(scene_count, "scene"),
+                        "detect_scenes", detail=count_label(scene_count, "scene")
                     ),
                 )
                 timer.finish()
@@ -213,16 +200,12 @@ def process_input(
                     {"scenes": [scene.model_dump(mode="json") for scene in scenes]},
                 )
                 active_reporter.stage_finished(
-                    "detect_scenes",
-                    "Detecting scenes",
-                    detail=count_label(len(scenes), "scene"),
+                    "detect_scenes", "Detecting scenes", detail=count_label(len(scenes), "scene")
                 )
 
                 current_stage = "extract_frames"
                 active_reporter.progress_started(
-                    "extract_frames",
-                    "Extracting slide frames",
-                    total=len(scenes),
+                    "extract_frames", "Extracting slide frames", total=len(scenes)
                 )
                 timer = start_stage_timer(stage_timings, "extract_frames")
                 slide_frames = video_runtime.extract_representative_frames(
@@ -238,10 +221,7 @@ def process_input(
                     detail=count_label(len(slide_frames), "frame"),
                 )
                 alignment_blocks = align_by_time(
-                    normalized_transcription.segments,
-                    scenes,
-                    slide_frames,
-                    warnings=warnings,
+                    normalized_transcription.segments, scenes, slide_frames, warnings=warnings
                 )
 
             structure_total = max(
@@ -262,8 +242,7 @@ def process_input(
                 detail="0 sections",
             )
             on_structure_progress, finish_structure_progress = progress_updater(
-                active_reporter,
-                stage_key="structure",
+                active_reporter, stage_key="structure"
             )
 
             timer = start_stage_timer(stage_timings, "structure")
@@ -273,13 +252,11 @@ def process_input(
                 alignment_blocks=alignment_blocks,
                 warnings=warnings,
                 progress_callback=lambda completed_count, section_count: on_structure_progress(
-                    float(completed_count),
-                    detail=count_label(section_count, "section"),
+                    float(completed_count), detail=count_label(section_count, "section")
                 ),
             )
             finish_structure_progress(
-                float(structure_total),
-                detail=count_label(len(report.sections), "section"),
+                float(structure_total), detail=count_label(len(report.sections), "section")
             )
             timer.finish()
             active_reporter.stage_finished(
@@ -371,10 +348,7 @@ def process_input(
 
 
 def extract_frames_input(
-    input_path: Path,
-    *,
-    output_dir: Path | None = None,
-    reporter: StageReporter | None = None,
+    input_path: Path, *, output_dir: Path | None = None, reporter: StageReporter | None = None
 ) -> FrameExtractionArtifacts:
     """Detect scenes and extract representative frames from a video input."""
     active_reporter = reporter or NullStageReporter()
@@ -383,9 +357,7 @@ def extract_frames_input(
     active_reporter.stage_started("prepare_run_dir", "Preparing run directory")
     layout = create_run_layout(input_path=input_path, output_dir=output_dir)
     active_reporter.stage_finished(
-        "prepare_run_dir",
-        "Preparing run directory",
-        detail=str(layout.run_dir),
+        "prepare_run_dir", "Preparing run directory", detail=str(layout.run_dir)
     )
 
     active_reporter.stage_started("probe_media", "Probing media")
@@ -411,21 +383,14 @@ def extract_frames_input(
         input_path,
         duration_sec=media_asset.duration_sec,
         progress_callback=lambda scene_count: active_reporter.progress_advanced(
-            "detect_scenes",
-            detail=count_label(scene_count, "scene"),
+            "detect_scenes", detail=count_label(scene_count, "scene")
         ),
     )
     active_reporter.stage_finished(
-        "detect_scenes",
-        "Detecting scenes",
-        detail=count_label(len(scenes), "scene"),
+        "detect_scenes", "Detecting scenes", detail=count_label(len(scenes), "scene")
     )
 
-    active_reporter.progress_started(
-        "extract_frames",
-        "Extracting slide frames",
-        total=len(scenes),
-    )
+    active_reporter.progress_started("extract_frames", "Extracting slide frames", total=len(scenes))
     slide_frames = video_runtime.extract_representative_frames(
         input_path,
         scenes,
@@ -433,17 +398,9 @@ def extract_frames_input(
         progress_callback=lambda: active_reporter.progress_advanced("extract_frames"),
     )
     active_reporter.stage_finished(
-        "extract_frames",
-        "Extracting slide frames",
-        detail=count_label(len(slide_frames), "frame"),
+        "extract_frames", "Extracting slide frames", detail=count_label(len(slide_frames), "frame")
     )
-    write_json(
-        layout.scenes_path,
-        {"scenes": [scene.model_dump(mode="json") for scene in scenes]},
-    )
+    write_json(layout.scenes_path, {"scenes": [scene.model_dump(mode="json") for scene in scenes]})
     return FrameExtractionArtifacts(
-        layout=layout,
-        media_asset=media_asset,
-        scenes=scenes,
-        slide_frames=slide_frames,
+        layout=layout, media_asset=media_asset, scenes=scenes, slide_frames=slide_frames
     )

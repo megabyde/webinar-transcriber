@@ -137,8 +137,7 @@ class WhisperCppLibrary:
 
     def runtime_details(self) -> WhisperCppRuntimeDetails:
         return WhisperCppRuntimeDetails(
-            library_path=self.library_path,
-            system_info=self.system_info(),
+            library_path=self.library_path, system_info=self.system_info()
         )
 
     def create_session(self, model_path: Path) -> WhisperCppSession:
@@ -147,8 +146,7 @@ class WhisperCppLibrary:
         _configure_context_params(context_params, system_info=runtime_details.system_info)
         _set_log_sink_path(self._log_path)
         context = self._lib.whisper_init_from_file_with_params(
-            os.fspath(model_path).encode("utf-8"),
-            context_params,
+            os.fspath(model_path).encode("utf-8"), context_params
         )
         if not context:
             raise WhisperCppError(f"Failed to initialize whisper.cpp model: {model_path}")
@@ -159,10 +157,7 @@ class WhisperCppLibrary:
             raise WhisperCppError("Failed to initialize whisper.cpp runtime state.")
 
         return WhisperCppSession(
-            self,
-            context=context,
-            state=state,
-            runtime_details=runtime_details,
+            self, context=context, state=state, runtime_details=runtime_details
         )
 
     def _decode_window(
@@ -183,10 +178,7 @@ class WhisperCppLibrary:
         )
 
         if window_samples.size == 0:
-            return DecodedWindow(
-                window=window,
-                language=language_hint,
-            )
+            return DecodedWindow(window=window, language=language_hint)
 
         params_ptr = self._lib.whisper_full_default_params_by_ref(_WHISPER_SAMPLING_GREEDY)
         try:
@@ -313,8 +305,7 @@ def _load_backend_plugins() -> None:
         return
 
     _GGML_LIBRARY_HANDLE = ctypes.CDLL(
-        str(ggml_library_path),
-        mode=getattr(ctypes, "RTLD_GLOBAL", 0),
+        str(ggml_library_path), mode=getattr(ctypes, "RTLD_GLOBAL", 0)
     )
     _configure_ggml_logging(_GGML_LIBRARY_HANDLE)
     _GGML_LIBRARY_HANDLE.ggml_backend_load_all_from_path.argtypes = [ctypes.c_char_p]

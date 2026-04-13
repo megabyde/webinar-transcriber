@@ -52,8 +52,7 @@ class RichStageReporter(NullStageReporter):
         self._stage_count += 1
         self._active_event = self._new_stage_event(stage_key, label)
         self._active_status = self._console.status(
-            f"[bold blue][{self._stage_count}][/bold blue] {label}",
-            spinner="dots",
+            f"[bold blue][{self._stage_count}][/bold blue] {label}", spinner="dots"
         )
         self._active_status.start()
 
@@ -99,20 +98,14 @@ class RichStageReporter(NullStageReporter):
         )
 
     def progress_advanced(
-        self,
-        stage_key: str,
-        *,
-        advance: float = 1.0,
-        detail: str | None = None,
+        self, stage_key: str, *, advance: float = 1.0, detail: str | None = None
     ) -> None:
         if self._active_event is None or self._active_event.stage_key != stage_key:
             return
         if self._active_progress is None or self._active_task_id is None:
             return
         self._active_progress.update(
-            self._active_task_id,
-            advance=advance,
-            detail_text=detail or "",
+            self._active_task_id, advance=advance, detail_text=detail or ""
         )
         task = self._active_progress.tasks[self._active_task_id]
         now = perf_counter()
@@ -160,21 +153,14 @@ class RichStageReporter(NullStageReporter):
         table.add_column(style="dim")
         table.add_column()
         warning_count = len(artifacts.report.warnings)
-        warning_text = Text(
-            str(warning_count),
-            style="yellow" if warning_count else "green",
-        )
+        warning_text = Text(str(warning_count), style="yellow" if warning_count else "green")
         table.add_row("Run directory", Text(str(artifacts.layout.run_dir), style="cyan"))
         table.add_row("Language", Text(artifacts.report.detected_language or "unknown"))
         table.add_row("Sections", Text(str(len(artifacts.report.sections))))
         table.add_row("Warnings", warning_text)
         self._console.print()
         self._console.print(
-            Panel.fit(
-                table,
-                title="[bold green]Completed[/]",
-                border_style="green",
-            )
+            Panel.fit(table, title="[bold green]Completed[/]", border_style="green")
         )
 
     def _stop_active_display(self) -> None:
@@ -187,11 +173,7 @@ class RichStageReporter(NullStageReporter):
             self._active_task_id = None
 
     def _new_stage_event(self, stage_key: str, label: str) -> StageEvent:
-        return StageEvent(
-            stage_key=stage_key,
-            label=label,
-            started_at=perf_counter(),
-        )
+        return StageEvent(stage_key=stage_key, label=label, started_at=perf_counter())
 
 
 class RateColumn(ProgressColumn):
