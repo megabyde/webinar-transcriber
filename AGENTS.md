@@ -68,8 +68,9 @@ The package intentionally avoids deep nesting.
 ## Runtime Contracts
 
 - Successful default CLI runs write the report artifact set described in `README.md`.
-- `diagnostics.json` is currently success-only; early failures can leave partial intermediate
-  artifacts without diagnostics or final report outputs.
+- Successful runs write `diagnostics.json`; failed runs also write it once the run directory
+  exists, though early failures can still leave only partial intermediate artifacts and no final
+  report outputs.
 - Temporary audio extracted for transcription should stay outside the run directory.
 
 ## Testing Notes
