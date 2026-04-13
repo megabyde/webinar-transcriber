@@ -61,6 +61,8 @@ addopts = [
     "--cov=webinar_transcriber",
     "--cov-report=term-missing",
     "--cov-report=xml",
+    "--durations=5",
+    "--durations-min=0",
 ]
 testpaths = ["webinar_transcriber"]
 
