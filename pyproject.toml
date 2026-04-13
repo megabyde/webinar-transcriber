@@ -72,7 +72,7 @@ source = ["webinar_transcriber"]
 
 [tool.coverage.report]
 show_missing = true
-skip_covered = false
+skip_covered = true
 fail_under = 95
 exclude_also = [
     "def __repr__",
