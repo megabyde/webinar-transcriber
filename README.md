@@ -75,7 +75,6 @@ choose a specific location.
 
 ```bash
 webinar-transcriber INPUT
-webinar-transcriber INPUT --format docx
 webinar-transcriber INPUT --keep-audio --audio-format mp3
 webinar-transcriber INPUT --output-dir runs/custom-demo
 ```
@@ -118,12 +117,11 @@ Successful default runs write:
 
 - `metadata.json`, `transcript.json`, and `transcript.vtt`
 - `diagnostics.json` with stage timings, counts, warnings, ASR details, and optional LLM metadata
-- `report.json` regardless of `--format`
+- `report.md`, `report.docx`, and `report.json`
 - ASR planning and decode artifacts under `asr/`
 
 Depending on options and input type, successful default runs also write:
 
-- `report.md` and/or `report.docx`
 - `transcription-audio.wav` or `transcription-audio.mp3` with `--keep-audio`
 - `scenes.json` and `frames/` for video input
 
@@ -208,8 +206,8 @@ runs/<timestamp>_<basename>/
 ├─ transcription-audio.mp3 # optional via --keep-audio --audio-format mp3
 ├─ scenes.json             # video only
 ├─ diagnostics.json
-├─ report.md               # written for --format all or --format md
-├─ report.docx             # written for --format all or --format docx
+├─ report.md
+├─ report.docx
 ├─ report.json
 └─ frames/                 # video only
 ```

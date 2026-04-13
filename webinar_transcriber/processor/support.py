@@ -55,17 +55,10 @@ def write_requested_artifacts(
     report: ReportDocument,
     transcription: TranscriptionResult,
     layout: RunLayout,
-    output_format: str,
 ) -> None:
-    """Write the requested human-facing artifacts plus canonical JSON/VTT outputs."""
-    formats = {"md", "docx", "json"} if output_format == "all" else {output_format}
-
-    if "md" in formats:
-        write_markdown_report(report, layout.markdown_report_path)
-    if "docx" in formats:
-        write_docx_report(report, layout.docx_report_path)
-
-    # Always write JSON - it is the canonical machine-readable artifact.
+    """Write the human-facing artifacts plus canonical JSON/VTT outputs."""
+    write_markdown_report(report, layout.markdown_report_path)
+    write_docx_report(report, layout.docx_report_path)
     write_json_report(report, layout.json_report_path)
     write_vtt_subtitles(transcription, layout.subtitle_vtt_path)
 

@@ -44,8 +44,8 @@ class RichStageReporter(NullStageReporter):
         self._warnings: list[str] = []
         self._stage_count = 0
 
-    def begin_run(self, input_path: Path, *, output_format: str) -> None:
-        self._console.print(f"[bold cyan]Starting[/] {input_path.name} (format={output_format})")
+    def begin_run(self, input_path: Path) -> None:
+        self._console.print(f"[bold cyan]Starting[/] {input_path.name}")
 
     def stage_started(self, stage_key: str, label: str) -> None:
         self._stop_active_display()

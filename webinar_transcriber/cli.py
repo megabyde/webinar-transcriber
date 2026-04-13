@@ -43,14 +43,6 @@ class CLIError(click.ClickException):
     help="Write artifacts to a specific output directory.",
 )
 @click.option(
-    "--format",
-    "output_format",
-    type=click.Choice(["all", "md", "docx", "json"], case_sensitive=False),
-    default="all",
-    show_default=True,
-    help="Select which report format to write.",
-)
-@click.option(
     "--asr-model",
     type=str,
     default=None,
@@ -137,7 +129,6 @@ class CLIError(click.ClickException):
 def main(
     input_path: Path,
     output_dir: Path | None,
-    output_format: str,
     asr_model: str | None,
     vad: bool,
     vad_threshold: float,
@@ -165,7 +156,6 @@ def main(
         process_input(
             input_path=input_path,
             output_dir=output_dir,
-            output_format=output_format,
             asr_model=asr_model,
             vad=VadSettings(
                 enabled=vad,

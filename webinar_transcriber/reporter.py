@@ -23,7 +23,7 @@ class StageEvent:
 class StageReporter(Protocol):
     """Reporter protocol shared by interactive and no-op implementations."""
 
-    def begin_run(self, input_path: Path, *, output_format: str) -> None:
+    def begin_run(self, input_path: Path) -> None:
         """Record the start of a processing run."""
 
     def stage_started(self, stage_key: str, label: str) -> None:
@@ -67,7 +67,7 @@ class StageReporter(Protocol):
 class NullStageReporter:
     """No-op reporter used by tests and non-interactive code paths."""
 
-    def begin_run(self, input_path: Path, *, output_format: str) -> None:
+    def begin_run(self, input_path: Path) -> None:
         """Record the start of a processing run."""
 
     def stage_started(self, stage_key: str, label: str) -> None:

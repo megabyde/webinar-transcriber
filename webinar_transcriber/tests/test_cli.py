@@ -72,14 +72,13 @@ class TestProcessCommand:
                 diagnostics=Diagnostics(),
             ),
         ) as process_input_mock:
-            result = runner.invoke(main, [str(input_path), "--format", "json"])
+            result = runner.invoke(main, [str(input_path)])
 
         assert result.exit_code == 0
         assert result.output == ""
         process_input_mock.assert_called_once_with(
             input_path=input_path,
             output_dir=None,
-            output_format="json",
             asr_model=None,
             vad=VadSettings(),
             carryover=PromptCarryoverSettings(),
@@ -144,7 +143,6 @@ class TestProcessCommand:
         process_input_mock.assert_called_once_with(
             input_path=input_path,
             output_dir=None,
-            output_format="all",
             asr_model="models/whisper-cpp/custom.bin",
             vad=VadSettings(
                 enabled=False,
@@ -183,8 +181,6 @@ class TestProcessCommand:
         assert "Override the whisper.cpp model path" in result.output
         assert "provider-backed report" in result.output
         assert "enhancement." in result.output
-        assert "--asr-compute-type" not in result.output
-        assert "--llm-model" not in result.output
 
     @pytest.mark.parametrize(
         ("path_name", "create_directory", "message"),

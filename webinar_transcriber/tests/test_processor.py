@@ -85,8 +85,8 @@ class RecordingReporter:
         self.warnings: list[str] = []
         self.progress_events: list[tuple[str, str, float, str | None]] = []
 
-    def begin_run(self, input_path: Path, *, output_format: str) -> None:
-        self.events.append(("begin", input_path.name, output_format))
+    def begin_run(self, input_path: Path) -> None:
+        self.events.append(("begin", input_path.name, ""))
 
     def stage_started(self, stage_key: str, label: str) -> None:
         self.events.append(("start", stage_key, label))

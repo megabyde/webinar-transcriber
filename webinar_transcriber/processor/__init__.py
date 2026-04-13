@@ -79,7 +79,6 @@ def process_input(
     input_path: Path,
     *,
     output_dir: Path | None = None,
-    output_format: str = "all",
     asr_model: str | None = None,
     vad: VadSettings = DEFAULT_VAD_SETTINGS,
     carryover: PromptCarryoverSettings = DEFAULT_PROMPT_CARRYOVER_SETTINGS,
@@ -115,7 +114,7 @@ def process_input(
         active_transcriber if transcriber is None else nullcontext(active_transcriber)
     )
     with transcriber_scope as active_transcriber:
-        active_reporter.begin_run(input_path, output_format=output_format)
+        active_reporter.begin_run(input_path)
         try:
             current_stage = "prepare_run_dir"
             active_reporter.stage_started("prepare_run_dir", "Preparing run directory")
@@ -285,9 +284,9 @@ def process_input(
             current_stage = "export"
             active_reporter.stage_started("export", "Writing artifacts")
             timer = start_stage_timer(stage_timings, "export")
-            write_requested_artifacts(report, normalized_transcription, layout, output_format)
+            write_requested_artifacts(report, normalized_transcription, layout)
             timer.finish()
-            active_reporter.stage_finished("export", "Writing artifacts", detail=output_format)
+            active_reporter.stage_finished("export", "Writing artifacts")
 
             diagnostics = build_diagnostics(
                 status="succeeded",
@@ -353,7 +352,7 @@ def extract_frames_input(
     """Detect scenes and extract representative frames from a video input."""
     active_reporter = reporter or NullStageReporter()
 
-    active_reporter.begin_run(input_path, output_format="frames")
+    active_reporter.begin_run(input_path)
     active_reporter.stage_started("prepare_run_dir", "Preparing run directory")
     layout = create_run_layout(input_path=input_path, output_dir=output_dir)
     active_reporter.stage_finished(
