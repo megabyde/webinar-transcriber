@@ -97,7 +97,9 @@ class TestRunMediaCommand:
     ) -> None:
         monkeypatch.setattr(
             "webinar_transcriber.media.subprocess.run",
-            lambda *_args, **_kwargs: subprocess.CompletedProcess(["ffprobe"], 1, stderr="   "),
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                subprocess.CalledProcessError(1, ["ffprobe"], stderr="   ")
+            ),
         )
 
         with pytest.raises(MediaProcessingError, match="External media command failed"):

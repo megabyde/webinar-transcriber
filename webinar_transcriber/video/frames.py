@@ -58,19 +58,19 @@ def _extract_frame(
     video_path: Path, timestamp_sec: float, output_path: Path
 ) -> tuple[bool, str | None]:
     try:
-        result = subprocess.run(
+        subprocess.run(
             _frame_extract_command(video_path, timestamp_sec, output_path),
             capture_output=True,
-            check=False,
+            check=True,
             text=True,
             timeout=FRAME_EXTRACT_TIMEOUT_SEC,
         )
-    except subprocess.TimeoutExpired as error:
+    except subprocess.CalledProcessError as ex:
+        return False, ex.stderr.strip() or f"ffmpeg exited with status {ex.returncode}"
+    except subprocess.TimeoutExpired as ex:
         raise MediaProcessingError(
             f"ffmpeg frame extraction timed out after {FRAME_EXTRACT_TIMEOUT_SEC:g}s."
-        ) from error
-    if result.returncode != 0:
-        return False, result.stderr.strip() or f"ffmpeg exited with status {result.returncode}"
+        ) from ex
     if not output_path.exists():
         return False, f"ffmpeg did not write {output_path}"
     return True, None
