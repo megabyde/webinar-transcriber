@@ -84,7 +84,6 @@ class InferenceWindow(BaseModel):
     region_index: int = Field(ge=0)
     start_sec: float = Field(ge=0)
     end_sec: float = Field(ge=0)
-    overlap_sec: float = Field(default=0, ge=0)
 
     def __lt__(self, other: object) -> bool:
         """Keep decode ordering deterministic without repeating tuple keys at call sites."""

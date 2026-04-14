@@ -82,9 +82,7 @@ class TestCoreModels:
 
     def test_asr_pipeline_support_models_accept_expected_fields(self) -> None:
         speech_region = SpeechRegion(start_sec=0.0, end_sec=1.5)
-        window = InferenceWindow(
-            window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.5, overlap_sec=0.3
-        )
+        window = InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.5)
         decoded_window = DecodedWindow(
             window=window,
             input_prompt="hello",

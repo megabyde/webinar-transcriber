@@ -235,7 +235,7 @@ class WhisperCppLibrary:
                         id=f"{window.window_id}-segment-{segment_index + 1}",
                         text=text,
                         start_sec=max(window.start_sec, start_sec),
-                        end_sec=max(start_sec, end_sec),
+                        end_sec=min(window.end_sec, max(start_sec, end_sec)),
                     )
                 )
 

@@ -117,7 +117,6 @@ def run_asr_pipeline(
             region_index=i,
             start_sec=region.start_sec,
             end_sec=region.end_sec,
-            overlap_sec=0.0,
         )
         for i, region in enumerate(expanded_regions)
         if region.end_sec > region.start_sec
