@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING
-
-from webinar_transcriber.usage import merge_usage_into
 
 from .contracts import (
     LLMProcessingError,
@@ -157,7 +156,7 @@ class _BaseLLMProcessor:
                 polished_transcripts[section.id] = transcript_text
                 if tldr:
                     polished_tldrs[section.id] = tldr
-                merge_usage_into(usage_totals, usage)
+                usage_totals.update(Counter(usage_totals) + Counter(usage))
                 warnings.extend(section_warnings)
                 if progress_callback is not None:
                     progress_callback(1)

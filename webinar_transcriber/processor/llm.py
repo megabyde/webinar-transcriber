@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -11,7 +12,6 @@ from webinar_transcriber.llm import (
     LLMProcessingError,
     build_llm_processor_from_env,
 )
-from webinar_transcriber.usage import merge_usage
 
 from .support import (
     llm_fallback_detail,
@@ -158,7 +158,7 @@ def maybe_polish_report(
 
     metadata_elapsed_sec = timer.finish()
     report_latency_sec = section_elapsed_sec + metadata_elapsed_sec
-    usage = merge_usage(section_result.usage, metadata_result.usage)
+    usage = dict(Counter(section_result.usage) + Counter(metadata_result.usage))
     report.summary = metadata_result.summary
     report.action_items = metadata_result.action_items
     for section in report.sections:
