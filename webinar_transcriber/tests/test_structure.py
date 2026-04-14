@@ -818,5 +818,5 @@ class TestSummaryAndActionHeuristics:
 
         assert summary == ["One", "Two", "Three"]
 
-    def test_derive_title_handles_windows_paths(self) -> None:
-        assert _derive_title(r"C:\recordings\weekly-sync.mp4") == "Weekly Sync"
+    def test_derive_title_formats_local_path_stem(self) -> None:
+        assert _derive_title("/recordings/weekly-sync.mp4") == "Weekly Sync"

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .constants import (
@@ -177,5 +177,5 @@ def _has_action_item_cue(text: str) -> bool:
 
 
 def _derive_title(source_path: str) -> str:
-    stem = PureWindowsPath(source_path).stem if "\\" in source_path else Path(source_path).stem
+    stem = Path(source_path).stem
     return stem.replace("-", " ").replace("_", " ").strip().title() or "Transcription Report"
