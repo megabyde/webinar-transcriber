@@ -44,6 +44,7 @@ from .support import (
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from typing import Literal
 
     from webinar_transcriber.asr import WhisperCppTranscriber
     from webinar_transcriber.llm import LLMProcessor
@@ -113,7 +114,7 @@ class _AsrPipelineState:
 def _build_run_diagnostics(
     ctx: _RunContext,
     *,
-    status: str,
+    status: Literal["succeeded", "failed"],
     asr_model: str | None,
     llm_enabled: bool,
     failed_stage: str | None = None,
@@ -146,7 +147,7 @@ def _build_run_diagnostics(
 def _write_run_diagnostics(
     ctx: _RunContext,
     *,
-    status: str,
+    status: Literal["succeeded", "failed"],
     asr_model: str | None,
     llm_enabled: bool,
     failed_stage: str | None = None,

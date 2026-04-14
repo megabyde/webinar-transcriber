@@ -189,7 +189,7 @@ class AsrPipelineDiagnostics(BaseModel):
 class Diagnostics(BaseModel):
     """Execution metadata recorded for a processing run."""
 
-    status: str = "succeeded"
+    status: Literal["succeeded", "failed"] = "succeeded"
     failed_stage: str | None = None
     error: str | None = None
     asr_backend: str | None = None

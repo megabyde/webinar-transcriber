@@ -25,6 +25,7 @@ from webinar_transcriber.models import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from typing import Literal
 
     from webinar_transcriber.llm import LLMReportPolishPlan
     from webinar_transcriber.paths import RunLayout
@@ -195,7 +196,7 @@ def title_update_detail(*, title_count: int, section_count: int) -> str:
 
 def build_diagnostics(
     *,
-    status: str = "succeeded",
+    status: Literal["succeeded", "failed"] = "succeeded",
     failed_stage: str | None = None,
     error: str | None = None,
     asr_model: str | None,
