@@ -11,11 +11,11 @@ from webinar_transcriber.models import (
 )
 from webinar_transcriber.structure import build_report
 from webinar_transcriber.structure.interludes import (
+    _append_interlude_range,
     _detect_interlude_ranges,
     _interlude_note,
     _interlude_title,
     _is_likely_interlude_text,
-    _repeated_bigram_ratio,
 )
 from webinar_transcriber.structure.scoring import (
     _action_item_score,
@@ -494,14 +494,20 @@ class TestBuildReport:
 
         assert ranges == [(0.0, 20.0), (40.0, 60.0)]
 
+    def test_append_interlude_range_skips_single_segment_without_marker(self) -> None:
+        ranges: list[tuple[float, float]] = []
+
+        _append_interlude_range(
+            ranges,
+            [TranscriptSegment(id="segment-1", text="la la la la la", start_sec=0.0, end_sec=20.0)],
+        )
+
+        assert ranges == []
+
     def test_interlude_helpers_cover_blank_text_and_localized_rendering(self) -> None:
         assert not _is_likely_interlude_text("   ")
         assert _interlude_title("en") == "Music Interlude"
         assert _interlude_note("en").startswith("Music or spoken-performance interlude.")
-
-    def test_repeated_bigram_ratio_returns_zero_for_too_few_words(self) -> None:
-        assert _repeated_bigram_ratio(["one", "two", "three"]) == 0.0
-
 
 class TestAudioSectionHeuristics:
     def test_build_audio_sections_flushes_speech_before_interlude_tail(self) -> None:

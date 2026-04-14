@@ -2,20 +2,15 @@
 
 from __future__ import annotations
 
-from itertools import pairwise
 from typing import TYPE_CHECKING
 
 from .constants import (
     AUDIO_SECTION_BREAK_GAP_SEC,
-    INTERLUDE_LOW_PUNCTUATION_DENSITY,
     INTERLUDE_LOW_UNIQUE_RATIO,
     INTERLUDE_MARKER_PATTERN,
     INTERLUDE_MIN_WORDS,
-    INTERLUDE_REPEATED_BIGRAM_RATIO,
     INTERLUDE_WORD_RE,
-    LATIN_VOWELS,
     MIN_INTERLUDE_DURATION_SEC,
-    RUSSIAN_VOWELS,
 )
 
 if TYPE_CHECKING:
@@ -128,55 +123,17 @@ def _is_likely_interlude_text(text: str) -> bool:
         return True
 
     words = INTERLUDE_WORD_RE.findall(stripped.casefold())
-    original_words = INTERLUDE_WORD_RE.findall(stripped)
     if len(words) < INTERLUDE_MIN_WORDS:
         return False
 
     sample_size = min(len(words), 80)
     sampled_words = words[:sample_size]
-    sampled_original_words = original_words[:sample_size]
-    punctuation_density = sum(1 for char in stripped if char in ".?!:;") / sample_size
     unique_ratio = len(set(sampled_words)) / sample_size
-    repeated_bigram_ratio = _repeated_bigram_ratio(sampled_words)
-    noisy_word_ratio = _noisy_word_ratio(sampled_original_words)
-
-    return bool(
-        punctuation_density <= INTERLUDE_LOW_PUNCTUATION_DENSITY
-        and (
-            unique_ratio <= INTERLUDE_LOW_UNIQUE_RATIO
-            or repeated_bigram_ratio >= INTERLUDE_REPEATED_BIGRAM_RATIO
-            or noisy_word_ratio >= 0.35
-        )
-    )
+    return unique_ratio <= INTERLUDE_LOW_UNIQUE_RATIO
 
 
 def _has_interlude_marker(text: str) -> bool:
     return bool(INTERLUDE_MARKER_PATTERN.search(text))
-
-
-def _repeated_bigram_ratio(words: list[str]) -> float:
-    if len(words) < 4:
-        return 0.0
-
-    bigrams = list(pairwise(words))
-    repeated_bigram_count = len(bigrams) - len(set(bigrams))
-    return repeated_bigram_count / len(bigrams)
-
-
-def _noisy_word_ratio(words: list[str]) -> float:
-    noisy_words = sum(1 for word in words if _is_noisy_word(word))
-    return noisy_words / len(words) if words else 0.0
-
-
-def _is_noisy_word(word: str) -> bool:
-    if len(word) < 5:
-        return False
-    if word.isupper():
-        return False
-
-    vowels = RUSSIAN_VOWELS | LATIN_VOWELS
-    return not any(char in vowels for char in word.casefold())
-
 
 def _interlude_title(detected_language: str | None) -> str:
     if detected_language == "ru":
