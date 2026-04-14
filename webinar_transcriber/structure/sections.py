@@ -177,6 +177,8 @@ def _sections_from_block(
     next_section_index: int,
 ) -> list[ReportSection]:
     if not block_segments:
+        # Keep slide-backed sections even when no transcript segments aligned, so frame/title
+        # context is preserved for scene-only blocks.
         title = _title_from_text(block.transcript_text, fallback=f"Slide {next_section_index}")
         if block.title_hint:
             title = _title_from_text(block.title_hint, fallback=title)
