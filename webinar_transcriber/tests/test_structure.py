@@ -79,7 +79,7 @@ class TestAudioSectionBoundaries:
 
 
 class TestBuildReport:
-    def test_uses_alignment_block_title_hint_and_warnings(self) -> None:
+    def test_uses_alignment_block_text_and_warnings(self) -> None:
         report = build_report(
             VideoAsset(path="demo-file.mp4", duration_sec=12.0),
             TranscriptionResult(
@@ -99,14 +99,13 @@ class TestBuildReport:
                     transcript_text="Agenda overview",
                     scene_id="scene-1",
                     frame_id="frame-1",
-                    title_hint="Slide Title",
                 )
             ],
             warnings=["low confidence"],
         )
 
         assert report.title == "Demo File"
-        assert report.sections[0].title == "Slide Title"
+        assert report.sections[0].title == "Agenda overview"
         assert report.sections[0].frame_id == "frame-1"
         assert report.warnings == ["low confidence"]
 
@@ -575,7 +574,7 @@ class TestAudioSectionHeuristics:
 
         assert not _should_start_new_audio_section(current_segments, next_segment)
 
-    def test_sections_from_block_uses_title_hint_when_segment_ids_are_missing(self) -> None:
+    def test_sections_from_block_uses_block_text_when_segment_ids_are_missing(self) -> None:
         block = AlignmentBlock(
             id="block-1",
             start_sec=0.0,
@@ -584,7 +583,6 @@ class TestAudioSectionHeuristics:
             transcript_text="Fallback block text",
             scene_id="scene-1",
             frame_id="frame-1",
-            title_hint="Slide Title",
         )
 
         sections = _sections_from_block(
@@ -595,7 +593,7 @@ class TestAudioSectionHeuristics:
         )
 
         assert len(sections) == 1
-        assert sections[0].title == "Slide Title"
+        assert sections[0].title == "Fallback block text"
         assert sections[0].frame_id == "frame-1"
 
     def test_title_helpers_fall_back_for_empty_or_filler_only_text(self) -> None:
