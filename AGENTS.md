@@ -12,37 +12,11 @@ Keep repository documentation consolidated in:
 Do not add new standalone documentation files under `docs/` unless there is a strong reason. If
 repository assets are needed, keep them under `docs/assets/`.
 
-## Stack
+## Tooling
 
-- Python 3.12
-- `uv` for dependency management and command execution
-- Hatchling build backend with PEP 621 metadata in `pyproject.toml`
-- `ruff` for formatting and linting
-- `ty` for type checking
-- `pytest` and `pytest-cov` for tests and coverage
-
-## Native Dependencies
-
-For local macOS runtime and development, use Homebrew:
-
-```bash
-brew install ffmpeg whisper-cpp
-```
-
-For Linux runtime, install `ffmpeg` plus a `libwhisper` package such as `libwhisper-cpp-dev`.
-
-CI and most tests only require `ffmpeg`. A full local CLI run also needs the `whisper.cpp` runtime
-library to be available.
-
-## Verification
-
-Run the full gate before each logical commit:
-
-```bash
-make format
-make lint
-make test
-```
+README owns the user-facing install and development setup, including native dependencies and the
+standard verification commands. Keep AGENTS focused on contributor-specific guidance that README
+does not need.
 
 In sandboxed Codex runs, prefer `UV_CACHE_DIR=/tmp/uv-cache` for `uv` and `make` commands to avoid
 cache-permission failures.
