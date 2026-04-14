@@ -29,8 +29,6 @@ class _TokenPiece:
     normalized: str
     start_sec: float
     end_sec: float
-    window_start_sec: float
-    window_end_sec: float
     window_order: int
     segment_order: int
     token_order: int
@@ -126,8 +124,6 @@ def _window_tokens(decoded_window: DecodedWindow, *, window_order: int) -> list[
                     normalized=_normalize_token(token_text),
                     start_sec=max(0.0, start_sec),
                     end_sec=max(start_sec, end_sec),
-                    window_start_sec=decoded_window.window.start_sec,
-                    window_end_sec=decoded_window.window.end_sec,
                     window_order=window_order,
                     segment_order=segment_order,
                     token_order=token_order,
@@ -162,7 +158,17 @@ def _duplicate_token_indices(
     ]
     matches = _align_overlap(previous_overlap, current_overlap)
     if not matches:
-        if _mean_edge_distance(previous_overlap) >= _mean_edge_distance(current_overlap):
+        previous_edge_distance = _mean_edge_distance(
+            previous_overlap,
+            window_start_sec=previous_tokens[0].start_sec,
+            window_end_sec=previous_tokens[-1].end_sec,
+        )
+        current_edge_distance = _mean_edge_distance(
+            current_overlap,
+            window_start_sec=current_tokens[0].start_sec,
+            window_end_sec=current_tokens[-1].end_sec,
+        )
+        if previous_edge_distance >= current_edge_distance:
             return set(), {index for index, _ in current_overlap}
         return {index for index, _ in previous_overlap}, set()
 
@@ -245,11 +251,13 @@ def _fully_dropped_segment_count(
     return fully_dropped
 
 
-def _mean_edge_distance(overlap: list[tuple[int, _TokenPiece]]) -> float:
+def _mean_edge_distance(
+    overlap: list[tuple[int, _TokenPiece]], *, window_start_sec: float, window_end_sec: float
+) -> float:
     if not overlap:
         return 0.0
     distances = [
-        min(token.center_sec - token.window_start_sec, token.window_end_sec - token.center_sec)
+        min(token.center_sec - window_start_sec, window_end_sec - token.center_sec)
         for _, token in overlap
     ]
     return sum(distances) / len(distances)
