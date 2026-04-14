@@ -137,16 +137,14 @@ class RichStageReporter(NullStageReporter):
         self._console.print(f"[yellow]![/] {message}")
 
     def interrupted(self) -> None:
-        self._stop_active_display()
         stage_suffix = ""
         if self._active_event is not None:
             stage_suffix = f" during {self._active_event.label.lower()}"
+        self._clear_active_display()
         self._console.print(f"[red]\u2717[/] Interrupted{stage_suffix}.")
-        self._active_event = None
 
     def reset_active_display(self) -> None:
-        self._stop_active_display()
-        self._active_event = None
+        self._clear_active_display()
 
     def complete_run(self, artifacts: ProcessArtifacts) -> None:
         table = Table.grid(padding=(0, 2))
@@ -171,6 +169,10 @@ class RichStageReporter(NullStageReporter):
             self._active_progress.stop()
             self._active_progress = None
             self._active_task_id = None
+
+    def _clear_active_display(self) -> None:
+        self._stop_active_display()
+        self._active_event = None
 
     def _new_stage_event(self, stage_key: str, label: str) -> StageEvent:
         return StageEvent(stage_key=stage_key, label=label, started_at=perf_counter())
