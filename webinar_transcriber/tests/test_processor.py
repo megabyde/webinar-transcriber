@@ -420,6 +420,11 @@ class TestProcessInput:
         assert reporter.has_progress_event_detail(
             "advance", "detect_scenes", lambda detail: detail == "1 scene" or detail == "2 scenes"
         )
+        assert all(
+            event[2] == 1.0
+            for event in reporter.progress_events
+            if event[0] == "advance" and event[1] == "detect_scenes"
+        )
         assert reporter.has_progress_event(
             "start", "extract_frames", artifacts.diagnostics.item_counts["scenes"], None
         )

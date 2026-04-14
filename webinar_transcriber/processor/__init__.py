@@ -264,20 +264,30 @@ def process_input(
 
             if isinstance(ctx.media_asset, VideoAsset):
                 ctx.current_stage = "detect_scenes"
+                detect_scene_total = video_runtime.estimate_sample_count(
+                    ctx.media_asset.duration_sec
+                )
                 ctx.reporter.progress_started(
                     "detect_scenes",
                     "Detecting scenes",
-                    total=video_runtime.estimate_sample_count(ctx.media_asset.duration_sec),
+                    total=detect_scene_total,
                     count_label="s",
                     detail="0 scenes",
+                )
+                on_detect_scenes_progress, finish_detect_scenes_progress = progress_updater(
+                    ctx.reporter, stage_key="detect_scenes"
                 )
                 timer = start_stage_timer(ctx.stage_timings, "detect_scenes")
                 ctx.scenes = video_runtime.detect_scenes(
                     input_path,
                     duration_sec=ctx.media_asset.duration_sec,
-                    progress_callback=lambda scene_count: ctx.reporter.progress_advanced(
-                        "detect_scenes", detail=count_label(scene_count, "scene")
+                    progress_callback=lambda scene_count: on_detect_scenes_progress(
+                        scene_count,
+                        detail=count_label(scene_count, "scene"),
                     ),
+                )
+                finish_detect_scenes_progress(
+                    detect_scene_total, detail=count_label(len(ctx.scenes), "scene")
                 )
                 timer.finish()
                 write_json(
@@ -434,20 +444,26 @@ def extract_frames_input(
             "Frame extraction is only supported for video input."
         )
 
+    detect_scene_total = video_runtime.estimate_sample_count(media_asset.duration_sec)
     active_reporter.progress_started(
         "detect_scenes",
         "Detecting scenes",
-        total=video_runtime.estimate_sample_count(media_asset.duration_sec),
+        total=detect_scene_total,
         count_label="s",
         detail="0 scenes",
+    )
+    on_detect_scenes_progress, finish_detect_scenes_progress = progress_updater(
+        active_reporter, stage_key="detect_scenes"
     )
     scenes = video_runtime.detect_scenes(
         input_path,
         duration_sec=media_asset.duration_sec,
-        progress_callback=lambda scene_count: active_reporter.progress_advanced(
-            "detect_scenes", detail=count_label(scene_count, "scene")
+        progress_callback=lambda scene_count: on_detect_scenes_progress(
+            scene_count,
+            detail=count_label(scene_count, "scene"),
         ),
     )
+    finish_detect_scenes_progress(detect_scene_total, detail=count_label(len(scenes), "scene"))
     active_reporter.stage_finished(
         "detect_scenes", "Detecting scenes", detail=count_label(len(scenes), "scene")
     )
