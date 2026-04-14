@@ -16,7 +16,7 @@ from webinar_transcriber.asr import (
     build_prompt_carryover,
 )
 from webinar_transcriber.asr.carryover import _carryover_drop_reason, _sanitize_prompt
-from webinar_transcriber.asr.config import _read_sysctl_int
+from webinar_transcriber.asr.config import _read_sysctl_int, default_asr_threads
 from webinar_transcriber.asr.transcriber import (
     _device_name_from_system_info,
     _download_default_whisper_cpp_model,
@@ -287,6 +287,20 @@ class TestWhisperCppTranscriber:
         monkeypatch.setattr("webinar_transcriber.asr.config.subprocess.run", fake_run)
 
         assert _read_sysctl_int("hw.physicalcpu") is None
+
+    def test_default_asr_threads_uses_sysctl_priority_then_cpu_count(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        values = {
+            "hw.perflevel0.physicalcpu": None,
+            "hw.physicalcpu": 6,
+        }
+        monkeypatch.setattr(
+            "webinar_transcriber.asr.config._read_sysctl_int", lambda name: values[name]
+        )
+        monkeypatch.setattr("webinar_transcriber.asr.config.os.cpu_count", lambda: 8)
+
+        assert default_asr_threads() == 6
 
     def test_transcriber_properties_are_safe_before_runtime_is_prepared(self) -> None:
         transcriber = WhisperCppTranscriber(threads=0)

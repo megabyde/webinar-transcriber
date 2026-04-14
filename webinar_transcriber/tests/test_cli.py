@@ -8,7 +8,7 @@ import pytest
 from click.testing import CliRunner
 
 from webinar_transcriber import __version__
-from webinar_transcriber.asr import DEFAULT_ASR_THREADS, PromptCarryoverSettings
+from webinar_transcriber.asr import PromptCarryoverSettings
 from webinar_transcriber.cli import main
 from webinar_transcriber.models import (
     Diagnostics,
@@ -20,6 +20,18 @@ from webinar_transcriber.models import (
 from webinar_transcriber.paths import OutputDirectoryExistsError, RunLayout
 from webinar_transcriber.processor import ProcessArtifacts
 from webinar_transcriber.segmentation import VadSettings
+
+
+def _process_artifacts(input_path, run_dir) -> ProcessArtifacts:
+    return ProcessArtifacts(
+        layout=RunLayout(run_dir=run_dir),
+        media_asset=VideoAsset(path=str(input_path), duration_sec=1.0),
+        transcription=TranscriptionResult(detected_language="en"),
+        report=ReportDocument(
+            title="Demo", source_file=str(input_path), media_type=MediaType.VIDEO
+        ),
+        diagnostics=Diagnostics(),
+    )
 
 
 class TestMainCli:
@@ -60,18 +72,13 @@ class TestProcessCommand:
         input_path.write_text("stub", encoding="utf-8")
         run_dir = tmp_path / "run-dir"
 
-        with patch(
-            "webinar_transcriber.cli.process_input",
-            return_value=ProcessArtifacts(
-                layout=RunLayout(run_dir=run_dir),
-                media_asset=VideoAsset(path=str(input_path), duration_sec=1.0),
-                transcription=TranscriptionResult(detected_language="en"),
-                report=ReportDocument(
-                    title="Demo", source_file=str(input_path), media_type=MediaType.VIDEO
-                ),
-                diagnostics=Diagnostics(),
-            ),
-        ) as process_input_mock:
+        with (
+            patch(
+                "webinar_transcriber.cli.process_input",
+                return_value=_process_artifacts(input_path, run_dir),
+            ) as process_input_mock,
+            patch("webinar_transcriber.cli.default_asr_threads", return_value=7),
+        ):
             result = runner.invoke(main, [str(input_path)])
 
         assert result.exit_code == 0
@@ -82,7 +89,7 @@ class TestProcessCommand:
             asr_model=None,
             vad=VadSettings(),
             carryover=PromptCarryoverSettings(),
-            asr_threads=DEFAULT_ASR_THREADS,
+            asr_threads=7,
             keep_audio=False,
             kept_audio_format="wav",
             enable_llm=False,
@@ -92,6 +99,24 @@ class TestProcessCommand:
             "RichStageReporter"
         )
 
+    def test_process_command_treats_zero_threads_as_auto(self, tmp_path) -> None:
+        runner = CliRunner()
+        input_path = tmp_path / "demo.mp4"
+        input_path.write_text("stub", encoding="utf-8")
+        run_dir = tmp_path / "run-dir"
+
+        with (
+            patch(
+                "webinar_transcriber.cli.process_input",
+                return_value=_process_artifacts(input_path, run_dir),
+            ) as process_input_mock,
+            patch("webinar_transcriber.cli.default_asr_threads", return_value=7),
+        ):
+            result = runner.invoke(main, [str(input_path), "--threads", "0"])
+
+        assert result.exit_code == 0
+        assert process_input_mock.call_args.kwargs["asr_threads"] == 7
+
     def test_process_command_forwards_asr_options(self, tmp_path) -> None:
         runner = CliRunner()
         input_path = tmp_path / "demo.mp4"
@@ -100,15 +125,7 @@ class TestProcessCommand:
 
         with patch(
             "webinar_transcriber.cli.process_input",
-            return_value=ProcessArtifacts(
-                layout=RunLayout(run_dir=run_dir),
-                media_asset=VideoAsset(path=str(input_path), duration_sec=1.0),
-                transcription=TranscriptionResult(detected_language="en"),
-                report=ReportDocument(
-                    title="Demo", source_file=str(input_path), media_type=MediaType.VIDEO
-                ),
-                diagnostics=Diagnostics(),
-            ),
+            return_value=_process_artifacts(input_path, run_dir),
         ) as process_input_mock:
             result = runner.invoke(
                 main,

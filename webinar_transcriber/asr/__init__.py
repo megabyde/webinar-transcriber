@@ -3,7 +3,6 @@
 from .carryover import build_prompt_carryover
 from .config import (
     ASR_BACKEND_NAME,
-    DEFAULT_ASR_THREADS,
     DEFAULT_CARRYOVER_MAX_SENTENCES,
     DEFAULT_CARRYOVER_MAX_TOKENS,
     DEFAULT_WHISPER_CPP_MODEL_EXAMPLE,
@@ -17,7 +16,6 @@ from .transcriber import WhisperCppTranscriber
 
 __all__ = [
     "ASR_BACKEND_NAME",
-    "DEFAULT_ASR_THREADS",
     "DEFAULT_CARRYOVER_MAX_SENTENCES",
     "DEFAULT_CARRYOVER_MAX_TOKENS",
     "DEFAULT_WHISPER_CPP_MODEL_EXAMPLE",

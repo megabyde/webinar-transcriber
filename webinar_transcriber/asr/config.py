@@ -49,9 +49,6 @@ def default_asr_threads() -> int:
     )
 
 
-DEFAULT_ASR_THREADS = default_asr_threads()
-
-
 @dataclass(frozen=True)
 class PromptCarryoverSettings:
     """Configuration for bounded prompt carryover between adjacent windows."""

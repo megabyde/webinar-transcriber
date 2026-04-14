@@ -11,7 +11,7 @@ import webinar_transcriber.media as media_runtime
 import webinar_transcriber.structure as structure_runtime
 import webinar_transcriber.video as video_runtime
 from webinar_transcriber.align import align_by_time
-from webinar_transcriber.asr import DEFAULT_ASR_THREADS, PromptCarryoverSettings
+from webinar_transcriber.asr import PromptCarryoverSettings, default_asr_threads
 from webinar_transcriber.labels import count_label
 from webinar_transcriber.models import (
     AlignmentBlock,
@@ -162,7 +162,7 @@ def process_input(
     asr_model: str | None = None,
     vad: VadSettings = DEFAULT_VAD_SETTINGS,
     carryover: PromptCarryoverSettings = DEFAULT_PROMPT_CARRYOVER_SETTINGS,
-    asr_threads: int = DEFAULT_ASR_THREADS,
+    asr_threads: int | None = None,
     keep_audio: bool = False,
     kept_audio_format: str = "wav",
     enable_llm: bool = False,
@@ -172,6 +172,7 @@ def process_input(
 ) -> ProcessArtifacts:
     """Process a single audio or video file into report artifacts."""
     active_reporter = reporter or NullStageReporter()
+    asr_threads = asr_threads or default_asr_threads()
     asr_pipeline = AsrPipelineDiagnostics(vad_enabled=vad.enabled, threads=asr_threads)
     asr_pipeline.carryover_enabled = carryover.enabled
     ctx = _RunContext(reporter=active_reporter, asr_pipeline=asr_pipeline)

@@ -6,10 +6,10 @@ import click
 
 from webinar_transcriber import __version__
 from webinar_transcriber.asr import (
-    DEFAULT_ASR_THREADS,
     DEFAULT_CARRYOVER_MAX_SENTENCES,
     DEFAULT_CARRYOVER_MAX_TOKENS,
     PromptCarryoverSettings,
+    default_asr_threads,
 )
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
@@ -107,8 +107,8 @@ class CLIError(click.ClickException):
     "--threads",
     "asr_threads",
     type=int,
-    default=DEFAULT_ASR_THREADS,
-    show_default=True,
+    default=None,
+    show_default="auto",
     help="Number of whisper.cpp inference threads to use.",
 )
 @click.option(
@@ -138,7 +138,7 @@ def main(
     carryover: bool,
     carryover_max_sentences: int,
     carryover_max_tokens: int,
-    asr_threads: int,
+    asr_threads: int | None,
     keep_audio: bool,
     kept_audio_format: str,
     llm: bool,
@@ -151,6 +151,7 @@ def main(
         raise CLIError(f"Input path is not a file: {input_path}")
 
     reporter = RichStageReporter()
+    asr_threads = asr_threads or default_asr_threads()
 
     try:
         process_input(
