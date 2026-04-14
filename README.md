@@ -176,8 +176,8 @@ Silero VAD behavior can be tuned from the CLI:
 - `--vad-threshold FLOAT`: set the Silero speech detection threshold.
 - `--min-speech-ms INT`: require this much speech before a region is kept.
 - `--min-silence-ms INT`: require this much silence before adjacent regions are split.
-- `--speech-region-pad-ms INT`: add symmetric context around each detected speech region before
-  decoding.
+- `--speech-region-pad-ms INT`: add symmetric padding to detected speech regions during ASR
+  planning.
 
 ### ASR Tuning
 

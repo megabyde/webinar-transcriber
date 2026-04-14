@@ -21,7 +21,6 @@ from webinar_transcriber.segmentation import (
     _normalize_regions,
     _silero_speech_timestamps,
     detect_speech_regions,
-    expand_speech_regions,
     normalized_audio_duration,
     repair_speech_regions,
 )
@@ -202,33 +201,6 @@ class TestNormalizedAudio:
     def test_normalized_audio_duration_returns_zero_for_invalid_sample_rate(self) -> None:
         assert normalized_audio_duration(np.zeros(16, dtype=np.float32), 0) == 0.0
 
-    def test_expand_speech_regions_clips_and_merges_overlaps(self) -> None:
-        expanded = expand_speech_regions(
-            [
-                SpeechRegion(start_sec=0.0, end_sec=1.0),
-                SpeechRegion(start_sec=1.15, end_sec=2.0),
-                SpeechRegion(start_sec=3.0, end_sec=4.0),
-            ],
-            pad_ms=200,
-            audio_duration_sec=4.0,
-        )
-
-        assert [(region.start_sec, region.end_sec) for region in expanded] == [
-            (0.0, 2.2),
-            (2.8, 4.0),
-        ]
-
-    def test_expand_speech_regions_returns_empty_for_empty_or_zero_duration(self) -> None:
-        assert expand_speech_regions([], pad_ms=200, audio_duration_sec=4.0) == []
-        assert (
-            expand_speech_regions(
-                [SpeechRegion(start_sec=0.0, end_sec=1.0)],
-                pad_ms=200,
-                audio_duration_sec=0.0,
-            )
-            == []
-        )
-
     def test_repair_speech_regions_merges_short_region_until_it_reaches_min_duration(self) -> None:
         repaired = repair_speech_regions([
             SpeechRegion(start_sec=0.0, end_sec=1.0),
@@ -323,7 +295,7 @@ class TestNormalizedAudio:
                 assert threshold == 0.5
                 assert sampling_rate == 16_000
                 assert min_silence_duration_ms == 600
-                assert speech_pad_ms == 30
+                assert speech_pad_ms == 200
                 self._calls = 0
 
             def __call__(self, _chunk, *, return_seconds=False):
@@ -346,7 +318,7 @@ class TestNormalizedAudio:
             threshold=0.5,
             min_speech_duration_ms=10,
             min_silence_duration_ms=600,
-            speech_pad_ms=30,
+            speech_pad_ms=200,
             progress_callback=lambda completed_sec, detected_count: progress.append((
                 completed_sec,
                 detected_count,

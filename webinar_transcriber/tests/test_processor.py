@@ -78,10 +78,6 @@ def install_basic_windowing(
         "webinar_transcriber.processor.asr.detect_speech_regions",
         lambda *_args, **_kwargs: ([SpeechRegion(start_sec=0.0, end_sec=region_end_sec)], []),
     )
-    monkeypatch.setattr(
-        "webinar_transcriber.processor.asr.expand_speech_regions",
-        lambda regions, **_kwargs: regions,
-    )
 
 
 class RecordingReporter(NullStageReporter):
@@ -475,10 +471,6 @@ class TestProcessInput:
             "webinar_transcriber.processor.asr.detect_speech_regions",
             lambda *_args, **_kwargs: ([SpeechRegion(start_sec=0.0, end_sec=6.0)], []),
         )
-        monkeypatch.setattr(
-            "webinar_transcriber.processor.asr.expand_speech_regions",
-            lambda regions, **_kwargs: regions,
-        )
         artifacts = process_input(
             FIXTURE_DIR / "sample-audio.mp3",
             output_dir=tmp_path / "windowed-run",
@@ -583,10 +575,6 @@ class TestProcessInput:
                 "webinar_transcriber.processor.asr.detect_speech_regions",
                 return_value=([SpeechRegion(start_sec=0.0, end_sec=3.0)], []),
             ),
-            patch(
-                "webinar_transcriber.processor.asr.expand_speech_regions",
-                side_effect=lambda regions, **_kwargs: regions,
-            ),
             pytest.raises(RuntimeError, match="boom"),
         ):
             process_input(
@@ -621,10 +609,6 @@ class TestProcessInput:
                 [SpeechRegion(start_sec=0.0, end_sec=6.0)],
                 ["Silero warning"],
             ),
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.processor.asr.expand_speech_regions",
-            lambda regions, **_kwargs: regions,
         )
 
         process_input(

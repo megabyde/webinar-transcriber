@@ -22,9 +22,6 @@ if TYPE_CHECKING:
 DEFAULT_VAD_THRESHOLD = 0.5
 DEFAULT_MIN_SPEECH_DURATION_MS = 250
 DEFAULT_MIN_SILENCE_DURATION_MS = 600
-# Keep Silero padding low so VAD answers "where is speech?" and the explicit expansion stage owns
-# most of the ASR boundary budget.
-DEFAULT_SPEECH_PAD_MS = 30
 DEFAULT_SPEECH_REGION_PAD_MS = 200
 DEFAULT_MIN_REPAIRED_REGION_SEC = 3.0
 DEFAULT_REPAIR_MAX_GAP_SEC = 0.9
@@ -48,7 +45,7 @@ def detect_speech_regions(
     threshold: float = DEFAULT_VAD_THRESHOLD,
     min_speech_duration_ms: int = DEFAULT_MIN_SPEECH_DURATION_MS,
     min_silence_duration_ms: int = DEFAULT_MIN_SILENCE_DURATION_MS,
-    speech_pad_ms: int = DEFAULT_SPEECH_PAD_MS,
+    speech_pad_ms: int = DEFAULT_SPEECH_REGION_PAD_MS,
     progress_callback: Callable[[float, int], None] | None = None,
     enabled: bool = True,
 ) -> tuple[list[SpeechRegion], list[str]]:
@@ -82,25 +79,6 @@ def detect_speech_regions(
         if float(timestamp["end"]) > float(timestamp["start"])
     ]
     return _normalize_regions(regions), []
-
-
-def expand_speech_regions(
-    regions: list[SpeechRegion], *, pad_ms: int, audio_duration_sec: float
-) -> list[SpeechRegion]:
-    """Apply ASR-specific context padding and merge overlaps after clipping to audio bounds."""
-    if not regions or audio_duration_sec <= 0:
-        return []
-
-    pad_sec = max(0.0, pad_ms / 1000.0)
-    expanded = [
-        SpeechRegion(
-            start_sec=max(0.0, region.start_sec - pad_sec),
-            end_sec=min(audio_duration_sec, region.end_sec + pad_sec),
-        )
-        for region in regions
-        if region.end_sec > region.start_sec
-    ]
-    return _normalize_regions(expanded)
 
 
 def repair_speech_regions(

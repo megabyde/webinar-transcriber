@@ -9,9 +9,7 @@ from webinar_transcriber.labels import count_label
 from webinar_transcriber.models import InferenceWindow, TranscriptionResult
 from webinar_transcriber.normalized_audio import load_normalized_audio
 from webinar_transcriber.segmentation import (
-    DEFAULT_SPEECH_PAD_MS,
     detect_speech_regions,
-    expand_speech_regions,
     normalized_audio_duration,
     repair_speech_regions,
 )
@@ -84,7 +82,7 @@ def run_asr_pipeline(
         threshold=vad.threshold,
         min_speech_duration_ms=vad.min_speech_duration_ms,
         min_silence_duration_ms=vad.min_silence_duration_ms,
-        speech_pad_ms=DEFAULT_SPEECH_PAD_MS,
+        speech_pad_ms=vad.speech_region_pad_ms,
         progress_callback=lambda completed_sec, detected_count: on_vad_progress(
             completed_sec, detail=count_label(detected_count, "region")
         ),
@@ -105,12 +103,7 @@ def run_asr_pipeline(
 
     reporter.stage_started("prepare_speech_regions", "Preparing speech regions")
     timer = start_stage_timer(stage_timings, "prepare_speech_regions")
-    repaired_regions = repair_speech_regions(speech_regions)
-    expanded_regions = expand_speech_regions(
-        repaired_regions,
-        pad_ms=vad.speech_region_pad_ms,
-        audio_duration_sec=asr_pipeline.normalized_audio_duration_sec or 0.0,
-    )
+    expanded_regions = repair_speech_regions(speech_regions)
     windows = [
         InferenceWindow(
             window_id=f"window-{i + 1}",
