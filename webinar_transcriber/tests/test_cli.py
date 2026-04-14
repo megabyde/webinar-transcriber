@@ -34,14 +34,14 @@ def _process_artifacts(input_path, run_dir) -> ProcessArtifacts:
     )
 
 
-class TestMainCli:
+class TestCli:
     def test_main_help_describes_root_command(self) -> None:
         runner = CliRunner()
 
         result = runner.invoke(main, ["--help"])
 
         assert result.exit_code == 0
-        assert "Process an audio or video input file." in result.output
+        assert "Transcribe an audio or video input file." in result.output
         assert "Commands:" not in result.output
 
     def test_main_version_prints_package_version(self) -> None:
@@ -64,9 +64,7 @@ class TestMainCli:
         finally:
             sys.argv = original_argv
 
-
-class TestProcessCommand:
-    def test_process_command_runs_pipeline(self, tmp_path) -> None:
+    def test_runs_pipeline(self, tmp_path) -> None:
         runner = CliRunner()
         input_path = tmp_path / "demo.mp4"
         input_path.write_text("stub", encoding="utf-8")
@@ -99,7 +97,7 @@ class TestProcessCommand:
             "RichStageReporter"
         )
 
-    def test_process_command_treats_zero_threads_as_auto(self, tmp_path) -> None:
+    def test_treats_zero_threads_as_auto(self, tmp_path) -> None:
         runner = CliRunner()
         input_path = tmp_path / "demo.mp4"
         input_path.write_text("stub", encoding="utf-8")
@@ -117,7 +115,7 @@ class TestProcessCommand:
         assert result.exit_code == 0
         assert process_input_mock.call_args.kwargs["asr_threads"] == 7
 
-    def test_process_command_forwards_asr_options(self, tmp_path) -> None:
+    def test_forwards_asr_options(self, tmp_path) -> None:
         runner = CliRunner()
         input_path = tmp_path / "demo.mp4"
         input_path.write_text("stub", encoding="utf-8")
@@ -206,7 +204,7 @@ class TestProcessCommand:
             ("input-dir", True, "Input path is not a file"),
         ],
     )
-    def test_process_command_rejects_invalid_input(
+    def test_rejects_invalid_input(
         self, tmp_path, path_name: str, create_directory: bool, message: str
     ) -> None:
         runner = CliRunner()
@@ -219,7 +217,7 @@ class TestProcessCommand:
         assert result.exit_code != 0
         assert message in result.output
 
-    def test_process_command_colors_top_level_errors(self, tmp_path) -> None:
+    def test_colors_top_level_errors(self, tmp_path) -> None:
         runner = CliRunner()
 
         result = runner.invoke(main, [str(tmp_path / "missing.wav")], color=True)
@@ -228,7 +226,7 @@ class TestProcessCommand:
         assert "\x1b[" in result.output
         assert "Error:" in result.output
 
-    def test_process_command_rejects_existing_output_directory(self, tmp_path) -> None:
+    def test_rejects_existing_output_directory(self, tmp_path) -> None:
         runner = CliRunner()
         input_path = tmp_path / "demo.wav"
         output_dir = tmp_path / "run"
@@ -246,7 +244,7 @@ class TestProcessCommand:
         assert result.exit_code != 0
         assert "Output directory already exists" in result.output
 
-    def test_process_command_resets_active_display_before_cli_errors(self, tmp_path) -> None:
+    def test_resets_active_display_before_cli_errors(self, tmp_path) -> None:
         runner = CliRunner()
         input_path = tmp_path / "demo.wav"
         input_path.write_text("stub", encoding="utf-8")
@@ -264,7 +262,7 @@ class TestProcessCommand:
         assert "Output directory already exists: demo" in result.output
         reset_mock.assert_called_once()
 
-    def test_process_command_handles_ctrl_c(self, tmp_path) -> None:
+    def test_handles_ctrl_c(self, tmp_path) -> None:
         runner = CliRunner()
         input_path = tmp_path / "demo.wav"
         input_path.write_text("stub", encoding="utf-8")

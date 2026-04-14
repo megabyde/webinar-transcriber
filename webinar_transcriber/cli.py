@@ -143,7 +143,7 @@ def main(
     kept_audio_format: str,
     llm: bool,
 ) -> None:
-    """Process an audio or video input file."""
+    """Transcribe an audio or video input file."""
     if not input_path.exists():
         raise CLIError(f"Input file does not exist: {input_path}")
 
