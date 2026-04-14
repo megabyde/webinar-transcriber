@@ -151,6 +151,16 @@ class TestWhisperCppTranscriber:
         assert transcriber.system_info == "METAL = 1"
         assert transcriber.library_path == "/usr/local/lib/libwhisper.so"
 
+    def test_prepare_model_raises_when_model_resolution_returns_none(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            WhisperCppTranscriber,
+            "_resolve_model_path",
+            lambda self: None,  # type: ignore[return-value]
+        )
+
+        with pytest.raises(RuntimeError, match=r"returned no whisper\.cpp model path"):
+            WhisperCppTranscriber().prepare_model()
+
     def test_transcriber_context_manager_closes_prepared_session(
         self, monkeypatch, tmp_path
     ) -> None:
@@ -322,6 +332,14 @@ class TestWhisperCppTranscriber:
         )
 
         assert [window.text for window in decoded_windows] == ["agenda review"]
+
+    def test_ensure_session_raises_when_prepare_model_does_not_initialize_session(self) -> None:
+        class BrokenTranscriber(WhisperCppTranscriber):
+            def prepare_model(self) -> None:
+                self._session = None
+
+        with pytest.raises(RuntimeError, match="session was not initialized"):
+            BrokenTranscriber(model_name="stub.bin")._ensure_session()
 
     def test_download_default_model_requires_huggingface_hub_dependency(self, monkeypatch) -> None:
         monkeypatch.setattr(

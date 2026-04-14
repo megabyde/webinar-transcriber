@@ -109,7 +109,8 @@ class WhisperCppTranscriber:
     def prepare_model(self) -> None:
         self._model_path = self._resolve_model_path()
         self.close()
-        assert self._model_path is not None
+        if self._model_path is None:
+            raise RuntimeError("Model path resolution returned no whisper.cpp model path.")
         runtime = WhisperCppLibrary(self._library_path, log_path=self._log_path)
         session = runtime.create_session(self._model_path)
         self._runtime = runtime
@@ -168,7 +169,8 @@ class WhisperCppTranscriber:
     def _ensure_session(self) -> WhisperCppSession:
         if self._session is None:
             self.prepare_model()
-        assert self._session is not None
+        if self._session is None:
+            raise RuntimeError("whisper.cpp session was not initialized during model preparation.")
         return self._session
 
     def _resolve_model_path(self) -> Path:
