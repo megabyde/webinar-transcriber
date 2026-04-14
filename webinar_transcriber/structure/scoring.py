@@ -88,11 +88,11 @@ def _audio_title_from_segments(segments: list[TranscriptSegment], *, fallback: s
     best_segment: TranscriptSegment | None = None
     best_score = float("-inf")
 
-    for index, segment in enumerate(segments):
-        adjusted_score = _audio_title_score(segment) - min(index, 5) * 0.15
-        if adjusted_score > best_score:
+    for segment in segments:
+        score = _audio_title_score(segment)
+        if score > best_score:
             best_segment = segment
-            best_score = adjusted_score
+            best_score = score
 
     if best_segment is None:
         return fallback
@@ -110,14 +110,14 @@ def _audio_title_score(segment: TranscriptSegment) -> float:
     informative_words = sum(
         1 for word in words[:12] if word not in TITLE_FILLER_WORDS and len(word) > 2
     )
-    punctuation_bonus = 1.0 if any(char in segment.text for char in ".?!,:;") else 0.0
+    if informative_words < 3:
+        return -1.0
+
     unique_ratio = len(set(words[:12])) / min(len(words), 12)
-    repetition_penalty = 0.0
-    if unique_ratio < 0.4:
-        repetition_penalty = 4.0
-    elif unique_ratio < 0.6:
-        repetition_penalty = 2.0
-    return informative_words + punctuation_bonus + min(len(words), 12) / 20.0 - repetition_penalty
+    score = float(informative_words)
+    if unique_ratio < 0.6:
+        score -= 3.0
+    return score
 
 
 def _summary_score(segment: TranscriptSegment) -> float:
@@ -127,16 +127,16 @@ def _summary_score(segment: TranscriptSegment) -> float:
     if word_count < 4:
         return -2.0
 
+    if SUMMARY_NOISE_PATTERN.search(text):
+        return -2.0
+
+    score = -1.0 if segment.start_sec < 60.0 else 0.0
     informative_words = sum(1 for word in words[:14] if len(word) > 2)
-    filler_words = sum(1 for word in words[:14] if word in TITLE_FILLER_WORDS)
     duration = max(0.0, segment.end_sec - segment.start_sec)
-    score = informative_words + min(duration, 15.0) / 5.0
-    score += _summary_noise_penalty(text)
-    score += _summary_start_penalty(segment.start_sec)
-    score += _summary_length_adjustment(word_count)
-    score += _summary_punctuation_bonus(text)
-    score += _summary_repetition_penalty(words)
-    score += _summary_filler_penalty(filler_words, word_count)
+    score += informative_words + min(duration, 15.0) / 5.0
+    unique_ratio = len(set(words[:14])) / min(len(words), 14)
+    if unique_ratio < 0.6:
+        score -= 2.0
     return score
 
 
@@ -146,52 +146,13 @@ def _action_item_score(segment: TranscriptSegment) -> float:
     if len(words) < 2:
         return -1.0
 
-    score = 2.0
     if SUMMARY_NOISE_PATTERN.search(text):
-        score -= 3.0
-    if segment.start_sec < 60.0:
-        score -= 0.5
-    if any(char in text for char in ".?!,:;"):
-        score += 0.5
+        return -1.0
+
+    score = 1.0
+    if segment.start_sec >= 60.0:
+        score += 1.0
     return score
-
-
-def _summary_noise_penalty(text: str) -> float:
-    return -6.0 if SUMMARY_NOISE_PATTERN.search(text) else 0.0
-
-
-def _summary_start_penalty(start_sec: float) -> float:
-    if start_sec < 60.0:
-        return -2.0
-    if start_sec < 180.0:
-        return -1.0
-    return 0.0
-
-
-def _summary_length_adjustment(word_count: int) -> float:
-    return -1.5 if word_count > 28 else 0.0
-
-
-def _summary_punctuation_bonus(text: str) -> float:
-    return 1.0 if any(char in text for char in ".?!,:;") else 0.0
-
-
-def _summary_repetition_penalty(words: list[str]) -> float:
-    unique_ratio = len(set(words[:14])) / min(len(words), 14)
-    if unique_ratio < 0.5:
-        return -3.0
-    if unique_ratio < 0.7:
-        return -1.5
-    return 0.0
-
-
-def _summary_filler_penalty(filler_words: int, word_count: int) -> float:
-    filler_ratio = filler_words / min(word_count, 14)
-    if filler_ratio > 0.25:
-        return -2.0
-    if filler_ratio > 0.15:
-        return -1.0
-    return 0.0
 
 
 def _title_words(text: str) -> list[str]:

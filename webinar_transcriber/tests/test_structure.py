@@ -26,9 +26,7 @@ from webinar_transcriber.structure.scoring import (
     _extract_action_items,
     _fallback_summary,
     _segment_key,
-    _summary_filler_penalty,
-    _summary_repetition_penalty,
-    _summary_start_penalty,
+    _summary_score,
     _title_from_text,
     _title_from_words,
 )
@@ -616,15 +614,31 @@ class TestAudioSectionHeuristics:
         assert _title_from_words([]) == ""
         assert _segment_key("   ") == ""
 
-    def test_audio_title_score_covers_repetition_penalty_bands(self) -> None:
-        heavy_repetition = TranscriptSegment(
+    def test_audio_title_score_penalizes_repetition(self) -> None:
+        repetitive = TranscriptSegment(
             id="segment-1", text="Plan plan plan plan", start_sec=0.0, end_sec=4.0
         )
-        medium_repetition = TranscriptSegment(
-            id="segment-2", text="Plan plan budget budget", start_sec=4.0, end_sec=8.0
+        informative = TranscriptSegment(
+            id="segment-2",
+            text="Budget timeline owner risks and rollout plan.",
+            start_sec=4.0,
+            end_sec=8.0,
         )
 
-        assert _audio_title_score(heavy_repetition) < _audio_title_score(medium_repetition)
+        assert _audio_title_score(repetitive) < _audio_title_score(informative)
+
+    def test_audio_title_score_rejects_segments_with_too_few_informative_words(self) -> None:
+        assert (
+            _audio_title_score(
+                TranscriptSegment(
+                    id="segment-1",
+                    text="Budget okay right plan",
+                    start_sec=0.0,
+                    end_sec=4.0,
+                )
+            )
+            == -1.0
+        )
 
 
 class TestSummaryAndActionHeuristics:
@@ -722,7 +736,7 @@ class TestSummaryAndActionHeuristics:
             "Please remember the final numbers.",
         ]
 
-    def test_structure_scoring_helpers_cover_penalty_branches(self) -> None:
+    def test_structure_scoring_helpers_cover_reduced_scoring_paths(self) -> None:
         repetitive_segment = TranscriptSegment(
             id="segment-1", text="So so so so.", start_sec=0.0, end_sec=10.0
         )
@@ -736,23 +750,10 @@ class TestSummaryAndActionHeuristics:
         todo_score = _action_item_score(
             TranscriptSegment(id="segment-3", text="TODO", start_sec=0.0, end_sec=1.0)
         )
-        no_repetition_penalty = _summary_repetition_penalty([
-            "plan",
-            "budget",
-            "timeline",
-            "risk",
-            "owner",
-            "scope",
-        ])
         filler_key = _segment_key(filler_heavy_segment.text)
 
         assert _audio_title_score(repetitive_segment) < 0
         assert todo_score == -1.0
-        assert _summary_start_penalty(200.0) == 0.0
-        assert _summary_repetition_penalty(["plan"] * 6) == -3.0
-        assert no_repetition_penalty == 0.0
-        assert _summary_filler_penalty(4, 10) == -2.0
-        assert _summary_filler_penalty(2, 10) == -1.0
         assert filler_key == "please chat audio microphone hello everyone"
 
     def test_action_item_score_penalizes_noise_and_missing_punctuation(self) -> None:
@@ -767,24 +768,37 @@ class TestSummaryAndActionHeuristics:
 
         assert score < 0
 
-    def test_summary_helpers_cover_medium_repetition_and_fallback_limit(self) -> None:
+    def test_summary_score_penalizes_repetitive_text(self) -> None:
+        repetitive_score = _summary_score(
+            TranscriptSegment(
+                id="segment-1",
+                text="Plan plan plan plan budget budget budget budget risk risk risk risk.",
+                start_sec=120.0,
+                end_sec=132.0,
+            )
+        )
+        informative_score = _summary_score(
+            TranscriptSegment(
+                id="segment-2",
+                text=(
+                    "Plan budget risks staffing delivery owners milestones blockers "
+                    "timeline rollout metrics approvals."
+                ),
+                start_sec=120.0,
+                end_sec=132.0,
+            )
+        )
+
+        assert repetitive_score < informative_score
+
+    def test_fallback_summary_keeps_limit(self) -> None:
         summary = _fallback_summary([
             TranscriptSegment(id="segment-1", text="One", start_sec=0.0, end_sec=1.0),
             TranscriptSegment(id="segment-2", text="Two", start_sec=1.0, end_sec=2.0),
             TranscriptSegment(id="segment-3", text="Three", start_sec=2.0, end_sec=3.0),
             TranscriptSegment(id="segment-4", text="Four", start_sec=3.0, end_sec=4.0),
         ])
-        repetition_penalty = _summary_repetition_penalty([
-            "plan",
-            "plan",
-            "budget",
-            "budget",
-            "risk",
-            "risk",
-            "owner",
-        ])
 
-        assert repetition_penalty == -1.5
         assert summary == ["One", "Two", "Three"]
 
     def test_derive_title_handles_windows_paths(self) -> None:
