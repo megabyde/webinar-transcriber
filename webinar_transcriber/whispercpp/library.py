@@ -107,7 +107,6 @@ class WhisperCppSession:
         exc: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        del exc_type, exc, traceback
         self.close()
 
     def __del__(self) -> None:  # pragma: no cover - interpreter shutdown cleanup

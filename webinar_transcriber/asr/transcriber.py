@@ -163,7 +163,6 @@ class WhisperCppTranscriber:
         exc: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        del exc_type, exc, traceback
         self.close()
 
     def _ensure_session(self) -> WhisperCppSession:
