@@ -507,6 +507,7 @@ class TestBuildReport:
         assert _interlude_title("en") == "Music Interlude"
         assert _interlude_note("en").startswith("Music or spoken-performance interlude.")
 
+
 class TestAudioSectionHeuristics:
     def test_build_audio_sections_flushes_speech_before_interlude_tail(self) -> None:
         progress_updates: list[tuple[int, int]] = []

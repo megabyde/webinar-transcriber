@@ -135,6 +135,7 @@ def _is_likely_interlude_text(text: str) -> bool:
 def _has_interlude_marker(text: str) -> bool:
     return bool(INTERLUDE_MARKER_PATTERN.search(text))
 
+
 def _interlude_title(detected_language: str | None) -> str:
     if detected_language == "ru":
         return "Музыкальная пауза"
