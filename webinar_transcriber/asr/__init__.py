@@ -1,6 +1,6 @@
 """ASR adapter built on top of the whisper.cpp C API."""
 
-from .carryover import _carryover_drop_reason, _sanitize_prompt, build_prompt_carryover
+from .carryover import build_prompt_carryover
 from .config import (
     ASR_BACKEND_NAME,
     DEFAULT_ASR_THREADS,
@@ -11,10 +11,9 @@ from .config import (
     DEFAULT_WHISPER_CPP_MODEL_REPO,
     PromptCarryoverSettings,
     WhisperDecodeSettings,
-    _read_sysctl_int,
     default_asr_threads,
 )
-from .transcriber import WhisperCppTranscriber, _device_name_from_system_info
+from .transcriber import WhisperCppTranscriber
 
 __all__ = [
     "ASR_BACKEND_NAME",
@@ -27,10 +26,6 @@ __all__ = [
     "PromptCarryoverSettings",
     "WhisperCppTranscriber",
     "WhisperDecodeSettings",
-    "_carryover_drop_reason",
-    "_device_name_from_system_info",
-    "_read_sysctl_int",
-    "_sanitize_prompt",
     "build_prompt_carryover",
     "default_asr_threads",
 ]

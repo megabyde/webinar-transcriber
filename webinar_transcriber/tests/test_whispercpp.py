@@ -12,17 +12,21 @@ from webinar_transcriber.whispercpp import (
     WhisperCppError,
     WhisperCppLibrary,
     WhisperCppSession,
-    _candidate_backend_plugin_paths,
+    resolve_library_path,
+)
+from webinar_transcriber.whispercpp.bindings import (
     _decode_c_string,
     _encode_optional_text,
+    _system_info_supports_gpu,
+    _WhisperContextParams,
+    _WhisperFullParams,
+)
+from webinar_transcriber.whispercpp.library import (
+    _candidate_backend_plugin_paths,
     _library_log_callback,
     _load_backend_plugins,
     _resolve_ggml_library_path,
     _set_log_sink_path,
-    _system_info_supports_gpu,
-    _WhisperContextParams,
-    _WhisperFullParams,
-    resolve_library_path,
 )
 
 
