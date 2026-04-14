@@ -125,8 +125,8 @@ Depending on options and input type, successful default runs also write:
 - `transcription-audio.wav` or `transcription-audio.mp3` with `--keep-audio`
 - `scenes.json` and `frames/` for video input
 
-Failed runs also write `diagnostics.json` once the run directory exists, though they may still
-leave only partial intermediate artifacts and no final report outputs.
+Failed runs also write `diagnostics.json` once the run directory exists, though they may still leave
+only partial intermediate artifacts and no final report outputs.
 
 ### How It Works
 
