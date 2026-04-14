@@ -49,8 +49,7 @@ INTERLUDE_MIN_WORDS = 18
 MIN_INTERLUDE_DURATION_SEC = 30.0
 INTERLUDE_LOW_UNIQUE_RATIO = 0.5
 TITLE_FILLER_WORDS = {
-    "actually",
-    "basically",
+    "first",
     "just",
     "like",
     "okay",
@@ -58,29 +57,8 @@ TITLE_FILLER_WORDS = {
     "so",
     "then",
     "well",
-    "you",
-    "бы",
-    "в",
     "вот",
-    "да",
-    "други",
-    "как",
-    "короче",
-    "ладно",
     "ну",
-    "парни",
-    "просто",
-    "ребят",
-    "скажем",
-    "собственно",
-    "соответственно",
-    "значит",
-    "так",
-    "типа",
-    "то",
-    "хорошо",
-    "что",
-    "это",
 }
 SUMMARY_NOISE_PATTERN = re.compile(
     r"\b("
