@@ -22,6 +22,7 @@ from webinar_transcriber.llm import (
 )
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.models import (
+    AsrPipelineDiagnostics,
     AudioAsset,
     DecodedWindow,
     MediaType,
@@ -38,6 +39,7 @@ from webinar_transcriber.processor import (
     extract_frames_input,
     process_input,
 )
+from webinar_transcriber.processor.__init__ import _RunContext, _write_run_diagnostics
 from webinar_transcriber.processor.llm import LLMRuntimeState, resolve_llm_processor
 from webinar_transcriber.processor.support import (
     asr_model_label,
@@ -291,6 +293,23 @@ class TestProcessInput:
 
         document = Document(str(artifacts.layout.docx_report_path))
         assert "Sample Audio" in "\n".join(paragraph.text for paragraph in document.paragraphs)
+
+    def test_write_run_diagnostics_returns_none_without_layout(self) -> None:
+        ctx = _RunContext(
+            reporter=NullStageReporter(),
+            asr_pipeline=AsrPipelineDiagnostics(vad_enabled=True, threads=1),
+        )
+
+        diagnostics = _write_run_diagnostics(
+            ctx,
+            status="failed",
+            failed_stage="prepare_run_dir",
+            error="boom",
+            asr_model="test-model",
+            llm_enabled=False,
+        )
+
+        assert diagnostics is None
 
     def test_keeps_normalized_audio_artifact(self, tmp_path, monkeypatch) -> None:
         install_basic_windowing(monkeypatch)
