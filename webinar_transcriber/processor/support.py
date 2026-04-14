@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING
@@ -29,6 +29,8 @@ if TYPE_CHECKING:
     from webinar_transcriber.llm import LLMReportPolishPlan
     from webinar_transcriber.paths import RunLayout
     from webinar_transcriber.reporter import StageReporter
+
+    from . import _AsrPipelineState
 
 
 @dataclass(frozen=True)
@@ -203,7 +205,7 @@ def build_diagnostics(
     llm_report_latency_sec: float | None,
     llm_report_usage: dict[str, int] | None,
     stage_timings: dict[str, float],
-    asr_pipeline: AsrPipelineDiagnostics,
+    asr_pipeline: _AsrPipelineState,
     transcript_segment_count: int,
     normalized_transcript_segment_count: int,
     report_section_count: int,
@@ -233,6 +235,6 @@ def build_diagnostics(
             "scenes": scene_count,
             "frames": frame_count,
         },
-        asr_pipeline=asr_pipeline,
+        asr_pipeline=AsrPipelineDiagnostics(**asdict(asr_pipeline)),
         warnings=warnings,
     )

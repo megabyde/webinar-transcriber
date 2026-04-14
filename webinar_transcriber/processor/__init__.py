@@ -15,7 +15,6 @@ from webinar_transcriber.asr import PromptCarryoverSettings, default_asr_threads
 from webinar_transcriber.labels import count_label
 from webinar_transcriber.models import (
     AlignmentBlock,
-    AsrPipelineDiagnostics,
     Diagnostics,
     MediaAsset,
     ReportDocument,
@@ -76,7 +75,7 @@ class _RunContext:
     """Mutable state for one processing run."""
 
     reporter: StageReporter
-    asr_pipeline: AsrPipelineDiagnostics
+    asr_pipeline: _AsrPipelineState
     stage_timings: dict[str, float] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     current_stage: str | None = None
@@ -93,6 +92,22 @@ class _RunContext:
 
 DEFAULT_VAD_SETTINGS = VadSettings()
 DEFAULT_PROMPT_CARRYOVER_SETTINGS = PromptCarryoverSettings()
+
+
+@dataclass
+class _AsrPipelineState:
+    """Mutable ASR diagnostics state accumulated during processing."""
+
+    vad_enabled: bool
+    threads: int
+    normalized_audio_duration_sec: float | None = None
+    vad_region_count: int = 0
+    carryover_enabled: bool = False
+    window_count: int = 0
+    average_window_duration_sec: float | None = None
+    reconciliation_duplicate_segments_dropped: int = 0
+    reconciliation_boundary_fixes: int = 0
+    system_info: str | None = None
 
 
 def _build_run_diagnostics(
@@ -173,7 +188,7 @@ def process_input(
     """Process a single audio or video file into report artifacts."""
     active_reporter = reporter or NullStageReporter()
     asr_threads = asr_threads or default_asr_threads()
-    asr_pipeline = AsrPipelineDiagnostics(vad_enabled=vad.enabled, threads=asr_threads)
+    asr_pipeline = _AsrPipelineState(vad_enabled=vad.enabled, threads=asr_threads)
     asr_pipeline.carryover_enabled = carryover.enabled
     ctx = _RunContext(reporter=active_reporter, asr_pipeline=asr_pipeline)
 

@@ -30,10 +30,12 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from webinar_transcriber.asr import WhisperCppTranscriber
-    from webinar_transcriber.models import AsrPipelineDiagnostics, MediaAsset
+    from webinar_transcriber.models import MediaAsset
     from webinar_transcriber.paths import RunLayout
     from webinar_transcriber.reporter import StageReporter
     from webinar_transcriber.segmentation import VadSettings
+
+    from . import _AsrPipelineState
 
 
 @dataclass(frozen=True)
@@ -53,7 +55,7 @@ def run_asr_pipeline(
     reporter: StageReporter,
     stage_timings: dict[str, float],
     warnings: list[str],
-    asr_pipeline: AsrPipelineDiagnostics,
+    asr_pipeline: _AsrPipelineState,
     vad: VadSettings,
 ) -> AsrPipelineResult:
     """Run the deterministic local ASR pipeline and persist intermediate artifacts."""
