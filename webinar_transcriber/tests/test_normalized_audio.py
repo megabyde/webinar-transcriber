@@ -247,6 +247,15 @@ class TestNormalizedAudio:
 
         assert [(r.start_sec, r.end_sec) for r in repaired] == [(0.0, 6.8), (7.65, 20.0)]
 
+    def test_repair_speech_regions_prefers_left_neighbor_on_equal_gap(self) -> None:
+        repaired = repair_speech_regions([
+            SpeechRegion(start_sec=0.0, end_sec=5.0),
+            SpeechRegion(start_sec=5.5, end_sec=6.5),
+            SpeechRegion(start_sec=7.0, end_sec=12.0),
+        ])
+
+        assert [(r.start_sec, r.end_sec) for r in repaired] == [(0.0, 6.5), (7.0, 12.0)]
+
     def test_repair_speech_regions_keeps_short_region_when_gaps_are_too_large(self) -> None:
         repaired = repair_speech_regions([
             SpeechRegion(start_sec=0.0, end_sec=12.0),

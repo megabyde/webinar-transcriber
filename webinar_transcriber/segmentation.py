@@ -116,37 +116,37 @@ def repair_speech_regions(
     if len(repaired) < 2 or min_duration <= 0:
         return repaired
 
-    max_iterations = len(repaired)
-    for _ in range(max_iterations):
-        changed = False
-        for i, region in enumerate(repaired):
-            if (region.end_sec - region.start_sec) >= min_duration:
-                continue
+    merged: list[SpeechRegion] = []
+    current = repaired[0]
+    next_index = 1
 
-            left_gap = region.start_sec - repaired[i - 1].end_sec if i > 0 else float("inf")
+    while True:
+        if (current.end_sec - current.start_sec) >= min_duration:
+            merged.append(current)
+        else:
+            left_gap = current.start_sec - merged[-1].end_sec if merged else float("inf")
             right_gap = (
-                repaired[i + 1].start_sec - region.end_sec
-                if i + 1 < len(repaired)
+                repaired[next_index].start_sec - current.end_sec
+                if next_index < len(repaired)
                 else float("inf")
             )
-            gap = min(left_gap, right_gap)
-            if gap > gap_limit:
+            if min(left_gap, right_gap) > gap_limit:
+                merged.append(current)
+            elif left_gap <= right_gap:
+                previous = merged.pop()
+                current = SpeechRegion(start_sec=previous.start_sec, end_sec=current.end_sec)
+                continue
+            else:
+                current = SpeechRegion(
+                    start_sec=current.start_sec, end_sec=repaired[next_index].end_sec
+                )
+                next_index += 1
                 continue
 
-            if left_gap <= right_gap:
-                repaired[i - 1 : i + 1] = [
-                    SpeechRegion(start_sec=repaired[i - 1].start_sec, end_sec=region.end_sec)
-                ]
-            else:
-                repaired[i : i + 2] = [
-                    SpeechRegion(start_sec=region.start_sec, end_sec=repaired[i + 1].end_sec)
-                ]
-            changed = True
-            break
-        if not changed:
-            break
-
-    return repaired
+        if next_index >= len(repaired):
+            return merged
+        current = repaired[next_index]
+        next_index += 1
 
 
 def normalized_audio_duration(samples: np.ndarray, sample_rate: int) -> float:
