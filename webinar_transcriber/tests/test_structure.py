@@ -18,7 +18,6 @@ from webinar_transcriber.structure.interludes import (
     _is_likely_interlude_text,
 )
 from webinar_transcriber.structure.scoring import (
-    _action_item_score,
     _audio_title_from_segments,
     _audio_title_score,
     _build_summary,
@@ -704,7 +703,7 @@ class TestSummaryAndActionHeuristics:
             "Please check the final numbers.",
         ]
 
-    def test_extract_action_items_prefers_higher_scored_later_candidates(self) -> None:
+    def test_extract_action_items_keeps_first_matching_candidates_in_transcript_order(self) -> None:
         action_items = _extract_action_items([
             TranscriptSegment(
                 id="segment-1", text="Please send the draft", start_sec=10.0, end_sec=13.0
@@ -730,11 +729,11 @@ class TestSummaryAndActionHeuristics:
         ])
 
         assert action_items == [
+            "Please send the draft",
             "Please review the spreadsheet",
             "Please update the tracker",
             "Please share the recording",
             "Please check the notes",
-            "Please remember the final numbers.",
         ]
 
     def test_structure_scoring_helpers_cover_reduced_scoring_paths(self) -> None:
@@ -748,26 +747,43 @@ class TestSummaryAndActionHeuristics:
             end_sec=14.0,
         )
 
-        todo_score = _action_item_score(
-            TranscriptSegment(id="segment-3", text="TODO", start_sec=0.0, end_sec=1.0)
-        )
         filler_key = _segment_key(filler_heavy_segment.text)
 
         assert _audio_title_score(repetitive_segment) < 0
-        assert todo_score == -1.0
         assert filler_key == "please chat audio microphone hello everyone"
 
-    def test_action_item_score_penalizes_noise_and_missing_punctuation(self) -> None:
-        score = _action_item_score(
+    def test_action_items_skip_noise_even_with_action_cue(self) -> None:
+        action_items = _extract_action_items([
             TranscriptSegment(
                 id="segment-1",
                 text="Please update the audio chat group",
                 start_sec=10.0,
                 end_sec=14.0,
             )
-        )
+        ])
 
-        assert score < 0
+        assert action_items == []
+
+    def test_action_items_preserve_transcript_order_after_cue_filtering(self) -> None:
+        action_items = _extract_action_items([
+            TranscriptSegment(
+                id="segment-1",
+                text="Please send the draft by Friday.",
+                start_sec=120.0,
+                end_sec=124.0,
+            ),
+            TranscriptSegment(
+                id="segment-2",
+                text="Please update the tracker after the review.",
+                start_sec=10.0,
+                end_sec=14.0,
+            ),
+        ])
+
+        assert action_items == [
+            "Please send the draft by Friday.",
+            "Please update the tracker after the review.",
+        ]
 
     def test_summary_score_penalizes_repetitive_text(self) -> None:
         repetitive_score = _summary_score(

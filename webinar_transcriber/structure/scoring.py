@@ -50,20 +50,16 @@ def _build_summary(segments: list[TranscriptSegment]) -> list[str]:
 
 
 def _extract_action_items(segments: list[TranscriptSegment]) -> list[str]:
-    candidates: list[tuple[float, int, str]] = []
     seen_keys: set[str] = set()
+    selected: list[tuple[int, str]] = []
 
     for index, segment in enumerate(segments):
         text = segment.text.strip()
         if not text or not _has_action_item_cue(text):
             continue
-        score = _action_item_score(segment)
-        if score <= 0:
+        words = _title_words(text)
+        if len(words) < 2 or SUMMARY_NOISE_PATTERN.search(text):
             continue
-        candidates.append((score, index, text))
-
-    selected: list[tuple[int, str]] = []
-    for _score, index, text in sorted(candidates, key=lambda item: (-item[0], item[1])):
         key = _segment_key(text)
         if key in seen_keys:
             continue
@@ -137,21 +133,6 @@ def _summary_score(segment: TranscriptSegment) -> float:
     unique_ratio = len(set(words[:14])) / min(len(words), 14)
     if unique_ratio < 0.6:
         score -= 2.0
-    return score
-
-
-def _action_item_score(segment: TranscriptSegment) -> float:
-    text = segment.text.strip()
-    words = _title_words(text)
-    if len(words) < 2:
-        return -1.0
-
-    if SUMMARY_NOISE_PATTERN.search(text):
-        return -1.0
-
-    score = 1.0
-    if segment.start_sec >= 60.0:
-        score += 1.0
     return score
 
 
