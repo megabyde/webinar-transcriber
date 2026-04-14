@@ -25,8 +25,6 @@ jobs:
       - name: Smoke CLI help
         run: |
           uv run webinar-transcriber --help
-          uv run webinar-transcriber process --help
-          uv run webinar-transcriber extract-frames --help
       - name: Run CI
         run: make check
       - name: Upload coverage
@@ -54,7 +52,5 @@ jobs:
       - name: Smoke CLI help
         run: |
           uv run webinar-transcriber --help
-          uv run webinar-transcriber process --help
-          uv run webinar-transcriber extract-frames --help
       - name: Run smoke tests
         run: make test

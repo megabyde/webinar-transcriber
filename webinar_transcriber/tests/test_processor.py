@@ -20,22 +20,17 @@ from webinar_transcriber.llm import (
     LLMReportPolishPlan,
     LLMSectionPolishResult,
 )
-from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.models import (
-    AudioAsset,
     DecodedWindow,
     MediaType,
     ReportDocument,
     ReportSection,
-    Scene,
     SpeechRegion,
     TranscriptSegment,
     VideoAsset,
 )
 from webinar_transcriber.processor import (
-    FrameExtractionArtifacts,
     ProcessArtifacts,
-    extract_frames_input,
     process_input,
 )
 from webinar_transcriber.processor.__init__ import (
@@ -613,44 +608,6 @@ class TestProcessInput:
         assert diagnostics_payload["failed_stage"] == "structure"
         assert diagnostics_payload["error"] == "boom"
         assert not (output_dir / "report.json").exists()
-
-    def test_extract_frames_input_writes_scene_artifacts(self, tmp_path, monkeypatch) -> None:
-        reporter = RecordingReporter()
-        monkeypatch.setattr(
-            "webinar_transcriber.media.probe_media",
-            lambda _path: VideoAsset(path="demo.mp4", duration_sec=2.0),
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.video.detect_scenes",
-            lambda *_args, **_kwargs: [Scene(id="scene-1", start_sec=0.0, end_sec=2.0)],
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.video.extract_representative_frames", lambda *_args, **_kwargs: []
-        )
-
-        artifacts = extract_frames_input(
-            FIXTURE_DIR / "sample-video.mp4", output_dir=tmp_path / "frames-run", reporter=reporter
-        )
-
-        assert isinstance(artifacts, FrameExtractionArtifacts)
-        assert artifacts.layout.scenes_path.exists()
-        assert json.loads(artifacts.layout.scenes_path.read_text(encoding="utf-8")) == {
-            "scenes": [{"id": "scene-1", "start_sec": 0.0, "end_sec": 2.0}]
-        }
-        assert reporter.has_event("finish", "detect_scenes", "1 scene")
-
-    def test_extract_frames_input_rejects_audio_input(self, tmp_path, monkeypatch) -> None:
-        monkeypatch.setattr(
-            "webinar_transcriber.media.probe_media",
-            lambda _path: AudioAsset(path="demo.mp3", duration_sec=2.0),
-        )
-
-        with pytest.raises(
-            MediaProcessingError, match="Frame extraction is only supported for video input"
-        ):
-            extract_frames_input(
-                FIXTURE_DIR / "sample-audio.mp3", output_dir=tmp_path / "frames-run"
-            )
 
     def test_forwards_vad_warnings_to_reporter(self, tmp_path, monkeypatch) -> None:
         reporter = RecordingReporter()
