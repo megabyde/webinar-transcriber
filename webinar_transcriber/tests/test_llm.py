@@ -9,7 +9,6 @@ from webinar_transcriber.llm import (
     AnthropicLLMProcessor,
     LLMConfigurationError,
     LLMProcessingError,
-    LLMReportPolishResult,
     OpenAILLMProcessor,
     ReportPolishResponse,
     ReportSectionUpdate,
@@ -145,17 +144,24 @@ class TestOpenAiLlmProcessor:
             ],
         )
 
-        result = processor.polish_report(report)
+        section_result = processor.polish_report_sections_with_progress(report)
+        metadata_result = processor.polish_report_metadata(
+            report, section_transcripts=section_result.section_transcripts
+        )
 
-        assert isinstance(result, LLMReportPolishResult)
-        assert result.summary == ["Improved summary."]
-        assert result.action_items == ["Send the updated draft by Friday."]
-        assert result.section_titles == {"section-1": "Improved overview"}
-        assert result.section_tldrs == {"section-1": "Short recap of the section."}
-        assert result.section_transcripts == {
+        assert metadata_result.summary == ["Improved summary."]
+        assert metadata_result.action_items == ["Send the updated draft by Friday."]
+        assert metadata_result.section_titles == {"section-1": "Improved overview"}
+        assert section_result.section_tldrs == {"section-1": "Short recap of the section."}
+        assert section_result.section_transcripts == {
             "section-1": "Agenda review and project status update.\n\nPlease listen."
         }
-        assert result.usage == {"input_tokens": 17, "output_tokens": 12, "total_tokens": 29}
+        assert section_result.usage == {"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}
+        assert metadata_result.usage == {
+            "input_tokens": 12,
+            "output_tokens": 8,
+            "total_tokens": 20,
+        }
 
     def test_rejects_unknown_report_section_id(self, monkeypatch) -> None:
         fake_client = self.FakeClient([
@@ -192,8 +198,12 @@ class TestOpenAiLlmProcessor:
             ],
         )
 
+        section_result = processor.polish_report_sections_with_progress(report)
+
         with pytest.raises(LLMProcessingError):
-            processor.polish_report(report)
+            processor.polish_report_metadata(
+                report, section_transcripts=section_result.section_transcripts
+            )
 
     def test_rejects_non_matching_section_schema(self, monkeypatch) -> None:
         fake_client = self.FakeClient([
@@ -343,17 +353,24 @@ class TestAnthropicLlmProcessor:
             ],
         )
 
-        result = processor.polish_report(report)
+        section_result = processor.polish_report_sections_with_progress(report)
+        metadata_result = processor.polish_report_metadata(
+            report, section_transcripts=section_result.section_transcripts
+        )
 
-        assert isinstance(result, LLMReportPolishResult)
-        assert result.summary == ["Improved summary."]
-        assert result.action_items == ["Send the updated draft by Friday."]
-        assert result.section_titles == {"section-1": "Improved overview"}
-        assert result.section_tldrs == {"section-1": "Short recap of the section."}
-        assert result.section_transcripts == {
+        assert metadata_result.summary == ["Improved summary."]
+        assert metadata_result.action_items == ["Send the updated draft by Friday."]
+        assert metadata_result.section_titles == {"section-1": "Improved overview"}
+        assert section_result.section_tldrs == {"section-1": "Short recap of the section."}
+        assert section_result.section_transcripts == {
             "section-1": "Agenda review and project status update.\n\nPlease listen."
         }
-        assert result.usage == {"input_tokens": 17, "output_tokens": 12, "total_tokens": 29}
+        assert section_result.usage == {"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}
+        assert metadata_result.usage == {
+            "input_tokens": 12,
+            "output_tokens": 8,
+            "total_tokens": 20,
+        }
 
     def test_rejects_invalid_json_response(self, monkeypatch) -> None:
         fake_client = self.FakeClient([

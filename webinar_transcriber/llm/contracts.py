@@ -104,9 +104,6 @@ class LLMProcessor(Protocol):
     def model_name(self) -> str:
         """Return the configured model identifier."""
 
-    def polish_report(self, report: ReportDocument) -> LLMReportPolishResult:
-        """Return polished summary, action items, and section titles."""
-
     def polish_report_sections_with_progress(
         self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
     ) -> LLMSectionPolishResult:
@@ -116,11 +113,6 @@ class LLMProcessor(Protocol):
         self, report: ReportDocument, *, section_transcripts: dict[str, str]
     ) -> LLMReportMetadataResult:
         """Return polished summary, action items, and section titles."""
-
-    def polish_report_with_progress(
-        self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
-    ) -> LLMReportPolishResult:
-        """Return polished report fields with per-section progress updates."""
 
     def report_polish_plan(self, report: ReportDocument) -> LLMReportPolishPlan:
         """Return concurrency details for report polishing."""

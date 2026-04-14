@@ -5,13 +5,12 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.usage import merge_usage, merge_usage_into
+from webinar_transcriber.usage import merge_usage_into
 
 from .contracts import (
     LLMProcessingError,
     LLMReportMetadataResult,
     LLMReportPolishPlan,
-    LLMReportPolishResult,
     LLMSectionPolishResult,
     ReportPolishResponse,
     SchemaModelT,
@@ -66,10 +65,6 @@ class _BaseLLMProcessor:
         """Return the configured LLM provider identifier."""
         return self._provider_name
 
-    def polish_report(self, report: ReportDocument) -> LLMReportPolishResult:
-        """Polish section text, summary, action items, and section titles."""
-        return self.polish_report_with_progress(report)
-
     def polish_report_sections_with_progress(
         self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
     ) -> LLMSectionPolishResult:
@@ -111,28 +106,6 @@ class _BaseLLMProcessor:
             action_items=normalize_report_lines(parsed.action_items, limit=ACTION_ITEM_LIMIT),
             section_titles=validated_section_titles(report, parsed.section_updates),
             usage=usage,
-        )
-
-    def polish_report_with_progress(
-        self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
-    ) -> LLMReportPolishResult:
-        """Polish section text first, then polish report summary and section titles."""
-        section_result = self.polish_report_sections_with_progress(
-            report, progress_callback=progress_callback
-        )
-        metadata_result = self.polish_report_metadata(
-            report, section_transcripts=section_result.section_transcripts
-        )
-        usage_totals = merge_usage(section_result.usage, metadata_result.usage)
-
-        return LLMReportPolishResult(
-            summary=metadata_result.summary,
-            action_items=metadata_result.action_items,
-            section_titles=metadata_result.section_titles,
-            section_tldrs=section_result.section_tldrs,
-            section_transcripts=section_result.section_transcripts,
-            usage=usage_totals,
-            warnings=section_result.warnings,
         )
 
     def report_polish_plan(self, report: ReportDocument) -> LLMReportPolishPlan:
