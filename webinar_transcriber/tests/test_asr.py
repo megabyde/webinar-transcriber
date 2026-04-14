@@ -355,24 +355,10 @@ class TestWhisperCppTranscriber:
         with pytest.raises(RuntimeError, match="session was not initialized"):
             BrokenTranscriber(model_name="stub.bin")._ensure_session()
 
-    def test_download_default_model_requires_huggingface_hub_dependency(self, monkeypatch) -> None:
-        monkeypatch.setattr(
-            "webinar_transcriber.asr.transcriber.importlib.import_module",
-            lambda _name: (_ for _ in ()).throw(ModuleNotFoundError("missing")),
-        )
-
-        with pytest.raises(RuntimeError, match="huggingface_hub is not installed"):
-            WhisperCppTranscriber()._resolve_model_path()
-
     def test_download_default_model_wraps_backend_failures(self, monkeypatch) -> None:
-        class FakeHub:
-            @staticmethod
-            def hf_hub_download(**_kwargs):
-                raise RuntimeError("backend failed")
-
         monkeypatch.setattr(
-            "webinar_transcriber.asr.transcriber.importlib.import_module",
-            lambda _name: FakeHub,
+            "webinar_transcriber.asr.transcriber.hf_hub_download",
+            lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("backend failed")),
         )
 
         with pytest.raises(
@@ -382,10 +368,8 @@ class TestWhisperCppTranscriber:
 
     def test_download_default_model_returns_downloaded_path(self, monkeypatch) -> None:
         monkeypatch.setattr(
-            "webinar_transcriber.asr.transcriber.importlib.import_module",
-            lambda _name: type(
-                "FakeHub", (), {"hf_hub_download": staticmethod(lambda **_kwargs: "/tmp/model.bin")}
-            ),
+            "webinar_transcriber.asr.transcriber.hf_hub_download",
+            lambda **_kwargs: "/tmp/model.bin",
         )
 
         assert _download_default_whisper_cpp_model() == Path("/tmp/model.bin")

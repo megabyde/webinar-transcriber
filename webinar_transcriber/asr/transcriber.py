@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import importlib
 from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Self
+
+from huggingface_hub import hf_hub_download
 
 from webinar_transcriber.asr.carryover import build_prompt_carryover
 from webinar_transcriber.asr.config import (
@@ -200,15 +201,7 @@ def _device_name_from_system_info(system_info: str) -> str:
 
 def _download_default_whisper_cpp_model() -> Path:
     try:
-        huggingface_hub = importlib.import_module("huggingface_hub")
-    except ModuleNotFoundError as error:  # pragma: no cover - dependency wiring only
-        raise RuntimeError(
-            "huggingface_hub is not installed, so the default whisper.cpp model cannot be "
-            "downloaded automatically."
-        ) from error
-
-    try:
-        downloaded_path = huggingface_hub.hf_hub_download(
+        downloaded_path = hf_hub_download(
             repo_id=DEFAULT_WHISPER_CPP_MODEL_REPO, filename=DEFAULT_WHISPER_CPP_MODEL_FILENAME
         )
     except Exception as error:  # pragma: no cover - network/backend specific
