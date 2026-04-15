@@ -18,7 +18,11 @@ from .contracts import (
     SectionTextResponse,
 )
 from .openai_backend import OpenAILLMProcessor
-from .prompts import ACTION_ITEM_LIMIT, REPORT_POLISH_TOTAL_CHAR_BUDGET, SECTION_POLISH_MAX_WORKERS
+from .prompts import (
+    ACTION_ITEM_LIMIT,
+    REPORT_POLISH_TOTAL_CHAR_BUDGET,
+    SECTION_POLISH_MAX_WORKERS,
+)
 from .utils import required_provider_env
 
 

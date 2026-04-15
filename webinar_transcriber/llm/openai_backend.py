@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 from typing import TYPE_CHECKING
-
-import openai
 
 from .contracts import LLMProcessingError, SchemaModelT
 from .flow import _BaseLLMProcessor
@@ -33,7 +32,7 @@ class OpenAILLMProcessor(_BaseLLMProcessor):
             section_max_workers=section_max_workers,
             report_char_budget=report_char_budget,
         )
-        self._client = openai.OpenAI(api_key=api_key)
+        self._client = importlib.import_module("openai").OpenAI(api_key=api_key)
 
     def _parse_structured_response(
         self,

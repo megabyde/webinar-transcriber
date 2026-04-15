@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
+import importlib
 from typing import TYPE_CHECKING
-
-import anthropic
 
 from .contracts import LLMProcessingError, SchemaModelT
 from .flow import _BaseLLMProcessor
@@ -38,7 +37,7 @@ class AnthropicLLMProcessor(_BaseLLMProcessor):
             section_max_workers=section_max_workers,
             report_char_budget=report_char_budget,
         )
-        self._client = anthropic.Anthropic(api_key=api_key)
+        self._client = importlib.import_module("anthropic").Anthropic(api_key=api_key)
 
     def _parse_structured_response(
         self,

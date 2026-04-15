@@ -1,6 +1,7 @@
 """Tests for optional cloud LLM helpers."""
 
 import json
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -32,6 +33,14 @@ from webinar_transcriber.llm.utils import (
 from webinar_transcriber.models import MediaType, ReportDocument, ReportSection
 
 
+def _fake_openai_module(fake_client):
+    return SimpleNamespace(OpenAI=lambda **_kwargs: fake_client)
+
+
+def _fake_anthropic_module(fake_client):
+    return SimpleNamespace(Anthropic=lambda **_kwargs: fake_client)
+
+
 class TestBuildLlmProcessorFromEnv:
     def test_requires_api_key_and_model(self, monkeypatch) -> None:
         monkeypatch.delenv("LLM_PROVIDER", raising=False)
@@ -47,8 +56,8 @@ class TestBuildLlmProcessorFromEnv:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         monkeypatch.setenv("ANTHROPIC_MODEL", "claude-test")
         monkeypatch.setattr(
-            "webinar_transcriber.llm.anthropic_backend.anthropic.Anthropic",
-            lambda api_key: fake_client,
+            "webinar_transcriber.llm.anthropic_backend.importlib.import_module",
+            lambda _name: _fake_anthropic_module(fake_client),
         )
 
         processor = build_llm_processor_from_env()
@@ -69,7 +78,8 @@ class TestBuildLlmProcessorFromEnv:
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         monkeypatch.setenv("OPENAI_MODEL", "gpt-test")
         monkeypatch.setattr(
-            "webinar_transcriber.llm.openai_backend.openai.OpenAI", lambda api_key: fake_client
+            "webinar_transcriber.llm.openai_backend.importlib.import_module",
+            lambda _name: _fake_openai_module(fake_client),
         )
 
         processor = build_llm_processor_from_env()
@@ -125,7 +135,8 @@ class TestOpenAiLlmProcessor:
             ),
         ])
         monkeypatch.setattr(
-            "webinar_transcriber.llm.openai_backend.openai.OpenAI", lambda api_key: fake_client
+            "webinar_transcriber.llm.openai_backend.importlib.import_module",
+            lambda _name: _fake_openai_module(fake_client),
         )
 
         processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
@@ -208,7 +219,8 @@ class TestOpenAiLlmProcessor:
             ),
         ])
         monkeypatch.setattr(
-            "webinar_transcriber.llm.openai_backend.openai.OpenAI", lambda api_key: fake_client
+            "webinar_transcriber.llm.openai_backend.importlib.import_module",
+            lambda _name: _fake_openai_module(fake_client),
         )
 
         processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
@@ -242,7 +254,8 @@ class TestOpenAiLlmProcessor:
             )
         ])
         monkeypatch.setattr(
-            "webinar_transcriber.llm.openai_backend.openai.OpenAI", lambda api_key: fake_client
+            "webinar_transcriber.llm.openai_backend.importlib.import_module",
+            lambda _name: _fake_openai_module(fake_client),
         )
 
         processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
@@ -266,7 +279,8 @@ class TestOpenAiLlmProcessor:
             )
         ])
         monkeypatch.setattr(
-            "webinar_transcriber.llm.openai_backend.openai.OpenAI", lambda api_key: fake_client
+            "webinar_transcriber.llm.openai_backend.importlib.import_module",
+            lambda _name: _fake_openai_module(fake_client),
         )
 
         processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
@@ -360,8 +374,8 @@ class TestAnthropicLlmProcessor:
             ),
         ])
         monkeypatch.setattr(
-            "webinar_transcriber.llm.anthropic_backend.anthropic.Anthropic",
-            lambda api_key: fake_client,
+            "webinar_transcriber.llm.anthropic_backend.importlib.import_module",
+            lambda _name: _fake_anthropic_module(fake_client),
         )
 
         processor = AnthropicLLMProcessor(api_key="test-key", model_name="claude-test")
@@ -409,8 +423,8 @@ class TestAnthropicLlmProcessor:
             )
         ])
         monkeypatch.setattr(
-            "webinar_transcriber.llm.anthropic_backend.anthropic.Anthropic",
-            lambda api_key: fake_client,
+            "webinar_transcriber.llm.anthropic_backend.importlib.import_module",
+            lambda _name: _fake_anthropic_module(fake_client),
         )
 
         processor = AnthropicLLMProcessor(api_key="test-key", model_name="claude-test")

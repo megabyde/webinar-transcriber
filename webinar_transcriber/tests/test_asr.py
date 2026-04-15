@@ -85,7 +85,7 @@ class TestWhisperCppTranscriber:
             "webinar_transcriber.asr.transcriber._download_default_whisper_cpp_model",
             lambda: cached_model_path,
         )
-        monkeypatch.setattr("webinar_transcriber.asr.transcriber.WhisperCppLibrary", FakeLibrary)
+        monkeypatch.setattr("webinar_transcriber.whispercpp.WhisperCppLibrary", FakeLibrary)
 
         transcriber = WhisperCppTranscriber()
         transcriber.prepare_model()
@@ -143,7 +143,7 @@ class TestWhisperCppTranscriber:
 
                 return FakeSession()
 
-        monkeypatch.setattr("webinar_transcriber.asr.transcriber.WhisperCppLibrary", FakeLibrary)
+        monkeypatch.setattr("webinar_transcriber.whispercpp.WhisperCppLibrary", FakeLibrary)
 
         transcriber = WhisperCppTranscriber(model_name=str(model_path))
         transcriber.prepare_model()
@@ -187,7 +187,7 @@ class TestWhisperCppTranscriber:
             def create_session(self, _model_path):
                 return FakeSession()
 
-        monkeypatch.setattr("webinar_transcriber.asr.transcriber.WhisperCppLibrary", FakeLibrary)
+        monkeypatch.setattr("webinar_transcriber.whispercpp.WhisperCppLibrary", FakeLibrary)
 
         with WhisperCppTranscriber(model_name=str(model_path)) as transcriber:
             transcriber.prepare_model()
@@ -240,7 +240,7 @@ class TestWhisperCppTranscriber:
 
                 return FakeSession()
 
-        monkeypatch.setattr("webinar_transcriber.asr.transcriber.WhisperCppLibrary", FakeLibrary)
+        monkeypatch.setattr("webinar_transcriber.whispercpp.WhisperCppLibrary", FakeLibrary)
 
         transcriber = WhisperCppTranscriber(model_name=str(model_path), threads=6)
         decoded_windows = transcriber.transcribe_inference_windows(
@@ -358,7 +358,7 @@ class TestWhisperCppTranscriber:
 
     def test_download_default_model_wraps_backend_failures(self, monkeypatch) -> None:
         monkeypatch.setattr(
-            "webinar_transcriber.asr.transcriber.hf_hub_download",
+            "huggingface_hub.hf_hub_download",
             lambda **_kwargs: (_ for _ in ()).throw(ASRProcessingError("backend failed")),
         )
 
@@ -369,7 +369,7 @@ class TestWhisperCppTranscriber:
 
     def test_download_default_model_returns_downloaded_path(self, monkeypatch) -> None:
         monkeypatch.setattr(
-            "webinar_transcriber.asr.transcriber.hf_hub_download",
+            "huggingface_hub.hf_hub_download",
             lambda **_kwargs: "/tmp/model.bin",
         )
 

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import importlib
+import re
 from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Self
-
-from huggingface_hub import hf_hub_download
 
 from webinar_transcriber.asr.carryover import build_prompt_carryover
 from webinar_transcriber.asr.config import (
@@ -16,18 +16,21 @@ from webinar_transcriber.asr.config import (
     PromptCarryoverSettings,
     WhisperDecodeSettings,
 )
-from webinar_transcriber.whispercpp import (
-    GPU_BACKEND_PATTERN,
-    WhisperCppLibrary,
-    WhisperCppRuntimeDetails,
-    WhisperCppSession,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from types import TracebackType
 
     from webinar_transcriber.models import DecodedWindow, InferenceWindow
+    from webinar_transcriber.whispercpp import (
+        WhisperCppLibrary,
+        WhisperCppRuntimeDetails,
+        WhisperCppSession,
+    )
+
+GPU_BACKEND_PATTERN = re.compile(
+    r"(?i)\b(metal|mtl|cuda|vulkan|coreml)\b[^|]*?(?:=|:)\s*(?:1|true)"
+)
 
 
 def _missing_model_error_message(model_path: Path) -> str:
@@ -116,7 +119,10 @@ class WhisperCppTranscriber:
         self.close()
         if self._model_path is None:
             raise ASRProcessingError("Model path resolution returned no whisper.cpp model path.")
-        runtime = WhisperCppLibrary(self._library_path, log_path=self._log_path)
+        whispercpp_library_cls = importlib.import_module(
+            "webinar_transcriber.whispercpp"
+        ).WhisperCppLibrary
+        runtime = whispercpp_library_cls(self._library_path, log_path=self._log_path)
         session = runtime.create_session(self._model_path)
         self._runtime = runtime
         self._session = session
@@ -206,6 +212,7 @@ def _device_name_from_system_info(system_info: str) -> str:
 
 
 def _download_default_whisper_cpp_model() -> Path:
+    hf_hub_download = importlib.import_module("huggingface_hub").hf_hub_download
     try:
         downloaded_path = hf_hub_download(
             repo_id=DEFAULT_WHISPER_CPP_MODEL_REPO, filename=DEFAULT_WHISPER_CPP_MODEL_FILENAME
