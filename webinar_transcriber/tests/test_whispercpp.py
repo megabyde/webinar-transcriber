@@ -2,7 +2,7 @@
 
 import ctypes
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -260,10 +260,9 @@ class TestBackendPluginLoading:
             "webinar_transcriber.whispercpp.library._resolve_ggml_library_path",
             lambda: ggml_library_path,
         )
-        with patch(
-            "webinar_transcriber.whispercpp.library.ctypes.CDLL", return_value=fake_ggml_library
-        ) as cdll_mock:
-            _load_backend_plugins()
+        cdll_mock = Mock(return_value=fake_ggml_library)
+        monkeypatch.setattr("webinar_transcriber.whispercpp.library.ctypes.CDLL", cdll_mock)
+        _load_backend_plugins()
 
         cdll_mock.assert_called_once_with(
             str(ggml_library_path), mode=getattr(ctypes, "RTLD_GLOBAL", 0)
