@@ -159,14 +159,24 @@ def maybe_polish_report(
     metadata_elapsed_sec = timer.finish()
     report_latency_sec = section_elapsed_sec + metadata_elapsed_sec
     usage = dict(Counter(section_result.usage) + Counter(metadata_result.usage))
-    report.summary = metadata_result.summary
-    report.action_items = metadata_result.action_items
-    for section in report.sections:
-        section.title = metadata_result.section_titles.get(section.id, section.title)
-        section.tldr = section_result.section_tldrs.get(section.id, section.tldr)
-        section.transcript_text = section_result.section_transcripts.get(
-            section.id, section.transcript_text
-        )
+    report = report.model_copy(
+        update={
+            "summary": metadata_result.summary,
+            "action_items": metadata_result.action_items,
+            "sections": [
+                section.model_copy(
+                    update={
+                        "title": metadata_result.section_titles.get(section.id, section.title),
+                        "tldr": section_result.section_tldrs.get(section.id, section.tldr),
+                        "transcript_text": section_result.section_transcripts.get(
+                            section.id, section.transcript_text
+                        ),
+                    }
+                )
+                for section in report.sections
+            ],
+        }
+    )
     reporter.stage_finished(
         "llm_report",
         summary_label,

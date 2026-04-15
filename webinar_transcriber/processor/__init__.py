@@ -358,9 +358,20 @@ def process_input(
 
             if ctx.slide_frames:
                 frame_by_id = {frame.id: frame for frame in ctx.slide_frames}
-                for section in ctx.report.sections:
-                    if section.frame_id and section.frame_id in frame_by_id:
-                        section.image_path = frame_by_id[section.frame_id].image_path
+                ctx.report = ctx.report.model_copy(
+                    update={
+                        "sections": [
+                            section.model_copy(
+                                update={
+                                    "image_path": frame_by_id[section.frame_id].image_path,
+                                }
+                            )
+                            if section.frame_id and section.frame_id in frame_by_id
+                            else section
+                            for section in ctx.report.sections
+                        ]
+                    }
+                )
 
             ctx.current_stage = "llm_report"
             ctx.report, ctx.llm_runtime = maybe_polish_report(
@@ -371,7 +382,7 @@ def process_input(
                 stage_timings=ctx.stage_timings,
                 llm_runtime=ctx.llm_runtime,
             )
-            ctx.report.warnings = list(ctx.warnings)
+            ctx.report = ctx.report.model_copy(update={"warnings": list(ctx.warnings)})
 
             ctx.current_stage = "export"
             ctx.reporter.stage_started("export", "Writing artifacts")

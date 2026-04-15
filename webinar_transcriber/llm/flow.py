@@ -87,11 +87,10 @@ class _BaseLLMProcessor:
         self, report: ReportDocument, *, section_transcripts: dict[str, str]
     ) -> LLMReportMetadataResult:
         """Polish report summary, action items, and section titles."""
-        polished_report = report.model_copy(deep=True)
-        for section in polished_report.sections:
-            section.transcript_text = section_transcripts.get(section.id, section.transcript_text)
         payload = build_report_polish_payload(
-            polished_report, total_char_budget=self._report_char_budget
+            report,
+            total_char_budget=self._report_char_budget,
+            section_transcripts=section_transcripts,
         )
         parsed, usage = self._parse_structured_response(
             system_prompt=REPORT_POLISH_SYSTEM_PROMPT,

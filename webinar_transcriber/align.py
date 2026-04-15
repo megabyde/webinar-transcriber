@@ -50,12 +50,20 @@ def align_by_time(
             )
             segments_by_block[nearest_block_index].append(segment)
 
+        updated_blocks: list[AlignmentBlock] = []
         for block, block_segments in zip(blocks, segments_by_block, strict=False):
             ordered_segments = sorted(block_segments)
-            block.transcript_segment_ids = [segment.id for segment in ordered_segments]
-            block.transcript_text = " ".join(
-                segment.text for segment in ordered_segments if segment.text
-            ).strip()
+            updated_blocks.append(
+                block.model_copy(
+                    update={
+                        "transcript_segment_ids": [segment.id for segment in ordered_segments],
+                        "transcript_text": " ".join(
+                            segment.text for segment in ordered_segments if segment.text
+                        ).strip(),
+                    }
+                )
+            )
+        blocks = updated_blocks
 
         if warnings is not None:
             warnings.append(_orphan_alignment_warning(orphan_count=len(orphan_segments)))

@@ -42,7 +42,10 @@ def required_provider_env(*, api_key_env: str, model_env: str) -> tuple[str, str
 
 
 def build_report_polish_payload(
-    report: ReportDocument, *, total_char_budget: int
+    report: ReportDocument,
+    *,
+    total_char_budget: int,
+    section_transcripts: Mapping[str, str] | None = None,
 ) -> dict[str, object]:
     """Build the report-polish payload with a per-section excerpt budget."""
     section_count = max(len(report.sections), 1)
@@ -62,7 +65,10 @@ def build_report_polish_payload(
                 "title": section.title,
                 "start_sec": section.start_sec,
                 "end_sec": section.end_sec,
-                "transcript_excerpt": truncate_text(section.transcript_text, per_section_budget),
+                "transcript_excerpt": truncate_text(
+                    (section_transcripts or {}).get(section.id, section.transcript_text),
+                    per_section_budget,
+                ),
             }
             for section in report.sections
         ],

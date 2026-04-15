@@ -1,6 +1,7 @@
 """Tests for optional cloud LLM helpers."""
 
 import json
+from typing import cast
 
 import pytest
 from pydantic import BaseModel
@@ -18,6 +19,7 @@ from webinar_transcriber.llm import (
 from webinar_transcriber.llm.flow import _BaseLLMProcessor
 from webinar_transcriber.llm.utils import (
     anthropic_response_text,
+    build_report_polish_payload,
     extract_json_text,
     extract_usage,
     normalize_polished_section_text,
@@ -162,6 +164,33 @@ class TestOpenAiLlmProcessor:
             "output_tokens": 8,
             "total_tokens": 20,
         }
+        assert report.sections[0].transcript_text == "Agenda review and project status update."
+
+    def test_build_report_polish_payload_uses_section_transcript_overrides(self) -> None:
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Agenda",
+                    start_sec=0.0,
+                    end_sec=10.0,
+                    transcript_text="Original transcript text.",
+                )
+            ],
+        )
+
+        payload = build_report_polish_payload(
+            report,
+            total_char_budget=1_000,
+            section_transcripts={"section-1": "Overridden transcript text."},
+        )
+        sections = cast("list[dict[str, object]]", payload["sections"])
+
+        assert sections[0]["transcript_excerpt"] == "Overridden transcript text."
+        assert report.sections[0].transcript_text == "Original transcript text."
 
     def test_rejects_unknown_report_section_id(self, monkeypatch) -> None:
         fake_client = self.FakeClient([
