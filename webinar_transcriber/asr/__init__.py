@@ -12,7 +12,7 @@ from .config import (
     WhisperDecodeSettings,
     default_asr_threads,
 )
-from .transcriber import WhisperCppTranscriber
+from .transcriber import ASRProcessingError, WhisperCppTranscriber
 
 __all__ = [
     "ASR_BACKEND_NAME",
@@ -21,6 +21,7 @@ __all__ = [
     "DEFAULT_WHISPER_CPP_MODEL_EXAMPLE",
     "DEFAULT_WHISPER_CPP_MODEL_FILENAME",
     "DEFAULT_WHISPER_CPP_MODEL_REPO",
+    "ASRProcessingError",
     "PromptCarryoverSettings",
     "WhisperCppTranscriber",
     "WhisperDecodeSettings",

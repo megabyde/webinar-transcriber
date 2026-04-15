@@ -48,6 +48,10 @@ def _default_model_download_error_message() -> str:
     )
 
 
+class ASRProcessingError(RuntimeError):
+    """Raised when the whisper.cpp ASR adapter cannot prepare or run."""
+
+
 class WhisperCppTranscriber:
     """ASR implementation using the in-process whisper.cpp C API."""
 
@@ -111,7 +115,7 @@ class WhisperCppTranscriber:
         self._model_path = self._resolve_model_path()
         self.close()
         if self._model_path is None:
-            raise RuntimeError("Model path resolution returned no whisper.cpp model path.")
+            raise ASRProcessingError("Model path resolution returned no whisper.cpp model path.")
         runtime = WhisperCppLibrary(self._library_path, log_path=self._log_path)
         session = runtime.create_session(self._model_path)
         self._runtime = runtime
@@ -171,20 +175,22 @@ class WhisperCppTranscriber:
         if self._session is None:
             self.prepare_model()
         if self._session is None:
-            raise RuntimeError("whisper.cpp session was not initialized during model preparation.")
+            raise ASRProcessingError(
+                "whisper.cpp session was not initialized during model preparation."
+            )
         return self._session
 
     def _resolve_model_path(self) -> Path:
         if not self._uses_default_model_path:
             assert self._configured_model_path is not None
             if not self._configured_model_path.exists():
-                raise RuntimeError(_missing_model_error_message(self._configured_model_path))
+                raise ASRProcessingError(_missing_model_error_message(self._configured_model_path))
             return self._configured_model_path
 
         try:
             return _download_default_whisper_cpp_model()
-        except RuntimeError as error:
-            raise RuntimeError(f"{_default_model_download_error_message()} {error}") from error
+        except ASRProcessingError as ex:
+            raise ASRProcessingError(f"{_default_model_download_error_message()} {ex}") from ex
 
     def __del__(self) -> None:  # pragma: no cover - interpreter shutdown cleanup
         with suppress(Exception):
@@ -205,7 +211,7 @@ def _download_default_whisper_cpp_model() -> Path:
             repo_id=DEFAULT_WHISPER_CPP_MODEL_REPO, filename=DEFAULT_WHISPER_CPP_MODEL_FILENAME
         )
     except Exception as error:  # pragma: no cover - network/backend specific
-        raise RuntimeError(
+        raise ASRProcessingError(
             "Automatic download of the default whisper.cpp model from Hugging Face failed."
         ) from error
 

@@ -11,6 +11,7 @@ from webinar_transcriber.asr import (
     DEFAULT_WHISPER_CPP_MODEL_EXAMPLE,
     DEFAULT_WHISPER_CPP_MODEL_FILENAME,
     DEFAULT_WHISPER_CPP_MODEL_REPO,
+    ASRProcessingError,
     PromptCarryoverSettings,
     WhisperCppTranscriber,
     build_prompt_carryover,
@@ -37,14 +38,14 @@ class TestWhisperCppTranscriber:
         )
 
     def test_prepare_model_requires_model_file(self, tmp_path) -> None:
-        with pytest.raises(RuntimeError, match="model file does not exist") as error:
+        with pytest.raises(ASRProcessingError, match="model file does not exist") as error:
             WhisperCppTranscriber(model_name=str(tmp_path / "missing.bin")).prepare_model()
         message = str(error.value)
         assert "--asr-model" in message
         assert "README.md" in message
 
     def test_prepare_model_missing_default_model_is_actionable(self, tmp_path, monkeypatch) -> None:
-        with pytest.raises(RuntimeError, match="model file does not exist") as error:
+        with pytest.raises(ASRProcessingError, match="model file does not exist") as error:
             WhisperCppTranscriber(
                 model_name=str(tmp_path / "missing-default-model.bin")
             ).prepare_model()
@@ -95,10 +96,10 @@ class TestWhisperCppTranscriber:
     def test_prepare_model_reports_default_download_failure(self, monkeypatch) -> None:
         monkeypatch.setattr(
             "webinar_transcriber.asr.transcriber._download_default_whisper_cpp_model",
-            lambda: (_ for _ in ()).throw(RuntimeError("download failed")),
+            lambda: (_ for _ in ()).throw(ASRProcessingError("download failed")),
         )
 
-        with pytest.raises(RuntimeError, match="download failed") as error:
+        with pytest.raises(ASRProcessingError, match="download failed") as error:
             WhisperCppTranscriber().prepare_model()
 
         message = str(error.value)
@@ -115,7 +116,7 @@ class TestWhisperCppTranscriber:
             lambda: download_calls.append(None),  # type: ignore[return-value]
         )
 
-        with pytest.raises(RuntimeError, match="model file does not exist"):
+        with pytest.raises(ASRProcessingError, match="model file does not exist"):
             WhisperCppTranscriber(model_name=str(explicit_model_path)).prepare_model()
 
         assert download_calls == []
@@ -158,7 +159,7 @@ class TestWhisperCppTranscriber:
             lambda self: None,  # type: ignore[return-value]
         )
 
-        with pytest.raises(RuntimeError, match=r"returned no whisper\.cpp model path"):
+        with pytest.raises(ASRProcessingError, match=r"returned no whisper\.cpp model path"):
             WhisperCppTranscriber().prepare_model()
 
     def test_transcriber_context_manager_closes_prepared_session(
@@ -352,17 +353,17 @@ class TestWhisperCppTranscriber:
             def prepare_model(self) -> None:
                 self._session = None
 
-        with pytest.raises(RuntimeError, match="session was not initialized"):
+        with pytest.raises(ASRProcessingError, match="session was not initialized"):
             BrokenTranscriber(model_name="stub.bin")._ensure_session()
 
     def test_download_default_model_wraps_backend_failures(self, monkeypatch) -> None:
         monkeypatch.setattr(
             "webinar_transcriber.asr.transcriber.hf_hub_download",
-            lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("backend failed")),
+            lambda **_kwargs: (_ for _ in ()).throw(ASRProcessingError("backend failed")),
         )
 
         with pytest.raises(
-            RuntimeError, match=r"Automatic download of the default whisper\.cpp model"
+            ASRProcessingError, match=r"Automatic download of the default whisper\.cpp model"
         ):
             WhisperCppTranscriber()._resolve_model_path()
 
