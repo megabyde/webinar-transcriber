@@ -1,5 +1,6 @@
 """Tests for normalized-audio preparation and segmentation."""
 
+import shutil
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
@@ -26,9 +27,19 @@ from webinar_transcriber.segmentation import (
 )
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
+FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None
+FFPROBE_AVAILABLE = shutil.which("ffprobe") is not None
+requires_ffmpeg = pytest.mark.skipif(
+    not FFMPEG_AVAILABLE, reason="ffmpeg is required for normalized-audio integration tests"
+)
+requires_ffmpeg_and_ffprobe = pytest.mark.skipif(
+    not FFMPEG_AVAILABLE or not FFPROBE_AVAILABLE,
+    reason="ffmpeg and ffprobe are required for normalized-audio integration tests",
+)
 
 
 class TestNormalizedAudio:
+    @requires_ffmpeg
     def test_prepared_transcription_audio_normalizes_audio_input_to_temp_wav(self) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
             assert audio_path.exists()
@@ -36,6 +47,7 @@ class TestNormalizedAudio:
 
         assert not audio_path.exists()
 
+    @requires_ffmpeg_and_ffprobe
     def test_extract_audio_creates_wav(self, tmp_path: Path) -> None:
         output_path = extract_audio(FIXTURE_DIR / "sample-audio.mp3", tmp_path / "audio.wav")
 
@@ -60,6 +72,7 @@ class TestNormalizedAudio:
         assert probe.returncode == 0
         assert "pcm_s16le" in probe.stdout
 
+    @requires_ffmpeg
     def test_prepared_transcription_audio_cleans_up_temp_wav(self) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-video.mp4") as audio_path:
             assert audio_path.exists()
@@ -67,6 +80,7 @@ class TestNormalizedAudio:
 
         assert not audio_path.exists()
 
+    @requires_ffmpeg
     def test_preserve_transcription_audio_copies_wav_output(self, tmp_path: Path) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
             kept_audio_path = preserve_transcription_audio(
@@ -77,6 +91,7 @@ class TestNormalizedAudio:
         assert kept_audio_path.suffix == ".wav"
         assert kept_audio_path.read_bytes()[:4] == b"RIFF"
 
+    @requires_ffmpeg
     def test_preserve_transcription_audio_transcodes_mp3_output(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
@@ -143,6 +158,7 @@ class TestNormalizedAudio:
                 tmp_path / "input.wav", tmp_path / "audio.ogg", audio_format="ogg"
             )
 
+    @requires_ffmpeg
     def test_load_normalized_audio_returns_mono_float32_samples(self) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
             samples, sample_rate = load_normalized_audio(audio_path)
@@ -387,6 +403,7 @@ class TestNormalizedAudio:
             == 10
         )
 
+    @requires_ffmpeg
     def test_load_normalized_audio_rejects_wrong_sample_rate(self, monkeypatch, tmp_path) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
 
@@ -424,6 +441,7 @@ class TestNormalizedAudio:
         ("channels", "sample_width", "message"),
         [(2, 2, "Expected mono transcription audio"), (1, 1, "Expected 16-bit PCM")],
     )
+    @requires_ffmpeg
     def test_load_normalized_audio_rejects_invalid_channel_or_sample_width(
         self, monkeypatch: pytest.MonkeyPatch, channels: int, sample_width: int, message: str
     ) -> None:
