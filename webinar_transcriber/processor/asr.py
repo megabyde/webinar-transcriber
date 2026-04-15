@@ -22,6 +22,7 @@ from .support import (
     start_stage_timer,
     window_transcription_stage_detail,
     write_json,
+    write_model_json,
 )
 
 if TYPE_CHECKING:
@@ -183,7 +184,7 @@ def run_asr_pipeline(
         detail=count_label(len(transcription.segments), "segment"),
     )
 
-    write_json(layout.transcript_path, transcription.model_dump(mode="json"))
+    write_model_json(layout.transcript_path, transcription)
     normalized_transcription = normalize_transcription(transcription)
     return AsrPipelineResult(
         transcription=transcription, normalized_transcription=normalized_transcription

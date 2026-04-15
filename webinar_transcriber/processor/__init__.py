@@ -39,6 +39,7 @@ from .support import (
     progress_updater,
     start_stage_timer,
     write_json,
+    write_model_json,
     write_requested_artifacts,
 )
 
@@ -157,7 +158,7 @@ def _write_run_diagnostics(
     )
     error_scope = suppress(Exception) if suppress_errors else nullcontext()
     with error_scope:
-        write_json(ctx.layout.diagnostics_path, diagnostics.model_dump(mode="json"))
+        write_model_json(ctx.layout.diagnostics_path, diagnostics)
     return diagnostics
 
 

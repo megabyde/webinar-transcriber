@@ -27,6 +27,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import Literal
 
+    from pydantic import BaseModel
+
     from webinar_transcriber.llm import LLMReportPolishPlan
     from webinar_transcriber.paths import RunLayout
     from webinar_transcriber.reporter import StageReporter
@@ -70,6 +72,12 @@ def write_json(output_path: Path, payload: dict[str, object]) -> None:
     """Write one JSON payload with stable UTF-8 formatting."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def write_model_json(output_path: Path, payload: BaseModel) -> None:
+    """Write one top-level Pydantic payload with stable UTF-8 formatting."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(payload.model_dump_json(indent=2), encoding="utf-8")
 
 
 def progress_updater(
