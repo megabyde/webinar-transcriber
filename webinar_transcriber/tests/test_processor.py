@@ -366,6 +366,17 @@ class TestProcessInput:
 
     def test_does_not_close_caller_supplied_transcriber(self, tmp_path, monkeypatch) -> None:
         install_basic_windowing(monkeypatch)
+        install_processor_media_runtime(
+            monkeypatch,
+            tmp_path,
+            input_path=FIXTURE_DIR / "sample-audio.mp3",
+            media_asset=AudioAsset(
+                path=str(FIXTURE_DIR / "sample-audio.mp3"),
+                duration_sec=6.0,
+                sample_rate=44_100,
+                channels=2,
+            ),
+        )
 
         class CloseTrackingTranscriber(self.FakeTranscriber):
             def __init__(self) -> None:
@@ -761,6 +772,17 @@ class TestProcessInput:
 
     def test_forwards_vad_warnings_to_reporter(self, tmp_path, monkeypatch) -> None:
         reporter = RecordingReporter()
+        install_processor_media_runtime(
+            monkeypatch,
+            tmp_path,
+            input_path=FIXTURE_DIR / "sample-audio.mp3",
+            media_asset=AudioAsset(
+                path=str(FIXTURE_DIR / "sample-audio.mp3"),
+                duration_sec=6.0,
+                sample_rate=44_100,
+                channels=2,
+            ),
+        )
         monkeypatch.setattr(
             "webinar_transcriber.processor.asr.load_normalized_audio",
             lambda _path: (np.zeros(16_000, dtype=np.float32), 16_000),
@@ -847,6 +869,17 @@ def llm_success_result(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[ProcessArtifacts, RecordingReporter]:
     install_basic_windowing(monkeypatch)
+    install_processor_media_runtime(
+        monkeypatch,
+        tmp_path,
+        input_path=FIXTURE_DIR / "sample-audio.mp3",
+        media_asset=AudioAsset(
+            path=str(FIXTURE_DIR / "sample-audio.mp3"),
+            duration_sec=6.0,
+            sample_rate=44_100,
+            channels=2,
+        ),
+    )
     reporter = RecordingReporter()
 
     class FakeLLMProcessor:
@@ -951,6 +984,17 @@ class TestProcessInputLlm:
 
     def test_reports_only_polishable_sections_in_llm_progress(self, tmp_path, monkeypatch) -> None:
         install_basic_windowing(monkeypatch)
+        install_processor_media_runtime(
+            monkeypatch,
+            tmp_path,
+            input_path=FIXTURE_DIR / "sample-audio.mp3",
+            media_asset=AudioAsset(
+                path=str(FIXTURE_DIR / "sample-audio.mp3"),
+                duration_sec=6.0,
+                sample_rate=44_100,
+                channels=2,
+            ),
+        )
         reporter = RecordingReporter()
         monkeypatch.setattr(
             "webinar_transcriber.structure.build_report",
@@ -1082,6 +1126,17 @@ class TestProcessInputLlm:
 
     def test_falls_back_when_report_polish_fails(self, tmp_path, monkeypatch) -> None:
         install_basic_windowing(monkeypatch)
+        install_processor_media_runtime(
+            monkeypatch,
+            tmp_path,
+            input_path=FIXTURE_DIR / "sample-audio.mp3",
+            media_asset=AudioAsset(
+                path=str(FIXTURE_DIR / "sample-audio.mp3"),
+                duration_sec=6.0,
+                sample_rate=44_100,
+                channels=2,
+            ),
+        )
         reporter = RecordingReporter()
 
         class FakeLLMProcessor:

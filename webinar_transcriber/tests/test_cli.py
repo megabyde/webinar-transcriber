@@ -267,7 +267,14 @@ class TestCli:
         input_path = tmp_path / "demo.wav"
         input_path.write_text("stub", encoding="utf-8")
 
-        with patch("webinar_transcriber.cli.process_input", side_effect=KeyboardInterrupt):
+        class FakeReporter:
+            def interrupted(self) -> None:
+                print("Interrupted")
+
+        with (
+            patch("webinar_transcriber.cli.process_input", side_effect=KeyboardInterrupt),
+            patch("webinar_transcriber.cli.RichStageReporter", return_value=FakeReporter()),
+        ):
             result = runner.invoke(main, [str(input_path)])
 
         assert result.exit_code == 130

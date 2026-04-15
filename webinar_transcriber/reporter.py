@@ -67,15 +67,42 @@ class StageReporter(Protocol):
 class NullStageReporter:
     """No-op reporter used by tests and non-interactive code paths."""
 
-    def _noop(self, *_args: object, **_kwargs: object) -> None:
-        return None
+    def begin_run(self, input_path: Path) -> None:
+        pass
 
-    begin_run = _noop
-    stage_started = _noop
-    progress_started = _noop
-    progress_advanced = _noop
-    stage_finished = _noop
-    warn = _noop
-    interrupted = _noop
-    reset_active_display = _noop
-    complete_run = _noop
+    def stage_started(self, stage_key: str, label: str) -> None:
+        pass
+
+    def progress_started(
+        self,
+        stage_key: str,
+        label: str,
+        *,
+        total: float,
+        count_label: str | None = None,
+        count_multiplier: float = 1.0,
+        rate_label: str | None = None,
+        rate_multiplier: float = 1.0,
+        detail: str | None = None,
+    ) -> None:
+        pass
+
+    def progress_advanced(
+        self, stage_key: str, *, advance: float = 1.0, detail: str | None = None
+    ) -> None:
+        pass
+
+    def stage_finished(self, stage_key: str, label: str, *, detail: str | None = None) -> None:
+        pass
+
+    def warn(self, message: str) -> None:
+        pass
+
+    def interrupted(self) -> None:
+        pass
+
+    def reset_active_display(self) -> None:
+        pass
+
+    def complete_run(self, artifacts: ProcessArtifacts) -> None:
+        pass
