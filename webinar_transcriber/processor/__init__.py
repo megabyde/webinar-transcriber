@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import webinar_transcriber.asr as asr_runtime
+import webinar_transcriber.export as export_runtime
 import webinar_transcriber.media as media_runtime
 import webinar_transcriber.structure as structure_runtime
 import webinar_transcriber.video as video_runtime
@@ -40,7 +41,6 @@ from .support import (
     start_stage_timer,
     write_json,
     write_model_json,
-    write_requested_artifacts,
 )
 
 if TYPE_CHECKING:
@@ -393,11 +393,15 @@ def process_input(
             ctx.current_stage = "export"
             ctx.reporter.stage_started("export", "Writing artifacts")
             timer = start_stage_timer(ctx.stage_timings, "export")
-            write_requested_artifacts(
+            export_runtime.write_markdown_report(ctx.report, ctx.layout.markdown_report_path)
+            export_runtime.write_docx_report(
                 ctx.report,
-                ctx.normalized_transcription,
-                ctx.layout,
+                ctx.layout.docx_report_path,
                 warning_callback=record_warning,
+            )
+            export_runtime.write_json_report(ctx.report, ctx.layout.json_report_path)
+            export_runtime.write_vtt_subtitles(
+                ctx.normalized_transcription, ctx.layout.subtitle_vtt_path
             )
             timer.finish()
             ctx.reporter.stage_finished("export", "Writing artifacts")

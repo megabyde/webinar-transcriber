@@ -9,18 +9,10 @@ from time import perf_counter
 from typing import TYPE_CHECKING
 
 from webinar_transcriber.asr import ASR_BACKEND_NAME, WhisperCppTranscriber
-from webinar_transcriber.export import (
-    write_docx_report,
-    write_json_report,
-    write_markdown_report,
-    write_vtt_subtitles,
-)
 from webinar_transcriber.labels import count_label, optional_count_label
 from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
     Diagnostics,
-    ReportDocument,
-    TranscriptionResult,
 )
 
 if TYPE_CHECKING:
@@ -54,20 +46,6 @@ class StageTimer:
 def start_stage_timer(stage_timings: dict[str, float], key: str) -> StageTimer:
     """Start a stage timer backed by one shared timings map."""
     return StageTimer(stage_timings=stage_timings, key=key, start_sec=perf_counter())
-
-
-def write_requested_artifacts(
-    report: ReportDocument,
-    transcription: TranscriptionResult,
-    layout: RunLayout,
-    *,
-    warning_callback: Callable[[str], None] | None = None,
-) -> None:
-    """Write the human-facing artifacts plus canonical JSON/VTT outputs."""
-    write_markdown_report(report, layout.markdown_report_path)
-    write_docx_report(report, layout.docx_report_path, warning_callback=warning_callback)
-    write_json_report(report, layout.json_report_path)
-    write_vtt_subtitles(transcription, layout.subtitle_vtt_path)
 
 
 def write_json(output_path: Path, payload: dict[str, object]) -> None:
