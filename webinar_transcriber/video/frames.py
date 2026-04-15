@@ -1,6 +1,5 @@
 """Representative frame extraction for detected scenes."""
 
-import logging
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -19,6 +18,7 @@ def extract_representative_frames(
     frames_dir: Path,
     *,
     progress_callback: Callable[[], None] | None = None,
+    warning_callback: Callable[[str], None] | None = None,
 ) -> list[SlideFrame]:
     """Extract one representative frame near the midpoint of each scene."""
     frames_dir.mkdir(parents=True, exist_ok=True)
@@ -29,12 +29,11 @@ def extract_representative_frames(
         output_path = frames_dir / f"{scene.id}.png"
         extracted, failure_detail = _extract_frame(video_path, midpoint_sec, output_path)
         if not extracted:
-            logging.warning(
-                "Frame extraction failed for %s at %.1fs: %s",
-                scene.id,
-                midpoint_sec,
-                failure_detail,
-            )
+            if warning_callback is not None:
+                warning_callback(
+                    f"Frame extraction failed for {scene.id} at {midpoint_sec:.1f}s: "
+                    f"{failure_detail}"
+                )
             if progress_callback is not None:
                 progress_callback()
             continue

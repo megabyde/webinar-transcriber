@@ -60,10 +60,12 @@ def write_requested_artifacts(
     report: ReportDocument,
     transcription: TranscriptionResult,
     layout: RunLayout,
+    *,
+    warning_callback: Callable[[str], None] | None = None,
 ) -> None:
     """Write the human-facing artifacts plus canonical JSON/VTT outputs."""
     write_markdown_report(report, layout.markdown_report_path)
-    write_docx_report(report, layout.docx_report_path)
+    write_docx_report(report, layout.docx_report_path, warning_callback=warning_callback)
     write_json_report(report, layout.json_report_path)
     write_vtt_subtitles(transcription, layout.subtitle_vtt_path)
 

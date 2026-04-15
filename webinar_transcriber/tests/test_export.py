@@ -120,7 +120,7 @@ class TestDocxReport:
         assert ("Bullet point.\ncontinued", "List Bullet") in paragraph_data
         assert ("Transcript", "Normal") in paragraph_data
 
-    def test_skips_missing_section_image(self, tmp_path: Path, caplog) -> None:
+    def test_skips_missing_section_image(self, tmp_path: Path) -> None:
         report = ReportDocument(
             title="Demo",
             source_file="demo.wav",
@@ -138,11 +138,12 @@ class TestDocxReport:
         )
 
         output_path = tmp_path / "report.docx"
+        warnings: list[str] = []
 
-        write_docx_report(report, output_path)
+        write_docx_report(report, output_path, warning_callback=warnings.append)
 
         assert output_path.exists()
-        assert "Section image does not exist" in caplog.text
+        assert warnings == [f"Section image does not exist: {tmp_path / 'missing.png'}"]
 
     def test_add_text_blocks_skips_blank_paragraphs(self) -> None:
         document = Document()

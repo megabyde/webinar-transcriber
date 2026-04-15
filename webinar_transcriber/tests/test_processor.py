@@ -25,6 +25,8 @@ from webinar_transcriber.models import (
     MediaType,
     ReportDocument,
     ReportSection,
+    Scene,
+    SlideFrame,
     SpeechRegion,
     TranscriptSegment,
     VideoAsset,
@@ -419,6 +421,49 @@ class TestProcessInput:
         assert reporter.has_progress_event(
             "start", "extract_frames", artifacts.diagnostics.item_counts["scenes"], None
         )
+
+    def test_forwards_frame_extraction_warnings_to_reporter(self, tmp_path, monkeypatch) -> None:
+        reporter = RecordingReporter()
+        install_basic_windowing(monkeypatch, region_end_sec=1.8)
+        monkeypatch.setattr(
+            "webinar_transcriber.video.detect_scenes",
+            lambda *_args, **_kwargs: [Scene(id="scene-1", start_sec=0.0, end_sec=1.8)],
+        )
+
+        def fake_extract_frames(*_args, warning_callback=None, **_kwargs) -> list[SlideFrame]:
+            assert warning_callback is not None
+            warning_callback("Frame extraction failed for scene-1 at 0.9s: decode failed")
+            return []
+
+        monkeypatch.setattr(
+            "webinar_transcriber.video.extract_representative_frames", fake_extract_frames
+        )
+
+        artifacts = process_input(
+            FIXTURE_DIR / "sample-video.mp4",
+            output_dir=tmp_path / "warning-run",
+            transcriber=self.FakeTranscriber(
+                segments=[
+                    TranscriptSegment(
+                        id="segment-1",
+                        text="Agenda overview and open questions.",
+                        start_sec=0.0,
+                        end_sec=0.9,
+                    ),
+                    TranscriptSegment(
+                        id="segment-2",
+                        text="Timeline planning and next step review.",
+                        start_sec=0.9,
+                        end_sec=1.8,
+                    ),
+                ]
+            ),
+            reporter=reporter,
+        )
+
+        assert reporter.warnings == ["Frame extraction failed for scene-1 at 0.9s: decode failed"]
+        assert artifacts.diagnostics.warnings == reporter.warnings
+        assert artifacts.report.warnings == reporter.warnings
 
     def test_runs_windowed_whispercpp_pipeline(self, tmp_path, monkeypatch) -> None:
         reporter = RecordingReporter()

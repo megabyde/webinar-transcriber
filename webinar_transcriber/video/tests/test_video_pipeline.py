@@ -139,9 +139,10 @@ class TestFrameExtraction:
             _extract_frame(FIXTURE_DIR / "sample-video.mp4", 1.0, tmp_path / "scene-1.png")
 
     def test_extract_representative_frames_skips_failed_scene_but_still_reports_progress(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         progress_ticks: list[int] = []
+        warnings: list[str] = []
         scenes = [
             Scene(id="scene-1", start_sec=0.0, end_sec=2.0),
             Scene(id="scene-2", start_sec=2.0, end_sec=4.0),
@@ -165,13 +166,15 @@ class TestFrameExtraction:
             scenes,
             tmp_path / "frames",
             progress_callback=lambda: progress_ticks.append(1),
+            warning_callback=warnings.append,
         )
 
         assert [frame.scene_id for frame in frames] == ["scene-2"]
         assert len(progress_ticks) == 2
-        assert "Frame extraction failed for scene-1 at 1.0s:" in caplog.text
-        assert "ffmpeg did not write" in caplog.text
-        assert "scene-1.png" in caplog.text
+        assert warnings == [
+            f"Frame extraction failed for scene-1 at 1.0s: "
+            f"ffmpeg did not write {tmp_path / 'frames' / 'scene-1.png'}"
+        ]
 
     def test_extract_representative_frames_uses_scene_midpoint(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

@@ -1,7 +1,7 @@
 """DOCX export helpers."""
 
-import logging
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 from docx import Document
@@ -12,7 +12,12 @@ from webinar_transcriber.export.formatting import section_timecode
 from webinar_transcriber.models import ReportDocument, ReportSection
 
 
-def write_docx_report(report: ReportDocument, output_path: Path) -> Path:
+def write_docx_report(
+    report: ReportDocument,
+    output_path: Path,
+    *,
+    warning_callback: Callable[[str], None] | None = None,
+) -> Path:
     """Write the report to DOCX."""
     document = Document()
     document.add_heading(report.title, level=0)
@@ -32,7 +37,7 @@ def write_docx_report(report: ReportDocument, output_path: Path) -> Path:
 
     document.add_heading("Sections", level=1)
     for section in report.sections:
-        _add_section(document, section)
+        _add_section(document, section, warning_callback=warning_callback)
 
     document.save(str(output_path))
     return output_path
@@ -43,23 +48,34 @@ def _split_paragraphs(text: str) -> list[str]:
     return paragraphs or [text]
 
 
-def _add_section(document: DocxDocument, section: ReportSection) -> None:
+def _add_section(
+    document: DocxDocument,
+    section: ReportSection,
+    *,
+    warning_callback: Callable[[str], None] | None = None,
+) -> None:
     title = section.title
     timecode = section_timecode(section.start_sec, section.end_sec)
     document.add_heading(f"{title} ({timecode})", level=2)
-    _add_section_image(document, section.image_path)
+    _add_section_image(document, section.image_path, warning_callback=warning_callback)
     _add_section_tldr(document, section.tldr)
     for paragraph_text in _split_paragraphs(section.transcript_text):
         document.add_paragraph(paragraph_text)
 
 
-def _add_section_image(document: DocxDocument, image_path: str | None) -> None:
+def _add_section_image(
+    document: DocxDocument,
+    image_path: str | None,
+    *,
+    warning_callback: Callable[[str], None] | None = None,
+) -> None:
     if not image_path:
         return
 
     resolved_path = Path(image_path)
     if not resolved_path.exists():
-        logging.warning("Section image does not exist: %s", resolved_path)
+        if warning_callback is not None:
+            warning_callback(f"Section image does not exist: {resolved_path}")
         return
     document.add_picture(str(resolved_path), width=Inches(6))
 

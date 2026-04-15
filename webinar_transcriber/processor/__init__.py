@@ -191,6 +191,11 @@ def process_input(
         active_transcriber if transcriber is None else nullcontext(active_transcriber)
     )
     with transcriber_scope as active_transcriber:
+
+        def record_warning(message: str) -> None:
+            ctx.warnings.append(message)
+            ctx.reporter.warn(message)
+
         ctx.reporter.begin_run(input_path)
         try:
             ctx.current_stage = "prepare_run_dir"
@@ -301,6 +306,7 @@ def process_input(
                     ctx.scenes,
                     ctx.layout.frames_dir,
                     progress_callback=lambda: ctx.reporter.progress_advanced("extract_frames"),
+                    warning_callback=record_warning,
                 )
                 timer.finish()
                 ctx.reporter.stage_finished(
@@ -387,7 +393,12 @@ def process_input(
             ctx.current_stage = "export"
             ctx.reporter.stage_started("export", "Writing artifacts")
             timer = start_stage_timer(ctx.stage_timings, "export")
-            write_requested_artifacts(ctx.report, ctx.normalized_transcription, ctx.layout)
+            write_requested_artifacts(
+                ctx.report,
+                ctx.normalized_transcription,
+                ctx.layout,
+                warning_callback=record_warning,
+            )
             timer.finish()
             ctx.reporter.stage_finished("export", "Writing artifacts")
 
