@@ -358,8 +358,18 @@ class TestWhisperCppTranscriber:
 
     def test_download_default_model_wraps_backend_failures(self, monkeypatch) -> None:
         monkeypatch.setattr(
-            "huggingface_hub.hf_hub_download",
-            lambda **_kwargs: (_ for _ in ()).throw(ASRProcessingError("backend failed")),
+            "webinar_transcriber.asr.transcriber.importlib.import_module",
+            lambda _name: type(
+                "FakeHubModule",
+                (),
+                {
+                    "hf_hub_download": staticmethod(
+                        lambda **_kwargs: (_ for _ in ()).throw(
+                            ASRProcessingError("backend failed")
+                        )
+                    )
+                },
+            )(),
         )
 
         with pytest.raises(
@@ -369,8 +379,12 @@ class TestWhisperCppTranscriber:
 
     def test_download_default_model_returns_downloaded_path(self, monkeypatch) -> None:
         monkeypatch.setattr(
-            "huggingface_hub.hf_hub_download",
-            lambda **_kwargs: "/tmp/model.bin",
+            "webinar_transcriber.asr.transcriber.importlib.import_module",
+            lambda _name: type(
+                "FakeHubModule",
+                (),
+                {"hf_hub_download": staticmethod(lambda **_kwargs: "/tmp/model.bin")},
+            )(),
         )
 
         assert _download_default_whisper_cpp_model() == Path("/tmp/model.bin")

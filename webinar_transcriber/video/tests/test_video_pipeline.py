@@ -43,13 +43,28 @@ class TestDetectScenes:
 
 
 class TestFrameExtraction:
-    def test_extract_representative_frames_creates_images(self, tmp_path) -> None:
-        video_path = FIXTURE_DIR / "sample-video.mp4"
-        scenes = detect_scenes(video_path, min_scene_length_sec=1.0)
+    def test_extract_representative_frames_creates_images(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        scenes = [
+            Scene(id="scene-1", start_sec=0.0, end_sec=2.0),
+            Scene(id="scene-2", start_sec=2.0, end_sec=4.0),
+        ]
         progress_ticks: list[int] = []
 
+        def fake_extract_frame(
+            _video_path: Path, _timestamp_sec: float, output_path: Path
+        ) -> tuple[bool, str | None]:
+            output_path.write_bytes(b"frame")
+            return True, None
+
+        monkeypatch.setattr("webinar_transcriber.video.frames._extract_frame", fake_extract_frame)
+        monkeypatch.setattr(
+            "webinar_transcriber.video.frames._normalize_extracted_frame", lambda _p: None
+        )
+
         frames = extract_representative_frames(
-            video_path,
+            FIXTURE_DIR / "sample-video.mp4",
             scenes,
             tmp_path / "frames",
             progress_callback=lambda: progress_ticks.append(1),
@@ -216,6 +231,24 @@ class TestFrameExtraction:
 
         assert not extracted
         assert failure_detail == f"ffmpeg did not write {tmp_path / 'scene-1.png'}"
+
+    def test_extract_frame_returns_true_when_ffmpeg_writes_output(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output_path = tmp_path / "scene-1.png"
+
+        def fake_run(*_args, **_kwargs) -> subprocess.CompletedProcess[str]:
+            output_path.write_bytes(b"frame")
+            return subprocess.CompletedProcess(["ffmpeg"], returncode=0)
+
+        monkeypatch.setattr("webinar_transcriber.video.frames.subprocess.run", fake_run)
+
+        extracted, failure_detail = _extract_frame(
+            FIXTURE_DIR / "sample-video.mp4", 1.0, output_path
+        )
+
+        assert extracted
+        assert failure_detail is None
 
     def test_extract_frame_returns_stderr_when_ffmpeg_exits_nonzero(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

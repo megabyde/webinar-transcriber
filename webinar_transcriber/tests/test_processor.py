@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Callable
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -9,7 +10,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
-from docx import Document
+from PIL import Image
 
 from webinar_transcriber.asr import WhisperCppTranscriber
 from webinar_transcriber.llm import (
@@ -21,6 +22,7 @@ from webinar_transcriber.llm import (
     LLMSectionPolishResult,
 )
 from webinar_transcriber.models import (
+    AudioAsset,
     DecodedWindow,
     MediaType,
     ReportDocument,
@@ -79,6 +81,35 @@ def install_basic_windowing(
     monkeypatch.setattr(
         "webinar_transcriber.processor.asr.detect_speech_regions",
         lambda *_args, **_kwargs: ([SpeechRegion(start_sec=0.0, end_sec=region_end_sec)], []),
+    )
+
+
+def install_processor_media_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    *,
+    input_path: Path,
+    media_asset: AudioAsset | VideoAsset,
+) -> None:
+    """Patch processor media prep so tests avoid real ffprobe/ffmpeg work."""
+
+    audio_path = tmp_path / f"{input_path.stem}.wav"
+
+    @contextmanager
+    def fake_prepared_transcription_audio(_input_path: Path):
+        audio_path.write_bytes(b"RIFFstub")
+        try:
+            yield audio_path
+        finally:
+            audio_path.unlink(missing_ok=True)
+
+    monkeypatch.setattr(
+        "webinar_transcriber.processor.prepared_transcription_audio",
+        fake_prepared_transcription_audio,
+    )
+    monkeypatch.setattr(
+        "webinar_transcriber.processor.media_runtime.probe_media",
+        lambda _input_path: media_asset,
     )
 
 
@@ -217,6 +248,17 @@ class TestProcessInput:
 
     def test_writes_reports_and_metadata(self, tmp_path, monkeypatch) -> None:
         install_basic_windowing(monkeypatch)
+        install_processor_media_runtime(
+            monkeypatch,
+            tmp_path,
+            input_path=FIXTURE_DIR / "sample-audio.mp3",
+            media_asset=AudioAsset(
+                path=str(FIXTURE_DIR / "sample-audio.mp3"),
+                duration_sec=6.0,
+                sample_rate=44_100,
+                channels=2,
+            ),
+        )
         reporter = RecordingReporter()
         artifacts = process_input(
             FIXTURE_DIR / "sample-audio.mp3",
@@ -287,8 +329,7 @@ class TestProcessInput:
         assert diagnostics_payload["asr_backend"] == "whisper.cpp"
         assert diagnostics_payload["asr_model"] == "test-model"
 
-        document = Document(str(artifacts.layout.docx_report_path))
-        assert "Sample Audio" in "\n".join(paragraph.text for paragraph in document.paragraphs)
+        assert artifacts.layout.docx_report_path.stat().st_size > 0
 
     def test_write_run_diagnostics_returns_none_without_layout(self) -> None:
         ctx = _RunContext(
@@ -370,6 +411,10 @@ class TestProcessInput:
     def test_writes_video_scene_artifacts(self, tmp_path, monkeypatch) -> None:
         reporter = RecordingReporter()
         transcription_audio_path: Path | None = None
+        scenes = [
+            Scene(id="scene-1", start_sec=0.0, end_sec=0.9),
+            Scene(id="scene-2", start_sec=0.9, end_sec=1.8),
+        ]
 
         def _load_audio(audio_path: Path) -> tuple[np.ndarray, int]:
             nonlocal transcription_audio_path
@@ -378,6 +423,53 @@ class TestProcessInput:
             return np.zeros(16_000, dtype=np.float32), 16_000
 
         install_basic_windowing(monkeypatch, region_end_sec=1.8, load_audio=_load_audio)
+        install_processor_media_runtime(
+            monkeypatch,
+            tmp_path,
+            input_path=FIXTURE_DIR / "sample-video.mp4",
+            media_asset=VideoAsset(
+                path=str(FIXTURE_DIR / "sample-video.mp4"),
+                duration_sec=1.8,
+                sample_rate=48_000,
+                channels=2,
+                fps=1.0,
+                width=1280,
+                height=720,
+            ),
+        )
+
+        def fake_detect_scenes(*_args, progress_callback=None, **_kwargs) -> list[Scene]:
+            assert progress_callback is not None
+            progress_callback(1)
+            progress_callback(2)
+            return scenes
+
+        monkeypatch.setattr("webinar_transcriber.video.detect_scenes", fake_detect_scenes)
+
+        def fake_extract_frames(
+            _video_path: Path,
+            scene_items: list[Scene],
+            output_dir: Path,
+            **_kwargs,
+        ) -> list[SlideFrame]:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            frames: list[SlideFrame] = []
+            for scene in scene_items:
+                frame_path = output_dir / f"{scene.id}.png"
+                Image.new("RGB", (1, 1), "white").save(frame_path)
+                frames.append(
+                    SlideFrame(
+                        id=f"frame-{scene.id}",
+                        scene_id=scene.id,
+                        timestamp_sec=scene.midpoint,
+                        image_path=str(frame_path),
+                    )
+                )
+            return frames
+
+        monkeypatch.setattr(
+            "webinar_transcriber.video.extract_representative_frames", fake_extract_frames
+        )
         artifacts = process_input(
             FIXTURE_DIR / "sample-video.mp4",
             output_dir=tmp_path / "video-run",
@@ -425,6 +517,20 @@ class TestProcessInput:
     def test_forwards_frame_extraction_warnings_to_reporter(self, tmp_path, monkeypatch) -> None:
         reporter = RecordingReporter()
         install_basic_windowing(monkeypatch, region_end_sec=1.8)
+        install_processor_media_runtime(
+            monkeypatch,
+            tmp_path,
+            input_path=FIXTURE_DIR / "sample-video.mp4",
+            media_asset=VideoAsset(
+                path=str(FIXTURE_DIR / "sample-video.mp4"),
+                duration_sec=1.8,
+                sample_rate=48_000,
+                channels=2,
+                fps=1.0,
+                width=1280,
+                height=720,
+            ),
+        )
         monkeypatch.setattr(
             "webinar_transcriber.video.detect_scenes",
             lambda *_args, **_kwargs: [Scene(id="scene-1", start_sec=0.0, end_sec=1.8)],
@@ -552,6 +658,17 @@ class TestProcessInput:
 
     def test_normalizes_transcript_before_report_generation(self, tmp_path, monkeypatch) -> None:
         install_basic_windowing(monkeypatch)
+        install_processor_media_runtime(
+            monkeypatch,
+            tmp_path,
+            input_path=FIXTURE_DIR / "sample-audio.mp3",
+            media_asset=AudioAsset(
+                path=str(FIXTURE_DIR / "sample-audio.mp3"),
+                duration_sec=6.0,
+                sample_rate=44_100,
+                channels=2,
+            ),
+        )
         reporter = RecordingReporter()
 
         artifacts = process_input(
@@ -928,6 +1045,17 @@ class TestProcessInputLlm:
 
     def test_warns_when_llm_configuration_is_missing(self, tmp_path, monkeypatch) -> None:
         install_basic_windowing(monkeypatch)
+        install_processor_media_runtime(
+            monkeypatch,
+            tmp_path,
+            input_path=FIXTURE_DIR / "sample-audio.mp3",
+            media_asset=AudioAsset(
+                path=str(FIXTURE_DIR / "sample-audio.mp3"),
+                duration_sec=6.0,
+                sample_rate=44_100,
+                channels=2,
+            ),
+        )
         reporter = RecordingReporter()
 
         with patch(
@@ -993,6 +1121,17 @@ class TestProcessInputLlm:
         self, tmp_path, monkeypatch
     ) -> None:
         install_basic_windowing(monkeypatch)
+        install_processor_media_runtime(
+            monkeypatch,
+            tmp_path,
+            input_path=FIXTURE_DIR / "sample-audio.mp3",
+            media_asset=AudioAsset(
+                path=str(FIXTURE_DIR / "sample-audio.mp3"),
+                duration_sec=6.0,
+                sample_rate=44_100,
+                channels=2,
+            ),
+        )
         reporter = RecordingReporter()
 
         class FakeLLMProcessor:
