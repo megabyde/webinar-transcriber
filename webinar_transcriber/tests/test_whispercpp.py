@@ -110,7 +110,7 @@ class TestWhisperCppLibrary:
             self._segment_t1 = [150, 300]
 
             self.whisper_context_default_params = TestWhisperCppLibrary.FakeFunction(
-                lambda: _WhisperContextParams()
+                _WhisperContextParams
             )
             self.whisper_init_from_file_with_params = TestWhisperCppLibrary.FakeFunction(
                 self._init_from_file_with_params
@@ -249,9 +249,12 @@ class TestBackendPluginLoading:
         fake_ggml_library = FakeGgmlLibrary()
 
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp.library._BACKEND_REGISTRATION_DONE", False
+            "webinar_transcriber.whispercpp.library._NATIVE_STATE.backend_registration_done",
+            False,
         )
-        monkeypatch.setattr("webinar_transcriber.whispercpp.library._GGML_LIBRARY_HANDLE", None)
+        monkeypatch.setattr(
+            "webinar_transcriber.whispercpp.library._NATIVE_STATE.ggml_library_handle", None
+        )
         monkeypatch.setattr(
             "webinar_transcriber.whispercpp.library._candidate_backend_plugin_paths",
             lambda: [plugin_path],
@@ -273,9 +276,12 @@ class TestBackendPluginLoading:
 
     def test_load_backend_plugins_returns_when_no_ggml_library(self, monkeypatch) -> None:
         monkeypatch.setattr(
-            "webinar_transcriber.whispercpp.library._BACKEND_REGISTRATION_DONE", False
+            "webinar_transcriber.whispercpp.library._NATIVE_STATE.backend_registration_done",
+            False,
         )
-        monkeypatch.setattr("webinar_transcriber.whispercpp.library._GGML_LIBRARY_HANDLE", None)
+        monkeypatch.setattr(
+            "webinar_transcriber.whispercpp.library._NATIVE_STATE.ggml_library_handle", None
+        )
         monkeypatch.setattr(
             "webinar_transcriber.whispercpp.library._resolve_ggml_library_path", lambda: None
         )
@@ -284,8 +290,8 @@ class TestBackendPluginLoading:
 
         from webinar_transcriber.whispercpp import library
 
-        assert library._BACKEND_REGISTRATION_DONE is True
-        assert library._GGML_LIBRARY_HANDLE is None
+        assert library._NATIVE_STATE.backend_registration_done is True
+        assert library._NATIVE_STATE.ggml_library_handle is None
 
     def test_resolve_ggml_library_path_uses_find_library(self, monkeypatch) -> None:
         monkeypatch.setattr(

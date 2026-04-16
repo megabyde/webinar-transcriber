@@ -34,7 +34,7 @@ class TestDetectScenes:
         scenes = detect_scenes(
             FIXTURE_DIR / "sample-video.mp4",
             min_scene_length_sec=1.0,
-            progress_callback=lambda scene_count: scene_counts.append(scene_count),
+            progress_callback=scene_counts.append,
         )
 
         assert len(scenes) >= 2
@@ -113,7 +113,7 @@ class TestFrameExtraction:
             samples,
             difference_threshold=10.0,
             min_scene_length_sec=3.0,
-            progress_callback=lambda scene_count: scene_counts.append(scene_count),
+            progress_callback=scene_counts.append,
         )
 
         assert scene_starts == [0.0, 4.0]

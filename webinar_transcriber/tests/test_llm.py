@@ -322,7 +322,7 @@ class TestOpenAiLlmProcessor:
         )
 
         result = processor.polish_report_sections_with_progress(
-            report, progress_callback=lambda advance: progress_updates.append(advance)
+            report, progress_callback=progress_updates.append
         )
 
         assert len(fake_client.responses.calls) == 1
@@ -547,7 +547,7 @@ class TestLlmFlow:
         )
 
         result = processor.polish_report_sections_with_progress(
-            report, progress_callback=lambda advance: progress_updates.append(advance)
+            report, progress_callback=progress_updates.append
         )
 
         assert result.section_transcripts == {"section-1": "Agenda review."}

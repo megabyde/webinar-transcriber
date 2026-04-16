@@ -137,6 +137,7 @@ select = [
     "FLY",  # flynt.
     "PLC",  # Pylint.
     "PLE",  # Pylint.
+    "PLW",  # Pylint.
     "PERF", # Perflint.
     "RUF",  # Ruff-specific rules.
 ]

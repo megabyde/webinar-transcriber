@@ -9,6 +9,7 @@ import threading
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Final, Self
 
 import numpy as np
@@ -30,10 +31,12 @@ if TYPE_CHECKING:
     from types import TracebackType
 
 _BACKEND_PLUGIN_GLOB: Final[str] = "libggml-*.so"
-_BACKEND_REGISTRATION_DONE = False
-_GGML_LIBRARY_HANDLE: ctypes.CDLL | None = None
 _LOG_SINK_LOCK = threading.RLock()
-_LOG_SINK_PATH: Path | None = None
+_NATIVE_STATE = SimpleNamespace(
+    backend_registration_done=False,
+    ggml_library_handle=None,
+    log_sink_path=None,
+)
 
 
 class WhisperCppError(RuntimeError):
@@ -308,26 +311,26 @@ def resolve_library_path(library_path: Path | None = None) -> Path:
 
 
 def _load_backend_plugins() -> None:
-    global _BACKEND_REGISTRATION_DONE, _GGML_LIBRARY_HANDLE
-    if _BACKEND_REGISTRATION_DONE:  # pragma: no cover - process-global native state
+    if _NATIVE_STATE.backend_registration_done:  # pragma: no cover - process-global native state
         return
 
     ggml_library_path = _resolve_ggml_library_path()
     if ggml_library_path is None:  # pragma: no cover - optional native dependency
-        _BACKEND_REGISTRATION_DONE = True
+        _NATIVE_STATE.backend_registration_done = True
         return
 
-    _GGML_LIBRARY_HANDLE = ctypes.CDLL(
+    _NATIVE_STATE.ggml_library_handle = ctypes.CDLL(
         str(ggml_library_path), mode=getattr(ctypes, "RTLD_GLOBAL", 0)
     )
-    _configure_ggml_logging(_GGML_LIBRARY_HANDLE)
-    _GGML_LIBRARY_HANDLE.ggml_backend_load_all_from_path.argtypes = [ctypes.c_char_p]
-    _GGML_LIBRARY_HANDLE.ggml_backend_load_all_from_path.restype = None
+    ggml_library_handle = _NATIVE_STATE.ggml_library_handle
+    _configure_ggml_logging(ggml_library_handle)
+    ggml_library_handle.ggml_backend_load_all_from_path.argtypes = [ctypes.c_char_p]
+    ggml_library_handle.ggml_backend_load_all_from_path.restype = None
 
     plugin_dirs = {plugin_path.parent for plugin_path in _candidate_backend_plugin_paths()}
     for plugin_dir in sorted(plugin_dirs):
-        _GGML_LIBRARY_HANDLE.ggml_backend_load_all_from_path(os.fspath(plugin_dir).encode("utf-8"))
-    _BACKEND_REGISTRATION_DONE = True
+        ggml_library_handle.ggml_backend_load_all_from_path(os.fspath(plugin_dir).encode("utf-8"))
+    _NATIVE_STATE.backend_registration_done = True
 
 
 def _candidate_backend_plugin_paths() -> list[Path]:
@@ -377,16 +380,16 @@ def _resolve_ggml_library_path() -> Path | None:
 
 
 def _set_log_sink_path(log_path: Path | None) -> None:
-    global _LOG_SINK_PATH
     if log_path is not None:
         log_path.parent.mkdir(parents=True, exist_ok=True)
-    _LOG_SINK_PATH = log_path
+    _NATIVE_STATE.log_sink_path = log_path
 
 
 def _append_log_message(text: bytes | None) -> None:
-    if _LOG_SINK_PATH is None or not text:
+    log_sink_path = _NATIVE_STATE.log_sink_path
+    if log_sink_path is None or not text:
         return
-    with _LOG_SINK_LOCK, _LOG_SINK_PATH.open("ab") as log_file:
+    with _LOG_SINK_LOCK, log_sink_path.open("ab") as log_file:
         log_file.write(text)
 
 
