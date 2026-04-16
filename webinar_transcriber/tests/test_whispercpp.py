@@ -434,7 +434,7 @@ class TestWhisperCppLibraryFailures:
         )
         library = WhisperCppLibrary(library_path)
 
-        empty_window = library._decode_window(
+        empty_window = library.decode_window(
             ctypes.c_void_p(1),
             ctypes.c_void_p(2),
             np.zeros(0, dtype=np.float32),
@@ -448,7 +448,7 @@ class TestWhisperCppLibraryFailures:
 
         fake_cdll.whisper_full_with_state = TestWhisperCppLibrary.FakeFunction(lambda *_args: 1)
         with pytest.raises(WhisperCppError, match="inference failed for window-2"):
-            library._decode_window(
+            library.decode_window(
                 ctypes.c_void_p(1),
                 ctypes.c_void_p(2),
                 np.zeros(16_000, dtype=np.float32),

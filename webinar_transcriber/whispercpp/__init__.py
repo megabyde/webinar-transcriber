@@ -1,7 +1,7 @@
 """Public whisper.cpp facade."""
 
+from .bindings import GPU_BACKEND_PATTERN
 from .library import (
-    GPU_BACKEND_PATTERN,
     WhisperCppError,
     WhisperCppLibrary,
     WhisperCppRuntimeDetails,

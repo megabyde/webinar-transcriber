@@ -16,7 +16,15 @@ import numpy as np
 from webinar_transcriber.models import DecodedWindow, InferenceWindow, TranscriptSegment
 from webinar_transcriber.normalized_audio import sample_index_for_time
 
-from . import bindings as _bindings
+from .bindings import (
+    _GGML_LOG_CALLBACK_TYPE,
+    _TICKS_PER_SECOND,
+    _WHISPER_SAMPLING_GREEDY,
+    _configure_context_params,
+    _configure_signatures,
+    _decode_c_string,
+    _encode_optional_text,
+)
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -26,17 +34,6 @@ _BACKEND_REGISTRATION_DONE = False
 _GGML_LIBRARY_HANDLE: ctypes.CDLL | None = None
 _LOG_SINK_LOCK = threading.RLock()
 _LOG_SINK_PATH: Path | None = None
-GPU_BACKEND_PATTERN = _bindings.GPU_BACKEND_PATTERN
-_GGML_LOG_CALLBACK_TYPE = _bindings._GGML_LOG_CALLBACK_TYPE
-_TICKS_PER_SECOND = _bindings._TICKS_PER_SECOND
-_WHISPER_SAMPLING_GREEDY = _bindings._WHISPER_SAMPLING_GREEDY
-_WhisperContextParams = _bindings._WhisperContextParams
-_WhisperFullParams = _bindings._WhisperFullParams
-_configure_context_params = _bindings._configure_context_params
-_configure_signatures = _bindings._configure_signatures
-_decode_c_string = _bindings._decode_c_string
-_encode_optional_text = _bindings._encode_optional_text
-_system_info_supports_gpu = _bindings._system_info_supports_gpu
 
 
 class WhisperCppError(RuntimeError):
@@ -88,7 +85,7 @@ class WhisperCppSession:
         language_hint: str | None = None,
     ) -> DecodedWindow:
         """Decode one inference window through whisper.cpp."""
-        return self._library._decode_window(
+        return self._library.decode_window(
             self._context,
             self._state,
             np.ascontiguousarray(audio_samples, dtype=np.float32),
@@ -102,8 +99,7 @@ class WhisperCppSession:
         """Release the native whisper.cpp state and context."""
         if self._closed:
             return
-        self._library._lib.whisper_free_state(self._state)
-        self._library._lib.whisper_free(self._context)
+        self._library.close_session(self._context, self._state)
         self._closed = True
 
     def __exit__(
@@ -171,7 +167,12 @@ class WhisperCppLibrary:
             self, context=context, state=state, runtime_details=runtime_details
         )
 
-    def _decode_window(
+    def close_session(self, context: ctypes.c_void_p, state: ctypes.c_void_p) -> None:
+        """Release a whisper.cpp state/context pair."""
+        self._lib.whisper_free_state(state)
+        self._lib.whisper_free(context)
+
+    def decode_window(
         self,
         context: ctypes.c_void_p,
         state: ctypes.c_void_p,
@@ -182,6 +183,7 @@ class WhisperCppLibrary:
         prompt: str | None,
         language_hint: str | None,
     ) -> DecodedWindow:
+        """Decode one prepared inference window through whisper.cpp."""
         start_index = sample_index_for_time(window.start_sec)
         end_index = min(len(audio_samples), sample_index_for_time(window.end_sec))
         window_samples = np.ascontiguousarray(

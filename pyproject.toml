@@ -156,8 +156,6 @@ convention = "google"
 "webinar_transcriber/tests/test_ui.py" = ["SLF001"]
 # whisper.cpp tests validate low-level wrapper behavior through private bridge methods.
 "webinar_transcriber/tests/test_whispercpp.py" = ["SLF001"]
-# The wrapper layer intentionally consumes private binding helpers from the raw ctypes layer.
-"webinar_transcriber/whispercpp/library.py" = ["SLF001"]
 
 [tool.pymarkdown.plugins.md013]
 line_length = 100
