@@ -104,6 +104,7 @@ select = [
 
     # Standalone families.
     "I",   # isort.
+    "INP", # flake8-no-pep420.
     "N",   # pep8-naming.
     "UP",  # pyupgrade.
 
@@ -116,6 +117,7 @@ select = [
     "BLE",   # flake8-blind-except.
     "C4",    # flake8-comprehensions.
     "EXE",   # flake8-executable.
+    "FA",    # flake8-future-annotations.
     "G",     # flake8-logging-format.
     "ISC",   # flake8-implicit-str-concat.
     "PIE",   # flake8-pie.
