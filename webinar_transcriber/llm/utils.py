@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from .contracts import (
     LLMConfigurationError,
@@ -36,9 +36,7 @@ def required_provider_env(*, api_key_env: str, model_env: str) -> tuple[str, str
     if missing_vars:
         missing = ", ".join(missing_vars)
         raise LLMConfigurationError(f"Missing required LLM environment variables: {missing}.")
-    assert api_key is not None
-    assert model_name is not None
-    return api_key, model_name
+    return cast("tuple[str, str]", (api_key, model_name))
 
 
 def build_report_polish_payload(

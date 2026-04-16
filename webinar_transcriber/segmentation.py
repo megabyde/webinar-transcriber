@@ -172,7 +172,8 @@ def _silero_speech_timestamps(
         return None
     silero_vad, torch = modules
 
-    assert sample_rate == NORMALIZED_SAMPLE_RATE, "Silero VAD expects normalized 16000 Hz audio."
+    if sample_rate != NORMALIZED_SAMPLE_RATE:
+        raise ValueError("Silero VAD expects normalized 16000 Hz audio.")
 
     speech_model = silero_vad.load_silero_vad()
     iterator = silero_vad.VADIterator(

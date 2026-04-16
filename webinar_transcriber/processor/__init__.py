@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import nullcontext, suppress
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import webinar_transcriber.asr as asr_runtime
 import webinar_transcriber.export as export_runtime
@@ -412,7 +412,7 @@ def process_input(
                 asr_model=active_transcriber.model_name,
                 llm_enabled=enable_llm,
             )
-            assert diagnostics is not None
+            diagnostics = cast("Diagnostics", diagnostics)
 
             artifacts = ProcessArtifacts(
                 layout=ctx.layout,

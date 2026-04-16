@@ -33,11 +33,15 @@ GPU_BACKEND_PATTERN = re.compile(
 )
 
 
-def _missing_model_error_message(model_path: Path) -> str:
+def _missing_model_error_message(model_path: Path | None) -> str:
+    if model_path is not None:
+        model_path_text = str(model_path)
+    else:
+        model_path_text = "--asr-model path was not initialized for the explicit whisper.cpp model"
     example_path = DEFAULT_WHISPER_CPP_MODEL_EXAMPLE
     location_hint = f"Download a whisper.cpp model there, or use --asr-model {example_path}."
     return (
-        f"whisper.cpp model file does not exist: {model_path}. "
+        f"whisper.cpp model file does not exist: {model_path_text}. "
         f"{location_hint} See README.md for model download instructions."
     )
 
@@ -188,10 +192,10 @@ class WhisperCppTranscriber:
 
     def _resolve_model_path(self) -> Path:
         if not self._uses_default_model_path:
-            assert self._configured_model_path is not None
-            if not self._configured_model_path.exists():
-                raise ASRProcessingError(_missing_model_error_message(self._configured_model_path))
-            return self._configured_model_path
+            configured_model_path = self._configured_model_path
+            if configured_model_path is None or not configured_model_path.exists():
+                raise ASRProcessingError(_missing_model_error_message(configured_model_path))
+            return configured_model_path
 
         try:
             return _download_default_whisper_cpp_model()

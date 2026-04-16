@@ -352,7 +352,7 @@ class TestNormalizedAudio:
             "webinar_transcriber.segmentation.importlib.import_module", fake_silero_import_module()
         )
 
-        with pytest.raises(AssertionError, match="16000 Hz"):
+        with pytest.raises(ValueError, match="16000 Hz"):
             _silero_speech_timestamps(
                 np.zeros(800, dtype=np.float32),
                 sample_rate=8_000,

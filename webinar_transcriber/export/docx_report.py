@@ -3,6 +3,7 @@
 import re
 from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 from docx import Document
 from docx.document import Document as DocxDocument
@@ -98,9 +99,7 @@ def _add_text_blocks(document: DocxDocument, text: str) -> None:
             continue
         if _all_list_items(lines):
             for line in lines:
-                body, style = _list_item_parts(line)
-                assert body is not None
-                assert style is not None
+                body, style = cast("tuple[str, str]", _list_item_parts(line))
                 document.add_paragraph(body, style=style)
             continue
         body, style = _list_item_parts(paragraph_text)

@@ -122,6 +122,7 @@ select = [
     "PT",    # flake8-pytest-style.
     "PYI",   # flake8-pyi.
     "RSE",   # flake8-raise.
+    "S",     # flake8-bandit.
     "RET",   # flake8-return.
     "SIM",   # flake8-simplify.
     "TCH",   # flake8-type-checking.
@@ -139,12 +140,13 @@ select = [
     "PERF", # Perflint.
     "RUF",  # Ruff-specific rules.
 ]
+ignore = ["S603", "S607"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-"webinar_transcriber/**/tests/*.py" = ["ARG", "D", "DTZ", "PLC0415"]
+"webinar_transcriber/**/tests/*.py" = ["ARG", "D", "DTZ", "PLC0415", "S101", "S108"]
 
 [tool.pymarkdown.plugins.md013]
 line_length = 100

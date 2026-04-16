@@ -356,6 +356,14 @@ class TestWhisperCppTranscriber:
         with pytest.raises(ASRProcessingError, match="session was not initialized"):
             BrokenTranscriber(model_name="stub.bin")._ensure_session()
 
+    def test_resolve_model_path_raises_when_explicit_model_path_is_uninitialized(self) -> None:
+        transcriber = WhisperCppTranscriber(model_name="stub.bin")
+        transcriber._uses_default_model_path = False
+        transcriber._configured_model_path = None
+
+        with pytest.raises(ASRProcessingError, match=r"--asr-model path was not initialized"):
+            transcriber._resolve_model_path()
+
     def test_download_default_model_wraps_backend_failures(self, monkeypatch) -> None:
         monkeypatch.setattr(
             "webinar_transcriber.asr.transcriber.importlib.import_module",
