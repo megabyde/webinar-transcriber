@@ -201,23 +201,25 @@ def process_input(
             ctx.current_stage = "prepare_run_dir"
             ctx.reporter.stage_started("prepare_run_dir", "Preparing run directory")
             timer = start_stage_timer(ctx.stage_timings, "prepare_run_dir")
-            ctx.layout = create_run_layout(input_path=input_path, output_dir=output_dir)
+            layout = create_run_layout(input_path=input_path, output_dir=output_dir)
+            ctx.layout = layout
             timer.finish()
             ctx.reporter.stage_finished(
-                "prepare_run_dir", "Preparing run directory", detail=str(ctx.layout.run_dir)
+                "prepare_run_dir", "Preparing run directory", detail=str(layout.run_dir)
             )
-            configure_asr_logging(active_transcriber, ctx.layout)
+            configure_asr_logging(active_transcriber, layout)
 
             ctx.current_stage = "probe_media"
             ctx.reporter.stage_started("probe_media", "Probing media")
             timer = start_stage_timer(ctx.stage_timings, "probe_media")
-            ctx.media_asset = media_runtime.probe_media(input_path)
+            media_asset = media_runtime.probe_media(input_path)
+            ctx.media_asset = media_asset
             timer.finish()
-            write_json(ctx.layout.metadata_path, {"media": ctx.media_asset.model_dump(mode="json")})
+            write_json(layout.metadata_path, {"media": media_asset.model_dump(mode="json")})
             ctx.reporter.stage_finished(
                 "probe_media",
                 "Probing media",
-                detail=f"{ctx.media_asset.media_type.value}, {ctx.media_asset.duration_sec:.1f}s",
+                detail=f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s",
             )
 
             ctx.current_stage = "prepare_transcription_audio"
@@ -231,17 +233,19 @@ def process_input(
                 ctx.current_stage = "asr"
                 asr_result = processor_asr.run_asr_pipeline(
                     audio_path=audio_path,
-                    media_asset=ctx.media_asset,
+                    media_asset=media_asset,
                     transcriber=active_transcriber,
-                    layout=ctx.layout,
+                    layout=layout,
                     reporter=ctx.reporter,
                     stage_timings=ctx.stage_timings,
                     warnings=ctx.warnings,
                     asr_pipeline=ctx.asr_pipeline,
                     vad=vad,
                 )
-                ctx.transcription = asr_result.transcription
-                ctx.normalized_transcription = asr_result.normalized_transcription
+                transcription = asr_result.transcription
+                normalized_transcription = asr_result.normalized_transcription
+                ctx.transcription = transcription
+                ctx.normalized_transcription = normalized_transcription
 
                 llm_enhancer, ctx.llm_runtime = resolve_llm_processor(
                     enable_llm=enable_llm,
@@ -251,18 +255,16 @@ def process_input(
                     llm_runtime=ctx.llm_runtime,
                 )
                 if keep_audio:
-                    preserved_audio_path = ctx.layout.transcription_audio_path(kept_audio_format)
+                    preserved_audio_path = layout.transcription_audio_path(kept_audio_format)
                     preserve_transcription_audio(
                         audio_path, preserved_audio_path, audio_format=kept_audio_format
                     )
             # Subsequent video, structure, and export stages intentionally run after temp audio
             # cleanup.
 
-            if isinstance(ctx.media_asset, VideoAsset):
+            if isinstance(media_asset, VideoAsset):
                 ctx.current_stage = "detect_scenes"
-                detect_scene_total = video_runtime.estimate_sample_count(
-                    ctx.media_asset.duration_sec
-                )
+                detect_scene_total = video_runtime.estimate_sample_count(media_asset.duration_sec)
                 ctx.reporter.progress_started(
                     "detect_scenes",
                     "Detecting scenes",
@@ -276,7 +278,7 @@ def process_input(
                 timer = start_stage_timer(ctx.stage_timings, "detect_scenes")
                 ctx.scenes = video_runtime.detect_scenes(
                     input_path,
-                    duration_sec=ctx.media_asset.duration_sec,
+                    duration_sec=media_asset.duration_sec,
                     progress_callback=lambda scene_count: on_detect_scenes_progress(
                         scene_count,
                         detail=count_label(scene_count, "scene"),
@@ -287,7 +289,7 @@ def process_input(
                 )
                 timer.finish()
                 write_json(
-                    ctx.layout.scenes_path,
+                    layout.scenes_path,
                     {"scenes": [scene.model_dump(mode="json") for scene in ctx.scenes]},
                 )
                 ctx.reporter.stage_finished(
@@ -304,7 +306,7 @@ def process_input(
                 ctx.slide_frames = video_runtime.extract_representative_frames(
                     input_path,
                     ctx.scenes,
-                    ctx.layout.frames_dir,
+                    layout.frames_dir,
                     progress_callback=lambda: ctx.reporter.progress_advanced("extract_frames"),
                     warning_callback=record_warning,
                 )
@@ -315,7 +317,7 @@ def process_input(
                     detail=count_label(len(ctx.slide_frames), "frame"),
                 )
                 ctx.alignment_blocks = align_by_time(
-                    ctx.normalized_transcription.segments,
+                    normalized_transcription.segments,
                     ctx.scenes,
                     ctx.slide_frames,
                     warnings=ctx.warnings,
@@ -325,7 +327,7 @@ def process_input(
                 (
                     len(ctx.alignment_blocks)
                     if ctx.alignment_blocks is not None
-                    else len(ctx.normalized_transcription.segments)
+                    else len(normalized_transcription.segments)
                 ),
                 1,
             )
@@ -343,28 +345,29 @@ def process_input(
             )
 
             timer = start_stage_timer(ctx.stage_timings, "structure")
-            ctx.report = structure_runtime.build_report(
-                ctx.media_asset,
-                ctx.normalized_transcription,
+            report = structure_runtime.build_report(
+                media_asset,
+                normalized_transcription,
                 alignment_blocks=ctx.alignment_blocks,
                 warnings=ctx.warnings,
                 progress_callback=lambda completed_count, section_count: on_structure_progress(
                     float(completed_count), detail=count_label(section_count, "section")
                 ),
             )
+            ctx.report = report
             finish_structure_progress(
-                float(structure_total), detail=count_label(len(ctx.report.sections), "section")
+                float(structure_total), detail=count_label(len(report.sections), "section")
             )
             timer.finish()
             ctx.reporter.stage_finished(
                 "structure",
                 "Structuring report",
-                detail=count_label(len(ctx.report.sections), "section"),
+                detail=count_label(len(report.sections), "section"),
             )
 
             if ctx.slide_frames:
                 frame_by_id = {frame.id: frame for frame in ctx.slide_frames}
-                ctx.report = ctx.report.model_copy(
+                report = report.model_copy(
                     update={
                         "sections": [
                             section.model_copy(
@@ -374,35 +377,35 @@ def process_input(
                             )
                             if section.frame_id and section.frame_id in frame_by_id
                             else section
-                            for section in ctx.report.sections
+                            for section in report.sections
                         ]
                     }
                 )
+                ctx.report = report
 
             ctx.current_stage = "llm_report"
-            ctx.report, ctx.llm_runtime = maybe_polish_report(
-                ctx.report,
+            report, ctx.llm_runtime = maybe_polish_report(
+                report,
                 llm_processor=llm_enhancer,
                 reporter=ctx.reporter,
                 warnings=ctx.warnings,
                 stage_timings=ctx.stage_timings,
                 llm_runtime=ctx.llm_runtime,
             )
-            ctx.report = ctx.report.model_copy(update={"warnings": list(ctx.warnings)})
+            report = report.model_copy(update={"warnings": list(ctx.warnings)})
+            ctx.report = report
 
             ctx.current_stage = "export"
             ctx.reporter.stage_started("export", "Writing artifacts")
             timer = start_stage_timer(ctx.stage_timings, "export")
-            export_runtime.write_markdown_report(ctx.report, ctx.layout.markdown_report_path)
+            export_runtime.write_markdown_report(report, layout.markdown_report_path)
             export_runtime.write_docx_report(
-                ctx.report,
-                ctx.layout.docx_report_path,
+                report,
+                layout.docx_report_path,
                 warning_callback=record_warning,
             )
-            export_runtime.write_json_report(ctx.report, ctx.layout.json_report_path)
-            export_runtime.write_vtt_subtitles(
-                ctx.normalized_transcription, ctx.layout.subtitle_vtt_path
-            )
+            export_runtime.write_json_report(report, layout.json_report_path)
+            export_runtime.write_vtt_subtitles(normalized_transcription, layout.subtitle_vtt_path)
             timer.finish()
             ctx.reporter.stage_finished("export", "Writing artifacts")
 
@@ -415,10 +418,10 @@ def process_input(
             diagnostics = cast("Diagnostics", diagnostics)
 
             artifacts = ProcessArtifacts(
-                layout=ctx.layout,
-                media_asset=ctx.media_asset,
-                transcription=ctx.transcription,
-                report=ctx.report,
+                layout=layout,
+                media_asset=media_asset,
+                transcription=transcription,
+                report=report,
                 diagnostics=diagnostics,
             )
             ctx.reporter.complete_run(artifacts)

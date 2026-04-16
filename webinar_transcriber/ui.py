@@ -54,10 +54,11 @@ class RichStageReporter(NullStageReporter):
         self._stop_active_display()
         self._stage_count += 1
         self._active_event = self._new_stage_event(stage_key, label)
-        self._active_status = self._console.status(
+        status = self._console.status(
             f"[bold blue][{self._stage_count}][/bold blue] {label}", spinner="dots"
         )
-        self._active_status.start()
+        self._active_status = status
+        status.start()
 
     def progress_started(
         self,
@@ -75,7 +76,7 @@ class RichStageReporter(NullStageReporter):
         self._stop_active_display()
         self._stage_count += 1
         self._active_event = self._new_stage_event(stage_key, label)
-        self._active_progress = Progress(
+        progress = Progress(
             SpinnerColumn(),
             TextColumn(f"[bold blue][{self._stage_count}][/bold blue] {label}"),
             BarColumn(),
@@ -89,8 +90,9 @@ class RichStageReporter(NullStageReporter):
             console=self._console,
             transient=True,
         )
-        self._active_progress.start()
-        self._active_task_id = self._active_progress.add_task(
+        self._active_progress = progress
+        progress.start()
+        self._active_task_id = progress.add_task(
             label,
             total=max(total, 1.0),
             count_label=count_label,

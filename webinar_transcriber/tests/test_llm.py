@@ -464,12 +464,14 @@ class TestAnthropicLlmProcessor:
 
 class TestLlmFlow:
     class StubProcessor(_BaseLLMProcessor):
-        def __init__(self, responses: dict[str, object]) -> None:
+        def __init__(
+            self, responses: dict[str, tuple[BaseModel, dict[str, int]] | Exception]
+        ) -> None:
             super().__init__(provider_name="stub", model_name="stub-model")
             self._responses = responses
 
-        def _parse_structured_response(self, **kwargs):
-            section_id = kwargs["user_payload"].get("id")
+        def _parse_structured_response(self, **kwargs) -> tuple[BaseModel, dict[str, int]]:
+            section_id = cast("str", kwargs["user_payload"].get("id"))
             response = self._responses[section_id]
             if isinstance(response, Exception):
                 raise response

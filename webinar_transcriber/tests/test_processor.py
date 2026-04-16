@@ -68,16 +68,18 @@ def install_basic_windowing(
     *,
     region_end_sec: float = 6.0,
     sample_rate: int = 16_000,
-    load_audio: Callable[[Path], tuple[np.ndarray, int]] | None = None,
+    load_audio_fn: Callable[[Path], tuple[np.ndarray, int]] | None = None,
 ) -> None:
     """Patch processor seams so tests exercise the windowed flow deterministically."""
 
-    if load_audio is None:
+    if load_audio_fn is None:
 
-        def load_audio(_path: Path) -> tuple[np.ndarray, int]:
+        def fake_load_audio(_path: Path) -> tuple[np.ndarray, int]:
             return np.zeros(sample_rate, dtype=np.float32), sample_rate
 
-    monkeypatch.setattr("webinar_transcriber.processor.asr.load_normalized_audio", load_audio)
+        load_audio_fn = fake_load_audio
+
+    monkeypatch.setattr("webinar_transcriber.processor.asr.load_normalized_audio", load_audio_fn)
     monkeypatch.setattr(
         "webinar_transcriber.processor.asr.detect_speech_regions",
         lambda *_args, **_kwargs: ([SpeechRegion(start_sec=0.0, end_sec=region_end_sec)], []),
@@ -433,7 +435,7 @@ class TestProcessInput:
             assert audio_path.exists()
             return np.zeros(16_000, dtype=np.float32), 16_000
 
-        install_basic_windowing(monkeypatch, region_end_sec=1.8, load_audio=_load_audio)
+        install_basic_windowing(monkeypatch, region_end_sec=1.8, load_audio_fn=_load_audio)
         install_processor_media_runtime(
             monkeypatch,
             tmp_path,
