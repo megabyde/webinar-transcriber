@@ -1,6 +1,7 @@
 """Command line interface for webinar-transcriber."""
 
 from pathlib import Path
+from typing import IO, Any
 
 import click
 
@@ -27,7 +28,7 @@ from webinar_transcriber.ui import RichStageReporter
 class CLIError(click.ClickException):
     """Styled CLI error that keeps terminal failures visually consistent."""
 
-    def show(self, file=None) -> None:
+    def show(self, file: IO[Any] | None = None) -> None:
         """Render the CLI error with consistent styling."""
         stream = file or click.get_text_stream("stderr")
         click.secho("Error:", fg="red", bold=True, nl=False, err=True, file=stream)

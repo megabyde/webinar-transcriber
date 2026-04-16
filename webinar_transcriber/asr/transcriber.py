@@ -21,6 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from types import TracebackType
 
+    import numpy as np
+
     from webinar_transcriber.models import DecodedWindow, InferenceWindow
     from webinar_transcriber.whispercpp import (
         WhisperCppLibrary,
@@ -143,7 +145,7 @@ class WhisperCppTranscriber:
 
     def transcribe_inference_windows(
         self,
-        audio_samples,
+        audio_samples: np.ndarray,
         windows: list[InferenceWindow],
         *,
         progress_callback: Callable[[float, int], None] | None = None,

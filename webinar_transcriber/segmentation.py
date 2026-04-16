@@ -18,6 +18,7 @@ from webinar_transcriber.normalized_audio import NORMALIZED_SAMPLE_RATE
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from types import ModuleType
 
 DEFAULT_VAD_THRESHOLD = 0.5
 DEFAULT_MIN_SPEECH_DURATION_MS = 250
@@ -212,7 +213,7 @@ def _silero_speech_timestamps(
     return timestamps
 
 
-def _load_silero_modules():
+def _load_silero_modules() -> tuple[ModuleType, ModuleType] | None:
     try:
         silero_vad = importlib.import_module("silero_vad")
         torch = importlib.import_module("torch")
@@ -249,7 +250,7 @@ def _consume_vad_event(
 
 
 def _report_vad_progress(
-    progress_callback,
+    progress_callback: Callable[[float, int], None] | None,
     *,
     processed_samples: int,
     total_samples: int,

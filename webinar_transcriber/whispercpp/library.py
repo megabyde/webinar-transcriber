@@ -394,7 +394,7 @@ def _append_log_message(text: bytes | None) -> None:
 
 
 @_GGML_LOG_CALLBACK_TYPE
-def _library_log_callback(_level: int, text: bytes | None, _user_data) -> None:
+def _library_log_callback(_level: int, text: bytes | None, _user_data: object | None) -> None:
     _append_log_message(text)
 
 
