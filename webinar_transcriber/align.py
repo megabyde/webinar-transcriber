@@ -11,7 +11,11 @@ def align_by_time(
     *,
     warnings: list[str] | None = None,
 ) -> list[AlignmentBlock]:
-    """Assign transcript segments to scenes using midpoint inclusion."""
+    """Assign transcript segments to scenes using midpoint inclusion.
+
+    Returns:
+        list[AlignmentBlock]: The scene-aligned transcript blocks.
+    """
     frame_by_scene = {frame.scene_id: frame for frame in slide_frames}
     blocks: list[AlignmentBlock] = []
     segments_by_block: list[list[TranscriptSegment]] = []

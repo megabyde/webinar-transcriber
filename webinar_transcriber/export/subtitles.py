@@ -6,7 +6,11 @@ from webinar_transcriber.models import TranscriptionResult
 
 
 def write_vtt_subtitles(transcription: TranscriptionResult, output_path: Path) -> Path:
-    """Write a transcription as a WebVTT subtitle file."""
+    """Write a transcription as a WebVTT subtitle file.
+
+    Returns:
+        Path: The written VTT artifact path.
+    """
     lines = ["WEBVTT", ""]
     for segment in transcription.segments:
         lines.extend([

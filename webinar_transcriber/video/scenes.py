@@ -25,7 +25,11 @@ def detect_scenes(
     min_scene_length_sec: float = MIN_SCENE_LENGTH_SEC,
     progress_callback: Callable[[int], None] | None = None,
 ) -> list[Scene]:
-    """Detect slide changes by sampling the video once per second."""
+    """Detect slide changes by sampling the video once per second.
+
+    Returns:
+        list[Scene]: The detected scene list.
+    """
     last_sample_time = 0.0
 
     def sampled_frames() -> Iterable[tuple[float, np.ndarray]]:
@@ -90,7 +94,11 @@ def _detect_scene_start_times(
 
 
 def estimate_sample_count(duration_sec: float) -> int:
-    """Estimate how many one-second scene samples will be processed."""
+    """Estimate how many one-second scene samples will be processed.
+
+    Returns:
+        int: The estimated number of sampled frames.
+    """
     if duration_sec <= 0:
         return 1
     return max(1, math.ceil(duration_sec / SAMPLE_INTERVAL_SEC))

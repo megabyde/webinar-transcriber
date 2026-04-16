@@ -57,7 +57,11 @@ def run_asr_pipeline(
     asr_pipeline: _AsrPipelineState,
     vad: VadSettings,
 ) -> AsrPipelineResult:
-    """Run the deterministic local ASR pipeline and persist intermediate artifacts."""
+    """Run the deterministic local ASR pipeline and persist intermediate artifacts.
+
+    Returns:
+        AsrPipelineResult: The raw and normalized transcription outputs.
+    """
     reporter.stage_started("prepare_asr", "Preparing ASR model")
     timer = start_stage_timer(stage_timings, "prepare_asr")
     transcriber.prepare_model()

@@ -87,7 +87,11 @@ class WhisperCppSession:
         prompt: str | None = None,
         language_hint: str | None = None,
     ) -> DecodedWindow:
-        """Decode one inference window through whisper.cpp."""
+        """Decode one inference window through whisper.cpp.
+
+        Returns:
+            DecodedWindow: The decoded window result.
+        """
         return self._library.decode_window(
             self._context,
             self._state,
@@ -150,7 +154,14 @@ class WhisperCppLibrary:
         )
 
     def create_session(self, model_path: Path) -> WhisperCppSession:
-        """Create a reusable decoding session for a specific model path."""
+        """Create a reusable decoding session for a specific model path.
+
+        Returns:
+            WhisperCppSession: The initialized reusable decode session.
+
+        Raises:
+            WhisperCppError: If the whisper.cpp context or runtime state cannot be initialized.
+        """
         context_params = self._lib.whisper_context_default_params()
         runtime_details = self.runtime_details()
         _configure_context_params(context_params, system_info=runtime_details.system_info)
@@ -186,7 +197,14 @@ class WhisperCppLibrary:
         prompt: str | None,
         language_hint: str | None,
     ) -> DecodedWindow:
-        """Decode one prepared inference window through whisper.cpp."""
+        """Decode one prepared inference window through whisper.cpp.
+
+        Returns:
+            DecodedWindow: The decoded window result.
+
+        Raises:
+            WhisperCppError: If whisper.cpp inference fails for the requested window.
+        """
         start_index = sample_index_for_time(window.start_sec)
         end_index = min(len(audio_samples), sample_index_for_time(window.end_sec))
         window_samples = np.ascontiguousarray(
@@ -268,7 +286,14 @@ class WhisperCppLibrary:
 
 
 def resolve_library_path(library_path: Path | None = None) -> Path:
-    """Return the shared-library path for whisper.cpp."""
+    """Return the shared-library path for whisper.cpp.
+
+    Returns:
+        Path: The resolved shared-library path.
+
+    Raises:
+        WhisperCppError: If no usable whisper.cpp shared library can be found.
+    """
     if library_path is not None:
         if library_path.exists():
             return library_path

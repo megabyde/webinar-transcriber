@@ -7,7 +7,11 @@ from webinar_transcriber.models import ReportDocument
 
 
 def write_markdown_report(report: ReportDocument, output_path: Path) -> Path:
-    """Write the report to Markdown."""
+    """Write the report to Markdown.
+
+    Returns:
+        Path: The written Markdown artifact path.
+    """
     lines = [f"# {report.title}", ""]
 
     if report.detected_language:

@@ -37,14 +37,22 @@ class StageTimer:
     start_sec: float
 
     def finish(self) -> float:
-        """Record elapsed time and return it."""
+        """Record elapsed time and return it.
+
+        Returns:
+            float: The elapsed stage time in seconds.
+        """
         elapsed_sec = perf_counter() - self.start_sec
         self.stage_timings[self.key] = elapsed_sec
         return elapsed_sec
 
 
 def start_stage_timer(stage_timings: dict[str, float], key: str) -> StageTimer:
-    """Start a stage timer backed by one shared timings map."""
+    """Start a stage timer backed by one shared timings map.
+
+    Returns:
+        StageTimer: The started stage timer.
+    """
     return StageTimer(stage_timings=stage_timings, key=key, start_sec=perf_counter())
 
 
@@ -202,7 +210,11 @@ def build_diagnostics(
     frame_count: int,
     warnings: list[str],
 ) -> Diagnostics:
-    """Build the final diagnostics payload for one processing run."""
+    """Build the final diagnostics payload for one processing run.
+
+    Returns:
+        Diagnostics: The final diagnostics payload.
+    """
     return Diagnostics(
         status=status,
         failed_stage=failed_stage,

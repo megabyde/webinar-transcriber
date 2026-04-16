@@ -129,7 +129,11 @@ class WhisperCppTranscriber:
         return self
 
     def prepare_model(self) -> None:
-        """Resolve the model and initialize a fresh whisper.cpp session."""
+        """Resolve the model and initialize a fresh whisper.cpp session.
+
+        Raises:
+            ASRProcessingError: If model resolution or session creation fails.
+        """
         self._model_path = self._resolve_model_path()
         self.close()
         if self._model_path is None:
@@ -150,7 +154,11 @@ class WhisperCppTranscriber:
         *,
         progress_callback: Callable[[float, int], None] | None = None,
     ) -> list[DecodedWindow]:
-        """Decode ordered inference windows into transcript segments."""
+        """Decode ordered inference windows into transcript segments.
+
+        Returns:
+            list[DecodedWindow]: The decoded windows in deterministic order.
+        """
         session = self._ensure_session()
         ordered_windows = sorted(windows)
         language_hint: str | None = None

@@ -15,7 +15,11 @@ STRONG_SENTENCE_END_RE = re.compile(r"[.!?]$")
 
 
 def normalize_transcription(transcription: TranscriptionResult) -> TranscriptionResult:
-    """Drop empty segments and merge adjacent short segments into larger utterances."""
+    """Drop empty segments and merge adjacent short segments into larger utterances.
+
+    Returns:
+        TranscriptionResult: The normalized transcription.
+    """
     meaningful_segments = [segment for segment in transcription.segments if segment.text.strip()]
     if not meaningful_segments:
         return TranscriptionResult(detected_language=transcription.detected_language, segments=[])

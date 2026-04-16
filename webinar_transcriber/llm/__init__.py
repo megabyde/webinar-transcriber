@@ -27,7 +27,14 @@ from .utils import required_provider_env
 
 
 def build_llm_processor_from_env() -> LLMProcessor:
-    """Build a configured LLM processor from environment variables."""
+    """Build a configured LLM processor from environment variables.
+
+    Returns:
+        LLMProcessor: The configured provider-backed processor.
+
+    Raises:
+        LLMConfigurationError: If the provider selection or required environment is invalid.
+    """
     provider = os.environ.get("LLM_PROVIDER", "openai").strip().casefold()
     match provider:
         case "openai":

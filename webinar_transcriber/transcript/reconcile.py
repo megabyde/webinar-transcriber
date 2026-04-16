@@ -18,7 +18,11 @@ class ReconciliationStats:
 def reconcile_decoded_windows(
     decoded_windows: list[DecodedWindow],
 ) -> tuple[TranscriptionResult, ReconciliationStats]:
-    """Merge decoded windows while keeping segment boundaries monotonic."""
+    """Merge decoded windows while keeping segment boundaries monotonic.
+
+    Returns:
+        tuple[TranscriptionResult, ReconciliationStats]: The reconciled transcript and stats.
+    """
     ordered_windows = sorted(decoded_windows, key=lambda item: item.window)
     detected_language = next(
         (window.language for window in ordered_windows if window.language), None

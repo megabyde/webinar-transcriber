@@ -95,12 +95,15 @@ line-length = 100
 preview = true
 
 [tool.ruff.lint]
+preview = true
+explicit-preview-rules = true
 select = [
     # Core families.
     "F",   # Pyflakes.
     "E",   # pycodestyle.
     "W",   # pycodestyle.
     "D",   # pydocstyle.
+    "DOC", # pydoclint.
 
     # Standalone families.
     "I",   # isort.
@@ -153,7 +156,7 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 # Tests intentionally use plain `assert`, narrow private seams, and test-only helpers.
-"webinar_transcriber/**/tests/*.py" = ["ANN", "ARG", "D", "DTZ", "PLC0415", "S101", "S108"]
+"webinar_transcriber/**/tests/*.py" = ["ANN", "ARG", "D", "DOC", "DTZ", "PLC0415", "S101", "S108"]
 # ASR tests exercise narrow failure paths on private transcriber helpers.
 "webinar_transcriber/tests/test_asr.py" = ["SLF001"]
 # UI reporter tests inspect internal state transitions that are hard to assert publicly.

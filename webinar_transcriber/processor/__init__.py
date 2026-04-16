@@ -111,7 +111,11 @@ def _build_run_diagnostics(
     failed_stage: str | None = None,
     error: str | None = None,
 ) -> Diagnostics:
-    """Build one diagnostics payload from the accumulated run state."""
+    """Build one diagnostics payload from the accumulated run state.
+
+    Returns:
+        Diagnostics: The assembled run diagnostics payload.
+    """
     return build_diagnostics(
         status=status,
         failed_stage=failed_stage,
@@ -145,7 +149,11 @@ def _write_run_diagnostics(
     error: str | None = None,
     suppress_errors: bool = False,
 ) -> Diagnostics | None:
-    """Write diagnostics when a run layout exists and return the payload."""
+    """Write diagnostics when a run layout exists and return the payload.
+
+    Returns:
+        Diagnostics | None: The written diagnostics payload, if a run layout exists.
+    """
     if ctx.layout is None:
         return None
     diagnostics = _build_run_diagnostics(
@@ -177,7 +185,11 @@ def process_input(
     llm_processor: LLMProcessor | None = None,
     reporter: StageReporter | None = None,
 ) -> ProcessArtifacts:
-    """Process a single audio or video file into report artifacts."""
+    """Process a single audio or video file into report artifacts.
+
+    Returns:
+        ProcessArtifacts: The completed processing artifacts.
+    """
     active_reporter = reporter or NullStageReporter()
     asr_threads = asr_threads or default_asr_threads()
     asr_pipeline = _AsrPipelineState(vad_enabled=vad.enabled, threads=asr_threads)

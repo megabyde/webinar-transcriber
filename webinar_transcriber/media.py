@@ -18,7 +18,14 @@ class MediaProcessingError(RuntimeError):
 def run_media_command(
     *args: str, timeout_sec: float = MEDIA_COMMAND_TIMEOUT_SEC
 ) -> subprocess.CompletedProcess[str]:
-    """Run ffmpeg or ffprobe and normalize common failure modes."""
+    """Run ffmpeg or ffprobe and normalize common failure modes.
+
+    Returns:
+        subprocess.CompletedProcess[str]: The completed subprocess result.
+
+    Raises:
+        MediaProcessingError: If the command fails or times out.
+    """
     try:
         result = subprocess.run(
             args, capture_output=True, check=True, text=True, timeout=timeout_sec
@@ -45,7 +52,14 @@ def _is_attached_picture_stream(stream: dict[str, object]) -> bool:
 
 
 def probe_media(input_path: Path) -> MediaAsset:
-    """Inspect media with ffprobe and return normalized metadata."""
+    """Inspect media with ffprobe and return normalized metadata.
+
+    Returns:
+        MediaAsset: The normalized probed media metadata.
+
+    Raises:
+        MediaProcessingError: If the input contains no usable audio or video streams.
+    """
     result = run_media_command(
         "ffprobe",
         "-v",

@@ -94,7 +94,14 @@ class RunLayout:
 def build_run_layout(
     input_path: Path, output_dir: Path | None = None, *, now: datetime | None = None
 ) -> RunLayout:
-    """Return the run layout without touching the filesystem."""
+    """Return the run layout without touching the filesystem.
+
+    Returns:
+        RunLayout: The computed run layout.
+
+    Raises:
+        OutputDirectoryExistsError: If the target run directory already exists.
+    """
     if output_dir is None:
         current_time = now or datetime.now(tz=UTC).astimezone()
         timestamp = current_time.strftime("%Y%m%d-%H%M%S-%f")
@@ -111,7 +118,11 @@ def build_run_layout(
 def create_run_layout(
     input_path: Path, output_dir: Path | None = None, *, now: datetime | None = None
 ) -> RunLayout:
-    """Create the run directory and return its layout."""
+    """Create the run directory and return its layout.
+
+    Returns:
+        RunLayout: The created run layout.
+    """
     layout = build_run_layout(input_path=input_path, output_dir=output_dir, now=now)
     layout.run_dir.mkdir(parents=True)
     return layout

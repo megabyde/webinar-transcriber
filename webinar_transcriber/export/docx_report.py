@@ -19,7 +19,11 @@ def write_docx_report(
     *,
     warning_callback: Callable[[str], None] | None = None,
 ) -> Path:
-    """Write the report to DOCX."""
+    """Write the report to DOCX.
+
+    Returns:
+        Path: The written DOCX artifact path.
+    """
     document = Document()
     document.add_heading(report.title, level=0)
 

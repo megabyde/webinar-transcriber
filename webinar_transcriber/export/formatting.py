@@ -6,7 +6,11 @@ EN_DASH = "\N{EN DASH}"
 
 
 def format_timecode(total_sec: float) -> str:
-    """Format a section timestamp as MM:SS or HH:MM:SS."""
+    """Format a section timestamp as MM:SS or HH:MM:SS.
+
+    Returns:
+        str: The formatted timecode string.
+    """
     clamped_sec = max(total_sec, 0.0)
     rounded_sec = floor(clamped_sec)
     hours, remainder = divmod(rounded_sec, 3600)
@@ -17,5 +21,9 @@ def format_timecode(total_sec: float) -> str:
 
 
 def section_timecode(start_sec: float, end_sec: float) -> str:
-    """Format a section start/end range for report headings."""
+    """Format a section start/end range for report headings.
+
+    Returns:
+        str: The formatted section range.
+    """
     return f"{format_timecode(start_sec)}{EN_DASH}{format_timecode(end_sec)}"

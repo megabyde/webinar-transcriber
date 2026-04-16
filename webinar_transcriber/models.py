@@ -54,7 +54,11 @@ class TranscriptSegment(BaseModel):
         return (self.start_sec + self.end_sec) / 2.0
 
     def __lt__(self, other: object) -> bool:
-        """Keep segment ordering deterministic without repeating tuple keys at call sites."""
+        """Keep segment ordering deterministic without repeating tuple keys at call sites.
+
+        Returns:
+            bool: Whether this segment sorts before the other object.
+        """
         if not isinstance(other, TranscriptSegment):
             return NotImplemented
         return self._sort_key() < other._sort_key()
@@ -86,7 +90,11 @@ class InferenceWindow(BaseModel):
     end_sec: float = Field(ge=0)
 
     def __lt__(self, other: object) -> bool:
-        """Keep decode ordering deterministic without repeating tuple keys at call sites."""
+        """Keep decode ordering deterministic without repeating tuple keys at call sites.
+
+        Returns:
+            bool: Whether this window sorts before the other object.
+        """
         if not isinstance(other, InferenceWindow):
             return NotImplemented
         return self._sort_key() < other._sort_key()

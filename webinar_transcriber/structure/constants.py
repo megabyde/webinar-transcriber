@@ -4,7 +4,11 @@ import re
 
 
 def _compile_case_insensitive_patterns(*patterns: str) -> tuple[re.Pattern[str], ...]:
-    """Compile a set of regex patterns with consistent case-insensitive flags."""
+    """Compile a set of regex patterns with consistent case-insensitive flags.
+
+    Returns:
+        tuple[re.Pattern[str], ...]: The compiled regex patterns.
+    """
     return tuple(re.compile(pattern, re.IGNORECASE) for pattern in patterns)
 
 

@@ -67,7 +67,11 @@ class _BaseLLMProcessor:
     def polish_report_sections_with_progress(
         self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
     ) -> LLMSectionPolishResult:
-        """Polish section transcript text with per-section progress updates."""
+        """Polish section transcript text with per-section progress updates.
+
+        Returns:
+            LLMSectionPolishResult: The polished section text, TL;DRs, usage, and warnings.
+        """
         usage_totals: dict[str, int] = {}
         warnings: list[str] = []
         polished_section_texts = self._polish_section_texts(
@@ -86,7 +90,11 @@ class _BaseLLMProcessor:
     def polish_report_metadata(
         self, report: ReportDocument, *, section_transcripts: dict[str, str]
     ) -> LLMReportMetadataResult:
-        """Polish report summary, action items, and section titles."""
+        """Polish report summary, action items, and section titles.
+
+        Returns:
+            LLMReportMetadataResult: The polished report-level metadata and usage details.
+        """
         payload = build_report_polish_payload(
             report,
             total_char_budget=self._report_char_budget,

@@ -25,7 +25,14 @@ if TYPE_CHECKING:
 
 
 def required_provider_env(*, api_key_env: str, model_env: str) -> tuple[str, str]:
-    """Return the required API key and model name for one provider."""
+    """Return the required API key and model name for one provider.
+
+    Returns:
+        tuple[str, str]: The configured API key and model name.
+
+    Raises:
+        LLMConfigurationError: If either required environment variable is missing.
+    """
     api_key = os.environ.get(api_key_env)
     model_name = os.environ.get(model_env)
     missing_vars = [
@@ -45,7 +52,11 @@ def build_report_polish_payload(
     total_char_budget: int,
     section_transcripts: Mapping[str, str] | None = None,
 ) -> dict[str, object]:
-    """Build the report-polish payload with a per-section excerpt budget."""
+    """Build the report-polish payload with a per-section excerpt budget.
+
+    Returns:
+        dict[str, object]: The structured payload sent to the metadata-polish stage.
+    """
     section_count = max(len(report.sections), 1)
     per_section_budget = min(
         REPORT_SECTION_EXCERPT_LIMIT, max(200, total_char_budget // section_count)
@@ -74,7 +85,11 @@ def build_report_polish_payload(
 
 
 def normalize_report_lines(lines: Sequence[str], *, limit: int) -> list[str]:
-    """Clean, dedupe, and cap a list of LLM-generated report lines."""
+    """Clean, dedupe, and cap a list of LLM-generated report lines.
+
+    Returns:
+        list[str]: The cleaned and deduplicated report lines.
+    """
     normalized: list[str] = []
     seen: set[str] = set()
 
@@ -94,7 +109,11 @@ def normalize_report_lines(lines: Sequence[str], *, limit: int) -> list[str]:
 
 
 def truncate_text(text: str, max_chars: int) -> str:
-    """Trim text to one character budget while preserving whole-word readability."""
+    """Trim text to one character budget while preserving whole-word readability.
+
+    Returns:
+        str: The truncated text.
+    """
     cleaned = text.strip()
     if len(cleaned) <= max_chars:
         return cleaned
@@ -104,7 +123,14 @@ def truncate_text(text: str, max_chars: int) -> str:
 def validated_section_titles(
     report: ReportDocument, section_titles: Sequence[ReportSectionUpdate]
 ) -> dict[str, str]:
-    """Validate returned section-title updates against the existing report."""
+    """Validate returned section-title updates against the existing report.
+
+    Returns:
+        dict[str, str]: Cleaned replacement titles keyed by section ID.
+
+    Raises:
+        LLMProcessingError: If the response references invalid, duplicate, or empty titles.
+    """
     valid_ids = {section.id for section in report.sections}
     polished_titles: dict[str, str] = {}
 
@@ -122,7 +148,11 @@ def validated_section_titles(
 
 
 def normalize_polished_text(*, original_text: str, polished_text: str) -> str:
-    """Normalize multi-paragraph LLM text while preserving trailing-finality semantics."""
+    """Normalize multi-paragraph LLM text while preserving trailing-finality semantics.
+
+    Returns:
+        str: The normalized polished text.
+    """
     cleaned = polished_text.strip()
     if not cleaned:
         return ""
@@ -139,7 +169,14 @@ def normalize_polished_text(*, original_text: str, polished_text: str) -> str:
 def normalize_polished_section_text(
     *, original_text: str, polished_text: str, section_id: str
 ) -> str:
-    """Normalize polished section text and reject suspiciously truncated output."""
+    """Normalize polished section text and reject suspiciously truncated output.
+
+    Returns:
+        str: The accepted polished section text, or the original text when empty.
+
+    Raises:
+        LLMProcessingError: If the polished section text looks implausibly truncated.
+    """
     cleaned = normalize_polished_text(original_text=original_text, polished_text=polished_text)
     if not cleaned:
         return original_text
@@ -151,7 +188,11 @@ def normalize_polished_section_text(
 
 
 def normalize_polished_section_tldr(tldr: str) -> str:
-    """Normalize a polished TL;DR into stable paragraph spacing."""
+    """Normalize a polished TL;DR into stable paragraph spacing.
+
+    Returns:
+        str: The normalized TL;DR text.
+    """
     cleaned = tldr.strip()
     if not cleaned:
         return ""
@@ -160,7 +201,11 @@ def normalize_polished_section_tldr(tldr: str) -> str:
 
 
 def _normalize_paragraph_blocks(text: str) -> str:
-    """Normalize blank-line paragraph blocks into stable spacing."""
+    """Normalize blank-line paragraph blocks into stable spacing.
+
+    Returns:
+        str: The normalized paragraph text.
+    """
     paragraphs = [
         re.sub(r"\s+", " ", p) for block in re.split(r"\n\s*\n+", text) if (p := block.strip())
     ]
@@ -168,7 +213,11 @@ def _normalize_paragraph_blocks(text: str) -> str:
 
 
 def extract_usage(response: object) -> dict[str, int]:
-    """Extract token usage from provider responses with a stable key subset."""
+    """Extract token usage from provider responses with a stable key subset.
+
+    Returns:
+        dict[str, int]: The extracted token counts.
+    """
     usage = getattr(response, "usage", None)
     if usage is None:
         return {}
@@ -196,7 +245,11 @@ def extract_usage(response: object) -> dict[str, int]:
 def anthropic_structured_prompt(
     *, system_prompt: str, user_payload: Mapping[str, object], response_model: type[BaseModel]
 ) -> str:
-    """Build the Anthropic prompt that embeds the target JSON schema."""
+    """Build the Anthropic prompt that embeds the target JSON schema.
+
+    Returns:
+        str: The complete Anthropic prompt text.
+    """
     schema = json.dumps(response_model.model_json_schema(), ensure_ascii=False)
     payload = json.dumps(user_payload, ensure_ascii=False)
     return (
@@ -209,7 +262,14 @@ def anthropic_structured_prompt(
 
 
 def anthropic_response_text(response: object) -> str:
-    """Extract concatenated text content from an Anthropic response object."""
+    """Extract concatenated text content from an Anthropic response object.
+
+    Returns:
+        str: The concatenated Anthropic text response.
+
+    Raises:
+        LLMProcessingError: If the response does not contain text blocks.
+    """
     content = getattr(response, "content", None)
     if not isinstance(content, list):
         raise LLMProcessingError("Anthropic response did not contain text content.")
@@ -225,7 +285,11 @@ def anthropic_response_text(response: object) -> str:
 
 
 def extract_json_text(text: str) -> str:
-    """Extract the first JSON object from plain or fenced text."""
+    """Extract the first JSON object from plain or fenced text.
+
+    Returns:
+        str: The extracted JSON text candidate.
+    """
     cleaned = text.strip()
     fenced = re.match(r"^```(?:json)?\s*(.*?)\s*```$", cleaned, flags=re.DOTALL)
     if fenced is not None:

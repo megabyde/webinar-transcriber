@@ -32,7 +32,11 @@ def build_report(
     warnings: list[str] | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> ReportDocument:
-    """Build a report document from media metadata and transcript segments."""
+    """Build a report document from media metadata and transcript segments.
+
+    Returns:
+        ReportDocument: The structured report document.
+    """
     interlude_candidate_ranges = _detect_interlude_ranges(transcription.segments)
     interlude_ranges = _renderable_interlude_ranges(interlude_candidate_ranges)
     sections = (

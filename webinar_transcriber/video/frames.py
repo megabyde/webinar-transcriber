@@ -20,7 +20,11 @@ def extract_representative_frames(
     progress_callback: Callable[[], None] | None = None,
     warning_callback: Callable[[str], None] | None = None,
 ) -> list[SlideFrame]:
-    """Extract one representative frame near the midpoint of each scene."""
+    """Extract one representative frame near the midpoint of each scene.
+
+    Returns:
+        list[SlideFrame]: The successfully extracted slide frames.
+    """
     frames_dir.mkdir(parents=True, exist_ok=True)
     frames: list[SlideFrame] = []
 

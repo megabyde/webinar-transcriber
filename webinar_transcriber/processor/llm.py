@@ -46,7 +46,11 @@ def resolve_llm_processor(
     warnings: list[str],
     llm_runtime: LLMRuntimeState,
 ) -> tuple[LLMProcessor | None, LLMRuntimeState]:
-    """Resolve the optional LLM processor and record configuration failures as warnings."""
+    """Resolve the optional LLM processor and record configuration failures as warnings.
+
+    Returns:
+        tuple[LLMProcessor | None, LLMRuntimeState]: The resolved processor and updated runtime.
+    """
     if not enable_llm:
         return None, llm_runtime
 
@@ -77,7 +81,11 @@ def maybe_polish_report(
     stage_timings: dict[str, float],
     llm_runtime: LLMRuntimeState,
 ) -> tuple[ReportDocument, LLMRuntimeState]:
-    """Optionally run the LLM report-polish flow and record warnings/fallbacks."""
+    """Optionally run the LLM report-polish flow and record warnings/fallbacks.
+
+    Returns:
+        tuple[ReportDocument, LLMRuntimeState]: The final report and updated LLM runtime state.
+    """
     if llm_processor is None:
         return report, llm_runtime
 

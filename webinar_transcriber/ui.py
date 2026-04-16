@@ -194,7 +194,11 @@ class RateColumn(ProgressColumn):
     """Render an optional rate derived from task completion over time."""
 
     def render(self, task: Task) -> Text:
-        """Render the current rate text."""
+        """Render the current rate text.
+
+        Returns:
+            Text: The rendered rate cell.
+        """
         rate_text = str(task.fields.get("rate_text", ""))
         return Text(rate_text, style="progress.data.speed")
 
@@ -203,7 +207,11 @@ class CountColumn(ProgressColumn):
     """Render a done/total counter with optional unit scaling."""
 
     def render(self, task: Task) -> Text:
-        """Render the current count text."""
+        """Render the current count text.
+
+        Returns:
+            Text: The rendered count cell.
+        """
         count_text = _format_count(
             completed=task.completed,
             total=task.total,

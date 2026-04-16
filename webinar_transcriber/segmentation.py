@@ -88,7 +88,11 @@ def repair_speech_regions(
     min_region_sec: float = DEFAULT_MIN_REPAIRED_REGION_SEC,
     max_gap_sec: float = DEFAULT_REPAIR_MAX_GAP_SEC,
 ) -> list[SpeechRegion]:
-    """Merge short speech regions across nearby pauses until they become usable ASR regions."""
+    """Merge short speech regions across nearby pauses until they become usable ASR regions.
+
+    Returns:
+        list[SpeechRegion]: The repaired speech regions.
+    """
     repaired = _normalize_regions(regions)
     min_duration = max(0.0, min_region_sec)
     gap_limit = max(0.0, max_gap_sec)
