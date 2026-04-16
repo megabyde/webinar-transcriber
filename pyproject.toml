@@ -98,70 +98,141 @@ preview = true
 preview = true
 explicit-preview-rules = true
 select = [
-    # Core families.
-    "F",   # Pyflakes.
-    "E",   # pycodestyle.
-    "W",   # pycodestyle.
-    "D",   # pydocstyle.
-    "DOC", # pydoclint.
+    # Core families
+    # Pyflakes
+    "F",
+    # pycodestyle
+    "E",
+    "W",
+    # pydocstyle
+    "D",
+    # pydoclint
+    "DOC",
 
-    # Standalone families.
-    "I",   # isort.
-    "INP", # flake8-no-pep420.
-    "N",   # pep8-naming.
-    "UP",  # pyupgrade.
+    # Standalone families
+    # isort
+    "I",
+    # flake8-no-pep420
+    "INP",
+    # pep8-naming
+    "N",
+    # pyupgrade
+    "UP",
 
     # flake8 families:
-    "A",     # flake8-builtins.
-    "ANN",   # flake8-annotations.
-    "YTT",   # flake8-2020.
-    "ASYNC", # flake8-async.
-    "B",     # flake8-bugbear.
-    "BLE",   # flake8-blind-except.
-    "C4",    # flake8-comprehensions.
-    "EXE",   # flake8-executable.
-    "FA",    # flake8-future-annotations.
-    "G",     # flake8-logging-format.
-    "ISC",   # flake8-implicit-str-concat.
-    "PIE",   # flake8-pie.
-    "PT",    # flake8-pytest-style.
-    "PYI",   # flake8-pyi.
-    "RSE",   # flake8-raise.
-    "S",     # flake8-bandit.
-    "RET",   # flake8-return.
-    "SIM",   # flake8-simplify.
-    "SLF",   # flake8-self.
-    "TCH",   # flake8-type-checking.
-    "ARG",   # flake8-unused-arguments.
-    "DTZ",   # flake8-datetimez.
-    "PTH",   # flake8-use-pathlib.
-    "TID",   # flake8-tidy-imports.
+    # flake8-builtins
+    "A",
+    # flake8-annotations
+    "ANN",
+    # flake8-2020
+    "YTT",
+    # flake8-async
+    "ASYNC",
+    # flake8-bugbear
+    "B",
+    # flake8-blind-except
+    "BLE",
+    # flake8-comprehensions
+    "C4",
+    # flake8-executable
+    "EXE",
+    # flake8-future-annotations
+    "FA",
+    # flake8-logging-format
+    "G",
+    # flake8-implicit-str-concat
+    "ISC",
+    # flake8-pie
+    "PIE",
+    # flake8-pytest-style
+    "PT",
+    # flake8-pyi
+    "PYI",
+    # flake8-raise
+    "RSE",
+    # flake8-bandit
+    "S",
+    # flake8-return
+    "RET",
+    # flake8-simplify
+    "SIM",
+    # flake8-self
+    "SLF",
+    # flake8-type-checking
+    "TCH",
+    # flake8-unused-arguments
+    "ARG",
+    # flake8-datetimez
+    "DTZ",
+    # flake8-use-pathlib
+    "PTH",
+    # flake8-tidy-imports
+    "TID",
 
-    # Other families.
-    "C90",  # mccabe.
-    "ERA",  # eradicate.
-    "FLY",  # flynt.
-    "PLC",  # Pylint.
-    "PLE",  # Pylint.
-    "PLW",  # Pylint.
-    "PERF", # Perflint.
-    "RUF",  # Ruff-specific rules.
+    # Other families
+    # mccabe
+    "C90",
+    # eradicate
+    "ERA",
+    # flynt
+    "FLY",
+    # refurb
+    "FURB",
+    # Pylint
+    "PLC",
+    "PLE",
+    "PLR",
+    "PLW",
+    # Perflint
+    "PERF",
+    # Ruff-specific rules
+    "RUF",
 ]
 # `subprocess` and partial executable-path rules are too noisy for this CLI-heavy
 # codebase; command safety is reviewed at each call site instead.
-ignore = ["S603", "S607"]
+ignore = [
+    # Public CLI/protocol/orchestration APIs intentionally take structured inputs
+    "PLR0913",
+    # The processor waterfall is intentionally one orchestrator function
+    "PLR0915",
+    # This codebase uses many domain-specific thresholds and fixture literals
+    "PLR2004",
+    # `subprocess` call sites are reviewed directly in this CLI-heavy codebase
+    "S603",
+    # Partial executable-path checks are too noisy for these media-tool invocations
+    "S607",
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-# Tests intentionally use plain `assert`, narrow private seams, and test-only helpers.
-"webinar_transcriber/**/tests/*.py" = ["ANN", "ARG", "D", "DOC", "DTZ", "PLC0415", "S101", "S108"]
-# ASR tests exercise narrow failure paths on private transcriber helpers.
+# Tests intentionally use plain `assert`, narrow private seams, and test-only helpers
+"webinar_transcriber/**/tests/*.py" = [
+    # Test fixtures and monkeypatch seams do not benefit from exhaustive annotations
+    "ANN",
+    # Tests intentionally accept unused fixture and helper arguments
+    "ARG",
+    # Test docstrings are kept lightweight
+    "D",
+    # pydoclint is kept focused on production code
+    "DOC",
+    # Naive datetimes in tests are usually deterministic fixture data
+    "DTZ",
+    # Local imports are often clearer in monkeypatched or dependency-seam tests
+    "PLC0415",
+    # Test predicates sometimes read clearest as explicit `a or b`
+    "PLR1714",
+    # Plain `assert` is the standard pytest style
+    "S101",
+    # Temporary test paths under pytest-managed directories are expected
+    "S108",
+]
+# ASR tests exercise narrow failure paths on private transcriber helpers
 "webinar_transcriber/tests/test_asr.py" = ["SLF001"]
-# UI reporter tests inspect internal state transitions that are hard to assert publicly.
+# UI reporter tests inspect internal state transitions that are hard to assert publicly
 "webinar_transcriber/tests/test_ui.py" = ["SLF001"]
-# whisper.cpp tests validate low-level wrapper behavior through private bridge methods.
+# whisper.cpp tests validate low-level wrapper behavior through private bridge methods
 "webinar_transcriber/tests/test_whispercpp.py" = ["SLF001"]
 
 [tool.pymarkdown.plugins.md013]
