@@ -259,13 +259,25 @@ class TestOpenAiLlmProcessor:
         )
 
         processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Old title",
+                    start_sec=0.0,
+                    end_sec=10.0,
+                    transcript_text="Agenda review and project status update.",
+                )
+            ],
+        )
 
-        with pytest.raises(LLMProcessingError, match="Section polish response did not match"):
-            processor._parse_structured_response(
-                system_prompt="system",
-                user_payload={"id": "section-1"},
-                response_model=SectionTextResponse,
-                error_prefix="Section polishing failed",
+        with pytest.raises(LLMProcessingError, match="Report polish response did not match"):
+            processor.polish_report_metadata(
+                report,
+                section_transcripts={"section-1": "Agenda review and project status update."},
             )
 
     def test_skips_interlude_section_text_polish(self, monkeypatch) -> None:
@@ -428,13 +440,25 @@ class TestAnthropicLlmProcessor:
         )
 
         processor = AnthropicLLMProcessor(api_key="test-key", model_name="claude-test")
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Old title",
+                    start_sec=0.0,
+                    end_sec=10.0,
+                    transcript_text="Agenda review and project status update.",
+                )
+            ],
+        )
 
-        with pytest.raises(LLMProcessingError, match="Section polish response did not match"):
-            processor._parse_structured_response(
-                system_prompt="system",
-                user_payload={"id": "section-1"},
-                response_model=SectionTextResponse,
-                error_prefix="Section polishing failed",
+        with pytest.raises(LLMProcessingError, match="Report polish response did not match"):
+            processor.polish_report_metadata(
+                report,
+                section_transcripts={"section-1": "Agenda review and project status update."},
             )
 
 

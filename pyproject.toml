@@ -123,6 +123,7 @@ select = [
     "S",     # flake8-bandit.
     "RET",   # flake8-return.
     "SIM",   # flake8-simplify.
+    "SLF",   # flake8-self.
     "TCH",   # flake8-type-checking.
     "ARG",   # flake8-unused-arguments.
     "DTZ",   # flake8-datetimez.
@@ -138,13 +139,24 @@ select = [
     "PERF", # Perflint.
     "RUF",  # Ruff-specific rules.
 ]
+# `subprocess` and partial executable-path rules are too noisy for this CLI-heavy
+# codebase; command safety is reviewed at each call site instead.
 ignore = ["S603", "S607"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
+# Tests intentionally use plain `assert`, narrow private seams, and test-only helpers.
 "webinar_transcriber/**/tests/*.py" = ["ARG", "D", "DTZ", "PLC0415", "S101", "S108"]
+# ASR tests exercise narrow failure paths on private transcriber helpers.
+"webinar_transcriber/tests/test_asr.py" = ["SLF001"]
+# UI reporter tests inspect internal state transitions that are hard to assert publicly.
+"webinar_transcriber/tests/test_ui.py" = ["SLF001"]
+# whisper.cpp tests validate low-level wrapper behavior through private bridge methods.
+"webinar_transcriber/tests/test_whispercpp.py" = ["SLF001"]
+# The wrapper layer intentionally consumes private binding helpers from the raw ctypes layer.
+"webinar_transcriber/whispercpp/library.py" = ["SLF001"]
 
 [tool.pymarkdown.plugins.md013]
 line_length = 100

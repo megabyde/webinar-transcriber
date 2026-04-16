@@ -814,11 +814,16 @@ class TestProcessorHelpers:
         assert detail == "1 window | RTF 0.20"
 
     def test_asr_runtime_detail_shortens_hf_cache_model_path(self) -> None:
-        transcriber = TestProcessInput.FakeTranscriber()
-        transcriber._model_path = Path(
-            "/tmp/huggingface/hub/"
-            "models--ggerganov--whisper.cpp/snapshots/123456/"
-            "ggml-large-v3-turbo.bin"
+        transcriber = cast(
+            "WhisperCppTranscriber",
+            SimpleNamespace(
+                model_name=(
+                    "/tmp/huggingface/hub/"
+                    "models--ggerganov--whisper.cpp/snapshots/123456/"
+                    "ggml-large-v3-turbo.bin"
+                ),
+                device_name="cpu",
+            ),
         )
 
         assert asr_runtime_detail(transcriber) == (
