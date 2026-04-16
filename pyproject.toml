@@ -100,9 +100,7 @@ select = [
     "F",   # Pyflakes.
     "E",   # pycodestyle.
     "W",   # pycodestyle.
-    "D2",  # pydocstyle.
-    "D3",  # pydocstyle.
-    "D4",  # pydocstyle.
+    "D",   # pydocstyle.
 
     # Standalone families.
     "I",   # isort.

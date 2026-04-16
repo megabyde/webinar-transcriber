@@ -31,6 +31,7 @@ class AnthropicLLMProcessor(_BaseLLMProcessor):
         section_max_workers: int = SECTION_POLISH_MAX_WORKERS,
         report_char_budget: int = REPORT_POLISH_TOTAL_CHAR_BUDGET,
     ) -> None:
+        """Initialize the Anthropic-backed report polisher."""
         super().__init__(
             provider_name="anthropic",
             model_name=model_name,

@@ -62,6 +62,7 @@ class WhisperCppSession:
         state: ctypes.c_void_p,
         runtime_details: WhisperCppRuntimeDetails,
     ) -> None:
+        """Initialize a session bound to one prepared whisper.cpp model."""
         self._library = library
         self._context = context
         self._state = state
@@ -70,9 +71,11 @@ class WhisperCppSession:
 
     @property
     def runtime_details(self) -> WhisperCppRuntimeDetails:
+        """Return runtime metadata captured when the session was created."""
         return self._runtime_details
 
     def __enter__(self) -> Self:
+        """Return the session as a context manager."""
         return self
 
     def decode_window(
@@ -84,6 +87,7 @@ class WhisperCppSession:
         prompt: str | None = None,
         language_hint: str | None = None,
     ) -> DecodedWindow:
+        """Decode one inference window through whisper.cpp."""
         return self._library._decode_window(
             self._context,
             self._state,
@@ -95,6 +99,7 @@ class WhisperCppSession:
         )
 
     def close(self) -> None:
+        """Release the native whisper.cpp state and context."""
         if self._closed:
             return
         self._library._lib.whisper_free_state(self._state)
@@ -107,9 +112,11 @@ class WhisperCppSession:
         exc: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        """Close the session when leaving a context manager block."""
         self.close()
 
     def __del__(self) -> None:  # pragma: no cover - interpreter shutdown cleanup
+        """Best-effort cleanup during interpreter shutdown."""
         with suppress(Exception):
             self.close()
 
@@ -118,6 +125,7 @@ class WhisperCppLibrary:
     """A small object wrapper over the whisper.cpp shared library."""
 
     def __init__(self, library_path: Path | None = None, *, log_path: Path | None = None) -> None:
+        """Load the whisper.cpp shared library and configure logging."""
         resolved_path = resolve_library_path(library_path)
         self._library_path = resolved_path
         self._log_path = log_path
@@ -129,17 +137,21 @@ class WhisperCppLibrary:
 
     @property
     def library_path(self) -> str:
+        """Return the resolved whisper.cpp shared library path."""
         return str(self._library_path)
 
     def system_info(self) -> str:
+        """Return the whisper.cpp runtime system-info string."""
         return _decode_c_string(self._lib.whisper_print_system_info())
 
     def runtime_details(self) -> WhisperCppRuntimeDetails:
+        """Return the library path and current runtime system info."""
         return WhisperCppRuntimeDetails(
             library_path=self.library_path, system_info=self.system_info()
         )
 
     def create_session(self, model_path: Path) -> WhisperCppSession:
+        """Create a reusable decoding session for a specific model path."""
         context_params = self._lib.whisper_context_default_params()
         runtime_details = self.runtime_details()
         _configure_context_params(context_params, system_info=runtime_details.system_info)

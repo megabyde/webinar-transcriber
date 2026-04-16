@@ -41,6 +41,7 @@ def _read_sysctl_int(name: str) -> int | None:
 
 
 def default_asr_threads() -> int:
+    """Return the preferred default whisper.cpp thread count for this host."""
     return (
         _read_sysctl_int("hw.perflevel0.physicalcpu")
         or _read_sysctl_int("hw.physicalcpu")

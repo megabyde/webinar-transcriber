@@ -71,6 +71,7 @@ class WhisperCppTranscriber:
         library_path: Path | None = None,
         log_path: Path | None = None,
     ) -> None:
+        """Initialize the whisper.cpp transcriber wrapper."""
         self._configured_model_path = Path(model_name) if model_name else None
         self._uses_default_model_path = model_name is None
         self._model_path: Path | None = self._configured_model_path
@@ -86,39 +87,47 @@ class WhisperCppTranscriber:
 
     @property
     def model_name(self) -> str:
+        """Return the resolved model path or default Hugging Face model reference."""
         if self._model_path is not None:
             return str(self._model_path)
         return f"{DEFAULT_WHISPER_CPP_MODEL_REPO}/{DEFAULT_WHISPER_CPP_MODEL_FILENAME}"
 
     @property
     def device_name(self) -> str:
+        """Return the detected runtime backend name."""
         if self._runtime_details is None:
             return "auto"
         return _device_name_from_system_info(self._runtime_details.system_info)
 
     @property
     def threads(self) -> int:
+        """Return the configured whisper.cpp thread count."""
         return self._threads
 
     @property
     def system_info(self) -> str | None:
+        """Return the whisper.cpp runtime system info string when available."""
         if self._runtime_details is None:
             return None
         return self._runtime_details.system_info
 
     @property
     def library_path(self) -> str | None:
+        """Return the loaded whisper.cpp shared library path when available."""
         if self._runtime_details is None:
             return None
         return self._runtime_details.library_path
 
     def set_log_path(self, log_path: Path) -> None:
+        """Set the whisper.cpp native log sink path for future sessions."""
         self._log_path = log_path
 
     def __enter__(self) -> Self:
+        """Return the transcriber as a context manager."""
         return self
 
     def prepare_model(self) -> None:
+        """Resolve the model and initialize a fresh whisper.cpp session."""
         self._model_path = self._resolve_model_path()
         self.close()
         if self._model_path is None:
@@ -139,6 +148,7 @@ class WhisperCppTranscriber:
         *,
         progress_callback: Callable[[float, int], None] | None = None,
     ) -> list[DecodedWindow]:
+        """Decode ordered inference windows into transcript segments."""
         session = self._ensure_session()
         ordered_windows = sorted(windows)
         language_hint: str | None = None
@@ -168,6 +178,7 @@ class WhisperCppTranscriber:
         return decoded_windows
 
     def close(self) -> None:
+        """Release any active whisper.cpp session resources."""
         if self._session is not None:
             self._session.close()
             self._session = None
@@ -179,6 +190,7 @@ class WhisperCppTranscriber:
         exc: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
+        """Close the transcriber when leaving a context manager block."""
         self.close()
 
     def _ensure_session(self) -> WhisperCppSession:
@@ -203,6 +215,7 @@ class WhisperCppTranscriber:
             raise ASRProcessingError(f"{_default_model_download_error_message()} {ex}") from ex
 
     def __del__(self) -> None:  # pragma: no cover - interpreter shutdown cleanup
+        """Best-effort cleanup during interpreter shutdown."""
         with suppress(Exception):
             self.close()
 

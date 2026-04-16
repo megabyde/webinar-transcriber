@@ -36,6 +36,7 @@ class RichStageReporter(NullStageReporter):
     """Terminal reporter using Rich status spinners and summaries."""
 
     def __init__(self, console: Console | None = None) -> None:
+        """Initialize the Rich-backed terminal reporter."""
         self._console = console or Console()
         self._active_status: Status | None = None
         self._active_progress: Progress | None = None
@@ -45,9 +46,11 @@ class RichStageReporter(NullStageReporter):
         self._stage_count = 0
 
     def begin_run(self, input_path: Path) -> None:
+        """Render the start of a processing run."""
         self._console.print(f"[bold cyan]Starting[/] {input_path.name}")
 
     def stage_started(self, stage_key: str, label: str) -> None:
+        """Start an indeterminate stage spinner."""
         self._stop_active_display()
         self._stage_count += 1
         self._active_event = self._new_stage_event(stage_key, label)
@@ -68,6 +71,7 @@ class RichStageReporter(NullStageReporter):
         rate_multiplier: float = 1.0,
         detail: str | None = None,
     ) -> None:
+        """Start a determinate progress display for a stage."""
         self._stop_active_display()
         self._stage_count += 1
         self._active_event = self._new_stage_event(stage_key, label)
@@ -100,6 +104,7 @@ class RichStageReporter(NullStageReporter):
     def progress_advanced(
         self, stage_key: str, *, advance: float = 1.0, detail: str | None = None
     ) -> None:
+        """Advance the active determinate progress display."""
         if self._active_event is None or self._active_event.stage_key != stage_key:
             return
         if self._active_progress is None or self._active_task_id is None:
@@ -121,6 +126,7 @@ class RichStageReporter(NullStageReporter):
         )
 
     def stage_finished(self, stage_key: str, label: str, *, detail: str | None = None) -> None:
+        """Stop the active display and render a finished-stage line."""
         self._stop_active_display()
         elapsed = 0.0
         if self._active_event is not None and self._active_event.stage_key == stage_key:
@@ -132,11 +138,13 @@ class RichStageReporter(NullStageReporter):
         self._active_event = None
 
     def warn(self, message: str) -> None:
+        """Render a warning message."""
         self._stop_active_display()
         self._warnings.append(message)
         self._console.print(f"[yellow]![/] {message}")
 
     def interrupted(self) -> None:
+        """Render an interrupted-run message."""
         stage_suffix = ""
         if self._active_event is not None:
             stage_suffix = f" during {self._active_event.label.lower()}"
@@ -144,9 +152,11 @@ class RichStageReporter(NullStageReporter):
         self._console.print(f"[red]\u2717[/] Interrupted{stage_suffix}.")
 
     def reset_active_display(self) -> None:
+        """Clear any active spinner or progress bar."""
         self._clear_active_display()
 
     def complete_run(self, artifacts: ProcessArtifacts) -> None:
+        """Render the completion summary panel."""
         table = Table.grid(padding=(0, 2))
         table.add_column(style="dim")
         table.add_column()
@@ -182,6 +192,7 @@ class RateColumn(ProgressColumn):
     """Render an optional rate derived from task completion over time."""
 
     def render(self, task: Task) -> Text:
+        """Render the current rate text."""
         rate_text = str(task.fields.get("rate_text", ""))
         return Text(rate_text, style="progress.data.speed")
 
@@ -190,6 +201,7 @@ class CountColumn(ProgressColumn):
     """Render a done/total counter with optional unit scaling."""
 
     def render(self, task: Task) -> Text:
+        """Render the current count text."""
         count_text = _format_count(
             completed=task.completed,
             total=task.total,

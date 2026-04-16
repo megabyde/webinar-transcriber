@@ -26,6 +26,7 @@ class OpenAILLMProcessor(_BaseLLMProcessor):
         section_max_workers: int = SECTION_POLISH_MAX_WORKERS,
         report_char_budget: int = REPORT_POLISH_TOTAL_CHAR_BUDGET,
     ) -> None:
+        """Initialize the OpenAI-backed report polisher."""
         super().__init__(
             provider_name="openai",
             model_name=model_name,

@@ -68,10 +68,10 @@ class NullStageReporter:
     """No-op reporter used by tests and non-interactive code paths."""
 
     def begin_run(self, input_path: Path) -> None:
-        pass
+        """Ignore the start of a processing run."""
 
     def stage_started(self, stage_key: str, label: str) -> None:
-        pass
+        """Ignore a stage-start event."""
 
     def progress_started(
         self,
@@ -85,24 +85,24 @@ class NullStageReporter:
         rate_multiplier: float = 1.0,
         detail: str | None = None,
     ) -> None:
-        pass
+        """Ignore a determinate stage-start event."""
 
     def progress_advanced(
         self, stage_key: str, *, advance: float = 1.0, detail: str | None = None
     ) -> None:
-        pass
+        """Ignore a determinate stage-progress update."""
 
     def stage_finished(self, stage_key: str, label: str, *, detail: str | None = None) -> None:
-        pass
+        """Ignore a stage-finished event."""
 
     def warn(self, message: str) -> None:
-        pass
+        """Ignore a warning message."""
 
     def interrupted(self) -> None:
-        pass
+        """Ignore an interrupted-run event."""
 
     def reset_active_display(self) -> None:
-        pass
+        """Ignore a request to clear active terminal output."""
 
     def complete_run(self, artifacts: ProcessArtifacts) -> None:
-        pass
+        """Ignore run completion."""

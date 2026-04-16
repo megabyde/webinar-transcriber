@@ -18,6 +18,7 @@ class MediaProcessingError(RuntimeError):
 def run_media_command(
     *args: str, timeout_sec: float = MEDIA_COMMAND_TIMEOUT_SEC
 ) -> subprocess.CompletedProcess[str]:
+    """Run ffmpeg or ffprobe and normalize common failure modes."""
     try:
         result = subprocess.run(
             args, capture_output=True, check=True, text=True, timeout=timeout_sec
