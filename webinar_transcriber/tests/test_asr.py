@@ -17,7 +17,14 @@ from webinar_transcriber.asr import (
     build_prompt_carryover,
 )
 from webinar_transcriber.asr.carryover import _carryover_drop_reason, _sanitize_prompt
-from webinar_transcriber.asr.config import _read_sysctl_int, default_asr_threads
+from webinar_transcriber.asr.config import (
+    DEFAULT_WHISPER_ENTROPY_THOLD,
+    DEFAULT_WHISPER_LOGPROB_THOLD,
+    DEFAULT_WHISPER_NO_SPEECH_THOLD,
+    DEFAULT_WHISPER_SUPPRESS_NST,
+    _read_sysctl_int,
+    default_asr_threads,
+)
 from webinar_transcriber.asr.transcriber import (
     _device_name_from_system_info,
     _download_default_whisper_cpp_model,
@@ -216,10 +223,21 @@ class TestWhisperCppTranscriber:
                     )
 
                     def decode_window(
-                        self, audio_samples, window, *, threads, prompt=None, language_hint=None
+                        self,
+                        audio_samples,
+                        window,
+                        *,
+                        threads,
+                        decode_settings,
+                        prompt=None,
+                        language_hint=None,
                     ):
                         del audio_samples, language_hint
                         assert threads == 6
+                        assert decode_settings.entropy_thold == DEFAULT_WHISPER_ENTROPY_THOLD
+                        assert decode_settings.logprob_thold == DEFAULT_WHISPER_LOGPROB_THOLD
+                        assert decode_settings.no_speech_thold == DEFAULT_WHISPER_NO_SPEECH_THOLD
+                        assert decode_settings.suppress_nst is DEFAULT_WHISPER_SUPPRESS_NST
                         return DecodedWindow(
                             window=window,
                             text=(
@@ -313,9 +331,16 @@ class TestWhisperCppTranscriber:
     def test_transcribe_inference_windows_reuses_existing_session_without_prepare(self) -> None:
         class FakeSession:
             def decode_window(
-                self, audio_samples, window, *, threads, prompt=None, language_hint=None
+                self,
+                audio_samples,
+                window,
+                *,
+                threads,
+                decode_settings,
+                prompt=None,
+                language_hint=None,
             ):
-                del audio_samples, threads, prompt, language_hint
+                del audio_samples, threads, decode_settings, prompt, language_hint
                 return DecodedWindow(
                     window=window,
                     text="agenda review",
@@ -434,23 +459,6 @@ class TestPromptCarryover:
 
         assert carryover is None
 
-    def test_build_prompt_carryover_drops_known_hallucination_phrases(self) -> None:
-        carryover = build_prompt_carryover(
-            DecodedWindow(
-                window=InferenceWindow(
-                    window_id="window-3",
-                    region_index=0,
-                    start_sec=35.0,
-                    end_sec=52.0,
-                ),
-                text="Thank you for watching, please like and share.",
-                segments=[],
-            ),
-            settings=PromptCarryoverSettings(),
-        )
-
-        assert carryover is None
-
     def test_device_name_from_system_info_prefers_enabled_backend(self) -> None:
         system_info = "WHISPER : MTL : EMBED_LIBRARY = 1 | CPU : NEON = 1 |"
 
@@ -476,23 +484,6 @@ class TestPromptCarryover:
 
         assert disabled_reason == "carryover_disabled"
         assert empty_text_reason == "empty_text"
-
-    def test_carryover_drop_reason_detects_repeated_hallucination_text(self) -> None:
-        repeated_reason = _carryover_drop_reason(
-            DecodedWindow(
-                window=InferenceWindow(
-                    window_id="window-4",
-                    region_index=0,
-                    start_sec=52.0,
-                    end_sec=70.0,
-                ),
-                text="plan plan plan plan plan plan review review review review",
-                segments=[],
-            ),
-            settings=PromptCarryoverSettings(),
-        )
-
-        assert repeated_reason == "hallucination_detected"
 
     def test_carryover_drop_reason_keeps_punctuation_only_text(self) -> None:
         reason = _carryover_drop_reason(

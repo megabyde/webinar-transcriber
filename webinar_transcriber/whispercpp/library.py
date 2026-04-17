@@ -30,6 +30,8 @@ from .bindings import (
 if TYPE_CHECKING:
     from types import TracebackType
 
+    from webinar_transcriber.asr import WhisperDecodeSettings
+
 _BACKEND_PLUGIN_GLOB: Final[str] = "libggml-*.so"
 _LOG_SINK_LOCK = threading.RLock()
 _NATIVE_STATE = SimpleNamespace(
@@ -84,6 +86,7 @@ class WhisperCppSession:
         window: InferenceWindow,
         *,
         threads: int,
+        decode_settings: WhisperDecodeSettings,
         prompt: str | None = None,
         language_hint: str | None = None,
     ) -> DecodedWindow:
@@ -98,6 +101,7 @@ class WhisperCppSession:
             np.ascontiguousarray(audio_samples, dtype=np.float32),
             window,
             threads=threads,
+            decode_settings=decode_settings,
             prompt=prompt,
             language_hint=language_hint,
         )
@@ -194,6 +198,7 @@ class WhisperCppLibrary:
         window: InferenceWindow,
         *,
         threads: int,
+        decode_settings: WhisperDecodeSettings,
         prompt: str | None,
         language_hint: str | None,
     ) -> DecodedWindow:
@@ -234,6 +239,10 @@ class WhisperCppLibrary:
             params.carry_initial_prompt = False
             params.language = _encode_optional_text(language_hint)
             params.detect_language = language_hint is None
+            params.suppress_nst = decode_settings.suppress_nst
+            params.entropy_thold = decode_settings.entropy_thold
+            params.logprob_thold = decode_settings.logprob_thold
+            params.no_speech_thold = decode_settings.no_speech_thold
             params.greedy.best_of = 1
             params.beam_search.patience = 1.0
 

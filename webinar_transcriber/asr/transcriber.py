@@ -171,6 +171,7 @@ class WhisperCppTranscriber:
                 audio_samples,
                 window,
                 threads=self._threads,
+                decode_settings=self._decode_settings,
                 prompt=carryover_prompt,
                 language_hint=language_hint,
             )

@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
+from webinar_transcriber.asr import WhisperDecodeSettings
 from webinar_transcriber.models import InferenceWindow
 from webinar_transcriber.whispercpp import (
     WhisperCppError,
@@ -156,9 +157,10 @@ class TestWhisperCppLibrary:
         monkeypatch.setattr(
             "webinar_transcriber.whispercpp.library._load_backend_plugins", lambda: None
         )
+        fake_cdll = self.FakeCDLL()
         monkeypatch.setattr(
             "webinar_transcriber.whispercpp.library.ctypes.CDLL",
-            lambda _path, mode=0: self.FakeCDLL(),
+            lambda _path, mode=0: fake_cdll,
         )
 
         library = WhisperCppLibrary(library_path)
@@ -167,6 +169,7 @@ class TestWhisperCppLibrary:
             np.zeros(16_000, dtype=np.float32),
             InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=3.0),
             threads=4,
+            decode_settings=WhisperDecodeSettings(),
         )
         session.close()
 
@@ -176,6 +179,10 @@ class TestWhisperCppLibrary:
 
         assert segment_texts == ["agenda review", "next step"]
         assert [segment.end_sec for segment in decoded_window.segments] == [1.5, 3.0]
+        assert fake_cdll._full_params.entropy_thold == pytest.approx(2.4)
+        assert fake_cdll._full_params.logprob_thold == pytest.approx(-1.0)
+        assert fake_cdll._full_params.no_speech_thold == pytest.approx(0.6)
+        assert fake_cdll._full_params.suppress_nst is True
 
     def test_whisper_cpp_session_context_manager_closes_native_handles(
         self, monkeypatch, tmp_path
@@ -446,6 +453,7 @@ class TestWhisperCppLibraryFailures:
             np.zeros(0, dtype=np.float32),
             InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
             threads=2,
+            decode_settings=WhisperDecodeSettings(),
             prompt=None,
             language_hint="ru",
         )
@@ -460,6 +468,7 @@ class TestWhisperCppLibraryFailures:
                 np.zeros(16_000, dtype=np.float32),
                 InferenceWindow(window_id="window-2", region_index=0, start_sec=0.0, end_sec=1.0),
                 threads=2,
+                decode_settings=WhisperDecodeSettings(),
                 prompt=None,
                 language_hint=None,
             )

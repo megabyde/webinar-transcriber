@@ -13,6 +13,10 @@ DEFAULT_WHISPER_CPP_MODEL_FILENAME = "ggml-large-v3-turbo.bin"
 DEFAULT_WHISPER_CPP_MODEL_EXAMPLE = Path("models/whisper-cpp/ggml-large-v3-turbo.bin")
 DEFAULT_CARRYOVER_MAX_SENTENCES = 2
 DEFAULT_CARRYOVER_MAX_TOKENS = 64
+DEFAULT_WHISPER_ENTROPY_THOLD = 2.4
+DEFAULT_WHISPER_LOGPROB_THOLD = -1.0
+DEFAULT_WHISPER_NO_SPEECH_THOLD = 0.6
+DEFAULT_WHISPER_SUPPRESS_NST = True
 SYSCTL_TIMEOUT_SEC = 1.0
 
 
@@ -64,3 +68,7 @@ class WhisperDecodeSettings:
     """Decode-time inference settings kept above the low-level whisper.cpp wrapper."""
 
     carryover: PromptCarryoverSettings = PromptCarryoverSettings()
+    entropy_thold: float = DEFAULT_WHISPER_ENTROPY_THOLD
+    logprob_thold: float = DEFAULT_WHISPER_LOGPROB_THOLD
+    no_speech_thold: float = DEFAULT_WHISPER_NO_SPEECH_THOLD
+    suppress_nst: bool = DEFAULT_WHISPER_SUPPRESS_NST
