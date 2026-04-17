@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from time import perf_counter
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from webinar_transcriber.asr import ASR_BACKEND_NAME, WhisperCppTranscriber
 from webinar_transcriber.labels import count_label, optional_count_label
@@ -16,7 +17,7 @@ from webinar_transcriber.models import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Iterator
     from typing import Literal
 
     from pydantic import BaseModel
@@ -28,32 +29,110 @@ if TYPE_CHECKING:
     from . import _AsrPipelineState
 
 
-@dataclass(frozen=True)
-class StageTimer:
-    """Simple stage timer that records elapsed time into one shared mapping."""
+class StageContext(Protocol):
+    """Shared stage context contract used across processor flows."""
 
+    reporter: NullStageReporter
     stage_timings: dict[str, float]
+    current_stage: str | None
+
+
+@dataclass
+class StageHandle:
+    """Mutable stage state shared with the stage context manager body."""
+
     key: str
-    start_sec: float
+    label: str
+    detail: str | None = None
+    start_sec: float = 0.0
 
-    def finish(self) -> float:
-        """Record elapsed time and return it.
-
-        Returns:
-            float: The elapsed stage time in seconds.
-        """
-        elapsed_sec = perf_counter() - self.start_sec
-        self.stage_timings[self.key] = elapsed_sec
-        return elapsed_sec
+    def elapsed_sec(self) -> float:
+        """Return the current elapsed stage time in seconds."""
+        return perf_counter() - self.start_sec
 
 
-def start_stage_timer(stage_timings: dict[str, float], key: str) -> StageTimer:
-    """Start a stage timer backed by one shared timings map.
+@dataclass
+class ProgressStageHandle(StageHandle):
+    """Mutable progress-stage state shared with the stage context manager body."""
 
-    Returns:
-        StageTimer: The started stage timer.
-    """
-    return StageTimer(stage_timings=stage_timings, key=key, start_sec=perf_counter())
+    reporter: NullStageReporter = field(kw_only=True)
+    completed: float = 0.0
+
+    def advance(self, advance: float = 1.0, *, detail: str | None = None) -> None:
+        """Advance stage progress by one positive delta."""
+        if advance <= 0:
+            return
+        self.reporter.progress_advanced(self.key, advance=advance, detail=detail)
+        self.completed += advance
+        if detail is not None:
+            self.detail = detail
+
+    def advance_to(self, completed: float, *, detail: str | None = None) -> None:
+        """Advance stage progress up to one cumulative completed value."""
+        self.advance(max(0.0, completed - self.completed), detail=detail)
+
+    def finish_progress(self, total: float, *, detail: str | None = None) -> None:
+        """Advance stage progress through one final total."""
+        self.advance_to(total, detail=detail)
+
+
+@contextmanager
+def stage(
+    ctx: StageContext, key: str, label: str, *, indeterminate: bool = True
+) -> Iterator[StageHandle]:
+    """Record one stage's timing and lifecycle through a context manager."""
+    handle = StageHandle(key=key, label=label, start_sec=perf_counter())
+    ctx.current_stage = key
+    if indeterminate:
+        ctx.reporter.stage_started(key, label)
+    try:
+        yield handle
+    except Exception:
+        ctx.stage_timings[key] = handle.elapsed_sec()
+        raise
+    ctx.stage_timings[key] = handle.elapsed_sec()
+    ctx.reporter.stage_finished(key, label, detail=handle.detail)
+
+
+@contextmanager
+def progress_stage(
+    ctx: StageContext,
+    key: str,
+    label: str,
+    *,
+    total: float,
+    count_label: str | None = None,
+    count_multiplier: float = 1.0,
+    rate_label: str | None = None,
+    rate_multiplier: float = 1.0,
+    detail: str | None = None,
+) -> Iterator[ProgressStageHandle]:
+    """Record one determinate stage's timing and progress through a context manager."""
+    handle = ProgressStageHandle(
+        key=key,
+        label=label,
+        detail=detail,
+        start_sec=perf_counter(),
+        reporter=ctx.reporter,
+    )
+    ctx.current_stage = key
+    ctx.reporter.progress_started(
+        key,
+        label,
+        total=total,
+        count_label=count_label,
+        count_multiplier=count_multiplier,
+        rate_label=rate_label,
+        rate_multiplier=rate_multiplier,
+        detail=detail,
+    )
+    try:
+        yield handle
+    except Exception:
+        ctx.stage_timings[key] = handle.elapsed_sec()
+        raise
+    ctx.stage_timings[key] = handle.elapsed_sec()
+    ctx.reporter.stage_finished(key, label, detail=handle.detail)
 
 
 def write_json(output_path: Path, payload: dict[str, object]) -> None:
@@ -66,25 +145,6 @@ def write_model_json(output_path: Path, payload: BaseModel) -> None:
     """Write one top-level Pydantic payload with stable UTF-8 formatting."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(payload.model_dump_json(indent=2), encoding="utf-8")
-
-
-def progress_updater(
-    reporter: NullStageReporter, *, stage_key: str
-) -> tuple[Callable[..., None], Callable[..., None]]:
-    """Return progress update helpers that only advance monotonically."""
-    completed = 0.0
-
-    def update(next_completed: float, *, detail: str | None = None) -> None:
-        nonlocal completed
-        advance = max(0.0, next_completed - completed)
-        if advance > 0:
-            reporter.progress_advanced(stage_key, advance=advance, detail=detail)
-            completed = next_completed
-
-    def finish(total: float, *, detail: str | None = None) -> None:
-        update(total, detail=detail)
-
-    return update, finish
 
 
 def configure_asr_logging(transcriber: WhisperCppTranscriber, layout: RunLayout) -> None:

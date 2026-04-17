@@ -47,6 +47,7 @@ from webinar_transcriber.processor.support import (
     asr_model_label,
     asr_runtime_detail,
     hf_cache_repo_label,
+    stage,
     title_update_detail,
     token_usage_detail,
     window_transcription_stage_detail,
@@ -80,9 +81,15 @@ def install_basic_windowing(
         load_audio_fn = fake_load_audio
 
     monkeypatch.setattr("webinar_transcriber.processor.asr.load_normalized_audio", load_audio_fn)
+
+    def fake_detect_speech_regions(*_args, progress_callback=None, **_kwargs):
+        if progress_callback is not None:
+            progress_callback(region_end_sec, 1)
+        return [SpeechRegion(start_sec=0.0, end_sec=region_end_sec)], []
+
     monkeypatch.setattr(
         "webinar_transcriber.processor.asr.detect_speech_regions",
-        lambda *_args, **_kwargs: ([SpeechRegion(start_sec=0.0, end_sec=region_end_sec)], []),
+        fake_detect_speech_regions,
     )
 
 
@@ -349,6 +356,19 @@ class TestProcessInput:
         )
 
         assert diagnostics is None
+
+    def test_stage_records_timing_on_failure_without_finish_event(self) -> None:
+        reporter = RecordingReporter()
+        ctx = _RunContext(
+            reporter=reporter,
+            asr_pipeline=_AsrPipelineState(vad_enabled=True, threads=1),
+        )
+
+        with pytest.raises(RuntimeError, match="boom"), stage(ctx, "probe_media", "Probing media"):
+            raise RuntimeError("boom")
+
+        assert "probe_media" in ctx.stage_timings
+        assert reporter.events == [("start", "probe_media", "Probing media")]
 
     def test_keeps_normalized_audio_artifact(self, tmp_path, monkeypatch) -> None:
         install_basic_windowing(monkeypatch)
