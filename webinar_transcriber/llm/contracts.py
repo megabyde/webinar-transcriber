@@ -90,7 +90,6 @@ class LLMReportPolishPlan:
 
     section_count: int
     worker_count: int
-    skipped_section_count: int = 0
 
 
 class LLMProcessor(Protocol):

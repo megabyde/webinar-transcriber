@@ -989,7 +989,7 @@ class TestProcessInputLlm:
         ) in reporter.events
         assert reporter.warnings == [EXPECTED_LLM_WARNING]
 
-    def test_reports_only_polishable_sections_in_llm_progress(self, tmp_path, monkeypatch) -> None:
+    def test_reports_all_sections_in_llm_progress(self, tmp_path, monkeypatch) -> None:
         install_basic_windowing(monkeypatch)
         install_processor_media_runtime(
             monkeypatch,
@@ -1013,13 +1013,10 @@ class TestProcessInputLlm:
                 sections=[
                     ReportSection(
                         id="section-1",
-                        title="Music Interlude",
+                        title="Intro",
                         start_sec=0.0,
                         end_sec=1.0,
-                        transcript_text=(
-                            "Music interlude. The raw transcript is preserved in transcript.json."
-                        ),
-                        is_interlude=True,
+                        transcript_text="Opening overview and project status update.",
                     ),
                     ReportSection(
                         id="section-2",
@@ -1038,7 +1035,7 @@ class TestProcessInputLlm:
 
             def report_polish_plan(self, report) -> LLMReportPolishPlan:
                 del report
-                return LLMReportPolishPlan(section_count=1, worker_count=1, skipped_section_count=1)
+                return LLMReportPolishPlan(section_count=2, worker_count=1)
 
             def polish_report_sections_with_progress(
                 self, report, *, progress_callback: Callable[[int], None] | None = None
@@ -1046,18 +1043,18 @@ class TestProcessInputLlm:
                 del report
                 assert progress_callback is not None
                 progress_callback(1)
+                progress_callback(1)
                 return LLMSectionPolishResult(
-                    section_tldrs={"section-2": "Agenda recap."},
+                    section_tldrs={
+                        "section-1": "Opening recap.",
+                        "section-2": "Agenda recap.",
+                    },
                     section_transcripts={
-                        "section-1": (
-                            "Music interlude. The raw transcript is preserved in transcript.json."
-                        ),
+                        "section-1": "Opening overview and project status update.",
                         "section-2": EXPECTED_LLM_SECTION_TEXT,
                     },
                     usage={"input_tokens": 12, "output_tokens": 3, "total_tokens": 15},
-                    warnings=[
-                        "Skipped LLM section polish for likely music/interlude section section-1."
-                    ],
+                    warnings=[],
                 )
 
             def polish_report_metadata(
@@ -1074,24 +1071,28 @@ class TestProcessInputLlm:
 
         artifacts = process_input(
             FIXTURE_DIR / "sample-audio.mp3",
-            output_dir=tmp_path / "llm-interlude-run",
+            output_dir=tmp_path / "llm-report-run",
             transcriber=TestProcessInput.FakeTranscriber(),
             llm_processor=cast("LLMProcessor", FakeLLMProcessor()),
             enable_llm=True,
             reporter=reporter,
         )
 
-        assert reporter.has_progress_event("start", "llm_report_sections", 1.0, None)
+        assert reporter.has_progress_event("start", "llm_report_sections", 2.0, None)
         assert reporter.progress_stage_events("advance", "llm_report_sections") == [
-            ("advance", "llm_report_sections", 1.0, None)
+            ("advance", "llm_report_sections", 1.0, None),
+            ("advance", "llm_report_sections", 1.0, None),
         ]
+        assert reporter.has_event("finish", "llm_report_sections", "2 sections")
         assert reporter.has_event(
-            "finish", "llm_report_sections", "1 section | 1 skipped interlude"
+            "finish",
+            "llm_report",
+            "1 summary bullet | 1 action item | 2 TL;DRs | 1 title updated | 26 tokens",
         )
-        assert reporter.has_event(
-            "finish", "llm_report", "1 summary bullet | 1 action item | 1 TL;DR | 26 tokens"
+        assert (
+            artifacts.report.sections[0].transcript_text
+            == "Opening overview and project status update."
         )
-        assert artifacts.report.sections[0].transcript_text.startswith("Music interlude.")
         assert artifacts.report.sections[1].title == "Refined section title"
 
     def test_warns_when_llm_configuration_is_missing(self, tmp_path, monkeypatch) -> None:

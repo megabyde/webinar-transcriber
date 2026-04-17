@@ -10,13 +10,6 @@ from webinar_transcriber.models import (
     VideoAsset,
 )
 from webinar_transcriber.structure import build_report
-from webinar_transcriber.structure.interludes import (
-    _append_interlude_range,
-    _detect_interlude_ranges,
-    _interlude_note,
-    _interlude_title,
-    _is_likely_interlude_text,
-)
 from webinar_transcriber.structure.scoring import (
     _audio_title_from_segments,
     _audio_title_score,
@@ -44,11 +37,6 @@ RU_CHECK_NUMBERS = (
     "созвоном."
 )
 RU_BUDGET_DISCUSSION = "Сегодня мы обсуждаем бюджет и план внедрения."
-RU_REPETITIVE_SPEECH = (
-    "Не в плане, что вы никого больше не трахаете, а в плане, "  # noqa: RUF001
-    "что вы вырабатываете модель, которая для этой единственной "
-    "уникальной женщины становится единственной и уникальной."
-)
 
 
 class TestAudioSectionBoundaries:
@@ -279,265 +267,8 @@ class TestBuildReport:
 
         assert report.sections == []
 
-    def test_splits_local_interlude_span_without_swallowing_surrounding_content(self) -> None:
-        report = build_report(
-            VideoAsset(path="demo-file.mp4", duration_sec=56.0),
-            TranscriptionResult(
-                detected_language="ru",
-                segments=[
-                    TranscriptSegment(
-                        id="segment-1",
-                        text="Сегодня мы обсуждаем бюджет и план внедрения.",
-                        start_sec=0.0,
-                        end_sec=8.0,
-                    ),
-                    TranscriptSegment(
-                        id="segment-2",
-                        text="Субтитры сделал DimaTorzok",
-                        start_sec=8.0,
-                        end_sec=24.0,
-                    ),
-                    TranscriptSegment(
-                        id="segment-3",
-                        text="Lyrics interlude chorus verse.",
-                        start_sec=24.0,
-                        end_sec=40.0,
-                    ),
-                    TranscriptSegment(
-                        id="segment-4",
-                        text="Пожалуйста, пришлите итоговый файл до пятницы.",
-                        start_sec=40.0,
-                        end_sec=56.0,
-                    ),
-                ],
-            ),
-            alignment_blocks=[
-                AlignmentBlock(
-                    id="block-1",
-                    start_sec=0.0,
-                    end_sec=56.0,
-                    transcript_segment_ids=["segment-1", "segment-2", "segment-3", "segment-4"],
-                    transcript_text="placeholder",
-                    scene_id="scene-1",
-                    frame_id="frame-1",
-                )
-            ],
-        )
-
-        assert [section.is_interlude for section in report.sections] == [False, True, False]
-        assert report.sections[0].title != "Музыкальная пауза"
-        assert report.sections[1].title == "Музыкальная пауза"
-        assert report.sections[2].transcript_text == RU_SEND_FILE
-        assert report.summary == [RU_BUDGET_DISCUSSION, RU_SEND_FILE]
-        assert report.action_items == [RU_SEND_FILE]
-
-    def test_renders_music_breaks_as_interludes_and_excludes_them_from_summary(self) -> None:
-        report = build_report(
-            AudioAsset(path="demo.wav", duration_sec=180.0),
-            TranscriptionResult(
-                detected_language="ru",
-                segments=[
-                    TranscriptSegment(
-                        id="segment-1",
-                        text=("ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля"),
-                        start_sec=0.0,
-                        end_sec=20.0,
-                    ),
-                    TranscriptSegment(
-                        id="segment-2",
-                        text=("ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля ля"),
-                        start_sec=20.0,
-                        end_sec=45.0,
-                    ),
-                    TranscriptSegment(
-                        id="segment-3",
-                        text="Сегодня мы обсуждаем бюджет и план внедрения.",
-                        start_sec=60.0,
-                        end_sec=75.0,
-                    ),
-                    TranscriptSegment(
-                        id="segment-4",
-                        text="Пожалуйста, пришлите итоговый файл до пятницы.",
-                        start_sec=75.0,
-                        end_sec=90.0,
-                    ),
-                ],
-            ),
-        )
-
-        assert report.sections[0].is_interlude
-        assert report.sections[0].title == "Музыкальная пауза"
-        assert "transcript.json" in report.sections[0].transcript_text
-        assert report.summary == [
-            "Сегодня мы обсуждаем бюджет и план внедрения.",
-            "Пожалуйста, пришлите итоговый файл до пятницы.",
-        ]
-        assert report.action_items == ["Пожалуйста, пришлите итоговый файл до пятницы."]
-
-    def test_renders_long_interlude_candidate(self) -> None:
-        report = build_report(
-            AudioAsset(path="demo.wav", duration_sec=900.0),
-            TranscriptionResult(
-                detected_language="ru",
-                segments=[
-                    TranscriptSegment(
-                        id="segment-1",
-                        text="Субтитры сделал DimaTorzok",
-                        start_sec=0.0,
-                        end_sec=350.0,
-                    ),
-                    TranscriptSegment(
-                        id="segment-2",
-                        text="Lyrics interlude chorus verse.",
-                        start_sec=350.0,
-                        end_sec=700.0,
-                    ),
-                    TranscriptSegment(
-                        id="segment-3", text=RU_BUDGET_DISCUSSION, start_sec=700.0, end_sec=760.0
-                    ),
-                ],
-            ),
-        )
-
-        assert report.sections[0].is_interlude
-        assert report.sections[0].title == "Музыкальная пауза"
-        assert report.sections[1].transcript_text == RU_BUDGET_DISCUSSION
-
-    def test_ignores_short_marker_only_interlude_candidate(self) -> None:
-        report = build_report(
-            AudioAsset(path="demo.wav", duration_sec=120.0),
-            TranscriptionResult(
-                detected_language="ru",
-                segments=[
-                    TranscriptSegment(
-                        id="segment-1",
-                        text="Субтитры сделал DimaTorzok",
-                        start_sec=0.0,
-                        end_sec=18.0,
-                    ),
-                    TranscriptSegment(
-                        id="segment-2", text=RU_BUDGET_DISCUSSION, start_sec=18.0, end_sec=60.0
-                    ),
-                ],
-            ),
-        )
-
-        assert all(not section.is_interlude for section in report.sections)
-        assert "Субтитры сделал DimaTorzok" in report.sections[0].transcript_text
-
-    def test_does_not_mark_single_repetitive_speech_segment_as_interlude(self) -> None:
-        report = build_report(
-            VideoAsset(path="demo-file.mp4", duration_sec=24.0),
-            TranscriptionResult(
-                detected_language="ru",
-                segments=[
-                    TranscriptSegment(
-                        id="segment-1",
-                        text="Сегодня мы обсуждаем бюджет и план внедрения.",
-                        start_sec=0.0,
-                        end_sec=8.0,
-                    ),
-                    TranscriptSegment(
-                        id="segment-2", text=RU_REPETITIVE_SPEECH, start_sec=8.0, end_sec=16.0
-                    ),
-                    TranscriptSegment(
-                        id="segment-3",
-                        text="Пожалуйста, пришлите итоговый файл до пятницы.",
-                        start_sec=16.0,
-                        end_sec=24.0,
-                    ),
-                ],
-            ),
-            alignment_blocks=[
-                AlignmentBlock(
-                    id="block-1",
-                    start_sec=0.0,
-                    end_sec=24.0,
-                    transcript_segment_ids=["segment-1", "segment-2", "segment-3"],
-                    transcript_text="placeholder",
-                    scene_id="scene-1",
-                    frame_id="frame-1",
-                )
-            ],
-        )
-
-        assert all(not section.is_interlude for section in report.sections)
-        assert len(report.sections) == 1
-        assert "единственной и уникальной" in report.sections[0].transcript_text
-
-    def test_does_not_mark_repetitive_technical_terms_as_interlude(self) -> None:
-        assert not _is_likely_interlude_text(
-            "HTTPS gRPC NCCL training pipeline gradient descent optimizer scheduler "
-            "dataloader tensor cluster review metrics throughput gRPC NCCL "
-            "optimizer scheduler tensor review"
-        )
-
-    def test_detect_interlude_ranges_splits_runs_at_large_gaps(self) -> None:
-        ranges = _detect_interlude_ranges([
-            TranscriptSegment(
-                id="segment-1",
-                text="Lyrics interlude chorus verse.",
-                start_sec=0.0,
-                end_sec=20.0,
-            ),
-            TranscriptSegment(
-                id="segment-2",
-                text="Lyrics interlude chorus verse.",
-                start_sec=40.0,
-                end_sec=60.0,
-            ),
-        ])
-
-        assert ranges == [(0.0, 20.0), (40.0, 60.0)]
-
-    def test_append_interlude_range_skips_single_segment_without_marker(self) -> None:
-        ranges: list[tuple[float, float]] = []
-
-        _append_interlude_range(
-            ranges,
-            [TranscriptSegment(id="segment-1", text="la la la la la", start_sec=0.0, end_sec=20.0)],
-        )
-
-        assert ranges == []
-
-    def test_interlude_helpers_cover_blank_text_and_localized_rendering(self) -> None:
-        assert not _is_likely_interlude_text("   ")
-        assert _interlude_title("en") == "Music Interlude"
-        assert _interlude_note("en").startswith("Music or spoken-performance interlude.")
-
 
 class TestAudioSectionHeuristics:
-    def test_build_audio_sections_flushes_speech_before_interlude_tail(self) -> None:
-        progress_updates: list[tuple[int, int]] = []
-
-        sections = _build_audio_sections(
-            [
-                TranscriptSegment(
-                    id="segment-1",
-                    text="Agenda review and project status update.",
-                    start_sec=0.0,
-                    end_sec=20.0,
-                ),
-                TranscriptSegment(
-                    id="segment-2",
-                    text="Lyrics interlude chorus verse.",
-                    start_sec=20.0,
-                    end_sec=40.0,
-                ),
-            ],
-            interlude_ranges=[(20.0, 40.0)],
-            progress_callback=lambda index, section_count: progress_updates.append((
-                index,
-                section_count,
-            )),
-        )
-
-        assert [(section.is_interlude, section.transcript_text) for section in sections] == [
-            (False, "Agenda review and project status update."),
-            (True, "Lyrics interlude chorus verse."),
-        ]
-        assert progress_updates == [(1, 1), (2, 2)]
-
     def test_build_audio_sections_splits_when_target_duration_would_be_exceeded(self) -> None:
         sections = _build_audio_sections([
             TranscriptSegment(
@@ -588,7 +319,6 @@ class TestAudioSectionHeuristics:
         sections = _sections_from_block(
             block,
             block_segments=[],
-            interlude_ranges=[],
             next_section_index=1,
         )
 

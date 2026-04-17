@@ -169,10 +169,7 @@ def llm_fallback_detail(*, provider_name: str | None, model_name: str | None) ->
 
 def llm_report_plan_label_detail(plan: LLMReportPolishPlan) -> str:
     """Return the worker-count detail for the section-polish stage."""
-    parts = [count_label(plan.worker_count, "worker")]
-    if plan.skipped_section_count > 0:
-        parts.append(count_label(plan.skipped_section_count, "skipped interlude"))
-    return " | ".join(parts)
+    return count_label(plan.worker_count, "worker")
 
 
 def token_usage_detail(usage: dict[str, int]) -> str:

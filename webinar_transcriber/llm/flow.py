@@ -116,11 +116,9 @@ class _BaseLLMProcessor:
 
     def report_polish_plan(self, report: ReportDocument) -> LLMReportPolishPlan:
         """Return concurrency details for report polishing."""
-        polishable_sections = [section for section in report.sections if not section.is_interlude]
         return LLMReportPolishPlan(
-            section_count=len(polishable_sections),
-            worker_count=min(self._section_max_workers, max(len(polishable_sections), 1)),
-            skipped_section_count=len(report.sections) - len(polishable_sections),
+            section_count=len(report.sections),
+            worker_count=min(self._section_max_workers, max(len(report.sections), 1)),
         )
 
     def _polish_section_texts(
@@ -141,16 +139,7 @@ class _BaseLLMProcessor:
             future_to_section = {
                 executor.submit(self._polish_section_text, section): section
                 for section in report.sections
-                if not section.is_interlude
             }
-            skipped_sections = [section for section in report.sections if section.is_interlude]
-            for section in skipped_sections:
-                polished_transcripts[section.id] = section.transcript_text
-                if section.tldr:
-                    polished_tldrs[section.id] = section.tldr
-                warnings.append(
-                    f"Skipped LLM section polish for likely music/interlude section {section.id}."
-                )
             for future in as_completed(future_to_section):
                 section = future_to_section[future]
                 try:

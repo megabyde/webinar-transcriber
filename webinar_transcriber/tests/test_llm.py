@@ -11,6 +11,7 @@ from webinar_transcriber.llm import (
     AnthropicLLMProcessor,
     LLMConfigurationError,
     LLMProcessingError,
+    LLMReportPolishPlan,
     OpenAILLMProcessor,
     ReportPolishResponse,
     ReportSectionUpdate,
@@ -321,15 +322,21 @@ class TestOpenAiLlmProcessor:
                 section_transcripts={"section-1": "Agenda review and project status update."},
             )
 
-    def test_skips_interlude_section_text_polish(self, monkeypatch) -> None:
+    def test_polishes_each_section_text(self, monkeypatch) -> None:
         progress_updates: list[int] = []
         fake_client = self.FakeClient([
             self.FakeResponse(
                 output_parsed=SectionTextResponse(
-                    tldr="Agenda recap.", transcript_text="Agenda review and project status update."
+                    tldr="Intro recap.", transcript_text="Intro review and project status update."
                 ),
                 usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
-            )
+            ),
+            self.FakeResponse(
+                output_parsed=SectionTextResponse(
+                    tldr="Agenda recap.", transcript_text="Agenda review and project status update."
+                ),
+                usage={"input_tokens": 6, "output_tokens": 5, "total_tokens": 11},
+            ),
         ])
         monkeypatch.setattr(
             "webinar_transcriber.llm.openai_backend.importlib.import_module",
@@ -344,13 +351,10 @@ class TestOpenAiLlmProcessor:
             sections=[
                 ReportSection(
                     id="section-1",
-                    title="Music Interlude",
+                    title="Intro",
                     start_sec=0.0,
                     end_sec=10.0,
-                    transcript_text=(
-                        "Music interlude. The raw transcript is preserved in transcript.json."
-                    ),
-                    is_interlude=True,
+                    transcript_text="Intro review and project status update.",
                 ),
                 ReportSection(
                     id="section-2",
@@ -366,14 +370,13 @@ class TestOpenAiLlmProcessor:
             report, progress_callback=progress_updates.append
         )
 
-        assert len(fake_client.responses.calls) == 1
-        assert result.section_tldrs == {"section-2": "Agenda recap."}
-        assert result.section_transcripts["section-1"] == report.sections[0].transcript_text
+        assert len(fake_client.responses.calls) == 2
+        assert result.section_tldrs == {"section-1": "Intro recap.", "section-2": "Agenda recap."}
+        assert result.section_transcripts["section-1"] == "Intro review and project status update."
         assert result.section_transcripts["section-2"] == "Agenda review and project status update."
-        assert result.warnings == [
-            "Skipped LLM section polish for likely music/interlude section section-1."
-        ]
-        assert progress_updates == [1]
+        assert result.usage == {"input_tokens": 11, "output_tokens": 9, "total_tokens": 20}
+        assert result.warnings == []
+        assert progress_updates == [1, 1]
 
 
 class TestAnthropicLlmProcessor:
@@ -529,13 +532,8 @@ class TestLlmFlow:
         assert result.usage == {}
         assert result.warnings == []
 
-    def test_keeps_interlude_tldr_during_section_polish(self) -> None:
-        processor = self.StubProcessor({
-            "section-2": (
-                SectionTextResponse(tldr="Agenda recap.", transcript_text="Agenda review."),
-                {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5},
-            )
-        })
+    def test_report_polish_plan_counts_all_sections(self) -> None:
+        processor = self.StubProcessor({})
         report = ReportDocument(
             title="Demo",
             source_file="demo.wav",
@@ -543,12 +541,10 @@ class TestLlmFlow:
             sections=[
                 ReportSection(
                     id="section-1",
-                    title="Music Interlude",
+                    title="Intro",
                     start_sec=0.0,
                     end_sec=5.0,
-                    transcript_text="Interlude placeholder.",
-                    tldr="Keep me.",
-                    is_interlude=True,
+                    transcript_text="Intro review.",
                 ),
                 ReportSection(
                     id="section-2",
@@ -560,11 +556,10 @@ class TestLlmFlow:
             ],
         )
 
-        result = processor.polish_report_sections_with_progress(report)
-
-        assert result.section_transcripts["section-1"] == "Interlude placeholder."
-        assert result.section_tldrs == {"section-1": "Keep me.", "section-2": "Agenda recap."}
-        assert result.usage == {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5}
+        assert processor.report_polish_plan(report) == LLMReportPolishPlan(
+            section_count=2,
+            worker_count=2,
+        )
 
     def test_turns_section_polish_errors_into_warnings(self) -> None:
         processor = self.StubProcessor({

@@ -135,11 +135,6 @@ def maybe_polish_report(
         warnings.append(warning)
         reporter.warn(warning)
     section_detail = count_label(polish_plan.section_count, "section")
-    if polish_plan.skipped_section_count > 0:
-        section_detail = " | ".join((
-            section_detail,
-            count_label(polish_plan.skipped_section_count, "skipped interlude"),
-        ))
     reporter.stage_finished("llm_report_sections", section_label, detail=section_detail)
     reporter.stage_started("llm_report", summary_label)
     timer = start_stage_timer(stage_timings, "llm_report_metadata")

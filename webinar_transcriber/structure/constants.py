@@ -49,9 +49,6 @@ MAX_AUDIO_SECTION_CHARS = 3600
 TITLE_WORD_LIMIT = 6
 SUMMARY_ITEM_LIMIT = 3
 ACTION_ITEM_LIMIT = 5
-INTERLUDE_MIN_WORDS = 18
-MIN_INTERLUDE_DURATION_SEC = 30.0
-INTERLUDE_LOW_UNIQUE_RATIO = 0.5
 TITLE_FILLER_WORDS = {
     "first",
     "just",
@@ -71,11 +68,3 @@ SUMMARY_NOISE_PATTERN = re.compile(
     r")\b",
     re.IGNORECASE,
 )
-INTERLUDE_MARKER_PATTERN = re.compile(
-    r"(?:"
-    r"субтитры сделал|музыкальн|припев|куплет|"
-    r"lyrics?|instrumental|chorus|verse|interlude"
-    r")",
-    re.IGNORECASE,
-)
-INTERLUDE_WORD_RE = re.compile(r"[\w'-]+", re.UNICODE)
