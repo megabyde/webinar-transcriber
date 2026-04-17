@@ -1,5 +1,9 @@
 """Tests for typed pipeline models."""
 
+from dataclasses import FrozenInstanceError
+
+import pytest
+
 from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
     AudioAsset,
@@ -110,7 +114,13 @@ class TestCoreModels:
             InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=6.0),
         ]
 
-        window_ids = [window.window_id for window in sorted(windows)]
+        window_ids = [
+            window.window_id
+            for window in sorted(
+                windows,
+                key=lambda item: (item.start_sec, item.end_sec, item.region_index, item.window_id),
+            )
+        ]
 
         assert window_ids == ["window-1", "window-2", "window-3"]
 
@@ -121,13 +131,18 @@ class TestCoreModels:
             TranscriptSegment(id="seg-1", text="first", start_sec=0.0, end_sec=1.0),
         ]
 
-        segment_ids = [segment.id for segment in sorted(segments)]
+        segment_ids = [
+            segment.id
+            for segment in sorted(
+                segments,
+                key=lambda item: (item.start_sec, item.end_sec, item.id),
+            )
+        ]
 
         assert segment_ids == ["seg-1", "seg-2", "seg-3"]
 
-    def test_model_ordering_returns_not_implemented_for_other_types(self) -> None:
+    def test_hot_path_dataclasses_are_frozen(self) -> None:
         segment = TranscriptSegment(id="seg-1", text="first", start_sec=0.0, end_sec=1.0)
-        window = InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)
 
-        assert segment.__lt__(object()) is NotImplemented
-        assert window.__lt__(object()) is NotImplemented
+        with pytest.raises(FrozenInstanceError):
+            segment.__setattr__("text", "updated")

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import ExitStack, nullcontext, suppress
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, cast
 
 import webinar_transcriber.asr as asr_runtime
@@ -279,7 +279,7 @@ def process_input(
                     )
                 write_json(
                     layout.scenes_path,
-                    {"scenes": [scene.model_dump(mode="json") for scene in ctx.scenes]},
+                    {"scenes": [asdict(scene) for scene in ctx.scenes]},
                 )
                 with progress_stage(
                     ctx,

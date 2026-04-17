@@ -1,5 +1,7 @@
 """Typed models used across the processing pipeline."""
 
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from enum import StrEnum
 from typing import Literal
 
@@ -40,86 +42,67 @@ class VideoAsset(_BaseMediaAsset):
 MediaAsset = AudioAsset | VideoAsset
 
 
-class TranscriptSegment(BaseModel):
+@dataclass(slots=True, frozen=True)
+class TranscriptSegment:
     """Segment-level transcript block."""
 
     id: str
     text: str
-    start_sec: float = Field(ge=0)
-    end_sec: float = Field(ge=0)
+    start_sec: float
+    end_sec: float
 
     @property
     def midpoint(self) -> float:
         """Return the midpoint of the segment on the transcript timeline."""
         return (self.start_sec + self.end_sec) / 2.0
 
-    def __lt__(self, other: object) -> bool:
-        """Keep segment ordering deterministic without repeating tuple keys at call sites.
-
-        Returns:
-            bool: Whether this segment sorts before the other object.
-        """
-        if not isinstance(other, TranscriptSegment):
-            return NotImplemented
-        return self._sort_key() < other._sort_key()
-
-    def _sort_key(self) -> tuple[float, float, str]:
-        return (self.start_sec, self.end_sec, self.id)
-
 
 class TranscriptionResult(BaseModel):
     """Full normalized transcription output."""
+
+    model_config = {"arbitrary_types_allowed": True}
 
     detected_language: str | None = None
     segments: list[TranscriptSegment] = Field(default_factory=list)
 
 
-class SpeechRegion(BaseModel):
+@dataclass(slots=True, frozen=True)
+class SpeechRegion:
     """Speech-bearing region on the normalized audio timeline."""
 
-    start_sec: float = Field(ge=0)
-    end_sec: float = Field(ge=0)
+    start_sec: float
+    end_sec: float
 
 
-class InferenceWindow(BaseModel):
+@dataclass(slots=True, frozen=True)
+class InferenceWindow:
     """Window planned for one whisper.cpp inference call."""
 
     window_id: str
-    region_index: int = Field(ge=0)
-    start_sec: float = Field(ge=0)
-    end_sec: float = Field(ge=0)
-
-    def __lt__(self, other: object) -> bool:
-        """Keep decode ordering deterministic without repeating tuple keys at call sites.
-
-        Returns:
-            bool: Whether this window sorts before the other object.
-        """
-        if not isinstance(other, InferenceWindow):
-            return NotImplemented
-        return self._sort_key() < other._sort_key()
-
-    def _sort_key(self) -> tuple[float, float, int, str]:
-        return (self.start_sec, self.end_sec, self.region_index, self.window_id)
+    region_index: int
+    start_sec: float
+    end_sec: float
 
 
-class DecodedWindow(BaseModel):
+@dataclass(slots=True, frozen=True)
+class DecodedWindow:
     """Transcript result for a planned inference window."""
 
     window: InferenceWindow
     input_prompt: str | None = None
     text: str = ""
-    segments: list[TranscriptSegment] = Field(default_factory=list)
+    segments: list[TranscriptSegment] = dataclass_field(default_factory=list)
     fallback_used: bool = False
     language: str | None = None
 
 
-class Scene(BaseModel):
+@dataclass(slots=True, frozen=True)
+class Scene:
     """Time-bounded scene for video processing."""
 
     id: str
-    start_sec: float = Field(ge=0)
-    end_sec: float = Field(ge=0)
+    start_sec: float
+    end_sec: float
 
     @property
     def midpoint(self) -> float:
@@ -127,23 +110,25 @@ class Scene(BaseModel):
         return (self.start_sec + self.end_sec) / 2.0
 
 
-class SlideFrame(BaseModel):
+@dataclass(slots=True, frozen=True)
+class SlideFrame:
     """Representative frame selected from a scene."""
 
     id: str
     scene_id: str
     image_path: str
-    timestamp_sec: float = Field(ge=0)
+    timestamp_sec: float
 
 
-class AlignmentBlock(BaseModel):
+@dataclass(slots=True, frozen=True)
+class AlignmentBlock:
     """Alignment between transcript content and media sections."""
 
     id: str
-    start_sec: float = Field(ge=0)
-    end_sec: float = Field(ge=0)
-    transcript_segment_ids: list[str] = Field(default_factory=list)
+    start_sec: float
+    end_sec: float
     transcript_text: str
+    transcript_segment_ids: list[str] = dataclass_field(default_factory=list)
     scene_id: str | None = None
     frame_id: str | None = None
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING
 
 from webinar_transcriber.labels import count_label
@@ -103,7 +103,7 @@ def run_asr_pipeline(
         ctx.reporter.warn(warning)
     write_json(
         layout.speech_regions_path,
-        {"speech_regions": [region.model_dump(mode="json") for region in speech_regions]},
+        {"speech_regions": [asdict(region) for region in speech_regions]},
     )
 
     with stage(ctx, "prepare_speech_regions", "Preparing speech regions") as st:
@@ -120,7 +120,7 @@ def run_asr_pipeline(
         ]
         write_json(
             layout.expanded_regions_path,
-            {"expanded_regions": [region.model_dump(mode="json") for region in expanded_regions]},
+            {"expanded_regions": [asdict(region) for region in expanded_regions]},
         )
         st.detail = (
             f"{count_label(len(speech_regions), 'region')} "
@@ -154,7 +154,7 @@ def run_asr_pipeline(
         )
         write_json(
             layout.decoded_windows_path,
-            {"decoded_windows": [window.model_dump(mode="json") for window in decoded_windows]},
+            {"decoded_windows": [asdict(window) for window in decoded_windows]},
         )
         st.finish_progress(media_asset.duration_sec)
         st.detail = window_transcription_stage_detail(

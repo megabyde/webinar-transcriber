@@ -23,7 +23,15 @@ def reconcile_decoded_windows(
     Returns:
         tuple[TranscriptionResult, ReconciliationStats]: The reconciled transcript and stats.
     """
-    ordered_windows = sorted(decoded_windows, key=lambda item: item.window)
+    ordered_windows = sorted(
+        decoded_windows,
+        key=lambda item: (
+            item.window.start_sec,
+            item.window.end_sec,
+            item.window.region_index,
+            item.window.window_id,
+        ),
+    )
     detected_language = next(
         (window.language for window in ordered_windows if window.language), None
     )

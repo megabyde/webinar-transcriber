@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import re
 from contextlib import suppress
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Self
 
@@ -160,7 +161,10 @@ class WhisperCppTranscriber:
             list[DecodedWindow]: The decoded windows in deterministic order.
         """
         session = self._ensure_session()
-        ordered_windows = sorted(windows)
+        ordered_windows = sorted(
+            windows,
+            key=lambda item: (item.start_sec, item.end_sec, item.region_index, item.window_id),
+        )
         language_hint: str | None = None
         carryover_prompt: str | None = None
         decoded_windows: list[DecodedWindow] = []
@@ -175,9 +179,7 @@ class WhisperCppTranscriber:
                 prompt=carryover_prompt,
                 language_hint=language_hint,
             )
-            decoded_windows.append(
-                decoded_window.model_copy(update={"input_prompt": carryover_prompt})
-            )
+            decoded_windows.append(replace(decoded_window, input_prompt=carryover_prompt))
             decoded_segment_count += len(decoded_window.segments)
             next_carryover = build_prompt_carryover(
                 decoded_window, settings=self._decode_settings.carryover

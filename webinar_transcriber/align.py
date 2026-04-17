@@ -1,5 +1,7 @@
 """Alignment helpers for transcript segments and video scenes."""
 
+from dataclasses import replace
+
 from webinar_transcriber.models import AlignmentBlock, Scene, SlideFrame, TranscriptSegment
 
 
@@ -51,21 +53,23 @@ def align_by_time(
                 0,
             )
             block = blocks[target_index]
-            block_segments = sorted([
-                *[
-                    segment
-                    for segment in transcript_segments
-                    if segment.id in block.transcript_segment_ids
+            block_segments = sorted(
+                [
+                    *[
+                        segment
+                        for segment in transcript_segments
+                        if segment.id in block.transcript_segment_ids
+                    ],
+                    segment,
                 ],
-                segment,
-            ])
-            blocks[target_index] = block.model_copy(
-                update={
-                    "transcript_segment_ids": [segment.id for segment in block_segments],
-                    "transcript_text": " ".join(
-                        segment.text for segment in block_segments if segment.text
-                    ).strip(),
-                }
+                key=lambda item: (item.start_sec, item.end_sec, item.id),
+            )
+            blocks[target_index] = replace(
+                block,
+                transcript_segment_ids=[segment.id for segment in block_segments],
+                transcript_text=" ".join(
+                    segment.text for segment in block_segments if segment.text
+                ).strip(),
             )
 
     return blocks
