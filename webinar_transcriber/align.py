@@ -1,6 +1,5 @@
 """Alignment helpers for transcript segments and video scenes."""
 
-from webinar_transcriber.labels import count_label
 from webinar_transcriber.models import AlignmentBlock, Scene, SlideFrame, TranscriptSegment
 
 
@@ -8,8 +7,6 @@ def align_by_time(
     transcript_segments: list[TranscriptSegment],
     scenes: list[Scene],
     slide_frames: list[SlideFrame],
-    *,
-    warnings: list[str] | None = None,
 ) -> list[AlignmentBlock]:
     """Assign transcript segments to scenes using midpoint inclusion.
 
@@ -18,7 +15,6 @@ def align_by_time(
     """
     frame_by_scene = {frame.scene_id: frame for frame in slide_frames}
     blocks: list[AlignmentBlock] = []
-    segments_by_block: list[list[TranscriptSegment]] = []
     assigned_segment_ids: set[str] = set()
 
     for index, scene in enumerate(scenes, start=1):
@@ -28,7 +24,6 @@ def align_by_time(
             if scene.start_sec <= segment.midpoint < scene.end_sec
         ]
         assigned_segment_ids.update(segment.id for segment in scene_segments)
-        segments_by_block.append(list(scene_segments))
         transcript_text = " ".join(segment.text for segment in scene_segments).strip()
         frame = frame_by_scene.get(scene.id)
         blocks.append(
@@ -43,48 +38,34 @@ def align_by_time(
             )
         )
 
-    orphan_segments = [
-        segment for segment in transcript_segments if segment.id not in assigned_segment_ids
-    ]
-    if orphan_segments and blocks:
-        for segment in orphan_segments:
-            nearest_block_index = min(
-                range(len(blocks)),
-                key=lambda index: _distance_to_block(segment.midpoint, blocks[index]),
+    if blocks:
+        for segment in transcript_segments:
+            if segment.id in assigned_segment_ids:
+                continue
+            target_index = next(
+                (
+                    index
+                    for index in reversed(range(len(blocks)))
+                    if blocks[index].start_sec <= segment.midpoint
+                ),
+                0,
             )
-            segments_by_block[nearest_block_index].append(segment)
-
-        updated_blocks: list[AlignmentBlock] = []
-        for block, block_segments in zip(blocks, segments_by_block, strict=False):
-            ordered_segments = sorted(block_segments)
-            updated_blocks.append(
-                block.model_copy(
-                    update={
-                        "transcript_segment_ids": [segment.id for segment in ordered_segments],
-                        "transcript_text": " ".join(
-                            segment.text for segment in ordered_segments if segment.text
-                        ).strip(),
-                    }
-                )
+            block = blocks[target_index]
+            block_segments = sorted([
+                *[
+                    segment
+                    for segment in transcript_segments
+                    if segment.id in block.transcript_segment_ids
+                ],
+                segment,
+            ])
+            blocks[target_index] = block.model_copy(
+                update={
+                    "transcript_segment_ids": [segment.id for segment in block_segments],
+                    "transcript_text": " ".join(
+                        segment.text for segment in block_segments if segment.text
+                    ).strip(),
+                }
             )
-        blocks = updated_blocks
-
-        if warnings is not None:
-            warnings.append(_orphan_alignment_warning(orphan_count=len(orphan_segments)))
 
     return blocks
-
-
-def _distance_to_block(midpoint_sec: float, block: AlignmentBlock) -> float:
-    if midpoint_sec < block.start_sec:
-        return block.start_sec - midpoint_sec
-    if midpoint_sec > block.end_sec:
-        return midpoint_sec - block.end_sec
-    return 0.0
-
-
-def _orphan_alignment_warning(*, orphan_count: int) -> str:
-    return (
-        f"Aligned {count_label(orphan_count, 'transcript segment')} to the nearest "
-        "scene blocks because their midpoints fell outside all scene ranges."
-    )

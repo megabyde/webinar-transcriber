@@ -332,7 +332,6 @@ def process_input(
                     normalized_transcription.segments,
                     ctx.scenes,
                     ctx.slide_frames,
-                    warnings=ctx.warnings,
                 )
 
             structure_total = max(

@@ -1,7 +1,7 @@
 """Tests for deterministic scene alignment."""
 
-from webinar_transcriber.align import _distance_to_block, align_by_time
-from webinar_transcriber.models import AlignmentBlock, Scene, SlideFrame, TranscriptSegment
+from webinar_transcriber.align import align_by_time
+from webinar_transcriber.models import Scene, SlideFrame, TranscriptSegment
 
 
 class TestAlignByTime:
@@ -40,9 +40,7 @@ class TestAlignByTime:
 
         assert blocks == []
 
-    def test_assigns_orphan_segments_to_nearest_blocks_and_warns(self) -> None:
-        warnings: list[str] = []
-
+    def test_assigns_orphan_segments_to_previous_blocks(self) -> None:
         blocks = align_by_time(
             transcript_segments=[
                 TranscriptSegment(id="seg-1", text="Before", start_sec=0.0, end_sec=0.2),
@@ -54,16 +52,9 @@ class TestAlignByTime:
                 Scene(id="scene-2", start_sec=2.0, end_sec=3.0),
             ],
             slide_frames=[],
-            warnings=warnings,
         )
 
         assert [block.transcript_segment_ids for block in blocks] == [["seg-1", "seg-2"], ["seg-3"]]
-        assert warnings == [
-            (
-                "Aligned 2 transcript segments to the nearest scene blocks "
-                "because their midpoints fell outside all scene ranges."
-            )
-        ]
 
     def test_orders_orphan_segments_by_timeline_within_blocks(self) -> None:
         blocks = align_by_time(
@@ -98,14 +89,17 @@ class TestAlignByTime:
         assert blocks[0].transcript_text == ""
         assert blocks[1].transcript_segment_ids == ["seg-1"]
 
-    def test_distance_to_block_is_zero_for_midpoint_inside_block(self) -> None:
-        block = AlignmentBlock(
-            id="block-1",
-            start_sec=1.0,
-            end_sec=2.0,
-            transcript_segment_ids=[],
-            transcript_text="",
-            scene_id="scene-1",
+    def test_assigns_boundary_drift_segments_to_previous_scene(self) -> None:
+        blocks = align_by_time(
+            transcript_segments=[
+                TranscriptSegment(id="seg-1", text="Intro", start_sec=0.0, end_sec=0.8),
+                TranscriptSegment(id="seg-2", text="Boundary", start_sec=2.0, end_sec=2.4),
+            ],
+            scenes=[
+                Scene(id="scene-1", start_sec=0.0, end_sec=1.0),
+                Scene(id="scene-2", start_sec=1.0, end_sec=2.0),
+            ],
+            slide_frames=[],
         )
 
-        assert _distance_to_block(1.5, block) == 0.0
+        assert blocks[1].transcript_segment_ids == ["seg-2"]
