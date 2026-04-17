@@ -92,6 +92,15 @@ Supported providers:
 - `openai` (default)
 - `anthropic`
 
+#### Install the LLM extra
+
+The base install does not include the optional provider SDKs. If you want to use `--llm`, reinstall
+the CLI from this checkout with the `llm` extra:
+
+```bash
+uv tool install --reinstall ".[llm]"
+```
+
 LLM configuration comes only from environment variables.
 
 #### OpenAI

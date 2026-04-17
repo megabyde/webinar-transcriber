@@ -41,13 +41,33 @@ def _fake_anthropic_module(fake_client):
     return SimpleNamespace(Anthropic=lambda **_kwargs: fake_client)
 
 
+LLM_EXTRA_INSTALL_RE = r'uv tool install --reinstall "\.\[llm\]"'
+
+
 class TestBuildLlmProcessorFromEnv:
     def test_requires_api_key_and_model(self, monkeypatch) -> None:
         monkeypatch.delenv("LLM_PROVIDER", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_MODEL", raising=False)
+        monkeypatch.setattr(
+            "webinar_transcriber.llm.importlib.import_module",
+            lambda _name: object(),
+        )
 
         with pytest.raises(LLMConfigurationError):
+            build_llm_processor_from_env()
+
+    def test_requires_llm_extra_for_openai(self, monkeypatch) -> None:
+        monkeypatch.delenv("LLM_PROVIDER", raising=False)
+        monkeypatch.setattr(
+            "webinar_transcriber.llm.importlib.import_module",
+            lambda _name: (_ for _ in ()).throw(ImportError("missing openai")),
+        )
+
+        with pytest.raises(
+            LLMConfigurationError,
+            match=rf"The OpenAI provider requires the 'llm' extra\..*{LLM_EXTRA_INSTALL_RE}",
+        ):
             build_llm_processor_from_env()
 
     def test_supports_anthropic(self, monkeypatch) -> None:
@@ -55,6 +75,10 @@ class TestBuildLlmProcessorFromEnv:
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         monkeypatch.setenv("ANTHROPIC_MODEL", "claude-test")
+        monkeypatch.setattr(
+            "webinar_transcriber.llm.importlib.import_module",
+            lambda _name: _fake_anthropic_module(fake_client),
+        )
         monkeypatch.setattr(
             "webinar_transcriber.llm.anthropic_backend.importlib.import_module",
             lambda _name: _fake_anthropic_module(fake_client),
@@ -65,6 +89,19 @@ class TestBuildLlmProcessorFromEnv:
         assert isinstance(processor, AnthropicLLMProcessor)
         assert processor.provider_name == "anthropic"
         assert processor.model_name == "claude-test"
+
+    def test_requires_llm_extra_for_anthropic(self, monkeypatch) -> None:
+        monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+        monkeypatch.setattr(
+            "webinar_transcriber.llm.importlib.import_module",
+            lambda _name: (_ for _ in ()).throw(ImportError("missing anthropic")),
+        )
+
+        with pytest.raises(
+            LLMConfigurationError,
+            match=rf"The Anthropic provider requires the 'llm' extra\..*{LLM_EXTRA_INSTALL_RE}",
+        ):
+            build_llm_processor_from_env()
 
     def test_rejects_unknown_provider(self, monkeypatch) -> None:
         monkeypatch.setenv("LLM_PROVIDER", "unknown")
@@ -77,6 +114,10 @@ class TestBuildLlmProcessorFromEnv:
         monkeypatch.delenv("LLM_PROVIDER", raising=False)
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         monkeypatch.setenv("OPENAI_MODEL", "gpt-test")
+        monkeypatch.setattr(
+            "webinar_transcriber.llm.importlib.import_module",
+            lambda _name: _fake_openai_module(fake_client),
+        )
         monkeypatch.setattr(
             "webinar_transcriber.llm.openai_backend.importlib.import_module",
             lambda _name: _fake_openai_module(fake_client),

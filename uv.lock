@@ -1140,16 +1140,20 @@ wheels = [
 name = "webinar-transcriber"
 source = { editable = "." }
 dependencies = [
-    { name = "anthropic" },
     { name = "click" },
     { name = "huggingface-hub" },
     { name = "numpy" },
-    { name = "openai" },
     { name = "pillow" },
     { name = "pydantic" },
     { name = "python-docx" },
     { name = "rich" },
     { name = "silero-vad" },
+]
+
+[package.optional-dependencies]
+llm = [
+    { name = "anthropic" },
+    { name = "openai" },
 ]
 
 [package.dev-dependencies]
@@ -1165,17 +1169,18 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "anthropic", specifier = ">=0.72.0,<1.0.0" },
+    { name = "anthropic", marker = "extra == 'llm'", specifier = ">=0.72.0,<1.0.0" },
     { name = "click", specifier = ">=8.3.1,<9.0.0" },
     { name = "huggingface-hub", specifier = ">=0.36.0,<1.0.0" },
     { name = "numpy", specifier = ">=2.4.3,<3.0.0" },
-    { name = "openai", specifier = ">=2.30.0,<3.0.0" },
+    { name = "openai", marker = "extra == 'llm'", specifier = ">=2.30.0,<3.0.0" },
     { name = "pillow", specifier = ">=12.1.1,<13.0.0" },
     { name = "pydantic", specifier = ">=2.12.5,<3.0.0" },
     { name = "python-docx", specifier = ">=1.2.0,<2.0.0" },
     { name = "rich", specifier = ">=14.3.3,<15.0.0" },
     { name = "silero-vad", specifier = ">=6.2.1,<7.0.0" },
 ]
+provides-extras = ["llm"]
 
 [package.metadata.requires-dev]
 dev = [
