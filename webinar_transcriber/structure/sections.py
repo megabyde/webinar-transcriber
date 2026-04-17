@@ -12,8 +12,9 @@ from .constants import (
     MAX_AUDIO_SECTION_CHARS,
     MIN_AUDIO_SECTION_DURATION_SEC,
     TARGET_AUDIO_SECTION_DURATION_SEC,
+    TITLE_WORD_LIMIT,
 )
-from .scoring import _audio_title_from_segments, _title_from_text
+from .scoring import _title_from_text
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -111,8 +112,18 @@ def _should_start_new_audio_section(
 def _audio_section_from_segments(
     segments: list[TranscriptSegment], section_index: int
 ) -> ReportSection:
-    title = _audio_title_from_segments(segments, fallback=f"Section {section_index}")
+    title = _first_words_title(segments, fallback=f"Section {section_index}")
     return _section_from_segments(segments, section_index=section_index, title=title)
+
+
+def _first_words_title(
+    segments: list[TranscriptSegment], *, fallback: str, word_limit: int = TITLE_WORD_LIMIT
+) -> str:
+    text = next((segment.text.strip() for segment in segments if segment.text.strip()), "")
+    if not text:
+        return fallback
+    words = text.split()
+    return " ".join(words[:word_limit]) + ("…" if len(words) > word_limit else "")
 
 
 def _section_from_segments(

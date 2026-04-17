@@ -11,7 +11,6 @@ from .constants import (
     ACTION_ITEM_PATTERNS,
     SUMMARY_ITEM_LIMIT,
     SUMMARY_NOISE_PATTERN,
-    TITLE_FILLER_WORDS,
     TITLE_WORD_LIMIT,
 )
 
@@ -80,42 +79,6 @@ def _title_from_text(text: str, *, fallback: str) -> str:
     return " ".join(words[:TITLE_WORD_LIMIT]) if len(words) > TITLE_WORD_LIMIT else cleaned
 
 
-def _audio_title_from_segments(segments: list[TranscriptSegment], *, fallback: str) -> str:
-    best_segment: TranscriptSegment | None = None
-    best_score = float("-inf")
-
-    for segment in segments:
-        score = _audio_title_score(segment)
-        if score > best_score:
-            best_segment = segment
-            best_score = score
-
-    if best_segment is None:
-        return fallback
-
-    title_words = _title_words(best_segment.text)
-    title = _title_from_words(title_words)
-    return title or fallback
-
-
-def _audio_title_score(segment: TranscriptSegment) -> float:
-    words = _title_words(segment.text)
-    if len(words) < 4:
-        return -1.0
-
-    informative_words = sum(
-        1 for word in words[:12] if word not in TITLE_FILLER_WORDS and len(word) > 2
-    )
-    if informative_words < 3:
-        return -1.0
-
-    unique_ratio = len(set(words[:12])) / min(len(words), 12)
-    score = float(informative_words)
-    if unique_ratio < 0.6:
-        score -= 3.0
-    return score
-
-
 def _summary_score(segment: TranscriptSegment) -> float:
     text = segment.text.strip()
     words = _title_words(text)
@@ -137,19 +100,7 @@ def _summary_score(segment: TranscriptSegment) -> float:
 
 
 def _title_words(text: str) -> list[str]:
-    words = re.findall(r"[\w'-]+", text.lower())
-    start_index = 0
-    while start_index < len(words) and words[start_index] in TITLE_FILLER_WORDS:
-        start_index += 1
-    return words[start_index:]
-
-
-def _title_from_words(words: list[str]) -> str:
-    if not words:
-        return ""
-
-    title = " ".join(words[:TITLE_WORD_LIMIT])
-    return title[:1].upper() + title[1:]
+    return re.findall(r"[\w'-]+", text.lower())
 
 
 def _segment_key(text: str) -> str:

@@ -49,18 +49,6 @@ MAX_AUDIO_SECTION_CHARS = 3600
 TITLE_WORD_LIMIT = 6
 SUMMARY_ITEM_LIMIT = 3
 ACTION_ITEM_LIMIT = 5
-TITLE_FILLER_WORDS = {
-    "first",
-    "just",
-    "like",
-    "okay",
-    "right",
-    "so",
-    "then",
-    "well",
-    "вот",
-    "ну",
-}
 SUMMARY_NOISE_PATTERN = re.compile(
     r"\b("
     r"звук|слышно|микрофон|всем привет|добрый вечер|чат|чате|групп[аы]|"

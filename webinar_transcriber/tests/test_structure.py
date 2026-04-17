@@ -11,19 +11,16 @@ from webinar_transcriber.models import (
 )
 from webinar_transcriber.structure import build_report
 from webinar_transcriber.structure.scoring import (
-    _audio_title_from_segments,
-    _audio_title_score,
     _build_summary,
     _derive_title,
     _extract_action_items,
     _fallback_summary,
     _segment_key,
     _summary_score,
-    _title_from_text,
-    _title_from_words,
 )
 from webinar_transcriber.structure.sections import (
     _build_audio_sections,
+    _first_words_title,
     _sections_from_block,
     _should_start_new_audio_section,
 )
@@ -118,7 +115,7 @@ class TestBuildReport:
 
         assert report.title == "Transcription Report"
         assert len(report.sections) == 1
-        assert report.sections[0].title == "Repeat me"
+        assert report.sections[0].title == "Repeat me."
         assert "Please follow up." in report.sections[0].transcript_text
         assert report.summary == ["Repeat me.", "Please follow up."]
         assert report.action_items == ["Please follow up."]
@@ -157,7 +154,7 @@ class TestBuildReport:
         assert report.sections[1].start_sec == 30.0
         assert report.sections[1].end_sec == 39.0
 
-    def test_uses_more_informative_audio_section_title(self) -> None:
+    def test_uses_first_words_audio_section_title(self) -> None:
         report = build_report(
             AudioAsset(path="demo.wav", duration_sec=260.0),
             TranscriptionResult(
@@ -185,7 +182,7 @@ class TestBuildReport:
         )
 
         assert len(report.sections) == 1
-        assert report.sections[0].title == "Today we review budget negotiations and"
+        assert report.sections[0].title == "So, well, okay, let's get started."
 
     def test_summary_skips_startup_chatter(self) -> None:
         report = build_report(
@@ -326,47 +323,46 @@ class TestAudioSectionHeuristics:
         assert sections[0].title == "Fallback block text"
         assert sections[0].frame_id == "frame-1"
 
-    def test_title_helpers_fall_back_for_empty_or_filler_only_text(self) -> None:
-        filler_segments = [
-            TranscriptSegment(id="segment-1", text="So, okay, well.", start_sec=0.0, end_sec=5.0),
-            TranscriptSegment(
-                id="segment-2", text="Just like okay right.", start_sec=5.0, end_sec=10.0
+    @pytest.mark.parametrize(
+        ("segments", "fallback", "expected"),
+        [
+            ([], "Fallback Title", "Fallback Title"),
+            (
+                [TranscriptSegment(id="segment-1", text="   ", start_sec=0.0, end_sec=5.0)],
+                "Fallback Title",
+                "Fallback Title",
             ),
-        ]
-
-        filler_title = _audio_title_from_segments(filler_segments, fallback="Fallback Title")
-
-        assert _title_from_text("   ", fallback="Fallback Title") == "Fallback Title"
-        assert _audio_title_from_segments([], fallback="Fallback Title") == "Fallback Title"
-        assert filler_title == "Fallback Title"
-        assert _title_from_words([]) == ""
+            (
+                [
+                    TranscriptSegment(
+                        id="segment-1",
+                        text="So, okay, well.",
+                        start_sec=0.0,
+                        end_sec=5.0,
+                    )
+                ],
+                "Fallback Title",
+                "So, okay, well.",
+            ),
+            (
+                [
+                    TranscriptSegment(
+                        id="segment-1",
+                        text="One two three four five six seven",
+                        start_sec=0.0,
+                        end_sec=5.0,
+                    )
+                ],
+                "Fallback Title",
+                "One two three four five six…",
+            ),
+        ],
+    )
+    def test_first_words_title(
+        self, segments: list[TranscriptSegment], fallback: str, expected: str
+    ) -> None:
+        assert _first_words_title(segments, fallback=fallback) == expected
         assert _segment_key("   ") == ""
-
-    def test_audio_title_score_penalizes_repetition(self) -> None:
-        repetitive = TranscriptSegment(
-            id="segment-1", text="Plan plan plan plan", start_sec=0.0, end_sec=4.0
-        )
-        informative = TranscriptSegment(
-            id="segment-2",
-            text="Budget timeline owner risks and rollout plan.",
-            start_sec=4.0,
-            end_sec=8.0,
-        )
-
-        assert _audio_title_score(repetitive) < _audio_title_score(informative)
-
-    def test_audio_title_score_rejects_segments_with_too_few_informative_words(self) -> None:
-        assert (
-            _audio_title_score(
-                TranscriptSegment(
-                    id="segment-1",
-                    text="Budget okay right plan",
-                    start_sec=0.0,
-                    end_sec=4.0,
-                )
-            )
-            == -1.0
-        )
 
 
 class TestSummaryAndActionHeuristics:
@@ -465,9 +461,6 @@ class TestSummaryAndActionHeuristics:
         ]
 
     def test_structure_scoring_helpers_cover_reduced_scoring_paths(self) -> None:
-        repetitive_segment = TranscriptSegment(
-            id="segment-1", text="So so so so.", start_sec=0.0, end_sec=10.0
-        )
         filler_heavy_segment = TranscriptSegment(
             id="segment-2",
             text="Please chat audio microphone hello everyone.",
@@ -477,7 +470,6 @@ class TestSummaryAndActionHeuristics:
 
         filler_key = _segment_key(filler_heavy_segment.text)
 
-        assert _audio_title_score(repetitive_segment) < 0
         assert filler_key == "please chat audio microphone hello everyone"
 
     def test_action_items_skip_noise_even_with_action_cue(self) -> None:
