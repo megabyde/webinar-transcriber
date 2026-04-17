@@ -29,7 +29,7 @@ from webinar_transcriber.normalized_audio import (
     preserve_transcription_audio,
 )
 from webinar_transcriber.paths import RunLayout, create_run_layout
-from webinar_transcriber.reporter import NullStageReporter, StageReporter
+from webinar_transcriber.reporter import NullStageReporter
 from webinar_transcriber.segmentation import VadSettings
 
 from . import asr as processor_asr
@@ -66,7 +66,7 @@ class ProcessArtifacts:
 class _RunContext:
     """Mutable state for one processing run."""
 
-    reporter: StageReporter
+    reporter: NullStageReporter
     asr_pipeline: _AsrPipelineState
     stage_timings: dict[str, float] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
@@ -183,7 +183,7 @@ def process_input(
     enable_llm: bool = False,
     transcriber: WhisperCppTranscriber | None = None,
     llm_processor: LLMProcessor | None = None,
-    reporter: StageReporter | None = None,
+    reporter: NullStageReporter | None = None,
 ) -> ProcessArtifacts:
     """Process a single audio or video file into report artifacts.
 

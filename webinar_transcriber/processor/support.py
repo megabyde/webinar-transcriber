@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
     from webinar_transcriber.llm import LLMReportPolishPlan
     from webinar_transcriber.paths import RunLayout
-    from webinar_transcriber.reporter import StageReporter
+    from webinar_transcriber.reporter import NullStageReporter
 
     from . import _AsrPipelineState
 
@@ -69,7 +69,7 @@ def write_model_json(output_path: Path, payload: BaseModel) -> None:
 
 
 def progress_updater(
-    reporter: StageReporter, *, stage_key: str
+    reporter: NullStageReporter, *, stage_key: str
 ) -> tuple[Callable[..., None], Callable[..., None]]:
     """Return progress update helpers that only advance monotonically."""
     completed = 0.0

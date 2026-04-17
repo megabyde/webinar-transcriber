@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from webinar_transcriber.asr import WhisperCppTranscriber
     from webinar_transcriber.models import MediaAsset
     from webinar_transcriber.paths import RunLayout
-    from webinar_transcriber.reporter import StageReporter
+    from webinar_transcriber.reporter import NullStageReporter
     from webinar_transcriber.segmentation import VadSettings
 
     from . import _AsrPipelineState
@@ -51,7 +51,7 @@ def run_asr_pipeline(
     media_asset: MediaAsset,
     transcriber: WhisperCppTranscriber,
     layout: RunLayout,
-    reporter: StageReporter,
+    reporter: NullStageReporter,
     stage_timings: dict[str, float],
     warnings: list[str],
     asr_pipeline: _AsrPipelineState,

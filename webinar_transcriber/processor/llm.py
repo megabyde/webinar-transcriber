@@ -24,7 +24,7 @@ from .support import (
 if TYPE_CHECKING:
     from webinar_transcriber.llm import LLMProcessor
     from webinar_transcriber.models import ReportDocument
-    from webinar_transcriber.reporter import StageReporter
+    from webinar_transcriber.reporter import NullStageReporter
 
 
 @dataclass
@@ -42,7 +42,7 @@ def resolve_llm_processor(
     *,
     enable_llm: bool,
     llm_processor: LLMProcessor | None,
-    reporter: StageReporter,
+    reporter: NullStageReporter,
     warnings: list[str],
     llm_runtime: LLMRuntimeState,
 ) -> tuple[LLMProcessor | None, LLMRuntimeState]:
@@ -76,7 +76,7 @@ def maybe_polish_report(
     report: ReportDocument,
     *,
     llm_processor: LLMProcessor | None,
-    reporter: StageReporter,
+    reporter: NullStageReporter,
     warnings: list[str],
     stage_timings: dict[str, float],
     llm_runtime: LLMRuntimeState,
