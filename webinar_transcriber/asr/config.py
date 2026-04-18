@@ -8,8 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ASR_BACKEND_NAME = "whisper.cpp"
-DEFAULT_WHISPER_CPP_MODEL_REPO = "ggerganov/whisper.cpp"
-DEFAULT_WHISPER_CPP_MODEL_FILENAME = "ggml-large-v3-turbo.bin"
+DEFAULT_WHISPER_CPP_MODEL_FILENAME = "large-v3-turbo"
 DEFAULT_WHISPER_CPP_MODEL_EXAMPLE = Path("models/whisper-cpp/ggml-large-v3-turbo.bin")
 DEFAULT_CARRYOVER_MAX_SENTENCES = 2
 DEFAULT_CARRYOVER_MAX_TOKENS = 64

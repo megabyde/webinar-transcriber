@@ -160,16 +160,20 @@ def run_asr_pipeline(
         )
 
     with stage(ctx, "reconcile", "Reconciling transcript windows") as st:
+        decoded_segment_count = sum(len(window.segments) for window in decoded_windows)
         transcription, reconciliation_stats = reconcile_decoded_windows(decoded_windows)
-        st.detail = count_label(len(transcription.segments), "segment")
+        segment_label = "segment" if len(transcription.segments) == 1 else "segments"
+        st.detail = f"{decoded_segment_count} -> {len(transcription.segments)} {segment_label}"
     asr_pipeline.reconciliation_duplicate_segments_dropped = (
         reconciliation_stats.duplicate_segments_dropped
     )
     asr_pipeline.reconciliation_boundary_fixes = reconciliation_stats.boundary_fixes
     asr_pipeline.system_info = transcriber.system_info
 
-    write_model_json(layout.transcript_path, transcription)
-    normalized_transcription = normalize_transcription(transcription)
+    with stage(ctx, "normalize_transcript", "Normalizing transcript") as st:
+        write_model_json(layout.transcript_path, transcription)
+        normalized_transcription = normalize_transcription(transcription)
+        st.detail = count_label(len(normalized_transcription.segments), "segment")
     return AsrPipelineResult(
         transcription=transcription, normalized_transcription=normalized_transcription
     )

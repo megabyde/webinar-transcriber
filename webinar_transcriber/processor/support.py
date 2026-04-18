@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
+import logging
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Protocol
 
@@ -18,6 +18,7 @@ from webinar_transcriber.models import (
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from pathlib import Path
     from typing import Literal
 
     from pydantic import BaseModel
@@ -148,32 +149,21 @@ def write_model_json(output_path: Path, payload: BaseModel) -> None:
 
 
 def configure_asr_logging(transcriber: WhisperCppTranscriber, layout: RunLayout) -> None:
-    """Write whisper.cpp logs into the run directory."""
-    transcriber.set_log_path(layout.run_dir / "whisper-cpp.log")
-
-
-def asr_model_label(model_name: str) -> str:
-    """Return a compact display label for the configured ASR model."""
-    path = Path(model_name)
-    if path.is_absolute():
-        if repo_label := hf_cache_repo_label(path):
-            return f"{repo_label}/{path.name} (HF cache)"
-        return path.name
-    return model_name
-
-
-def hf_cache_repo_label(path: Path) -> str | None:
-    """Return the Hugging Face repo label embedded in a cache path, if present."""
-    for part in path.parts:
-        if part.startswith("models--"):
-            return part.removeprefix("models--").replace("--", "/")
-    return None
+    """Write pywhispercpp logs into the run directory."""
+    log_path = layout.run_dir / "whisper-cpp.log"
+    logger = logging.getLogger("pywhispercpp")
+    for handler in logger.handlers:
+        handler.close()
+    logger.handlers.clear()
+    logger.addHandler(logging.FileHandler(log_path))
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    transcriber.set_log_path(log_path)
 
 
 def asr_runtime_detail(transcriber: WhisperCppTranscriber) -> str:
     """Return a human-facing ASR runtime label."""
-    model_label = asr_model_label(transcriber.model_name)
-    return f"{model_label} | {transcriber.device_name}"
+    return f"{transcriber.model_name} | {transcriber.device_name}"
 
 
 def window_transcription_stage_detail(

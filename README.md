@@ -21,48 +21,41 @@ top of that local output, but it does not replace the base pipeline.
 
 ## Install
 
-### System Dependencies
+### Prerequisites
 
-Install the native media and `whisper.cpp` runtime dependencies before using the CLI.
+- `ffmpeg` and `ffprobe` (for media handling).
+- A C/C++ compiler and `cmake` (needed when `pywhispercpp` builds from source for GPU backends).
+- For CUDA: a working CUDA toolkit (`nvcc` on `PATH`, `CUDA_HOME` set).
 
-#### macOS
-
-```bash
-brew install ffmpeg whisper-cpp
-```
-
-Homebrew installs `libwhisper.dylib` in a standard location, so the default setup should usually
-work without extra configuration.
-
-#### Linux
-
-On Debian or Ubuntu, a typical setup is:
-
-```bash
-sudo apt update
-sudo apt install -y ffmpeg libwhisper-cpp-dev
-```
-
-If `libwhisper.so` is not in a standard system location, point the app at it with `WHISPER_CPP_LIB`,
-for example:
-
-```bash
-export WHISPER_CPP_LIB=/path/to/libwhisper.so
-```
-
-### Install the CLI
-
-From this repository checkout:
+### Quick Install (CPU Everywhere, Metal by Default on macOS)
 
 ```bash
 uv tool install .
 ```
 
-If you update the checkout and want to refresh the installed command:
+This works on every supported platform. On Linux and Windows, this is the CPU install path. On
+macOS, when `pywhispercpp` is source-built, whisper.cpp enables Metal automatically. The default
+`large-v3-turbo` model is downloaded on first transcription run, not during `uv tool install .`. To
+verify the active backend after a run, look for `Metal = 1` under `diagnostics.json` →
+`asr_pipeline.system_info`.
+
+### NVIDIA (CUDA on Linux or Windows)
 
 ```bash
-uv tool install --reinstall .
+GGML_CUDA=1 uv tool install --reinstall .
 ```
+
+### Switching Backends During Development
+
+If you're working from a repository checkout and want to rebuild only `pywhispercpp` with a
+different backend:
+
+```bash
+make sync-reinstall PYWHISPERCPP_BACKEND=cuda
+```
+
+For contributor/development workflows from a checkout, use `make sync` to create the project
+environment. `uv tool install .` is the user-facing CLI install path.
 
 All usage examples below assume `webinar-transcriber` is available on your `PATH`.
 
@@ -142,8 +135,9 @@ only partial intermediate artifacts and no final report outputs.
 1. Probe the input and prepare deterministic transcription audio. This means a mono, `16 kHz`,
    `16-bit PCM WAV` file that the downstream pipeline can treat as a stable contract instead of
    re-checking format details at every stage.
-1. Prepare the local `whisper.cpp` runtime. This loads the selected GGML model, resolves the
-   execution backend, and records runtime details for diagnostics and CLI progress reporting.
+1. Prepare the local `whisper.cpp` runtime. This loads the selected model identifier or GGML model
+   path, resolves the execution backend, and records runtime details for diagnostics and CLI
+   progress reporting.
 1. Detect speech regions with Silero VAD.
 1. Expand and repair speech regions into ASR windows.
 1. Transcribe the windows locally with `whisper.cpp`.
@@ -157,14 +151,14 @@ only partial intermediate artifacts and no final report outputs.
 
 ### ASR Model
 
-`webinar-transcriber` uses a `whisper.cpp` GGML model file. By default, it resolves
-`ggml-large-v3-turbo` from the standard Hugging Face cache and reuses the cached file on later runs.
-If you want to pin a different model file or keep models in a repo-local directory, download the
-`.bin` file yourself and pass its path with `--asr-model`.
+`webinar-transcriber` uses `pywhispercpp` to resolve whisper.cpp models. By default, it uses the
+built-in `large-v3-turbo` model identifier, which `pywhispercpp` downloads into its cache on first
+use. You can also pass a different model identifier or a local GGML model path with `--asr-model`.
 
 For example:
 
 ```bash
+webinar-transcriber INPUT --asr-model large-v3-turbo
 webinar-transcriber INPUT --asr-model models/whisper-cpp/ggml-large-v3-turbo.bin
 ```
 

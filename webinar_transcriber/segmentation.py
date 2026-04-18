@@ -1,8 +1,8 @@
 """Speech-region detection and preparation for deterministic ASR decoding.
 
-The policy lives here rather than in `whispercpp.py` so the native binding stays a thin decode
-shim. That separation makes it easier to evolve segmentation heuristics without entangling them
-with the low-level library wrapper.
+The policy lives here rather than in the transcriber wrapper so the ASR integration stays a thin
+decode shim. That separation makes it easier to evolve segmentation heuristics without entangling
+them with runtime-specific library details.
 """
 
 from __future__ import annotations

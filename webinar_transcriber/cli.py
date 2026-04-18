@@ -48,8 +48,8 @@ class CLIError(click.ClickException):
     "--asr-model",
     type=str,
     default=None,
-    help="Override the whisper.cpp model path, for example "
-    "'models/whisper-cpp/ggml-large-v3-turbo.bin'.",
+    help="Override the whisper.cpp model identifier or local model path, for example "
+    "'large-v3-turbo' or 'models/whisper-cpp/ggml-large-v3-turbo.bin'.",
 )
 @click.option(
     "--vad/--no-vad",

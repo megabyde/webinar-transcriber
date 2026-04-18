@@ -193,7 +193,8 @@ class TestCli:
         assert "--keep-audio / --no-keep-audio" in result.output
         assert "--audio-format" in result.output
         assert "--llm" in result.output
-        assert "Override the whisper.cpp model path" in result.output
+        assert "Override the whisper.cpp model identifier" in result.output
+        assert "local model path" in result.output
         assert "provider-backed report" in result.output
         assert "enhancement." in result.output
 
