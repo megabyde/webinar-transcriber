@@ -263,14 +263,14 @@ def process_input(
                     "detect_scenes",
                     "Detecting scenes",
                     total=detect_scene_total,
-                    count_label="s",
+                    count_label="samples",
                     detail="0 scenes",
                 ) as st:
                     ctx.scenes = video_runtime.detect_scenes(
                         input_path,
                         duration_sec=media_asset.duration_sec,
-                        progress_callback=lambda scene_count: st.advance_to(
-                            scene_count,
+                        progress_callback=lambda sample_count, scene_count: st.advance_to(
+                            float(sample_count),
                             detail=count_label(scene_count, "scene"),
                         ),
                     )

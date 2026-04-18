@@ -3,6 +3,7 @@
 import io
 import subprocess
 from pathlib import Path
+from typing import IO, cast
 
 import numpy as np
 import pytest
@@ -17,11 +18,14 @@ from webinar_transcriber.video.frames import (
     _normalize_extracted_frame,
 )
 from webinar_transcriber.video.scenes import (
+    SCENE_SAMPLE_TIMEOUT_SEC,
     TARGET_SAMPLE_HEIGHT,
     TARGET_SAMPLE_WIDTH,
     _detect_scene_start_times,
     _estimate_sample_end_time,
     _iter_sampled_frames,
+    _read_stdout_chunk,
+    _remaining_scene_sample_timeout,
     estimate_sample_count,
 )
 
@@ -30,16 +34,22 @@ FIXTURE_DIR = Path(__file__).parents[2] / "tests" / "fixtures"
 
 class TestDetectScenes:
     def test_detect_scenes_finds_multiple_segments(self) -> None:
-        scene_counts: list[int] = []
+        progress_updates: list[tuple[int, int]] = []
+
+        def on_progress(sample_count: int, scene_count: int) -> None:
+            progress_updates.append((sample_count, scene_count))
+
         scenes = detect_scenes(
             FIXTURE_DIR / "sample-video.mp4",
             min_scene_length_sec=1.0,
-            progress_callback=scene_counts.append,
+            progress_callback=on_progress,
         )
 
         assert len(scenes) >= 2
         assert scenes[0].start_sec == 0.0
-        assert scene_counts == [1, 2]
+        assert progress_updates
+        assert progress_updates[-1][0] == estimate_sample_count(scenes[-1].end_sec)
+        assert progress_updates[-1][1] == len(scenes)
 
 
 class TestFrameExtraction:
@@ -101,23 +111,26 @@ class TestFrameExtraction:
 
         assert scene_starts == [0.0, 4.0]
 
-    def test_detect_scene_start_times_reports_running_scene_counts(self) -> None:
-        scene_counts: list[int] = []
+    def test_detect_scene_start_times_reports_sample_and_scene_progress(self) -> None:
+        progress_updates: list[tuple[int, int]] = []
         samples = [
             (0.0, np.zeros((2, 2), dtype=np.float32)),
             (1.0, np.full((2, 2), 30.0, dtype=np.float32)),
             (4.0, np.full((2, 2), 30.0, dtype=np.float32)),
         ]
 
+        def on_progress(sample_count: int, scene_count: int) -> None:
+            progress_updates.append((sample_count, scene_count))
+
         scene_starts = _detect_scene_start_times(
             samples,
             difference_threshold=10.0,
             min_scene_length_sec=3.0,
-            progress_callback=scene_counts.append,
+            progress_callback=on_progress,
         )
 
         assert scene_starts == [0.0, 4.0]
-        assert scene_counts == [1, 1, 2]
+        assert progress_updates == [(1, 1), (2, 1), (3, 2)]
 
     def test_normalize_extracted_frame_applies_exif_orientation(self, tmp_path) -> None:
         image_path = tmp_path / "rotated.jpg"
@@ -319,13 +332,13 @@ class TestIterSampledFrames:
     ) -> None:
         class FakeProcess:
             def __init__(self) -> None:
-                self.stdout = io.BytesIO()
+                self.stdout = io.BytesIO(b"\x00")
                 self.stderr = io.BytesIO()
                 self.returncode = 0
 
-            def communicate(self, timeout: float | None = None) -> tuple[bytes, bytes]:
+            def wait(self, timeout: float | None = None) -> int:
                 del timeout
-                return b"\x00", b""
+                return self.returncode
 
         process = FakeProcess()
         monkeypatch.setattr(
@@ -343,12 +356,12 @@ class TestIterSampledFrames:
         class FakeProcess:
             def __init__(self) -> None:
                 self.stdout = io.BytesIO()
-                self.stderr = io.BytesIO()
+                self.stderr = io.BytesIO(b"ffmpeg failed")
                 self.returncode = 1
 
-            def communicate(self, timeout: float | None = None) -> tuple[bytes, bytes]:
+            def wait(self, timeout: float | None = None) -> int:
                 del timeout
-                return b"", b"ffmpeg failed"
+                return self.returncode
 
         monkeypatch.setattr(
             "webinar_transcriber.video.scenes.subprocess.Popen", lambda *_a, **_k: FakeProcess()
@@ -366,13 +379,13 @@ class TestIterSampledFrames:
 
         class FakeProcess:
             def __init__(self) -> None:
-                self.stdout = io.BytesIO()
-                self.stderr = io.BytesIO()
+                self.stdout = io.BytesIO(b"\x00" * frame_size)
+                self.stderr = io.BytesIO(b"ffmpeg failed late")
                 self.returncode = 1
 
-            def communicate(self, timeout: float | None = None) -> tuple[bytes, bytes]:
+            def wait(self, timeout: float | None = None) -> int:
                 del timeout
-                return b"\x00" * frame_size, b"ffmpeg failed late"
+                return self.returncode
 
         monkeypatch.setattr(
             "webinar_transcriber.video.scenes.subprocess.Popen", lambda *_a, **_k: FakeProcess()
@@ -388,13 +401,13 @@ class TestIterSampledFrames:
     ) -> None:
         class FakeProcess:
             def __init__(self) -> None:
-                self.stdout = io.BytesIO()
-                self.stderr = io.BytesIO()
+                self.stdout = io.BytesIO(b"\x00")
+                self.stderr = io.BytesIO(b"ffmpeg failed")
                 self.returncode = 1
 
-            def communicate(self, timeout: float | None = None) -> tuple[bytes, bytes]:
+            def wait(self, timeout: float | None = None) -> int:
                 del timeout
-                return b"\x00", b"ffmpeg failed"
+                return self.returncode
 
         monkeypatch.setattr(
             "webinar_transcriber.video.scenes.subprocess.Popen", lambda *_a, **_k: FakeProcess()
@@ -409,7 +422,6 @@ class TestIterSampledFrames:
         class FakeProcess:
             def __init__(self) -> None:
                 self.killed = False
-                self.communicated = False
 
             stdout = io.BytesIO()
             stderr = io.BytesIO()
@@ -418,15 +430,19 @@ class TestIterSampledFrames:
             def kill(self) -> None:
                 self.killed = True
 
-            def communicate(self, timeout: float | None = None) -> tuple[bytes, bytes]:
-                if not self.communicated:
-                    self.communicated = True
-                    raise subprocess.TimeoutExpired(cmd=["ffmpeg"], timeout=timeout or 0.0)
-                return b"", b""
+            def wait(self, timeout: float | None = None) -> int:
+                del timeout
+                return self.returncode
 
         process = FakeProcess()
         monkeypatch.setattr(
             "webinar_transcriber.video.scenes.subprocess.Popen", lambda *_a, **_k: process
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.video.scenes._read_stdout_chunk",
+            lambda *_a, **_k: (_ for _ in ()).throw(
+                subprocess.TimeoutExpired(cmd=["ffmpeg"], timeout=SCENE_SAMPLE_TIMEOUT_SEC)
+            ),
         )
 
         with pytest.raises(
@@ -436,9 +452,67 @@ class TestIterSampledFrames:
 
         assert process.killed
 
+    def test_iter_sampled_frames_yields_frames_before_waiting_for_completion(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        frame_size = TARGET_SAMPLE_WIDTH * TARGET_SAMPLE_HEIGHT
+
+        class FakeProcess:
+            def __init__(self) -> None:
+                self.stdout = io.BytesIO(b"\x00" * frame_size)
+                self.stderr = io.BytesIO()
+                self.returncode = 0
+                self.wait_called = False
+
+            def wait(self, timeout: float | None = None) -> int:
+                del timeout
+                self.wait_called = True
+                return self.returncode
+
+        process = FakeProcess()
+        monkeypatch.setattr(
+            "webinar_transcriber.video.scenes.subprocess.Popen", lambda *_a, **_k: process
+        )
+
+        frames = iter(_iter_sampled_frames(FIXTURE_DIR / "sample-video.mp4"))
+        sample_time, frame = next(frames)
+
+        assert sample_time == 0.0
+        assert frame.shape == (TARGET_SAMPLE_HEIGHT, TARGET_SAMPLE_WIDTH)
+        assert not process.wait_called
+        with pytest.raises(StopIteration):
+            next(frames)
+        assert process.wait_called
+
 
 class TestSceneSamplingHelpers:
     def test_scene_sampling_helpers_cover_zero_duration_and_trailing_sample(self) -> None:
         assert estimate_sample_count(0.0) == 1
         assert _estimate_sample_end_time(0.0) == 0.0
         assert _estimate_sample_end_time(4.0) == 5.0
+
+    def test_remaining_scene_sample_timeout_raises_once_budget_is_exhausted(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("webinar_transcriber.video.scenes.perf_counter", lambda: 10.0)
+
+        with pytest.raises(subprocess.TimeoutExpired):
+            _remaining_scene_sample_timeout(10.0 - SCENE_SAMPLE_TIMEOUT_SEC - 1.0)
+
+    def test_read_stdout_chunk_raises_when_pipe_is_not_ready(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class FakeStream:
+            def fileno(self) -> int:
+                return 123
+
+            def read(self, _size: int) -> bytes:
+                raise AssertionError("read should not run when select reports no readiness")
+
+        monkeypatch.setattr(
+            "webinar_transcriber.video.scenes.select.select",
+            lambda *_args, **_kwargs: ([], [], []),
+        )
+
+        with pytest.raises(subprocess.TimeoutExpired):
+            _read_stdout_chunk(cast("IO[bytes]", FakeStream()), size=1, timeout_sec=1.0)

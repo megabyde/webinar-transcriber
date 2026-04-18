@@ -473,8 +473,8 @@ class TestProcessInput:
 
         def fake_detect_scenes(*_args, progress_callback=None, **_kwargs) -> list[Scene]:
             assert progress_callback is not None
-            progress_callback(1)
-            progress_callback(2)
+            progress_callback(1, 1)
+            progress_callback(2, 2)
             return scenes
 
         monkeypatch.setattr("webinar_transcriber.video.detect_scenes", fake_detect_scenes)
@@ -833,7 +833,7 @@ class TestProcessorHelpers:
             window_count=1, total_duration_sec=12.5, elapsed_sec=2.5
         )
 
-        assert detail == "1 window | RTF 0.20"
+        assert detail == "1 window | RTF 5x"
 
     def test_asr_runtime_detail_shortens_hf_cache_model_path(self) -> None:
         transcriber = cast(

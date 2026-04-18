@@ -182,7 +182,8 @@ def window_transcription_stage_detail(
     """Return the transcribe-stage summary with window count and real-time factor."""
     details = [count_label(window_count, "window")]
     if total_duration_sec > 0 and elapsed_sec > 0:
-        details.append(f"RTF {elapsed_sec / total_duration_sec:.2f}")
+        realtime_multiple = f"{total_duration_sec / elapsed_sec:.2f}".rstrip("0").rstrip(".")
+        details.append(f"RTF {realtime_multiple}x")
     return " | ".join(details)
 
 

@@ -1,9 +1,13 @@
 """Scene detection for webinar videos."""
 
+import io
 import math
+import select
 import subprocess
 from collections.abc import Callable, Iterable
 from pathlib import Path
+from time import perf_counter
+from typing import IO
 
 import numpy as np
 
@@ -23,7 +27,7 @@ def detect_scenes(
     *,
     duration_sec: float | None = None,
     min_scene_length_sec: float = MIN_SCENE_LENGTH_SEC,
-    progress_callback: Callable[[int], None] | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[Scene]:
     """Detect slide changes by sampling the video once per second.
 
@@ -63,22 +67,22 @@ def _detect_scene_start_times(
     *,
     difference_threshold: float = DIFFERENCE_THRESHOLD,
     min_scene_length_sec: float = MIN_SCENE_LENGTH_SEC,
-    progress_callback: Callable[[int], None] | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[float]:
     scene_starts: list[float] = []
     accepted_frame: np.ndarray | None = None
 
-    for current_time, current_frame in sampled_frames:
+    for sample_count, (current_time, current_frame) in enumerate(sampled_frames, start=1):
         if accepted_frame is None:
             scene_starts.append(float(current_time))
             accepted_frame = current_frame
             if progress_callback is not None:
-                progress_callback(len(scene_starts))
+                progress_callback(sample_count, len(scene_starts))
             continue
 
         if (current_time - scene_starts[-1]) < min_scene_length_sec:
             if progress_callback is not None:
-                progress_callback(len(scene_starts))
+                progress_callback(sample_count, len(scene_starts))
             continue
 
         difference = float(np.abs(current_frame - accepted_frame).mean())
@@ -88,7 +92,7 @@ def _detect_scene_start_times(
             # so gradual visual drift does not trigger spurious scene breaks.
             accepted_frame = current_frame
         if progress_callback is not None:
-            progress_callback(len(scene_starts))
+            progress_callback(sample_count, len(scene_starts))
 
     return scene_starts
 
@@ -139,15 +143,36 @@ def _iter_sampled_frames(video_path: Path) -> Iterable[tuple[float, np.ndarray]]
         process.kill()
         raise MediaProcessingError("Could not open ffmpeg pipes for scene detection.")
 
+    start_time = perf_counter()
+    partial_frame = bytearray()
+
     try:
-        stdout_data, stderr_data = process.communicate(timeout=SCENE_SAMPLE_TIMEOUT_SEC)
+        sample_index = 0
+        while chunk := _read_stdout_chunk(
+            process.stdout,
+            size=frame_size - len(partial_frame),
+            timeout_sec=_remaining_scene_sample_timeout(start_time),
+        ):
+            partial_frame.extend(chunk)
+            if len(partial_frame) < frame_size:
+                continue
+            frame_bytes = bytes(partial_frame)
+            frame = np.frombuffer(frame_bytes, dtype=np.uint8).reshape((
+                TARGET_SAMPLE_HEIGHT,
+                TARGET_SAMPLE_WIDTH,
+            ))
+            yield sample_index * SAMPLE_INTERVAL_SEC, frame.astype(np.float32)
+            sample_index += 1
+            partial_frame.clear()
+        process.wait(timeout=_remaining_scene_sample_timeout(start_time))
     except subprocess.TimeoutExpired as error:
         process.kill()
-        process.communicate()
+        process.wait()
         raise MediaProcessingError(
             f"ffmpeg scene sampling timed out after {SCENE_SAMPLE_TIMEOUT_SEC:g}s."
         ) from error
 
+    stderr_data = process.stderr.read()
     stderr_text = (
         stderr_data.decode(errors="replace").strip()
         if isinstance(stderr_data, bytes)
@@ -156,17 +181,26 @@ def _iter_sampled_frames(video_path: Path) -> Iterable[tuple[float, np.ndarray]]
     if process.returncode != 0:
         raise MediaProcessingError(stderr_text or "ffmpeg scene sampling failed.")
 
-    if len(stdout_data) % frame_size != 0:
+    if partial_frame:
         raise MediaProcessingError("Incomplete frame sample returned by ffmpeg.")
 
-    for sample_index in range(len(stdout_data) // frame_size):
-        start = sample_index * frame_size
-        chunk = stdout_data[start : start + frame_size]
-        frame = np.frombuffer(chunk, dtype=np.uint8).reshape((
-            TARGET_SAMPLE_HEIGHT,
-            TARGET_SAMPLE_WIDTH,
-        ))
-        yield sample_index * SAMPLE_INTERVAL_SEC, frame.astype(np.float32)
+
+def _remaining_scene_sample_timeout(start_time: float) -> float:
+    remaining = SCENE_SAMPLE_TIMEOUT_SEC - (perf_counter() - start_time)
+    if remaining <= 0:
+        raise subprocess.TimeoutExpired(cmd=["ffmpeg"], timeout=SCENE_SAMPLE_TIMEOUT_SEC)
+    return remaining
+
+
+def _read_stdout_chunk(stream: IO[bytes], *, size: int, timeout_sec: float) -> bytes:
+    try:
+        fileno = stream.fileno()
+    except (AttributeError, io.UnsupportedOperation, OSError):
+        return stream.read(size)
+    ready, _, _ = select.select([fileno], [], [], timeout_sec)
+    if not ready:
+        raise subprocess.TimeoutExpired(cmd=["ffmpeg"], timeout=SCENE_SAMPLE_TIMEOUT_SEC)
+    return stream.read(size)
 
 
 def _estimate_sample_end_time(last_sample_time: float) -> float:

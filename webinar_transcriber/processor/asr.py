@@ -122,11 +122,7 @@ def run_asr_pipeline(
             layout.expanded_regions_path,
             {"expanded_regions": [asdict(region) for region in expanded_regions]},
         )
-        st.detail = (
-            f"{count_label(len(speech_regions), 'region')} "
-            f"-> {count_label(len(expanded_regions), 'region')} "
-            f"| {count_label(len(windows), 'window')}"
-        )
+        st.detail = count_label(len(expanded_regions), "region")
     asr_pipeline.window_count = len(windows)
     asr_pipeline.average_window_duration_sec = (
         sum(w.end_sec - w.start_sec for w in windows) / len(windows) if windows else None
