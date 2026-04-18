@@ -25,10 +25,10 @@ classifiers = [
 ]
 dependencies = [
     "click>=8.3.1,<9.0.0",
-    "huggingface-hub>=0.36.0,<1.0.0",
     "numpy>=2.4.3,<3.0.0",
     "pillow>=12.1.1,<13.0.0",
     "pydantic>=2.12.5,<3.0.0",
+    "pywhispercpp>=1.4.1,<2.0.0",
     "python-docx>=1.2.0,<2.0.0",
     "rich>=14.3.3,<15.0.0",
     "silero-vad>=6.2.1,<7.0.0",
@@ -69,6 +69,15 @@ addopts = [
     "--durations-min=0",
 ]
 testpaths = ["webinar_transcriber"]
+
+[tool.uv.sources]
+pywhispercpp = { git = "https://github.com/absadiki/pywhispercpp", tag = "v1.4.1" }
+
+[tool.uv]
+no-build-isolation-package = ["pywhispercpp"]
+
+[tool.uv.extra-build-variables]
+pywhispercpp = { NO_REPAIR = "1" }
 
 [tool.coverage.run]
 branch = false
@@ -236,8 +245,6 @@ convention = "google"
 "webinar_transcriber/tests/test_asr.py" = ["SLF001"]
 # UI reporter tests inspect internal state transitions that are hard to assert publicly
 "webinar_transcriber/tests/test_ui.py" = ["SLF001"]
-# whisper.cpp tests validate low-level wrapper behavior through private bridge methods
-"webinar_transcriber/tests/test_whispercpp.py" = ["SLF001"]
 
 [tool.pymarkdown.plugins.md013]
 line_length = 100

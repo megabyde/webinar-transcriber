@@ -58,7 +58,7 @@ jobs:
             uv-${{ runner.os }}-py3.12-
       - name: Install native dependencies
         run: |
-          brew install ffmpeg whisper-cpp
+          brew install ffmpeg
       - name: Sync dependencies
         run: make sync
       - name: Smoke CLI help
@@ -66,7 +66,7 @@ jobs:
           uv run webinar-transcriber --help
       - name: Smoke whisper runtime
         run: |
-          uv run python -c "from webinar_transcriber.whispercpp import WhisperCppLibrary; lib = WhisperCppLibrary(); assert lib.system_info().strip()"
+          uv run python -c "from pywhispercpp.model import Model; assert Model.system_info().strip()"
       - name: Run smoke tests
         run: make test
 

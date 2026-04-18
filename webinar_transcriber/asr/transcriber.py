@@ -1,39 +1,52 @@
-"""ASR adapter built on top of the whisper.cpp C API."""
+"""ASR adapter built on top of pywhispercpp."""
 
 from __future__ import annotations
 
 import importlib
 import re
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from dataclasses import replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Any, Protocol, Self, cast
+
+import numpy as np
 
 from webinar_transcriber.asr.carryover import build_prompt_carryover
 from webinar_transcriber.asr.config import (
     DEFAULT_WHISPER_CPP_MODEL_EXAMPLE,
     DEFAULT_WHISPER_CPP_MODEL_FILENAME,
-    DEFAULT_WHISPER_CPP_MODEL_REPO,
     PromptCarryoverSettings,
     WhisperDecodeSettings,
 )
+from webinar_transcriber.models import DecodedWindow, TranscriptSegment
+from webinar_transcriber.normalized_audio import sample_index_for_time
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
     from types import TracebackType
 
-    import numpy as np
+    from webinar_transcriber.models import InferenceWindow
 
-    from webinar_transcriber.models import DecodedWindow, InferenceWindow
-    from webinar_transcriber.whispercpp import (
-        WhisperCppLibrary,
-        WhisperCppRuntimeDetails,
-        WhisperCppSession,
-    )
+GPU_BACKEND_PATTERN = re.compile(r"(?i)\b(metal|mtl|cuda)\b[^|]*?(?:=|:)\s*(?:1|true)")
+_WHISPER_TICKS_PER_SECOND = 100.0
 
-GPU_BACKEND_PATTERN = re.compile(
-    r"(?i)\b(metal|mtl|cuda|vulkan|coreml)\b[^|]*?(?:=|:)\s*(?:1|true)"
-)
+
+class _PyWhisperSegment(Protocol):
+    t0: int | float
+    t1: int | float
+    text: str
+
+
+class _PyWhisperModel(Protocol):
+    def system_info(self) -> str: ...
+
+    def transcribe(
+        self, audio_samples: np.ndarray, **kwargs: str | None
+    ) -> list[_PyWhisperSegment]: ...
+
+    def auto_detect_language(
+        self, audio_samples: np.ndarray, *, n_threads: int
+    ) -> tuple[tuple[str, float], dict[str, float]]: ...
 
 
 def _missing_model_error_message(model_path: Path | None) -> str:
@@ -45,17 +58,36 @@ def _missing_model_error_message(model_path: Path | None) -> str:
     location_hint = f"Download a whisper.cpp model there, or use --asr-model {example_path}."
     return (
         f"whisper.cpp model file does not exist: {model_path_text}. "
-        f"{location_hint} See README.md for model download instructions."
+        f"{location_hint} See README.md for model setup details."
     )
 
 
-def _default_model_download_error_message() -> str:
+def _model_prepare_error_message(model_name: str) -> str:
     return (
-        "Could not resolve the default whisper.cpp model from the Hugging Face cache. "
-        "The app uses Hugging Face cache defaults for the built-in model. "
-        f"To use a manual file instead, pass --asr-model {DEFAULT_WHISPER_CPP_MODEL_EXAMPLE}. "
-        "See README.md for model download instructions."
+        f"Could not prepare whisper.cpp model '{model_name}'. "
+        "pywhispercpp accepts model identifiers such as 'large-v3-turbo' or local ggml model "
+        f"paths such as {DEFAULT_WHISPER_CPP_MODEL_EXAMPLE}."
     )
+
+
+def _model_cls() -> type[_PyWhisperModel]:
+    return importlib.import_module("pywhispercpp.model").Model
+
+
+def _looks_like_model_path(model_name: str) -> bool:
+    model_path = Path(model_name).expanduser()
+    return model_path.suffix == ".bin" or model_path.parent != Path()
+
+
+@contextmanager
+def _suppress_pywhispercpp_download_progress() -> Iterator[None]:
+    pywhispercpp_utils = cast("Any", importlib.import_module("pywhispercpp.utils"))
+    original_tqdm = pywhispercpp_utils.tqdm
+    pywhispercpp_utils.tqdm = lambda *args, **kwargs: original_tqdm(*args, disable=True, **kwargs)
+    try:
+        yield
+    finally:
+        pywhispercpp_utils.tqdm = original_tqdm
 
 
 class ASRProcessingError(RuntimeError):
@@ -63,7 +95,7 @@ class ASRProcessingError(RuntimeError):
 
 
 class WhisperCppTranscriber:
-    """ASR implementation using the in-process whisper.cpp C API."""
+    """ASR implementation using pywhispercpp."""
 
     def __init__(
         self,
@@ -71,36 +103,30 @@ class WhisperCppTranscriber:
         *,
         threads: int = 4,
         carryover_settings: PromptCarryoverSettings | None = None,
-        library_path: Path | None = None,
         log_path: Path | None = None,
     ) -> None:
         """Initialize the whisper.cpp transcriber wrapper."""
         self._configured_model_path = Path(model_name) if model_name else None
-        self._uses_default_model_path = model_name is None
-        self._model_path: Path | None = self._configured_model_path
+        self._uses_default_model_name = model_name is None
+        self._model_name = model_name or DEFAULT_WHISPER_CPP_MODEL_FILENAME
         self._threads = max(1, threads)
         self._decode_settings = WhisperDecodeSettings(
             carryover=carryover_settings or PromptCarryoverSettings()
         )
-        self._library_path = library_path
         self._log_path = log_path
-        self._runtime_details: WhisperCppRuntimeDetails | None = None
-        self._runtime: WhisperCppLibrary | None = None
-        self._session: WhisperCppSession | None = None
+        self._model: _PyWhisperModel | None = None
 
     @property
     def model_name(self) -> str:
-        """Return the resolved model path or default Hugging Face model reference."""
-        if self._model_path is not None:
-            return str(self._model_path)
-        return f"{DEFAULT_WHISPER_CPP_MODEL_REPO}/{DEFAULT_WHISPER_CPP_MODEL_FILENAME}"
+        """Return the configured model identifier or explicit local path."""
+        return self._model_name
 
     @property
     def device_name(self) -> str:
         """Return the detected runtime backend name."""
-        if self._runtime_details is None:
+        if (system_info := self.system_info) is None:
             return "auto"
-        return _device_name_from_system_info(self._runtime_details.system_info)
+        return _device_name_from_system_info(system_info)
 
     @property
     def threads(self) -> int:
@@ -110,43 +136,51 @@ class WhisperCppTranscriber:
     @property
     def system_info(self) -> str | None:
         """Return the whisper.cpp runtime system info string when available."""
-        if self._runtime_details is None:
+        if self._model is None:
             return None
-        return self._runtime_details.system_info
+        return self._model.system_info()
 
     @property
     def library_path(self) -> str | None:
         """Return the loaded whisper.cpp shared library path when available."""
-        if self._runtime_details is None:
-            return None
-        return self._runtime_details.library_path
-
-    def set_log_path(self, log_path: Path) -> None:
-        """Set the whisper.cpp native log sink path for future sessions."""
-        self._log_path = log_path
+        return None
 
     def __enter__(self) -> Self:
         """Return the transcriber as a context manager."""
         return self
 
+    def set_log_path(self, log_path: Path) -> None:
+        """Set the whisper.cpp native log destination for future model loads."""
+        self._log_path = log_path
+
     def prepare_model(self) -> None:
-        """Resolve the model and initialize a fresh whisper.cpp session.
+        """Resolve the model and initialize one pywhispercpp model instance.
 
         Raises:
-            ASRProcessingError: If model resolution or session creation fails.
+            ASRProcessingError: If model resolution or model creation fails.
         """
-        self._model_path = self._resolve_model_path()
+        self._model_name = self._resolve_model_name()
         self.close()
-        if self._model_path is None:
-            raise ASRProcessingError("Model path resolution returned no whisper.cpp model path.")
-        whispercpp_library_cls = importlib.import_module(
-            "webinar_transcriber.whispercpp"
-        ).WhisperCppLibrary
-        runtime = whispercpp_library_cls(self._library_path, log_path=self._log_path)
-        session = runtime.create_session(self._model_path)
-        self._runtime = runtime
-        self._session = session
-        self._runtime_details = session.runtime_details
+        model_kwargs: dict[str, object] = {
+            "n_threads": self._threads,
+            "print_realtime": False,
+            "print_progress": False,
+            "no_context": True,
+            "split_on_word": True,
+            "entropy_thold": self._decode_settings.entropy_thold,
+            "logprob_thold": self._decode_settings.logprob_thold,
+            "no_speech_thold": self._decode_settings.no_speech_thold,
+        }
+        if self._log_path is not None:
+            model_kwargs["redirect_whispercpp_logs_to"] = str(self._log_path)
+        try:
+            with _suppress_pywhispercpp_download_progress():
+                model = _model_cls()(self._model_name, **model_kwargs)
+        except Exception as error:
+            raise ASRProcessingError(_model_prepare_error_message(self._model_name)) from error
+        if getattr(model, "_ctx", True) is None:
+            raise ASRProcessingError(_model_prepare_error_message(self._model_name))
+        self._model = model
 
     def transcribe_inference_windows(
         self,
@@ -160,7 +194,7 @@ class WhisperCppTranscriber:
         Returns:
             list[DecodedWindow]: The decoded windows in deterministic order.
         """
-        session = self._ensure_session()
+        model = self._ensure_model()
         ordered_windows = sorted(
             windows,
             key=lambda item: (item.start_sec, item.end_sec, item.region_index, item.window_id),
@@ -171,11 +205,10 @@ class WhisperCppTranscriber:
         decoded_segment_count = 0
 
         for window in ordered_windows:
-            decoded_window = session.decode_window(
+            decoded_window = self._transcribe_window(
+                model,
                 audio_samples,
                 window,
-                threads=self._threads,
-                decode_settings=self._decode_settings,
                 prompt=carryover_prompt,
                 language_hint=language_hint,
             )
@@ -191,11 +224,8 @@ class WhisperCppTranscriber:
         return decoded_windows
 
     def close(self) -> None:
-        """Release any active whisper.cpp session resources."""
-        if self._session is not None:
-            self._session.close()
-            self._session = None
-        self._runtime = None
+        """Release any active pywhispercpp model resources."""
+        self._model = None
 
     def __exit__(
         self,
@@ -206,26 +236,88 @@ class WhisperCppTranscriber:
         """Close the transcriber when leaving a context manager block."""
         self.close()
 
-    def _ensure_session(self) -> WhisperCppSession:
-        if self._session is None:
+    def _ensure_model(self) -> _PyWhisperModel:
+        if self._model is None:
             self.prepare_model()
-        if self._session is None:
+        if self._model is None:
             raise ASRProcessingError(
-                "whisper.cpp session was not initialized during model preparation."
+                "pywhispercpp model was not initialized during model preparation."
             )
-        return self._session
+        return self._model
 
-    def _resolve_model_path(self) -> Path:
-        if not self._uses_default_model_path:
-            configured_model_path = self._configured_model_path
+    def _resolve_model_name(self) -> str:
+        if not self._uses_default_model_name:
+            if not _looks_like_model_path(self._model_name):
+                return self._model_name
+            configured_model_path = None
+            if self._configured_model_path is not None:
+                configured_model_path = self._configured_model_path.expanduser()
             if configured_model_path is None or not configured_model_path.exists():
                 raise ASRProcessingError(_missing_model_error_message(configured_model_path))
-            return configured_model_path
+            return str(configured_model_path)
+        return DEFAULT_WHISPER_CPP_MODEL_FILENAME
 
+    def _transcribe_window(
+        self,
+        model: _PyWhisperModel,
+        audio_samples: np.ndarray,
+        window: InferenceWindow,
+        *,
+        prompt: str | None,
+        language_hint: str | None,
+    ) -> DecodedWindow:
+        start_index = sample_index_for_time(window.start_sec)
+        end_index = min(len(audio_samples), sample_index_for_time(window.end_sec))
+        window_samples = np.ascontiguousarray(
+            audio_samples[start_index:end_index], dtype=np.float32
+        )
+        if window_samples.size == 0:
+            return DecodedWindow(window=window, language=language_hint)
+
+        transcribe_kwargs: dict[str, str] = {}
+        if prompt is not None:
+            transcribe_kwargs["initial_prompt"] = prompt
+        if language_hint is not None:
+            transcribe_kwargs["language"] = language_hint
         try:
-            return _download_default_whisper_cpp_model()
-        except ASRProcessingError as ex:
-            raise ASRProcessingError(f"{_default_model_download_error_message()} {ex}") from ex
+            raw_segments = model.transcribe(window_samples, **transcribe_kwargs)
+        except Exception as error:
+            raise ASRProcessingError(
+                f"whisper.cpp inference failed for {window.window_id}."
+            ) from error
+
+        detected_language = language_hint
+        if detected_language is None:
+            with suppress(Exception):
+                detected_language = model.auto_detect_language(
+                    window_samples, n_threads=self._threads
+                )[0][0]
+
+        segments = [
+            TranscriptSegment(
+                id=f"{window.window_id}-segment-{segment_index + 1}",
+                text=str(raw_segment.text).strip(),
+                start_sec=max(
+                    window.start_sec,
+                    window.start_sec + (float(raw_segment.t0) / _WHISPER_TICKS_PER_SECOND),
+                ),
+                end_sec=min(
+                    window.end_sec,
+                    max(
+                        window.start_sec + (float(raw_segment.t0) / _WHISPER_TICKS_PER_SECOND),
+                        window.start_sec + (float(raw_segment.t1) / _WHISPER_TICKS_PER_SECOND),
+                    ),
+                ),
+            )
+            for segment_index, raw_segment in enumerate(raw_segments)
+        ]
+        return DecodedWindow(
+            window=window,
+            text=" ".join(segment.text for segment in segments if segment.text).strip(),
+            segments=segments,
+            fallback_used=False,
+            language=detected_language,
+        )
 
     def __del__(self) -> None:  # pragma: no cover - interpreter shutdown cleanup
         """Best-effort cleanup during interpreter shutdown."""
@@ -239,17 +331,3 @@ def _device_name_from_system_info(system_info: str) -> str:
         backend_name = match.group(1).lower()
         return "metal" if backend_name == "mtl" else backend_name
     return "cpu"
-
-
-def _download_default_whisper_cpp_model() -> Path:
-    hf_hub_download = importlib.import_module("huggingface_hub").hf_hub_download
-    try:
-        downloaded_path = hf_hub_download(
-            repo_id=DEFAULT_WHISPER_CPP_MODEL_REPO, filename=DEFAULT_WHISPER_CPP_MODEL_FILENAME
-        )
-    except Exception as error:  # pragma: no cover - network/backend specific
-        raise ASRProcessingError(
-            "Automatic download of the default whisper.cpp model from Hugging Face failed."
-        ) from error
-
-    return Path(downloaded_path)

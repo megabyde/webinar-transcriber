@@ -1,6 +1,7 @@
 """Tests for the end-to-end processor flow."""
 
 import json
+import logging
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
@@ -33,6 +34,7 @@ from webinar_transcriber.models import (
     TranscriptSegment,
     VideoAsset,
 )
+from webinar_transcriber.paths import RunLayout
 from webinar_transcriber.processor import (
     ProcessArtifacts,
     process_input,
@@ -44,9 +46,8 @@ from webinar_transcriber.processor.__init__ import (
 )
 from webinar_transcriber.processor.llm import LLMRuntimeState, resolve_llm_processor
 from webinar_transcriber.processor.support import (
-    asr_model_label,
     asr_runtime_detail,
-    hf_cache_repo_label,
+    configure_asr_logging,
     stage,
     title_update_detail,
     token_usage_detail,
@@ -669,6 +670,8 @@ class TestProcessInput:
         assert reporter.has_event("start", "vad", "Detecting speech regions")
         assert reporter.has_event("start", "prepare_speech_regions", "Preparing speech regions")
         assert reporter.has_event("start", "reconcile", "Reconciling transcript windows")
+        assert reporter.has_event("finish", "reconcile", "2 -> 2 segments")
+        assert reporter.has_event("start", "normalize_transcript", "Normalizing transcript")
         assert artifacts.layout.speech_regions_path.exists()
         assert artifacts.layout.expanded_regions_path.exists()
         assert artifacts.layout.decoded_windows_path.exists()
@@ -835,32 +838,57 @@ class TestProcessorHelpers:
 
         assert detail == "1 window | RTF 5x"
 
-    def test_asr_runtime_detail_shortens_hf_cache_model_path(self) -> None:
+    def test_asr_runtime_detail_uses_model_name_verbatim(self) -> None:
         transcriber = cast(
             "WhisperCppTranscriber",
             SimpleNamespace(
-                model_name=(
-                    "/tmp/huggingface/hub/"
-                    "models--ggerganov--whisper.cpp/snapshots/123456/"
-                    "ggml-large-v3-turbo.bin"
-                ),
+                model_name="/tmp/models/local-model.bin",
                 device_name="cpu",
             ),
         )
 
-        assert asr_runtime_detail(transcriber) == (
-            "ggerganov/whisper.cpp/ggml-large-v3-turbo.bin (HF cache) | cpu"
-        )
+        assert asr_runtime_detail(transcriber) == "/tmp/models/local-model.bin | cpu"
 
     def test_title_update_detail_reports_partial_title_updates(self) -> None:
         assert title_update_detail(title_count=1, section_count=2) == "1 title updated"
         assert title_update_detail(title_count=2, section_count=3) == "2 titles updated"
 
-    def test_asr_model_label_uses_basename_for_non_hf_absolute_paths(self) -> None:
-        assert asr_model_label("/tmp/models/local-model.bin") == "local-model.bin"
+    def test_configure_asr_logging_writes_to_run_logger_file(self, tmp_path) -> None:
+        run_dir = tmp_path / "run-dir"
+        run_dir.mkdir()
+        logger = logging.getLogger("pywhispercpp")
+        existing_handler = logging.StreamHandler()
+        logger.handlers = [existing_handler]
+        transcriber = cast(
+            "WhisperCppTranscriber", SimpleNamespace(set_log_path=lambda _path: None)
+        )
 
-    def test_hf_cache_repo_label_returns_none_for_non_hf_path(self) -> None:
-        assert hf_cache_repo_label(Path("/tmp/models/local-model.bin")) is None
+        configure_asr_logging(transcriber, RunLayout(run_dir=run_dir))
+
+        assert logger.level == logging.INFO
+        assert logger.propagate is False
+        assert len(logger.handlers) == 1
+        assert isinstance(logger.handlers[0], logging.FileHandler)
+        assert Path(logger.handlers[0].baseFilename) == run_dir / "whisper-cpp.log"
+        logger.handlers[0].close()
+        logger.handlers.clear()
+
+    def test_configure_asr_logging_sets_transcriber_log_path(self, tmp_path) -> None:
+        run_dir = tmp_path / "run-dir"
+        run_dir.mkdir()
+        recorded_paths: list[Path] = []
+
+        def record_log_path(path: Path) -> None:
+            recorded_paths.append(path)
+
+        transcriber = cast(
+            "WhisperCppTranscriber",
+            SimpleNamespace(set_log_path=record_log_path),
+        )
+
+        configure_asr_logging(transcriber, RunLayout(run_dir=run_dir))
+
+        assert recorded_paths == [run_dir / "whisper-cpp.log"]
 
     def test_token_usage_detail_returns_blank_without_total_tokens(self) -> None:
         assert token_usage_detail({"input_tokens": 2}) == ""
