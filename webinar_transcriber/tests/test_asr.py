@@ -363,16 +363,6 @@ class TestWhisperCppTranscriber:
                 [InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
             )
 
-    def test_transcriber_destructor_swallows_close_failures(self) -> None:
-        transcriber = object.__new__(WhisperCppTranscriber)
-
-        def failing_close() -> None:
-            raise RuntimeError("shutdown")
-
-        transcriber.close = failing_close  # type: ignore[method-assign]
-
-        transcriber.__del__()
-
     @pytest.mark.parametrize("stdout", ["abc", "0"])
     def test_read_sysctl_int_returns_none_for_invalid_or_nonpositive_values(
         self, monkeypatch: pytest.MonkeyPatch, stdout: str

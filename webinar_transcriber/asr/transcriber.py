@@ -319,11 +319,6 @@ class WhisperCppTranscriber:
             language=detected_language,
         )
 
-    def __del__(self) -> None:  # pragma: no cover - interpreter shutdown cleanup
-        """Best-effort cleanup during interpreter shutdown."""
-        with suppress(Exception):
-            self.close()
-
 
 def _device_name_from_system_info(system_info: str) -> str:
     match = GPU_BACKEND_PATTERN.search(system_info)
