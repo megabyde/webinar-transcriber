@@ -32,6 +32,14 @@ from webinar_transcriber.video.scenes import (
 FIXTURE_DIR = Path(__file__).parents[2] / "tests" / "fixtures"
 
 
+def _frame(fill: int, *, invert_quadrants: bool = False) -> np.ndarray:
+    frame = np.full((32, 32), fill, dtype=np.uint8)
+    if invert_quadrants:
+        frame[:16, :16] = 255 - fill
+        frame[16:, 16:] = 255 - fill
+    return frame
+
+
 class TestDetectScenes:
     def test_detect_scenes_finds_multiple_segments(self) -> None:
         progress_updates: list[tuple[int, int]] = []
@@ -86,27 +94,27 @@ class TestFrameExtraction:
 
     def test_detect_scene_start_times_uses_last_accepted_frame(self) -> None:
         samples = [
-            (0.0, np.zeros((2, 2), dtype=np.float32)),
-            (1.0, np.full((2, 2), 6.0, dtype=np.float32)),
-            (2.0, np.full((2, 2), 12.0, dtype=np.float32)),
-            (3.0, np.full((2, 2), 18.0, dtype=np.float32)),
+            (0.0, _frame(0)),
+            (1.0, _frame(0)),
+            (2.0, _frame(32, invert_quadrants=True)),
+            (3.0, _frame(32, invert_quadrants=True)),
         ]
 
         scene_starts = _detect_scene_start_times(
-            samples, difference_threshold=10.0, min_scene_length_sec=0.0
+            samples, difference_threshold=1, min_scene_length_sec=0.0
         )
 
         assert scene_starts == [0.0, 2.0]
 
     def test_detect_scene_start_times_respects_min_scene_length(self) -> None:
         samples = [
-            (0.0, np.zeros((2, 2), dtype=np.float32)),
-            (1.0, np.full((2, 2), 30.0, dtype=np.float32)),
-            (4.0, np.full((2, 2), 30.0, dtype=np.float32)),
+            (0.0, _frame(0)),
+            (1.0, _frame(32, invert_quadrants=True)),
+            (4.0, _frame(32, invert_quadrants=True)),
         ]
 
         scene_starts = _detect_scene_start_times(
-            samples, difference_threshold=10.0, min_scene_length_sec=3.0
+            samples, difference_threshold=1, min_scene_length_sec=3.0
         )
 
         assert scene_starts == [0.0, 4.0]
@@ -114,9 +122,9 @@ class TestFrameExtraction:
     def test_detect_scene_start_times_reports_sample_and_scene_progress(self) -> None:
         progress_updates: list[tuple[int, int]] = []
         samples = [
-            (0.0, np.zeros((2, 2), dtype=np.float32)),
-            (1.0, np.full((2, 2), 30.0, dtype=np.float32)),
-            (4.0, np.full((2, 2), 30.0, dtype=np.float32)),
+            (0.0, _frame(0)),
+            (1.0, _frame(32, invert_quadrants=True)),
+            (4.0, _frame(32, invert_quadrants=True)),
         ]
 
         def on_progress(sample_count: int, scene_count: int) -> None:
@@ -124,7 +132,7 @@ class TestFrameExtraction:
 
         scene_starts = _detect_scene_start_times(
             samples,
-            difference_threshold=10.0,
+            difference_threshold=1,
             min_scene_length_sec=3.0,
             progress_callback=on_progress,
         )
@@ -200,11 +208,11 @@ class TestFrameExtraction:
         assert [frame.scene_id for frame in frames] == ["scene-2"]
         assert len(progress_ticks) == 2
         assert warnings == [
-            f"Frame extraction failed for scene-1 at 1.0s: "
+            f"Frame extraction failed for scene-1 at 0.5s: "
             f"ffmpeg did not write {tmp_path / 'frames' / 'scene-1.png'}"
         ]
 
-    def test_extract_representative_frames_uses_scene_midpoint(
+    def test_extract_representative_frames_uses_first_stable_frame(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         captured_timestamps: list[float] = []
@@ -227,8 +235,8 @@ class TestFrameExtraction:
             tmp_path / "frames",
         )
 
-        assert captured_timestamps == [3.5]
-        assert frames[0].timestamp_sec == 3.5
+        assert captured_timestamps == [2.5]
+        assert frames[0].timestamp_sec == 2.5
 
     def test_extract_frame_returns_false_when_ffmpeg_does_not_write_output(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

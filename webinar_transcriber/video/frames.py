@@ -10,6 +10,7 @@ from webinar_transcriber.media import MEDIA_COMMAND_TIMEOUT_SEC, MediaProcessing
 from webinar_transcriber.models import Scene, SlideFrame
 
 FRAME_EXTRACT_TIMEOUT_SEC = MEDIA_COMMAND_TIMEOUT_SEC
+REPRESENTATIVE_FRAME_OFFSET_SEC = 0.5
 
 
 def extract_representative_frames(
@@ -20,7 +21,7 @@ def extract_representative_frames(
     progress_callback: Callable[[], None] | None = None,
     warning_callback: Callable[[str], None] | None = None,
 ) -> list[SlideFrame]:
-    """Extract one representative frame near the midpoint of each scene.
+    """Extract one representative frame near the start of each scene.
 
     Returns:
         list[SlideFrame]: The successfully extracted slide frames.
@@ -29,13 +30,13 @@ def extract_representative_frames(
     frames: list[SlideFrame] = []
 
     for index, scene in enumerate(scenes, start=1):
-        midpoint_sec = scene.midpoint
+        frame_timestamp_sec = min(scene.end_sec, scene.start_sec + REPRESENTATIVE_FRAME_OFFSET_SEC)
         output_path = frames_dir / f"{scene.id}.png"
-        extracted, failure_detail = _extract_frame(video_path, midpoint_sec, output_path)
+        extracted, failure_detail = _extract_frame(video_path, frame_timestamp_sec, output_path)
         if not extracted:
             if warning_callback is not None:
                 warning_callback(
-                    f"Frame extraction failed for {scene.id} at {midpoint_sec:.1f}s: "
+                    f"Frame extraction failed for {scene.id} at {frame_timestamp_sec:.1f}s: "
                     f"{failure_detail}"
                 )
             if progress_callback is not None:
@@ -48,7 +49,7 @@ def extract_representative_frames(
                 id=f"frame-{index}",
                 scene_id=scene.id,
                 image_path=str(output_path),
-                timestamp_sec=midpoint_sec,
+                timestamp_sec=frame_timestamp_sec,
             )
         )
         if progress_callback is not None:

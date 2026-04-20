@@ -9,16 +9,19 @@ from pathlib import Path
 from time import perf_counter
 from typing import IO
 
+import imagehash
 import numpy as np
+from PIL import Image
 
 from webinar_transcriber.media import MEDIA_COMMAND_TIMEOUT_SEC, MediaProcessingError
 from webinar_transcriber.models import Scene
 
 SAMPLE_INTERVAL_SEC = 1.0
 MIN_SCENE_LENGTH_SEC = 3.0
-DIFFERENCE_THRESHOLD = 12.0
-TARGET_SAMPLE_WIDTH = 160
-TARGET_SAMPLE_HEIGHT = 90
+DIFFERENCE_THRESHOLD = 8
+TARGET_SAMPLE_WIDTH = 256
+TARGET_SAMPLE_HEIGHT = 144
+PHASH_HASH_SIZE = 16
 SCENE_SAMPLE_TIMEOUT_SEC = MEDIA_COMMAND_TIMEOUT_SEC
 
 
@@ -70,12 +73,16 @@ def _detect_scene_start_times(
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[float]:
     scene_starts: list[float] = []
-    accepted_frame: np.ndarray | None = None
+    accepted_hash: imagehash.ImageHash | None = None
 
     for sample_count, (current_time, current_frame) in enumerate(sampled_frames, start=1):
-        if accepted_frame is None:
+        current_hash = imagehash.phash(
+            Image.fromarray(current_frame.astype(np.uint8)),
+            hash_size=PHASH_HASH_SIZE,
+        )
+        if accepted_hash is None:
             scene_starts.append(float(current_time))
-            accepted_frame = current_frame
+            accepted_hash = current_hash
             if progress_callback is not None:
                 progress_callback(sample_count, len(scene_starts))
             continue
@@ -85,12 +92,10 @@ def _detect_scene_start_times(
                 progress_callback(sample_count, len(scene_starts))
             continue
 
-        difference = float(np.abs(current_frame - accepted_frame).mean())
+        difference = current_hash - accepted_hash
         if difference >= difference_threshold:
             scene_starts.append(float(current_time))
-            # Compare against the scene's anchor frame, not the previous sample,
-            # so gradual visual drift does not trigger spurious scene breaks.
-            accepted_frame = current_frame
+            accepted_hash = current_hash
         if progress_callback is not None:
             progress_callback(sample_count, len(scene_starts))
 
@@ -161,7 +166,7 @@ def _iter_sampled_frames(video_path: Path) -> Iterable[tuple[float, np.ndarray]]
                 TARGET_SAMPLE_HEIGHT,
                 TARGET_SAMPLE_WIDTH,
             ))
-            yield sample_index * SAMPLE_INTERVAL_SEC, frame.astype(np.float32)
+            yield sample_index * SAMPLE_INTERVAL_SEC, frame
             sample_index += 1
             partial_frame.clear()
         process.wait(timeout=_remaining_scene_sample_timeout(start_time))
