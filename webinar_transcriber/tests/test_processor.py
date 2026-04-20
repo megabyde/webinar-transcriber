@@ -84,9 +84,7 @@ def install_basic_windowing(
 
     monkeypatch.setattr("webinar_transcriber.processor.asr.load_normalized_audio", load_audio_fn)
 
-    def fake_detect_speech_regions(*_args, progress_callback=None, **_kwargs):
-        if progress_callback is not None:
-            progress_callback(region_end_sec, 1)
+    def fake_detect_speech_regions(*_args, **_kwargs):
         return [SpeechRegion(start_sec=0.0, end_sec=region_end_sec)], []
 
     monkeypatch.setattr(
@@ -317,8 +315,8 @@ class TestProcessInput:
         assert transcribe_start_events == [
             ("start", "transcribe", artifacts.media_asset.duration_sec, "0 segments")
         ]
-        vad_start_events = reporter.progress_stage_events("start", "vad")
-        assert vad_start_events == [("start", "vad", artifacts.media_asset.duration_sec, None)]
+        assert reporter.has_event("start", "vad", "Detecting speech regions")
+        assert reporter.has_event("finish", "vad", "1 region")
         assert reporter.has_progress_event_detail(
             "advance", "transcribe", lambda detail: detail == "2 segments"
         )
@@ -333,9 +331,6 @@ class TestProcessInput:
         ]
         assert reporter.has_progress_event_detail(
             "advance", "structure", lambda detail: detail == "1 section"
-        )
-        assert reporter.has_progress_event_detail(
-            "advance", "vad", lambda detail: detail == "1 region"
         )
         assert diagnostics_payload["asr_backend"] == "whisper.cpp"
         assert diagnostics_payload["asr_model"] == "test-model"
