@@ -162,9 +162,10 @@ def _iter_sampled_frames(video_path: Path) -> Iterable[tuple[float, np.ndarray]]
             if len(partial_frame) < frame_size:
                 continue
             frame_bytes = bytes(partial_frame)
-            frame = np.frombuffer(frame_bytes, dtype=np.uint8).reshape(
-                (TARGET_SAMPLE_HEIGHT, TARGET_SAMPLE_WIDTH)
-            )
+            frame = np.frombuffer(frame_bytes, dtype=np.uint8).reshape((
+                TARGET_SAMPLE_HEIGHT,
+                TARGET_SAMPLE_WIDTH,
+            ))
             yield sample_index * SAMPLE_INTERVAL_SEC, frame
             sample_index += 1
             partial_frame.clear()

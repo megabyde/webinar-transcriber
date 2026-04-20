@@ -24,6 +24,7 @@ from .support import (
     write_json,
     write_model_json,
 )
+from .types import _AsrPipelineState
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -33,7 +34,6 @@ if TYPE_CHECKING:
     from webinar_transcriber.paths import RunLayout
     from webinar_transcriber.segmentation import VadSettings
 
-    from . import _AsrPipelineState
     from .support import ProgressStageHandle, StageContext
 
 
@@ -43,6 +43,7 @@ class AsrPipelineResult:
 
     transcription: TranscriptionResult
     normalized_transcription: TranscriptionResult
+    asr_pipeline: _AsrPipelineState
 
 
 def run_asr_pipeline(
@@ -53,8 +54,8 @@ def run_asr_pipeline(
     layout: RunLayout,
     ctx: StageContext,
     warnings: list[str],
-    asr_pipeline: _AsrPipelineState,
     vad: VadSettings,
+    carryover_enabled: bool,
 ) -> AsrPipelineResult:
     """Run the deterministic local ASR pipeline and persist intermediate artifacts.
 
@@ -66,9 +67,7 @@ def run_asr_pipeline(
         st.detail = asr_runtime_detail(transcriber)
 
     audio_samples, sample_rate = load_normalized_audio(audio_path)
-    asr_pipeline.normalized_audio_duration_sec = normalized_audio_duration(
-        audio_samples, sample_rate
-    )
+    normalized_audio_duration_sec = normalized_audio_duration(audio_samples, sample_rate)
     with progress_stage(
         ctx,
         "vad",
@@ -97,7 +96,7 @@ def run_asr_pipeline(
         st.finish_progress(
             media_asset.duration_sec, detail=count_label(len(speech_regions), "region")
         )
-    asr_pipeline.vad_region_count = len(speech_regions)
+    vad_region_count = len(speech_regions)
     for warning in vad_warnings:
         warnings.append(warning)
         ctx.reporter.warn(warning)
@@ -123,8 +122,8 @@ def run_asr_pipeline(
             {"expanded_regions": [asdict(region) for region in expanded_regions]},
         )
         st.detail = count_label(len(expanded_regions), "region")
-    asr_pipeline.window_count = len(windows)
-    asr_pipeline.average_window_duration_sec = (
+    window_count = len(windows)
+    average_window_duration_sec = (
         sum(w.end_sec - w.start_sec for w in windows) / len(windows) if windows else None
     )
     with progress_stage(
@@ -164,16 +163,26 @@ def run_asr_pipeline(
         transcription, reconciliation_stats = reconcile_decoded_windows(decoded_windows)
         segment_label = "segment" if len(transcription.segments) == 1 else "segments"
         st.detail = f"{decoded_segment_count} -> {len(transcription.segments)} {segment_label}"
-    asr_pipeline.reconciliation_duplicate_segments_dropped = (
-        reconciliation_stats.duplicate_segments_dropped
-    )
-    asr_pipeline.reconciliation_boundary_fixes = reconciliation_stats.boundary_fixes
-    asr_pipeline.system_info = transcriber.system_info
 
     with stage(ctx, "normalize_transcript", "Normalizing transcript") as st:
         write_model_json(layout.transcript_path, transcription)
         normalized_transcription = normalize_transcription(transcription)
         st.detail = count_label(len(normalized_transcription.segments), "segment")
+
+    asr_pipeline = _AsrPipelineState(
+        vad_enabled=vad.enabled,
+        threads=transcriber.threads,
+        normalized_audio_duration_sec=normalized_audio_duration_sec,
+        vad_region_count=vad_region_count,
+        carryover_enabled=carryover_enabled,
+        window_count=window_count,
+        average_window_duration_sec=average_window_duration_sec,
+        reconciliation_duplicate_segments_dropped=reconciliation_stats.duplicate_segments_dropped,
+        reconciliation_boundary_fixes=reconciliation_stats.boundary_fixes,
+        system_info=transcriber.system_info,
+    )
     return AsrPipelineResult(
-        transcription=transcription, normalized_transcription=normalized_transcription
+        transcription=transcription,
+        normalized_transcription=normalized_transcription,
+        asr_pipeline=asr_pipeline,
     )
