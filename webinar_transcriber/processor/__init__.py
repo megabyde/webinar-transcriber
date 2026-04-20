@@ -2,45 +2,32 @@
 
 from __future__ import annotations
 
-from contextlib import ExitStack, nullcontext, suppress
-from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, cast
+from contextlib import nullcontext, suppress
+from typing import TYPE_CHECKING
 
 import webinar_transcriber.asr as asr_runtime
-import webinar_transcriber.export as export_runtime
 import webinar_transcriber.media as media_runtime
-import webinar_transcriber.structure as structure_runtime
-import webinar_transcriber.video as video_runtime
-from webinar_transcriber.align import align_by_time
 from webinar_transcriber.asr import PromptCarryoverSettings, default_asr_threads
-from webinar_transcriber.labels import count_label
-from webinar_transcriber.models import (
-    AlignmentBlock,
-    Diagnostics,
-    MediaAsset,
-    ReportDocument,
-    Scene,
-    SlideFrame,
-    TranscriptionResult,
-    VideoAsset,
-)
 from webinar_transcriber.normalized_audio import (
     prepared_transcription_audio,
-    preserve_transcription_audio,
 )
-from webinar_transcriber.paths import RunLayout, create_run_layout
+from webinar_transcriber.paths import create_run_layout
 from webinar_transcriber.reporter import NullStageReporter
 from webinar_transcriber.segmentation import VadSettings
 
-from . import asr as processor_asr
-from .llm import LLMRuntimeState, maybe_polish_report, resolve_llm_processor
+from .report import run_report_phase
 from .support import (
     build_diagnostics,
     configure_asr_logging,
-    progress_stage,
     stage,
     write_json,
     write_model_json,
+)
+from .transcribe import run_transcription_phase
+from .types import (
+    ProcessArtifacts,
+    _AsrPipelineState,
+    _RunContext,
 )
 
 if TYPE_CHECKING:
@@ -49,57 +36,11 @@ if TYPE_CHECKING:
 
     from webinar_transcriber.asr import WhisperCppTranscriber
     from webinar_transcriber.llm import LLMProcessor
-
-
-@dataclass(frozen=True)
-class ProcessArtifacts:
-    """Runtime artifacts returned from a processing run."""
-
-    layout: RunLayout
-    media_asset: MediaAsset
-    transcription: TranscriptionResult
-    report: ReportDocument
-    diagnostics: Diagnostics
-
-
-@dataclass
-class _RunContext:
-    """Mutable state for one processing run."""
-
-    reporter: NullStageReporter
-    asr_pipeline: _AsrPipelineState
-    stage_timings: dict[str, float] = field(default_factory=dict)
-    warnings: list[str] = field(default_factory=list)
-    current_stage: str | None = None
-    layout: RunLayout | None = None
-    media_asset: MediaAsset | None = None
-    alignment_blocks: list[AlignmentBlock] | None = None
-    scenes: list[Scene] = field(default_factory=list)
-    slide_frames: list[SlideFrame] = field(default_factory=list)
-    transcription: TranscriptionResult | None = None
-    normalized_transcription: TranscriptionResult | None = None
-    report: ReportDocument | None = None
-    llm_runtime: LLMRuntimeState = field(default_factory=LLMRuntimeState)
+    from webinar_transcriber.models import Diagnostics
 
 
 DEFAULT_VAD_SETTINGS = VadSettings()
 DEFAULT_PROMPT_CARRYOVER_SETTINGS = PromptCarryoverSettings()
-
-
-@dataclass
-class _AsrPipelineState:
-    """Mutable ASR diagnostics state accumulated during processing."""
-
-    vad_enabled: bool
-    threads: int
-    normalized_audio_duration_sec: float | None = None
-    vad_region_count: int = 0
-    carryover_enabled: bool = False
-    window_count: int = 0
-    average_window_duration_sec: float | None = None
-    reconciliation_duplicate_segments_dropped: int = 0
-    reconciliation_boundary_fixes: int = 0
-    system_info: str | None = None
 
 
 def _build_run_diagnostics(
@@ -192,9 +133,14 @@ def process_input(
     """
     active_reporter = reporter or NullStageReporter()
     asr_threads = asr_threads or default_asr_threads()
-    asr_pipeline = _AsrPipelineState(vad_enabled=vad.enabled, threads=asr_threads)
-    asr_pipeline.carryover_enabled = carryover.enabled
-    ctx = _RunContext(reporter=active_reporter, asr_pipeline=asr_pipeline)
+    ctx = _RunContext(
+        reporter=active_reporter,
+        asr_pipeline=_AsrPipelineState(
+            vad_enabled=vad.enabled,
+            threads=asr_threads,
+            carryover_enabled=carryover.enabled,
+        ),
+    )
 
     active_transcriber = transcriber or asr_runtime.WhisperCppTranscriber(
         model_name=asr_model, threads=asr_threads, carryover_settings=carryover
@@ -203,11 +149,6 @@ def process_input(
         active_transcriber if transcriber is None else nullcontext(active_transcriber)
     )
     with transcriber_scope as active_transcriber:
-
-        def record_warning(message: str) -> None:
-            ctx.warnings.append(message)
-            ctx.reporter.warn(message)
-
         ctx.reporter.begin_run(input_path)
         try:
             with stage(ctx, "prepare_run_dir", "Preparing run directory") as st:
@@ -222,155 +163,35 @@ def process_input(
                 write_json(layout.metadata_path, {"media": media_asset.model_dump(mode="json")})
                 st.detail = f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s"
 
-            with ExitStack() as audio_scope:
-                with stage(ctx, "prepare_transcription_audio", "Preparing audio") as st:
-                    audio_path = audio_scope.enter_context(prepared_transcription_audio(input_path))
-                    st.detail = str(audio_path.name)
-                asr_result = processor_asr.run_asr_pipeline(
-                    audio_path=audio_path,
-                    media_asset=media_asset,
-                    transcriber=active_transcriber,
-                    layout=layout,
-                    ctx=ctx,
-                    warnings=ctx.warnings,
-                    asr_pipeline=ctx.asr_pipeline,
-                    vad=vad,
-                )
-                transcription = asr_result.transcription
-                normalized_transcription = asr_result.normalized_transcription
-                ctx.transcription = transcription
-                ctx.normalized_transcription = normalized_transcription
-
-                llm_enhancer, ctx.llm_runtime = resolve_llm_processor(
-                    enable_llm=enable_llm,
-                    llm_processor=llm_processor,
-                    reporter=ctx.reporter,
-                    warnings=ctx.warnings,
-                    llm_runtime=ctx.llm_runtime,
-                )
-                if keep_audio:
-                    preserved_audio_path = layout.transcription_audio_path(kept_audio_format)
-                    preserve_transcription_audio(
-                        audio_path, preserved_audio_path, audio_format=kept_audio_format
-                    )
-            # Subsequent video, structure, and export stages intentionally run after temp audio
-            # cleanup.
-
-            if isinstance(media_asset, VideoAsset):
-                detect_scene_total = video_runtime.estimate_sample_count(media_asset.duration_sec)
-                with progress_stage(
-                    ctx,
-                    "detect_scenes",
-                    "Detecting scenes",
-                    total=detect_scene_total,
-                    count_label="samples",
-                    detail="0 scenes",
-                ) as st:
-                    ctx.scenes = video_runtime.detect_scenes(
-                        input_path,
-                        duration_sec=media_asset.duration_sec,
-                        progress_callback=lambda sample_count, scene_count: st.advance_to(
-                            float(sample_count),
-                            detail=count_label(scene_count, "scene"),
-                        ),
-                    )
-                    st.finish_progress(
-                        detect_scene_total, detail=count_label(len(ctx.scenes), "scene")
-                    )
-                write_json(
-                    layout.scenes_path,
-                    {"scenes": [asdict(scene) for scene in ctx.scenes]},
-                )
-                with progress_stage(
-                    ctx,
-                    "extract_frames",
-                    "Extracting slide frames",
-                    total=float(len(ctx.scenes)),
-                ) as st:
-                    ctx.slide_frames = video_runtime.extract_representative_frames(
-                        input_path,
-                        ctx.scenes,
-                        layout.frames_dir,
-                        progress_callback=st.advance,
-                        warning_callback=record_warning,
-                    )
-                    st.detail = count_label(len(ctx.slide_frames), "frame")
-                ctx.alignment_blocks = align_by_time(
-                    normalized_transcription.segments,
-                    ctx.scenes,
-                    ctx.slide_frames,
-                )
-
-            structure_total = max(
-                (
-                    len(ctx.alignment_blocks)
-                    if ctx.alignment_blocks is not None
-                    else len(normalized_transcription.segments)
-                ),
-                1,
-            )
-            structure_count_label = "blocks" if ctx.alignment_blocks is not None else "segments"
-            with progress_stage(
-                ctx,
-                "structure",
-                "Structuring report",
-                total=float(structure_total),
-                count_label=structure_count_label,
-                detail="0 sections",
-            ) as st:
-                report = structure_runtime.build_report(
-                    media_asset,
-                    normalized_transcription,
-                    alignment_blocks=ctx.alignment_blocks,
-                    warnings=ctx.warnings,
-                    progress_callback=lambda completed_count, section_count: st.advance_to(
-                        float(completed_count), detail=count_label(section_count, "section")
-                    ),
-                )
-                st.finish_progress(
-                    float(structure_total), detail=count_label(len(report.sections), "section")
-                )
-            ctx.report = report
-
-            if ctx.slide_frames:
-                frame_by_id = {frame.id: frame for frame in ctx.slide_frames}
-                report = report.model_copy(
-                    update={
-                        "sections": [
-                            section.model_copy(
-                                update={
-                                    "image_path": frame_by_id[section.frame_id].image_path,
-                                }
-                            )
-                            if section.frame_id and section.frame_id in frame_by_id
-                            else section
-                            for section in report.sections
-                        ]
-                    }
-                )
-                ctx.report = report
-
-            report, ctx.llm_runtime = maybe_polish_report(
-                report,
-                llm_processor=llm_enhancer,
+            transcription_phase = run_transcription_phase(
+                input_path=input_path,
+                media_asset=media_asset,
+                transcriber=active_transcriber,
+                layout=layout,
                 ctx=ctx,
-                warnings=ctx.warnings,
-                llm_runtime=ctx.llm_runtime,
+                vad=vad,
+                carryover_enabled=carryover.enabled,
+                keep_audio=keep_audio,
+                kept_audio_format=kept_audio_format,
+                prepared_audio_factory=prepared_transcription_audio,
             )
-            report = report.model_copy(update={"warnings": list(ctx.warnings)})
-            ctx.report = report
+            ctx.transcription = transcription_phase.transcription
+            ctx.normalized_transcription = transcription_phase.normalized_transcription
+            ctx.asr_pipeline = transcription_phase.asr_pipeline
 
-            with stage(ctx, "export", "Writing artifacts"):
-                export_runtime.write_markdown_report(report, layout.markdown_report_path)
-                export_runtime.write_docx_report(
-                    report,
-                    layout.docx_report_path,
-                    warning_callback=record_warning,
-                )
-                export_runtime.write_json_report(report, layout.json_report_path)
-                export_runtime.write_vtt_subtitles(
-                    normalized_transcription, layout.subtitle_vtt_path
-                )
+            report_phase = run_report_phase(
+                input_path=input_path,
+                layout=layout,
+                media_asset=media_asset,
+                normalized_transcription=transcription_phase.normalized_transcription,
+                enable_llm=enable_llm,
+                llm_processor=llm_processor,
+                ctx=ctx,
+            )
+            ctx.alignment_blocks = report_phase.alignment_blocks
+            ctx.scenes = report_phase.scenes
+            ctx.slide_frames = report_phase.slide_frames
+            ctx.report = report_phase.report
 
             diagnostics = _write_run_diagnostics(
                 ctx,
@@ -378,13 +199,16 @@ def process_input(
                 asr_model=active_transcriber.model_name,
                 llm_enabled=enable_llm,
             )
-            diagnostics = cast("Diagnostics", diagnostics)
+            if diagnostics is None:  # pragma: no cover - run layout always exists on success
+                raise RuntimeError(
+                    "Run diagnostics were not written after creating the run layout."
+                )
 
             artifacts = ProcessArtifacts(
                 layout=layout,
                 media_asset=media_asset,
-                transcription=transcription,
-                report=report,
+                transcription=transcription_phase.transcription,
+                report=report_phase.report,
                 diagnostics=diagnostics,
             )
             ctx.reporter.complete_run(artifacts)

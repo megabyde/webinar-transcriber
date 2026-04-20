@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from webinar_transcriber.paths import RunLayout
     from webinar_transcriber.reporter import NullStageReporter
 
-    from . import _AsrPipelineState
+    from .types import _AsrPipelineState
 
 
 class StageContext(Protocol):
