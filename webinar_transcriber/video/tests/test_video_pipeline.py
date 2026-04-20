@@ -65,6 +65,14 @@ def _install_fake_phashes(monkeypatch: pytest.MonkeyPatch, distances: list[int])
     )
 
 
+def _frame(fill: int, *, invert_quadrants: bool = False) -> np.ndarray:
+    frame = np.full((32, 32), fill, dtype=np.uint8)
+    if invert_quadrants:
+        frame[:16, :16] = 255 - fill
+        frame[16:, 16:] = 255 - fill
+    return frame
+
+
 class TestDetectScenes:
     @pytest.mark.slow
     def test_detect_scenes_finds_multiple_segments(self) -> None:
