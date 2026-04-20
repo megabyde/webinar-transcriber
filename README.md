@@ -255,8 +255,11 @@ committed:
 ```bash
 make format
 make lint
-make test
+make check
 ```
+
+For quick local iteration, `make test` skips tests marked `slow`. Use `make check` to run the full
+coverage-gated suite.
 
 The repository keeps tiny committed media fixtures so pipeline tests can run without network fetches
 or large binary blobs. Contributor and agent-specific repository guidance lives in

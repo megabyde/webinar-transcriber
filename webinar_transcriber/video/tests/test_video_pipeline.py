@@ -41,6 +41,7 @@ def _frame(fill: int, *, invert_quadrants: bool = False) -> np.ndarray:
 
 
 class TestDetectScenes:
+    @pytest.mark.slow
     def test_detect_scenes_finds_multiple_segments(self) -> None:
         progress_updates: list[tuple[int, int]] = []
 
@@ -61,6 +62,44 @@ class TestDetectScenes:
 
 
 class TestFrameExtraction:
+    @pytest.mark.slow
+    def test_extract_frame_writes_real_image(self, tmp_path: Path) -> None:
+        output_path = tmp_path / "scene-1.png"
+
+        extracted, failure_detail = _extract_frame(
+            FIXTURE_DIR / "sample-video.mp4", 1.0, output_path
+        )
+
+        assert extracted
+        assert failure_detail is None
+        assert output_path.exists()
+        with Image.open(output_path) as image:
+            assert image.mode == "RGB"
+            assert image.width > 0
+            assert image.height > 0
+
+    @pytest.mark.slow
+    def test_extract_representative_frames_creates_real_images(self, tmp_path: Path) -> None:
+        scenes = [
+            Scene(id="scene-1", start_sec=0.0, end_sec=1.0),
+            Scene(id="scene-2", start_sec=1.0, end_sec=2.0),
+        ]
+
+        frames = extract_representative_frames(
+            FIXTURE_DIR / "sample-video.mp4",
+            scenes,
+            tmp_path / "frames",
+        )
+
+        assert [frame.scene_id for frame in frames] == ["scene-1", "scene-2"]
+        assert [frame.timestamp_sec for frame in frames] == [0.5, 1.5]
+        assert all(Path(frame.image_path).exists() for frame in frames)
+        for frame in frames:
+            with Image.open(frame.image_path) as image:
+                assert image.mode == "RGB"
+                assert image.width > 0
+                assert image.height > 0
+
     def test_extract_representative_frames_creates_images(
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -92,7 +131,9 @@ class TestFrameExtraction:
         assert all(Path(frame.image_path).exists() for frame in frames)
         assert len(progress_ticks) == len(scenes)
 
-    def test_detect_scene_start_times_uses_last_accepted_frame(self) -> None:
+    def test_detect_scene_start_times_uses_last_accepted_frame(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         samples = [
             (0.0, _frame(0)),
             (1.0, _frame(0)),
@@ -100,18 +141,57 @@ class TestFrameExtraction:
             (3.0, _frame(32, invert_quadrants=True)),
         ]
 
+        class FakeHash:
+            def __init__(self, key: str) -> None:
+                self.key = key
+
+            def __sub__(self, other: object) -> int:
+                assert isinstance(other, FakeHash)
+                return 0 if self.key == other.key else 10
+
+        fake_hashes = iter([
+            FakeHash("a"),
+            FakeHash("a"),
+            FakeHash("b"),
+            FakeHash("b"),
+        ])
+        monkeypatch.setattr(
+            "webinar_transcriber.video.scenes.imagehash.phash",
+            lambda *_args, **_kwargs: next(fake_hashes),
+        )
+
         scene_starts = _detect_scene_start_times(
             samples, difference_threshold=1, min_scene_length_sec=0.0
         )
 
         assert scene_starts == [0.0, 2.0]
 
-    def test_detect_scene_start_times_respects_min_scene_length(self) -> None:
+    def test_detect_scene_start_times_respects_min_scene_length(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         samples = [
             (0.0, _frame(0)),
             (1.0, _frame(32, invert_quadrants=True)),
             (4.0, _frame(32, invert_quadrants=True)),
         ]
+
+        class FakeHash:
+            def __init__(self, key: str) -> None:
+                self.key = key
+
+            def __sub__(self, other: object) -> int:
+                assert isinstance(other, FakeHash)
+                return 0 if self.key == other.key else 10
+
+        fake_hashes = iter([
+            FakeHash("a"),
+            FakeHash("b"),
+            FakeHash("b"),
+        ])
+        monkeypatch.setattr(
+            "webinar_transcriber.video.scenes.imagehash.phash",
+            lambda *_args, **_kwargs: next(fake_hashes),
+        )
 
         scene_starts = _detect_scene_start_times(
             samples, difference_threshold=1, min_scene_length_sec=3.0
@@ -119,13 +199,33 @@ class TestFrameExtraction:
 
         assert scene_starts == [0.0, 4.0]
 
-    def test_detect_scene_start_times_reports_sample_and_scene_progress(self) -> None:
+    def test_detect_scene_start_times_reports_sample_and_scene_progress(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         progress_updates: list[tuple[int, int]] = []
         samples = [
             (0.0, _frame(0)),
             (1.0, _frame(32, invert_quadrants=True)),
             (4.0, _frame(32, invert_quadrants=True)),
         ]
+
+        class FakeHash:
+            def __init__(self, key: str) -> None:
+                self.key = key
+
+            def __sub__(self, other: object) -> int:
+                assert isinstance(other, FakeHash)
+                return 0 if self.key == other.key else 10
+
+        fake_hashes = iter([
+            FakeHash("a"),
+            FakeHash("b"),
+            FakeHash("b"),
+        ])
+        monkeypatch.setattr(
+            "webinar_transcriber.video.scenes.imagehash.phash",
+            lambda *_args, **_kwargs: next(fake_hashes),
+        )
 
         def on_progress(sample_count: int, scene_count: int) -> None:
             progress_updates.append((sample_count, scene_count))
@@ -524,3 +624,21 @@ class TestSceneSamplingHelpers:
 
         with pytest.raises(subprocess.TimeoutExpired):
             _read_stdout_chunk(cast("IO[bytes]", FakeStream()), size=1, timeout_sec=1.0)
+
+    def test_read_stdout_chunk_reads_when_pipe_is_ready(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class FakeStream:
+            def fileno(self) -> int:
+                return 123
+
+            def read(self, size: int) -> bytes:
+                assert size == 2
+                return b"ok"
+
+        monkeypatch.setattr(
+            "webinar_transcriber.video.scenes.select.select",
+            lambda *_args, **_kwargs: ([123], [], []),
+        )
+
+        assert _read_stdout_chunk(cast("IO[bytes]", FakeStream()), size=2, timeout_sec=1.0) == b"ok"
