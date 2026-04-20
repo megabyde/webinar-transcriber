@@ -286,6 +286,7 @@ class TestProcessInput:
         assert artifacts.report.detected_language == "en"
         assert artifacts.report.action_items == ["Next step please send the draft by Friday."]
         assert len(artifacts.report.sections) == 1
+        assert artifacts.diagnostics.asr_pipeline is not None
         assert (
             "Next step please send the draft by Friday."
             in artifacts.report.sections[0].transcript_text
@@ -313,7 +314,12 @@ class TestProcessInput:
         )
         transcribe_start_events = reporter.progress_stage_events("start", "transcribe")
         assert transcribe_start_events == [
-            ("start", "transcribe", artifacts.media_asset.duration_sec, "0 segments")
+            (
+                "start",
+                "transcribe",
+                float(artifacts.diagnostics.asr_pipeline.window_count),
+                "0 segments",
+            )
         ]
         assert reporter.has_event("start", "vad", "Detecting speech regions")
         assert reporter.has_event("finish", "vad", "1 region")
