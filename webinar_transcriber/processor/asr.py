@@ -114,18 +114,17 @@ def run_asr_pipeline(
         ctx,
         "transcribe",
         "Transcribing audio",
-        total=float(window_count),
-        count_label="regions",
-        rate_label="regions/s",
+        total=media_asset.duration_sec,
+        count_label="s",
         detail="0 segments",
     ) as st:
 
         def on_window_completed(
-            _completed_sec: float,
+            completed_sec: float,
             segment_count: int,
             handle: ProgressStageHandle = st,
         ) -> None:
-            handle.advance(1.0, detail=count_label(segment_count, "segment"))
+            handle.advance_to(completed_sec, detail=count_label(segment_count, "segment"))
 
         decoded_windows = transcriber.transcribe_inference_windows(
             audio_samples,
@@ -136,7 +135,7 @@ def run_asr_pipeline(
             layout.decoded_windows_path,
             {"decoded_windows": [asdict(window) for window in decoded_windows]},
         )
-        st.finish_progress(float(window_count))
+        st.finish_progress(media_asset.duration_sec)
         st.detail = window_transcription_stage_detail(
             window_count=len(windows),
             total_duration_sec=media_asset.duration_sec,
