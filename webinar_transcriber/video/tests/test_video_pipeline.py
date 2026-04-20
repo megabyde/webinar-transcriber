@@ -30,6 +30,7 @@ from webinar_transcriber.video.scenes import (
 )
 
 FIXTURE_DIR = Path(__file__).parents[2] / "tests" / "fixtures"
+SAMPLE_VIDEO_PATH = FIXTURE_DIR / "sample-video.mp4"
 
 
 def _frame(fill: int, *, invert_quadrants: bool = False) -> np.ndarray:
@@ -38,6 +39,30 @@ def _frame(fill: int, *, invert_quadrants: bool = False) -> np.ndarray:
         frame[:16, :16] = 255 - fill
         frame[16:, 16:] = 255 - fill
     return frame
+
+
+def _scene(index: int, start_sec: float, end_sec: float) -> Scene:
+    return Scene(id=f"scene-{index}", start_sec=start_sec, end_sec=end_sec)
+
+
+def _install_fake_phashes(monkeypatch: pytest.MonkeyPatch, distances: list[int]) -> None:
+    class FakeHash:
+        def __init__(self, key: int) -> None:
+            self.key = key
+
+        def __sub__(self, other: object) -> int:
+            assert isinstance(other, FakeHash)
+            return abs(self.key - other.key)
+
+    keys = [0]
+    for distance in distances:
+        keys.append(keys[-1] + distance)
+
+    fake_hashes = iter(FakeHash(key) for key in keys)
+    monkeypatch.setattr(
+        "webinar_transcriber.video.scenes.imagehash.phash",
+        lambda *_args, **_kwargs: next(fake_hashes),
+    )
 
 
 class TestDetectScenes:
@@ -49,7 +74,7 @@ class TestDetectScenes:
             progress_updates.append((sample_count, scene_count))
 
         scenes = detect_scenes(
-            FIXTURE_DIR / "sample-video.mp4",
+            SAMPLE_VIDEO_PATH,
             min_scene_length_sec=1.0,
             progress_callback=on_progress,
         )
@@ -66,9 +91,7 @@ class TestFrameExtraction:
     def test_extract_frame_writes_real_image(self, tmp_path: Path) -> None:
         output_path = tmp_path / "scene-1.png"
 
-        extracted, failure_detail = _extract_frame(
-            FIXTURE_DIR / "sample-video.mp4", 1.0, output_path
-        )
+        extracted, failure_detail = _extract_frame(SAMPLE_VIDEO_PATH, 1.0, output_path)
 
         assert extracted
         assert failure_detail is None
@@ -80,13 +103,10 @@ class TestFrameExtraction:
 
     @pytest.mark.slow
     def test_extract_representative_frames_creates_real_images(self, tmp_path: Path) -> None:
-        scenes = [
-            Scene(id="scene-1", start_sec=0.0, end_sec=1.0),
-            Scene(id="scene-2", start_sec=1.0, end_sec=2.0),
-        ]
+        scenes = [_scene(1, 0.0, 1.0), _scene(2, 1.0, 2.0)]
 
         frames = extract_representative_frames(
-            FIXTURE_DIR / "sample-video.mp4",
+            SAMPLE_VIDEO_PATH,
             scenes,
             tmp_path / "frames",
         )
@@ -103,10 +123,7 @@ class TestFrameExtraction:
     def test_extract_representative_frames_creates_images(
         self, tmp_path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        scenes = [
-            Scene(id="scene-1", start_sec=0.0, end_sec=2.0),
-            Scene(id="scene-2", start_sec=2.0, end_sec=4.0),
-        ]
+        scenes = [_scene(1, 0.0, 2.0), _scene(2, 2.0, 4.0)]
         progress_ticks: list[int] = []
 
         def fake_extract_frame(
@@ -121,7 +138,7 @@ class TestFrameExtraction:
         )
 
         frames = extract_representative_frames(
-            FIXTURE_DIR / "sample-video.mp4",
+            SAMPLE_VIDEO_PATH,
             scenes,
             tmp_path / "frames",
             progress_callback=lambda: progress_ticks.append(1),
@@ -141,24 +158,7 @@ class TestFrameExtraction:
             (3.0, _frame(32, invert_quadrants=True)),
         ]
 
-        class FakeHash:
-            def __init__(self, key: str) -> None:
-                self.key = key
-
-            def __sub__(self, other: object) -> int:
-                assert isinstance(other, FakeHash)
-                return 0 if self.key == other.key else 10
-
-        fake_hashes = iter([
-            FakeHash("a"),
-            FakeHash("a"),
-            FakeHash("b"),
-            FakeHash("b"),
-        ])
-        monkeypatch.setattr(
-            "webinar_transcriber.video.scenes.imagehash.phash",
-            lambda *_args, **_kwargs: next(fake_hashes),
-        )
+        _install_fake_phashes(monkeypatch, [0, 10, 0])
 
         scene_starts = _detect_scene_start_times(
             samples, difference_threshold=1, min_scene_length_sec=0.0
@@ -175,23 +175,7 @@ class TestFrameExtraction:
             (4.0, _frame(32, invert_quadrants=True)),
         ]
 
-        class FakeHash:
-            def __init__(self, key: str) -> None:
-                self.key = key
-
-            def __sub__(self, other: object) -> int:
-                assert isinstance(other, FakeHash)
-                return 0 if self.key == other.key else 10
-
-        fake_hashes = iter([
-            FakeHash("a"),
-            FakeHash("b"),
-            FakeHash("b"),
-        ])
-        monkeypatch.setattr(
-            "webinar_transcriber.video.scenes.imagehash.phash",
-            lambda *_args, **_kwargs: next(fake_hashes),
-        )
+        _install_fake_phashes(monkeypatch, [10, 0])
 
         scene_starts = _detect_scene_start_times(
             samples, difference_threshold=1, min_scene_length_sec=3.0
@@ -209,23 +193,7 @@ class TestFrameExtraction:
             (4.0, _frame(32, invert_quadrants=True)),
         ]
 
-        class FakeHash:
-            def __init__(self, key: str) -> None:
-                self.key = key
-
-            def __sub__(self, other: object) -> int:
-                assert isinstance(other, FakeHash)
-                return 0 if self.key == other.key else 10
-
-        fake_hashes = iter([
-            FakeHash("a"),
-            FakeHash("b"),
-            FakeHash("b"),
-        ])
-        monkeypatch.setattr(
-            "webinar_transcriber.video.scenes.imagehash.phash",
-            lambda *_args, **_kwargs: next(fake_hashes),
-        )
+        _install_fake_phashes(monkeypatch, [10, 0])
 
         def on_progress(sample_count: int, scene_count: int) -> None:
             progress_updates.append((sample_count, scene_count))
@@ -239,6 +207,20 @@ class TestFrameExtraction:
 
         assert scene_starts == [0.0, 4.0]
         assert progress_updates == [(1, 1), (2, 1), (3, 2)]
+
+    def test_detect_scene_start_times_default_threshold_ignores_minor_variants(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        samples = [
+            (0.0, _frame(0)),
+            (4.0, _frame(32, invert_quadrants=True)),
+        ]
+
+        _install_fake_phashes(monkeypatch, [30])
+
+        scene_starts = _detect_scene_start_times(samples, min_scene_length_sec=0.0)
+
+        assert scene_starts == [0.0]
 
     def test_normalize_extracted_frame_applies_exif_orientation(self, tmp_path) -> None:
         image_path = tmp_path / "rotated.jpg"
@@ -254,9 +236,7 @@ class TestFrameExtraction:
             assert normalized_image.getexif().get(274) is None
 
     def test_frame_extract_command_disables_ffmpeg_autorotate(self, tmp_path) -> None:
-        command = _frame_extract_command(
-            FIXTURE_DIR / "sample-video.mp4", 12.345, tmp_path / "scene-1.png"
-        )
+        command = _frame_extract_command(SAMPLE_VIDEO_PATH, 12.345, tmp_path / "scene-1.png")
 
         assert command[:3] == ["ffmpeg", "-y", "-noautorotate"]
         assert "-i" in command
@@ -272,17 +252,14 @@ class TestFrameExtraction:
         with pytest.raises(
             MediaProcessingError, match=r"ffmpeg frame extraction timed out after 300s\."
         ):
-            _extract_frame(FIXTURE_DIR / "sample-video.mp4", 1.0, tmp_path / "scene-1.png")
+            _extract_frame(SAMPLE_VIDEO_PATH, 1.0, tmp_path / "scene-1.png")
 
     def test_extract_representative_frames_skips_failed_scene_but_still_reports_progress(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         progress_ticks: list[int] = []
         warnings: list[str] = []
-        scenes = [
-            Scene(id="scene-1", start_sec=0.0, end_sec=2.0),
-            Scene(id="scene-2", start_sec=2.0, end_sec=4.0),
-        ]
+        scenes = [_scene(1, 0.0, 2.0), _scene(2, 2.0, 4.0)]
 
         def fake_extract_frame(
             _video_path: Path, _timestamp_sec: float, output_path: Path
@@ -298,7 +275,7 @@ class TestFrameExtraction:
         )
 
         frames = extract_representative_frames(
-            FIXTURE_DIR / "sample-video.mp4",
+            SAMPLE_VIDEO_PATH,
             scenes,
             tmp_path / "frames",
             progress_callback=lambda: progress_ticks.append(1),
@@ -330,8 +307,8 @@ class TestFrameExtraction:
         )
 
         frames = extract_representative_frames(
-            FIXTURE_DIR / "sample-video.mp4",
-            [Scene(id="scene-1", start_sec=2.0, end_sec=5.0)],
+            SAMPLE_VIDEO_PATH,
+            [_scene(1, 2.0, 5.0)],
             tmp_path / "frames",
         )
 
@@ -346,9 +323,7 @@ class TestFrameExtraction:
             lambda *_args, **_kwargs: subprocess.CompletedProcess(["ffmpeg"], returncode=0),
         )
 
-        extracted, failure_detail = _extract_frame(
-            FIXTURE_DIR / "sample-video.mp4", 1.0, tmp_path / "scene-1.png"
-        )
+        extracted, failure_detail = _extract_frame(SAMPLE_VIDEO_PATH, 1.0, tmp_path / "scene-1.png")
 
         assert not extracted
         assert failure_detail == f"ffmpeg did not write {tmp_path / 'scene-1.png'}"
@@ -364,9 +339,7 @@ class TestFrameExtraction:
 
         monkeypatch.setattr("webinar_transcriber.video.frames.subprocess.run", fake_run)
 
-        extracted, failure_detail = _extract_frame(
-            FIXTURE_DIR / "sample-video.mp4", 1.0, output_path
-        )
+        extracted, failure_detail = _extract_frame(SAMPLE_VIDEO_PATH, 1.0, output_path)
 
         assert extracted
         assert failure_detail is None
@@ -381,9 +354,7 @@ class TestFrameExtraction:
             ),
         )
 
-        extracted, failure_detail = _extract_frame(
-            FIXTURE_DIR / "sample-video.mp4", 1.0, tmp_path / "scene-1.png"
-        )
+        extracted, failure_detail = _extract_frame(SAMPLE_VIDEO_PATH, 1.0, tmp_path / "scene-1.png")
 
         assert not extracted
         assert failure_detail == "decode failed"
@@ -397,7 +368,7 @@ class TestDetectScenesFallback:
             "webinar_transcriber.video.scenes._iter_sampled_frames", lambda _path: iter(())
         )
 
-        scenes = detect_scenes(FIXTURE_DIR / "sample-video.mp4")
+        scenes = detect_scenes(SAMPLE_VIDEO_PATH)
 
         assert scenes == [Scene(id="scene-1", start_sec=0.0, end_sec=0.0)]
 
@@ -414,7 +385,7 @@ class TestIterSampledFrames:
         with pytest.raises(
             MediaProcessingError, match="Could not start ffmpeg for scene detection: ffmpeg missing"
         ):
-            list(_iter_sampled_frames(FIXTURE_DIR / "sample-video.mp4"))
+            list(_iter_sampled_frames(SAMPLE_VIDEO_PATH))
 
     def test_iter_sampled_frames_raises_when_ffmpeg_pipes_are_unavailable(
         self, monkeypatch: pytest.MonkeyPatch
@@ -433,7 +404,7 @@ class TestIterSampledFrames:
         )
 
         with pytest.raises(MediaProcessingError, match="Could not open ffmpeg pipes"):
-            list(_iter_sampled_frames(FIXTURE_DIR / "sample-video.mp4"))
+            list(_iter_sampled_frames(SAMPLE_VIDEO_PATH))
 
     def test_iter_sampled_frames_raises_on_incomplete_frame_sample(
         self, monkeypatch: pytest.MonkeyPatch
@@ -456,7 +427,7 @@ class TestIterSampledFrames:
         with pytest.raises(
             MediaProcessingError, match="Incomplete frame sample returned by ffmpeg"
         ):
-            list(_iter_sampled_frames(FIXTURE_DIR / "sample-video.mp4"))
+            list(_iter_sampled_frames(SAMPLE_VIDEO_PATH))
 
     def test_iter_sampled_frames_raises_when_ffmpeg_exits_nonzero(
         self, monkeypatch: pytest.MonkeyPatch
@@ -476,7 +447,7 @@ class TestIterSampledFrames:
         )
 
         with pytest.raises(MediaProcessingError) as exc_info:
-            list(_iter_sampled_frames(FIXTURE_DIR / "sample-video.mp4"))
+            list(_iter_sampled_frames(SAMPLE_VIDEO_PATH))
 
         assert str(exc_info.value) == "ffmpeg failed"
 
@@ -500,7 +471,7 @@ class TestIterSampledFrames:
         )
 
         with pytest.raises(MediaProcessingError) as exc_info:
-            list(_iter_sampled_frames(FIXTURE_DIR / "sample-video.mp4"))
+            list(_iter_sampled_frames(SAMPLE_VIDEO_PATH))
 
         assert str(exc_info.value) == "ffmpeg failed late"
 
@@ -522,7 +493,7 @@ class TestIterSampledFrames:
         )
 
         with pytest.raises(MediaProcessingError, match="ffmpeg failed"):
-            list(_iter_sampled_frames(FIXTURE_DIR / "sample-video.mp4"))
+            list(_iter_sampled_frames(SAMPLE_VIDEO_PATH))
 
     def test_iter_sampled_frames_kills_process_when_ffmpeg_times_out(
         self, monkeypatch: pytest.MonkeyPatch
@@ -582,7 +553,7 @@ class TestIterSampledFrames:
             "webinar_transcriber.video.scenes.subprocess.Popen", lambda *_a, **_k: process
         )
 
-        frames = iter(_iter_sampled_frames(FIXTURE_DIR / "sample-video.mp4"))
+        frames = iter(_iter_sampled_frames(SAMPLE_VIDEO_PATH))
         sample_time, frame = next(frames)
 
         assert sample_time == 0.0
