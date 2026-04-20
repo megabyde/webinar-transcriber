@@ -1,28 +1,23 @@
 """Tests for optional cloud LLM helpers."""
 
 import json
-from types import SimpleNamespace
 from typing import cast
 
 import pytest
 from pydantic import BaseModel
 
 from webinar_transcriber.llm import (
-    AnthropicLLMProcessor,
+    InstructorLLMProcessor,
     LLMConfigurationError,
     LLMProcessingError,
     LLMReportPolishPlan,
-    OpenAILLMProcessor,
     ReportPolishResponse,
     ReportSectionUpdate,
     SectionTextResponse,
     build_llm_processor_from_env,
 )
-from webinar_transcriber.llm.flow import _BaseLLMProcessor
 from webinar_transcriber.llm.utils import (
-    anthropic_response_text,
     build_report_polish_payload,
-    extract_json_text,
     extract_usage,
     normalize_polished_section_text,
     normalize_polished_section_tldr,
@@ -33,16 +28,30 @@ from webinar_transcriber.llm.utils import (
 )
 from webinar_transcriber.models import MediaType, ReportDocument, ReportSection
 
-
-def _fake_openai_module(fake_client):
-    return SimpleNamespace(OpenAI=lambda **_kwargs: fake_client)
-
-
-def _fake_anthropic_module(fake_client):
-    return SimpleNamespace(Anthropic=lambda **_kwargs: fake_client)
-
-
 LLM_EXTRA_INSTALL_RE = r'uv tool install --reinstall "\.\[llm\]"'
+
+
+def _fake_import_module(modules: dict[str, object]):
+    def fake_import_module(name: str) -> object:
+        try:
+            return modules[name]
+        except KeyError as error:
+            raise ImportError(name) from error
+
+    return fake_import_module
+
+
+class FakeInstructorModule:
+    class Mode:
+        TOOLS = "tools"
+
+    def __init__(self, client: object) -> None:
+        self._client = client
+        self.calls: list[tuple[str, dict[str, object]]] = []
+
+    def from_provider(self, provider_model: str, **kwargs: object) -> object:
+        self.calls.append((provider_model, kwargs))
+        return self._client
 
 
 class TestBuildLlmProcessorFromEnv:
@@ -52,7 +61,10 @@ class TestBuildLlmProcessorFromEnv:
         monkeypatch.delenv("OPENAI_MODEL", raising=False)
         monkeypatch.setattr(
             "webinar_transcriber.llm.importlib.import_module",
-            lambda _name: object(),
+            _fake_import_module({
+                "instructor": FakeInstructorModule(object()),
+                "openai": object(),
+            }),
         )
 
         with pytest.raises(LLMConfigurationError):
@@ -62,7 +74,7 @@ class TestBuildLlmProcessorFromEnv:
         monkeypatch.delenv("LLM_PROVIDER", raising=False)
         monkeypatch.setattr(
             "webinar_transcriber.llm.importlib.import_module",
-            lambda _name: (_ for _ in ()).throw(ImportError("missing openai")),
+            _fake_import_module({}),
         )
 
         with pytest.raises(
@@ -72,30 +84,35 @@ class TestBuildLlmProcessorFromEnv:
             build_llm_processor_from_env()
 
     def test_supports_anthropic(self, monkeypatch) -> None:
-        fake_client = TestAnthropicLlmProcessor.FakeClient([])
+        fake_instructor = FakeInstructorModule(object())
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         monkeypatch.setenv("ANTHROPIC_MODEL", "claude-test")
         monkeypatch.setattr(
             "webinar_transcriber.llm.importlib.import_module",
-            lambda _name: _fake_anthropic_module(fake_client),
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.llm.anthropic_backend.importlib.import_module",
-            lambda _name: _fake_anthropic_module(fake_client),
+            _fake_import_module({
+                "instructor": fake_instructor,
+                "anthropic": object(),
+            }),
         )
 
         processor = build_llm_processor_from_env()
 
-        assert isinstance(processor, AnthropicLLMProcessor)
+        assert isinstance(processor, InstructorLLMProcessor)
         assert processor.provider_name == "anthropic"
         assert processor.model_name == "claude-test"
+        assert fake_instructor.calls == [
+            (
+                "anthropic/claude-test",
+                {"api_key": "test-key", "mode": FakeInstructorModule.Mode.TOOLS},
+            )
+        ]
 
     def test_requires_llm_extra_for_anthropic(self, monkeypatch) -> None:
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         monkeypatch.setattr(
             "webinar_transcriber.llm.importlib.import_module",
-            lambda _name: (_ for _ in ()).throw(ImportError("missing anthropic")),
+            _fake_import_module({}),
         )
 
         with pytest.raises(
@@ -111,61 +128,58 @@ class TestBuildLlmProcessorFromEnv:
             build_llm_processor_from_env()
 
     def test_defaults_to_openai(self, monkeypatch) -> None:
-        fake_client = TestOpenAiLlmProcessor.FakeClient([])
+        fake_instructor = FakeInstructorModule(object())
         monkeypatch.delenv("LLM_PROVIDER", raising=False)
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         monkeypatch.setenv("OPENAI_MODEL", "gpt-test")
         monkeypatch.setattr(
             "webinar_transcriber.llm.importlib.import_module",
-            lambda _name: _fake_openai_module(fake_client),
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.llm.openai_backend.importlib.import_module",
-            lambda _name: _fake_openai_module(fake_client),
+            _fake_import_module({
+                "instructor": fake_instructor,
+                "openai": object(),
+            }),
         )
 
         processor = build_llm_processor_from_env()
 
-        assert isinstance(processor, OpenAILLMProcessor)
+        assert isinstance(processor, InstructorLLMProcessor)
         assert processor.provider_name == "openai"
         assert processor.model_name == "gpt-test"
+        assert fake_instructor.calls == [
+            (
+                "openai/gpt-test",
+                {"api_key": "test-key", "mode": FakeInstructorModule.Mode.TOOLS},
+            )
+        ]
 
 
-class TestOpenAiLlmProcessor:
-    class FakeResponse:
-        """Simple stand-in for the OpenAI SDK response object."""
-
-        def __init__(self, output_parsed, usage) -> None:
-            self.output_parsed = output_parsed
+class TestInstructorLlmProcessor:
+    class FakeCompletion:
+        def __init__(self, usage) -> None:
             self.usage = usage
 
-    class FakeResponsesAPI:
-        """Capture parse calls and replay canned responses."""
-
+    class FakeClient:
         def __init__(self, responses) -> None:
-            self.calls = []
+            self.calls: list[dict[str, object]] = []
             self._responses = list(responses)
 
-        def parse(self, **kwargs):
+        def create_with_completion(self, **kwargs):
             self.calls.append(kwargs)
-            return self._responses.pop(0)
+            response = self._responses.pop(0)
+            if isinstance(response, Exception):
+                raise response
+            return response
 
-    class FakeClient:
-        """Container exposing a fake responses API surface."""
-
-        def __init__(self, responses) -> None:
-            self.responses = TestOpenAiLlmProcessor.FakeResponsesAPI(responses)
-
-    def test_polishes_report(self, monkeypatch) -> None:
+    def test_polishes_report(self) -> None:
         fake_client = self.FakeClient([
-            self.FakeResponse(
-                output_parsed=SectionTextResponse(
+            (
+                SectionTextResponse(
                     tldr="Short recap of the section.",
                     transcript_text="Agenda review and project status update.\n\nPlease listen.",
                 ),
-                usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
+                self.FakeCompletion({"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}),
             ),
-            self.FakeResponse(
+            (
                 ReportPolishResponse(
                     summary=["Improved summary."],
                     action_items=["Send the updated draft by Friday."],
@@ -173,15 +187,15 @@ class TestOpenAiLlmProcessor:
                         ReportSectionUpdate(id="section-1", title="Improved overview")
                     ],
                 ),
-                {"input_tokens": 12, "output_tokens": 8, "total_tokens": 20},
+                self.FakeCompletion({"input_tokens": 12, "output_tokens": 8, "total_tokens": 20}),
             ),
         ])
-        monkeypatch.setattr(
-            "webinar_transcriber.llm.openai_backend.importlib.import_module",
-            lambda _name: _fake_openai_module(fake_client),
-        )
 
-        processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
+        processor = InstructorLLMProcessor(
+            client=fake_client,
+            provider_name="openai",
+            model_name="gpt-test",
+        )
         report = ReportDocument(
             title="Demo",
             source_file="demo.wav",
@@ -218,6 +232,18 @@ class TestOpenAiLlmProcessor:
             "total_tokens": 20,
         }
         assert report.sections[0].transcript_text == "Agenda review and project status update."
+        assert len(fake_client.calls) == 2
+        assert fake_client.calls[0]["max_retries"] == 1
+        assert fake_client.calls[0]["response_model"] is SectionTextResponse
+        assert fake_client.calls[1]["response_model"] is ReportPolishResponse
+        messages = cast("list[dict[str, object]]", fake_client.calls[0]["messages"])
+        assert json.loads(cast("str", messages[1]["content"])) == {
+            "id": "section-1",
+            "title": "Old title",
+            "start_sec": 0.0,
+            "end_sec": 10.0,
+            "transcript_text": "Agenda review and project status update.",
+        }
 
     def test_build_report_polish_payload_uses_section_transcript_overrides(self) -> None:
         report = ReportDocument(
@@ -245,27 +271,28 @@ class TestOpenAiLlmProcessor:
         assert sections[0]["transcript_excerpt"] == "Overridden transcript text."
         assert report.sections[0].transcript_text == "Original transcript text."
 
-    def test_rejects_unknown_report_section_id(self, monkeypatch) -> None:
+    def test_rejects_unknown_report_section_id(self) -> None:
         fake_client = self.FakeClient([
-            self.FakeResponse(
-                output_parsed=SectionTextResponse(
-                    tldr="Agenda recap.", transcript_text="Agenda review and project status update."
+            (
+                SectionTextResponse(
+                    tldr="Agenda recap.",
+                    transcript_text="Agenda review and project status update.",
                 ),
-                usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
+                self.FakeCompletion({"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}),
             ),
-            self.FakeResponse(
+            (
                 ReportPolishResponse(
                     section_updates=[ReportSectionUpdate(id="section-x", title="Unexpected title")]
                 ),
-                {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5},
+                self.FakeCompletion({"input_tokens": 3, "output_tokens": 2, "total_tokens": 5}),
             ),
         ])
-        monkeypatch.setattr(
-            "webinar_transcriber.llm.openai_backend.importlib.import_module",
-            lambda _name: _fake_openai_module(fake_client),
-        )
 
-        processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
+        processor = InstructorLLMProcessor(
+            client=fake_client,
+            provider_name="openai",
+            model_name="gpt-test",
+        )
         report = ReportDocument(
             title="Demo",
             source_file="demo.wav",
@@ -288,19 +315,19 @@ class TestOpenAiLlmProcessor:
                 report, section_transcripts=section_result.section_transcripts
             )
 
-    def test_rejects_non_matching_section_schema(self, monkeypatch) -> None:
+    def test_rejects_non_matching_schema(self) -> None:
         fake_client = self.FakeClient([
-            self.FakeResponse(
-                output_parsed=object(),
-                usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
+            (
+                object(),
+                self.FakeCompletion({"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}),
             )
         ])
-        monkeypatch.setattr(
-            "webinar_transcriber.llm.openai_backend.importlib.import_module",
-            lambda _name: _fake_openai_module(fake_client),
-        )
 
-        processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
+        processor = InstructorLLMProcessor(
+            client=fake_client,
+            provider_name="openai",
+            model_name="gpt-test",
+        )
         report = ReportDocument(
             title="Demo",
             source_file="demo.wav",
@@ -322,28 +349,42 @@ class TestOpenAiLlmProcessor:
                 section_transcripts={"section-1": "Agenda review and project status update."},
             )
 
-    def test_polishes_each_section_text(self, monkeypatch) -> None:
+    def test_wraps_client_errors(self) -> None:
+        fake_client = self.FakeClient([RuntimeError("boom")])
+        processor = InstructorLLMProcessor(
+            client=fake_client,
+            provider_name="openai",
+            model_name="gpt-test",
+        )
+        report = ReportDocument(title="Demo", source_file="demo.wav", media_type=MediaType.AUDIO)
+
+        with pytest.raises(LLMProcessingError, match="Report polishing failed: boom"):
+            processor.polish_report_metadata(report, section_transcripts={})
+
+    def test_polishes_each_section_text(self) -> None:
         progress_updates: list[int] = []
         fake_client = self.FakeClient([
-            self.FakeResponse(
-                output_parsed=SectionTextResponse(
-                    tldr="Intro recap.", transcript_text="Intro review and project status update."
+            (
+                SectionTextResponse(
+                    tldr="Intro recap.",
+                    transcript_text="Intro review and project status update.",
                 ),
-                usage={"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
+                self.FakeCompletion({"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}),
             ),
-            self.FakeResponse(
-                output_parsed=SectionTextResponse(
-                    tldr="Agenda recap.", transcript_text="Agenda review and project status update."
+            (
+                SectionTextResponse(
+                    tldr="Agenda recap.",
+                    transcript_text="Agenda review and project status update.",
                 ),
-                usage={"input_tokens": 6, "output_tokens": 5, "total_tokens": 11},
+                self.FakeCompletion({"input_tokens": 6, "output_tokens": 5, "total_tokens": 11}),
             ),
         ])
-        monkeypatch.setattr(
-            "webinar_transcriber.llm.openai_backend.importlib.import_module",
-            lambda _name: _fake_openai_module(fake_client),
-        )
 
-        processor = OpenAILLMProcessor(api_key="test-key", model_name="gpt-test")
+        processor = InstructorLLMProcessor(
+            client=fake_client,
+            provider_name="openai",
+            model_name="gpt-test",
+        )
         report = ReportDocument(
             title="Demo",
             source_file="demo.wav",
@@ -370,7 +411,7 @@ class TestOpenAiLlmProcessor:
             report, progress_callback=progress_updates.append
         )
 
-        assert len(fake_client.responses.calls) == 2
+        assert len(fake_client.calls) == 2
         assert result.section_tldrs == {"section-1": "Intro recap.", "section-2": "Agenda recap."}
         assert result.section_transcripts["section-1"] == "Intro review and project status update."
         assert result.section_transcripts["section-2"] == "Agenda review and project status update."
@@ -378,145 +419,51 @@ class TestOpenAiLlmProcessor:
         assert result.warnings == []
         assert progress_updates == [1, 1]
 
-
-class TestAnthropicLlmProcessor:
-    class FakeContentBlock:
-        """Simple Anthropic text content block."""
-
-        def __init__(self, text: str) -> None:
-            self.type = "text"
-            self.text = text
-
-    class FakeResponse:
-        """Simple stand-in for the Anthropic SDK response object."""
-
-        def __init__(self, text: str, usage) -> None:
-            self.content = [TestAnthropicLlmProcessor.FakeContentBlock(text)]
-            self.usage = usage
-
-    class FakeMessagesAPI:
-        """Capture create calls and replay canned responses."""
-
-        def __init__(self, responses) -> None:
-            self.calls = []
-            self._responses = list(responses)
-
-        def create(self, **kwargs):
-            self.calls.append(kwargs)
-            return self._responses.pop(0)
-
-    class FakeClient:
-        """Container exposing a fake Anthropic messages API surface."""
-
-        def __init__(self, responses) -> None:
-            self.messages = TestAnthropicLlmProcessor.FakeMessagesAPI(responses)
-
-    def test_polishes_report(self, monkeypatch) -> None:
+    def test_passes_request_kwargs_to_client(self) -> None:
         fake_client = self.FakeClient([
-            self.FakeResponse(
-                json.dumps({
-                    "tldr": "Short recap of the section.",
-                    "transcript_text": "Agenda review and project status update.\n\nPlease listen.",
-                }),
-                usage=type("Usage", (), {"input_tokens": 5, "output_tokens": 4})(),
-            ),
-            self.FakeResponse(
-                json.dumps({
-                    "summary": ["Improved summary."],
-                    "action_items": ["Send the updated draft by Friday."],
-                    "section_updates": [{"id": "section-1", "title": "Improved overview"}],
-                }),
-                usage=type("Usage", (), {"input_tokens": 12, "output_tokens": 8})(),
-            ),
-        ])
-        monkeypatch.setattr(
-            "webinar_transcriber.llm.anthropic_backend.importlib.import_module",
-            lambda _name: _fake_anthropic_module(fake_client),
-        )
-
-        processor = AnthropicLLMProcessor(api_key="test-key", model_name="claude-test")
-        report = ReportDocument(
-            title="Demo",
-            source_file="demo.wav",
-            media_type=MediaType.AUDIO,
-            summary=["Old summary."],
-            action_items=["Old action."],
-            sections=[
-                ReportSection(
-                    id="section-1",
-                    title="Old title",
-                    start_sec=0.0,
-                    end_sec=10.0,
-                    transcript_text="Agenda review and project status update.",
-                )
-            ],
-        )
-
-        section_result = processor.polish_report_sections_with_progress(report)
-        metadata_result = processor.polish_report_metadata(
-            report, section_transcripts=section_result.section_transcripts
-        )
-
-        assert metadata_result.summary == ["Improved summary."]
-        assert metadata_result.action_items == ["Send the updated draft by Friday."]
-        assert metadata_result.section_titles == {"section-1": "Improved overview"}
-        assert section_result.section_tldrs == {"section-1": "Short recap of the section."}
-        assert section_result.section_transcripts == {
-            "section-1": "Agenda review and project status update.\n\nPlease listen."
-        }
-        assert section_result.usage == {"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}
-        assert metadata_result.usage == {
-            "input_tokens": 12,
-            "output_tokens": 8,
-            "total_tokens": 20,
-        }
-
-    def test_rejects_invalid_json_response(self, monkeypatch) -> None:
-        fake_client = self.FakeClient([
-            self.FakeResponse(
-                "[]",
-                usage=type("Usage", (), {"input_tokens": 5, "output_tokens": 4})(),
+            (
+                ReportPolishResponse(),
+                self.FakeCompletion({"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}),
             )
         ])
-        monkeypatch.setattr(
-            "webinar_transcriber.llm.anthropic_backend.importlib.import_module",
-            lambda _name: _fake_anthropic_module(fake_client),
+        processor = InstructorLLMProcessor(
+            client=fake_client,
+            provider_name="anthropic",
+            model_name="claude-test",
+            request_kwargs={"max_tokens": 4096},
         )
+        report = ReportDocument(title="Demo", source_file="demo.wav", media_type=MediaType.AUDIO)
 
-        processor = AnthropicLLMProcessor(api_key="test-key", model_name="claude-test")
-        report = ReportDocument(
-            title="Demo",
-            source_file="demo.wav",
-            media_type=MediaType.AUDIO,
-            sections=[
-                ReportSection(
-                    id="section-1",
-                    title="Old title",
-                    start_sec=0.0,
-                    end_sec=10.0,
-                    transcript_text="Agenda review and project status update.",
-                )
-            ],
-        )
+        processor.polish_report_metadata(report, section_transcripts={})
 
-        with pytest.raises(LLMProcessingError, match="Report polish response did not match"):
-            processor.polish_report_metadata(
-                report,
-                section_transcripts={"section-1": "Agenda review and project status update."},
-            )
+        assert len(fake_client.calls) == 1
+        assert fake_client.calls[0]["response_model"] is ReportPolishResponse
+        assert fake_client.calls[0]["max_retries"] == 1
+        assert fake_client.calls[0]["max_tokens"] == 4096
+        messages = cast("list[dict[str, object]]", fake_client.calls[0]["messages"])
+        assert messages[0]["role"] == "system"
+        assert messages[1]["role"] == "user"
 
 
-class TestLlmFlow:
-    class StubProcessor(_BaseLLMProcessor):
+class TestInstructorProcessorFlow:
+    class StubProcessor(InstructorLLMProcessor):
+        class UnusedClient:
+            def create_with_completion(self, **_kwargs):
+                raise AssertionError("unused")
+
         def __init__(
             self, responses: dict[str, tuple[BaseModel, dict[str, int]] | Exception]
         ) -> None:
-            super().__init__(provider_name="stub", model_name="stub-model")
+            super().__init__(
+                client=self.UnusedClient(),
+                provider_name="stub",
+                model_name="stub-model",
+            )
             self._responses = responses
 
-        def _parse_structured_response(self, **kwargs) -> tuple[BaseModel, dict[str, int]]:
-            section_id = cast("str", kwargs["user_payload"].get("id"))
-            response = self._responses[section_id]
+        def _create_structured_response(self, **kwargs) -> tuple[BaseModel, dict[str, int]]:
+            response_key = cast("str", kwargs["user_payload"].get("id", "__metadata__"))
+            response = self._responses[response_key]
             if isinstance(response, Exception):
                 raise response
             return response
@@ -754,20 +701,6 @@ class TestLlmNormalization:
             "input_tokens": 3,
             "total_tokens": 9,
         }
-
-    def test_extract_json_text_supports_fenced_and_embedded_json(self) -> None:
-        assert extract_json_text('```json\n{"a": 1}\n```') == '{"a": 1}'
-        assert extract_json_text('prefix {"a": 1} suffix') == '{"a": 1}'
-        assert extract_json_text("  plain text  ") == "plain text"
-
-    def test_anthropic_response_text_requires_text_content(self) -> None:
-        response = type("Response", (), {"content": [type("Block", (), {"type": "image"})()]})()
-
-        with pytest.raises(LLMProcessingError, match="did not contain text content"):
-            anthropic_response_text(response)
-
-        with pytest.raises(LLMProcessingError, match="did not contain text content"):
-            anthropic_response_text(type("Response", (), {"content": "invalid"})())
 
     def test_schema_label_covers_known_and_fallback_models(self) -> None:
         class OtherResponse(BaseModel):

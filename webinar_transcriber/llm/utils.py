@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import re
 from typing import TYPE_CHECKING, cast
@@ -10,7 +9,6 @@ from typing import TYPE_CHECKING, cast
 from .contracts import (
     LLMConfigurationError,
     LLMProcessingError,
-    ReportPolishResponse,
     ReportSectionUpdate,
     SectionTextResponse,
 )
@@ -248,70 +246,10 @@ def extract_usage(response: object) -> dict[str, int]:
     return extracted
 
 
-def anthropic_structured_prompt(
-    *, system_prompt: str, user_payload: Mapping[str, object], response_model: type[BaseModel]
-) -> str:
-    """Build the Anthropic prompt that embeds the target JSON schema.
-
-    Returns:
-        str: The complete Anthropic prompt text.
-    """
-    schema = json.dumps(response_model.model_json_schema(), ensure_ascii=False)
-    payload = json.dumps(user_payload, ensure_ascii=False)
-    return (
-        f"{system_prompt}\n\n"
-        "Return only a JSON object that matches this JSON Schema exactly.\n"
-        f"{schema}\n\n"
-        "User payload:\n"
-        f"{payload}"
-    )
-
-
-def anthropic_response_text(response: object) -> str:
-    """Extract concatenated text content from an Anthropic response object.
-
-    Returns:
-        str: The concatenated Anthropic text response.
-
-    Raises:
-        LLMProcessingError: If the response does not contain text blocks.
-    """
-    content = getattr(response, "content", None)
-    if not isinstance(content, list):
-        raise LLMProcessingError("Anthropic response did not contain text content.")
-
-    text_chunks = [
-        block.text
-        for block in content
-        if getattr(block, "type", None) == "text" and isinstance(getattr(block, "text", None), str)
-    ]
-    if not text_chunks:
-        raise LLMProcessingError("Anthropic response did not contain text content.")
-    return "".join(text_chunks).strip()
-
-
-def extract_json_text(text: str) -> str:
-    """Extract the first JSON object from plain or fenced text.
-
-    Returns:
-        str: The extracted JSON text candidate.
-    """
-    cleaned = text.strip()
-    fenced = re.match(r"^```(?:json)?\s*(.*?)\s*```$", cleaned, flags=re.DOTALL)
-    if fenced is not None:
-        return fenced.group(1)
-
-    start = cleaned.find("{")
-    end = cleaned.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        return cleaned[start : end + 1]
-    return cleaned
-
-
 def schema_label(response_model: type[BaseModel]) -> str:
     """Return the human-facing label for one structured response schema."""
     if response_model is SectionTextResponse:
         return "Section polish"
-    if response_model is ReportPolishResponse:
+    if response_model.__name__ == "ReportPolishResponse":
         return "Report polish"
     return "Structured LLM"
