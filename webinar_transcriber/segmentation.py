@@ -11,14 +11,14 @@ import importlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-import numpy as np
-
 from webinar_transcriber.models import SpeechRegion
 from webinar_transcriber.normalized_audio import NORMALIZED_SAMPLE_RATE
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from types import ModuleType
+
+    import numpy as np
 
 DEFAULT_VAD_THRESHOLD = 0.5
 DEFAULT_MIN_SPEECH_DURATION_MS = 250
@@ -181,38 +181,17 @@ def _silero_speech_timestamps(
         raise ValueError("Silero VAD expects normalized 16000 Hz audio.")
 
     speech_model = silero_vad.load_silero_vad()
-    iterator = silero_vad.VADIterator(
+    timestamps = silero_vad.get_speech_timestamps(
+        torch.from_numpy(samples),
         speech_model,
         threshold=threshold,
         sampling_rate=sample_rate,
+        min_speech_duration_ms=min_speech_duration_ms,
         min_silence_duration_ms=min_silence_duration_ms,
         speech_pad_ms=speech_pad_ms,
     )
-    window_size = 512
-    min_speech_samples = (sample_rate * min_speech_duration_ms) / 1000
-    total_samples = len(samples)
-    start_sample: int | None = None
-    timestamps: list[dict[str, int]] = []
-
-    for chunk_start in range(0, total_samples, window_size):
-        chunk = _silero_chunk(samples, start=chunk_start, window_size=window_size)
-        event = iterator(torch.from_numpy(chunk), return_seconds=False)
-        start_sample = _consume_vad_event(
-            timestamps,
-            event=event,
-            start_sample=start_sample,
-            min_speech_samples=min_speech_samples,
-        )
-        _report_vad_progress(
-            progress_callback,
-            processed_samples=min(chunk_start + window_size, total_samples),
-            total_samples=total_samples,
-            sample_rate=sample_rate,
-            detected_count=len(timestamps),
-        )
-
-    if start_sample is not None and (total_samples - start_sample) > min_speech_samples:
-        timestamps.append({"start": start_sample, "end": total_samples})
+    if progress_callback is not None:
+        progress_callback(len(samples) / sample_rate, len(timestamps))
 
     return timestamps
 
@@ -224,43 +203,3 @@ def _load_silero_modules() -> tuple[ModuleType, ModuleType] | None:
     except ImportError:
         return None
     return silero_vad, torch
-
-
-def _silero_chunk(samples: np.ndarray, *, start: int, window_size: int) -> np.ndarray:
-    chunk = samples[start : start + window_size]
-    if len(chunk) < window_size:
-        chunk = np.pad(chunk, (0, window_size - len(chunk)))
-    return chunk
-
-
-def _consume_vad_event(
-    timestamps: list[dict[str, int]],
-    *,
-    event: dict[str, int] | None,
-    start_sample: int | None,
-    min_speech_samples: float,
-) -> int | None:
-    if event is None:
-        return start_sample
-    if "start" in event:
-        return int(event["start"])
-    if "end" not in event or start_sample is None:
-        return start_sample
-
-    end_sample = int(event["end"])
-    if end_sample > start_sample and (end_sample - start_sample) > min_speech_samples:
-        timestamps.append({"start": start_sample, "end": end_sample})
-    return None
-
-
-def _report_vad_progress(
-    progress_callback: Callable[[float, int], None] | None,
-    *,
-    processed_samples: int,
-    total_samples: int,
-    sample_rate: int,
-    detected_count: int,
-) -> None:
-    if progress_callback is None:
-        return
-    progress_callback(min(total_samples, processed_samples) / sample_rate, detected_count)

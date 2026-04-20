@@ -18,7 +18,6 @@ from webinar_transcriber.normalized_audio import (
     transcode_audio_to_mp3,
 )
 from webinar_transcriber.segmentation import (
-    _consume_vad_event,
     _normalize_regions,
     _silero_speech_timestamps,
     detect_speech_regions,
@@ -299,33 +298,43 @@ class TestNormalizedAudio:
         with pytest.raises(ImportError, match="other"):
             fake_import_module("other")
 
-    def test_silero_speech_timestamps_uses_vad_iterator_and_reports_progress(
+    def test_fake_silero_import_module_assigns_iterator_class(
+        self, fake_silero_import_module
+    ) -> None:
+        class FakeIterator:
+            pass
+
+        fake_import_module = fake_silero_import_module(iterator_cls=FakeIterator)
+        silero_module = fake_import_module("silero_vad")
+
+        assert silero_module.VADIterator is FakeIterator
+
+    def test_silero_speech_timestamps_uses_get_speech_timestamps_and_reports_progress(
         self, monkeypatch, fake_silero_import_module
     ) -> None:
         progress: list[tuple[float, int]] = []
 
-        class FakeIterator:
-            def __init__(
-                self, _model, *, threshold, sampling_rate, min_silence_duration_ms, speech_pad_ms
-            ) -> None:
-                assert threshold == 0.5
-                assert sampling_rate == 16_000
-                assert min_silence_duration_ms == 600
-                assert speech_pad_ms == 200
-                self._calls = 0
-
-            def __call__(self, _chunk, *, return_seconds=False):
-                assert return_seconds is False
-                self._calls += 1
-                if self._calls == 1:
-                    return {"start": 100}
-                if self._calls == 3:
-                    return {"end": 900}
-                return None
+        def fake_get_speech_timestamps(
+            samples,
+            _model,
+            *,
+            threshold,
+            sampling_rate,
+            min_speech_duration_ms,
+            min_silence_duration_ms,
+            speech_pad_ms,
+        ):
+            assert len(samples) == 1_600
+            assert threshold == 0.5
+            assert sampling_rate == 16_000
+            assert min_speech_duration_ms == 10
+            assert min_silence_duration_ms == 600
+            assert speech_pad_ms == 200
+            return [{"start": 100, "end": 900}]
 
         monkeypatch.setattr(
             "webinar_transcriber.segmentation.importlib.import_module",
-            fake_silero_import_module(iterator_cls=FakeIterator),
+            fake_silero_import_module(get_speech_timestamps_fn=fake_get_speech_timestamps),
         )
 
         timestamps = _silero_speech_timestamps(
@@ -362,23 +371,15 @@ class TestNormalizedAudio:
                 speech_pad_ms=30,
             )
 
-    def test_silero_speech_timestamps_flushes_open_speech_at_end_of_stream(
+    def test_silero_speech_timestamps_returns_backend_timestamps_unchanged(
         self, monkeypatch, fake_silero_import_module
     ) -> None:
-        class FakeIterator:
-            def __init__(self, *_args, **_kwargs) -> None:
-                self._calls = 0
-
-            def __call__(self, _chunk, *, return_seconds=False):
-                assert return_seconds is False
-                self._calls += 1
-                if self._calls == 1:
-                    return {"start": 200}
-                return None
+        def fake_get_speech_timestamps(*_args, **_kwargs):
+            return [{"start": 200, "end": 1_600}]
 
         monkeypatch.setattr(
             "webinar_transcriber.segmentation.importlib.import_module",
-            fake_silero_import_module(iterator_cls=FakeIterator),
+            fake_silero_import_module(get_speech_timestamps_fn=fake_get_speech_timestamps),
         )
 
         timestamps = _silero_speech_timestamps(
@@ -391,17 +392,6 @@ class TestNormalizedAudio:
         )
 
         assert timestamps == [{"start": 200, "end": 1_600}]
-
-    def test_consume_vad_event_keeps_start_when_end_is_missing(self) -> None:
-        assert (
-            _consume_vad_event(
-                [],
-                event={"foo": 1},
-                start_sample=10,
-                min_speech_samples=5.0,
-            )
-            == 10
-        )
 
     @requires_ffmpeg
     def test_load_normalized_audio_rejects_wrong_sample_rate(self, monkeypatch, tmp_path) -> None:
