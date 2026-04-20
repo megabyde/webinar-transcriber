@@ -81,6 +81,8 @@ def _looks_like_model_path(model_name: str) -> bool:
 
 @contextmanager
 def _suppress_pywhispercpp_download_progress() -> Iterator[None]:
+    # This monkey-patch relies on pywhispercpp continuing to expose `utils.tqdm`.
+    # If that internal import path changes upstream, download progress suppression silently stops.
     pywhispercpp_utils = cast("Any", importlib.import_module("pywhispercpp.utils"))
     original_tqdm = pywhispercpp_utils.tqdm
     pywhispercpp_utils.tqdm = lambda *args, **kwargs: original_tqdm(*args, disable=True, **kwargs)
@@ -318,11 +320,6 @@ class WhisperCppTranscriber:
             fallback_used=False,
             language=detected_language,
         )
-
-    def __del__(self) -> None:  # pragma: no cover - interpreter shutdown cleanup
-        """Best-effort cleanup during interpreter shutdown."""
-        with suppress(Exception):
-            self.close()
 
 
 def _device_name_from_system_info(system_info: str) -> str:

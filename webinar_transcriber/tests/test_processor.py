@@ -406,7 +406,7 @@ class TestProcessInput:
                 super().__init__()
                 self.close_calls = 0
 
-            def close(self) -> None:
+            def close(self) -> None:  # pragma: no cover - explicit non-call in this test
                 self.close_calls += 1
 
         transcriber = CloseTrackingTranscriber()

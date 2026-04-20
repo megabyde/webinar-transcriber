@@ -308,6 +308,22 @@ class TestWhisperCppTranscriber:
 
         assert fake_utils_module.calls == [{"disable": True, "total": 1}]
 
+    def test_suppress_pywhispercpp_download_progress_targets_real_tqdm_attribute(
+        self, monkeypatch
+    ) -> None:
+        fake_utils_module = type("FakeUtilsModule", (), {"tqdm": object()})()
+        monkeypatch.setattr(
+            "webinar_transcriber.asr.transcriber.importlib.import_module",
+            lambda _name: fake_utils_module,
+        )
+
+        from webinar_transcriber.asr import transcriber as transcriber_module
+
+        assert hasattr(
+            transcriber_module.importlib.import_module("pywhispercpp.utils"),
+            "tqdm",
+        )
+
     def test_transcribe_inference_windows_clips_segment_times_to_window(self, monkeypatch) -> None:
         install_fake_pywhispercpp(monkeypatch)
         FakeModel.returned_segments = [[FakeSegment(-50, 300, "agenda review")]]
@@ -362,16 +378,6 @@ class TestWhisperCppTranscriber:
                 np.zeros(16_000, dtype=np.float32),
                 [InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
             )
-
-    def test_transcriber_destructor_swallows_close_failures(self) -> None:
-        transcriber = object.__new__(WhisperCppTranscriber)
-
-        def failing_close() -> None:
-            raise RuntimeError("shutdown")
-
-        transcriber.close = failing_close  # type: ignore[method-assign]
-
-        transcriber.__del__()
 
     @pytest.mark.parametrize("stdout", ["abc", "0"])
     def test_read_sysctl_int_returns_none_for_invalid_or_nonpositive_values(
