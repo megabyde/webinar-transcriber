@@ -1,20 +1,19 @@
 """Scene detection for webinar videos."""
 
-import io
 import math
-import select
-import subprocess
 from collections.abc import Callable, Iterable
 from pathlib import Path
-from time import perf_counter
-from typing import IO
+from typing import TYPE_CHECKING, cast
 
 import imagehash
 import numpy as np
 from PIL import Image
 
-from webinar_transcriber.media import MEDIA_COMMAND_TIMEOUT_SEC, MediaProcessingError
+from webinar_transcriber.media import MediaProcessingError, open_input_media_container
 from webinar_transcriber.models import Scene
+
+if TYPE_CHECKING:
+    from av.video.frame import VideoFrame
 
 SAMPLE_INTERVAL_SEC = 1.0
 MIN_SCENE_LENGTH_SEC = 3.0
@@ -22,7 +21,6 @@ DIFFERENCE_THRESHOLD = 48
 TARGET_SAMPLE_WIDTH = 256
 TARGET_SAMPLE_HEIGHT = 144
 PHASH_HASH_SIZE = 16
-SCENE_SAMPLE_TIMEOUT_SEC = MEDIA_COMMAND_TIMEOUT_SEC
 
 
 def detect_scenes(
@@ -114,98 +112,31 @@ def estimate_sample_count(duration_sec: float) -> int:
 
 
 def _iter_sampled_frames(video_path: Path) -> Iterable[tuple[float, np.ndarray]]:
-    frame_size = TARGET_SAMPLE_WIDTH * TARGET_SAMPLE_HEIGHT
-    try:
-        process = subprocess.Popen(
-            [
-                "ffmpeg",
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-i",
-                str(video_path),
-                "-vf",
-                (
-                    f"fps={1 / SAMPLE_INTERVAL_SEC:g},"
-                    f"scale={TARGET_SAMPLE_WIDTH}:{TARGET_SAMPLE_HEIGHT},"
-                    "format=gray"
-                ),
-                "-f",
-                "rawvideo",
-                "-pix_fmt",
-                "gray",
-                "-",
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+    with open_input_media_container(
+        video_path,
+        error_message="Could not open {path} with PyAV for scene detection: {error}",
+    ) as input_container:
+        video_stream = next(
+            (stream for stream in input_container.streams if stream.type == "video"),
+            None,
         )
-    except OSError as error:
-        raise MediaProcessingError(
-            f"Could not start ffmpeg for scene detection: {error}"
-        ) from error
+        if video_stream is None:
+            raise MediaProcessingError(f"No video stream found in {video_path}.")
 
-    if process.stdout is None or process.stderr is None:
-        process.kill()
-        raise MediaProcessingError("Could not open ffmpeg pipes for scene detection.")
-
-    start_time = perf_counter()
-    partial_frame = bytearray()
-
-    try:
         sample_index = 0
-        while chunk := _read_stdout_chunk(
-            process.stdout,
-            size=frame_size - len(partial_frame),
-            timeout_sec=_remaining_scene_sample_timeout(start_time),
-        ):
-            partial_frame.extend(chunk)
-            if len(partial_frame) < frame_size:
+        next_sample_time = 0.0
+        for decoded_frame in input_container.decode(video_stream):
+            frame = cast("VideoFrame", decoded_frame)
+            if frame.time is None or frame.time < next_sample_time:
                 continue
-            frame_bytes = bytes(partial_frame)
-            frame = np.frombuffer(frame_bytes, dtype=np.uint8).reshape((
-                TARGET_SAMPLE_HEIGHT,
-                TARGET_SAMPLE_WIDTH,
-            ))
-            yield sample_index * SAMPLE_INTERVAL_SEC, frame
+            sampled_frame = frame.reformat(
+                width=TARGET_SAMPLE_WIDTH,
+                height=TARGET_SAMPLE_HEIGHT,
+                format="gray",
+            )
+            yield next_sample_time, sampled_frame.to_ndarray()
             sample_index += 1
-            partial_frame.clear()
-        process.wait(timeout=_remaining_scene_sample_timeout(start_time))
-    except subprocess.TimeoutExpired as error:
-        process.kill()
-        process.wait()
-        raise MediaProcessingError(
-            f"ffmpeg scene sampling timed out after {SCENE_SAMPLE_TIMEOUT_SEC:g}s."
-        ) from error
-
-    stderr_data = process.stderr.read()
-    stderr_text = (
-        stderr_data.decode(errors="replace").strip()
-        if isinstance(stderr_data, bytes)
-        else str(stderr_data).strip()
-    )
-    if process.returncode != 0:
-        raise MediaProcessingError(stderr_text or "ffmpeg scene sampling failed.")
-
-    if partial_frame:
-        raise MediaProcessingError("Incomplete frame sample returned by ffmpeg.")
-
-
-def _remaining_scene_sample_timeout(start_time: float) -> float:
-    remaining = SCENE_SAMPLE_TIMEOUT_SEC - (perf_counter() - start_time)
-    if remaining <= 0:
-        raise subprocess.TimeoutExpired(cmd=["ffmpeg"], timeout=SCENE_SAMPLE_TIMEOUT_SEC)
-    return remaining
-
-
-def _read_stdout_chunk(stream: IO[bytes], *, size: int, timeout_sec: float) -> bytes:
-    try:
-        fileno = stream.fileno()
-    except (AttributeError, io.UnsupportedOperation, OSError):
-        return stream.read(size)
-    ready, _, _ = select.select([fileno], [], [], timeout_sec)
-    if not ready:
-        raise subprocess.TimeoutExpired(cmd=["ffmpeg"], timeout=SCENE_SAMPLE_TIMEOUT_SEC)
-    return stream.read(size)
+            next_sample_time = sample_index * SAMPLE_INTERVAL_SEC
 
 
 def _estimate_sample_end_time(last_sample_time: float) -> float:

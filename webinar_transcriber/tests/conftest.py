@@ -1,6 +1,7 @@
 """Shared test helpers for webinar_transcriber/tests."""
 
 from collections.abc import Callable
+from typing import Self
 
 import pytest
 
@@ -9,6 +10,14 @@ class FakeTorch:
     @staticmethod
     def from_numpy(arr):
         return arr
+
+
+class FakeContextContainer:
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        return None
 
 
 @pytest.fixture

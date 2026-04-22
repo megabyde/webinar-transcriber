@@ -30,7 +30,7 @@ The package intentionally avoids deep nesting.
 - `webinar_transcriber/asr/`: ASR backend selection, carryover policy, and the `pywhispercpp`
   wrapper
 - `webinar_transcriber/llm/`: optional cloud LLM integrations
-- `webinar_transcriber/media.py`: probing and shared ffmpeg/ffprobe command execution
+- `webinar_transcriber/media.py`: probing helpers and shared media error types
 - `webinar_transcriber/normalized_audio.py`: deterministic transcription-audio preparation
 - `webinar_transcriber/transcript/`: transcript normalization and window reconciliation
 - `webinar_transcriber/structure/`: report heuristics

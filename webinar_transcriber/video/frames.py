@@ -1,15 +1,18 @@
 """Representative frame extraction for detected scenes."""
 
-import subprocess
 from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
+import av
 from PIL import Image, ImageOps
 
-from webinar_transcriber.media import MEDIA_COMMAND_TIMEOUT_SEC, MediaProcessingError
+from webinar_transcriber.media import MediaProcessingError, open_input_media_container
 from webinar_transcriber.models import Scene, SlideFrame
 
-FRAME_EXTRACT_TIMEOUT_SEC = MEDIA_COMMAND_TIMEOUT_SEC
+if TYPE_CHECKING:
+    from av.video.frame import VideoFrame
+
 REPRESENTATIVE_FRAME_OFFSET_SEC = 0.5
 
 
@@ -62,37 +65,37 @@ def _extract_frame(
     video_path: Path, timestamp_sec: float, output_path: Path
 ) -> tuple[bool, str | None]:
     try:
-        subprocess.run(
-            _frame_extract_command(video_path, timestamp_sec, output_path),
-            capture_output=True,
-            check=True,
-            text=True,
-            timeout=FRAME_EXTRACT_TIMEOUT_SEC,
-        )
-    except subprocess.CalledProcessError as ex:
-        return False, ex.stderr.strip() or f"ffmpeg exited with status {ex.returncode}"
-    except subprocess.TimeoutExpired as ex:
-        raise MediaProcessingError(
-            f"ffmpeg frame extraction timed out after {FRAME_EXTRACT_TIMEOUT_SEC:g}s."
-        ) from ex
+        with open_input_media_container(
+            video_path,
+            error_message="{error}",
+        ) as input_container:
+            video_stream = next(
+                (stream for stream in input_container.streams if stream.type == "video"),
+                None,
+            )
+            if video_stream is None:
+                return False, f"No video stream found in {video_path}"
+
+            input_container.seek(int(max(timestamp_sec, 0.0) * av.time_base), backward=True)
+            frame = None
+            for decoded_frame in input_container.decode(video_stream):
+                current_frame = cast("VideoFrame", decoded_frame)
+                if current_frame.time is None:
+                    continue
+                frame = current_frame
+                if current_frame.time >= timestamp_sec:
+                    break
+            if frame is None:
+                return False, f"PyAV did not decode a frame at {timestamp_sec:.3f}s"
+
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            frame.to_image().convert("RGB").save(output_path)
+    except (MediaProcessingError, OSError, av.FFmpegError) as error:
+        return False, str(error)
+
     if not output_path.exists():
-        return False, f"ffmpeg did not write {output_path}"
+        return False, f"PyAV did not write {output_path}"
     return True, None
-
-
-def _frame_extract_command(video_path: Path, timestamp_sec: float, output_path: Path) -> list[str]:
-    return [
-        "ffmpeg",
-        "-y",
-        "-noautorotate",
-        "-ss",
-        f"{timestamp_sec:.3f}",
-        "-i",
-        str(video_path),
-        "-frames:v",
-        "1",
-        str(output_path),
-    ]
 
 
 def _normalize_extracted_frame(output_path: Path) -> None:
