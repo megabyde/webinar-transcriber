@@ -1,16 +1,18 @@
 """Tests for normalized-audio preparation and segmentation."""
 
-import shutil
-import subprocess
+import wave
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
+import av
 import numpy as np
 import pytest
 
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.models import SpeechRegion
 from webinar_transcriber.normalized_audio import (
+    _mux_audio_frames,
     extract_audio,
     load_normalized_audio,
     prepared_transcription_audio,
@@ -24,21 +26,45 @@ from webinar_transcriber.segmentation import (
     normalized_audio_duration,
     repair_speech_regions,
 )
+from webinar_transcriber.tests.conftest import FakeContextContainer
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
-FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None
-FFPROBE_AVAILABLE = shutil.which("ffprobe") is not None
-requires_ffmpeg = pytest.mark.skipif(
-    not FFMPEG_AVAILABLE, reason="ffmpeg is required for normalized-audio integration tests"
-)
-requires_ffmpeg_and_ffprobe = pytest.mark.skipif(
-    not FFMPEG_AVAILABLE or not FFPROBE_AVAILABLE,
-    reason="ffmpeg and ffprobe are required for normalized-audio integration tests",
-)
 
 
 class TestNormalizedAudio:
-    @requires_ffmpeg
+    def test_mux_audio_frames_handles_single_frame_and_frame_list(self) -> None:
+        frame = av.AudioFrame(format="s16", layout="mono", samples=1)
+        encoded_frames: list[object | None] = []
+        muxed_packets: list[str] = []
+
+        class FakeOutputStream:
+            def encode(self, audio_frame=None) -> list[str]:
+                encoded_frames.append(audio_frame)
+                return ["packet"] if audio_frame is not None else []
+
+        class FakeOutputContainer:
+            def mux(self, packet: str) -> None:
+                muxed_packets.append(packet)
+
+        _mux_audio_frames(
+            cast("av.container.OutputContainer", FakeOutputContainer()),
+            cast("av.audio.stream.AudioStream", FakeOutputStream()),
+            None,
+        )
+        _mux_audio_frames(
+            cast("av.container.OutputContainer", FakeOutputContainer()),
+            cast("av.audio.stream.AudioStream", FakeOutputStream()),
+            frame,
+        )
+        _mux_audio_frames(
+            cast("av.container.OutputContainer", FakeOutputContainer()),
+            cast("av.audio.stream.AudioStream", FakeOutputStream()),
+            [frame],
+        )
+
+        assert encoded_frames == [frame, frame]
+        assert muxed_packets == ["packet", "packet"]
+
     def test_prepared_transcription_audio_normalizes_audio_input_to_temp_wav(self) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
             assert audio_path.exists()
@@ -47,32 +73,16 @@ class TestNormalizedAudio:
         assert not audio_path.exists()
 
     @pytest.mark.slow
-    @requires_ffmpeg_and_ffprobe
     def test_extract_audio_creates_wav(self, tmp_path: Path) -> None:
         output_path = extract_audio(FIXTURE_DIR / "sample-audio.mp3", tmp_path / "audio.wav")
 
         assert output_path.exists()
+        with wave.open(str(output_path), "rb") as wav_file:
+            assert wav_file.getframerate() == 16_000
+            assert wav_file.getnchannels() == 1
+            assert wav_file.getsampwidth() == 2
+            assert wav_file.getnframes() > 0
 
-        probe = subprocess.run(
-            [
-                "ffprobe",
-                "-v",
-                "error",
-                "-show_entries",
-                "stream=codec_name",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                str(output_path),
-            ],
-            capture_output=True,
-            check=False,
-            text=True,
-        )
-
-        assert probe.returncode == 0
-        assert "pcm_s16le" in probe.stdout
-
-    @requires_ffmpeg
     def test_prepared_transcription_audio_cleans_up_temp_wav(self) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-video.mp4") as audio_path:
             assert audio_path.exists()
@@ -80,7 +90,6 @@ class TestNormalizedAudio:
 
         assert not audio_path.exists()
 
-    @requires_ffmpeg
     def test_preserve_transcription_audio_copies_wav_output(self, tmp_path: Path) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
             kept_audio_path = preserve_transcription_audio(
@@ -91,7 +100,6 @@ class TestNormalizedAudio:
         assert kept_audio_path.suffix == ".wav"
         assert kept_audio_path.read_bytes()[:4] == b"RIFF"
 
-    @requires_ffmpeg
     def test_preserve_transcription_audio_transcodes_mp3_output(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
@@ -115,67 +123,93 @@ class TestNormalizedAudio:
         assert kept_audio_path == expected_output
         assert kept_audio_path.read_text(encoding="utf-8") == "mp3"
 
-    def test_transcode_audio_to_mp3_invokes_ffmpeg(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        calls: list[tuple[str, ...]] = []
-
-        def fake_run_media_command(*args: str, **_kwargs) -> subprocess.CompletedProcess[str]:
-            calls.append(args)
-            output_path = Path(args[-1])
-            output_path.write_text("mp3", encoding="utf-8")
-            return subprocess.CompletedProcess(args, 0, stdout="")
-
-        monkeypatch.setattr(
-            "webinar_transcriber.normalized_audio.run_media_command", fake_run_media_command
-        )
-
-        output_path = transcode_audio_to_mp3(
-            tmp_path / "input.wav", tmp_path / "nested" / "audio.mp3"
-        )
-
-        assert output_path == tmp_path / "nested" / "audio.mp3"
-        assert output_path.read_text(encoding="utf-8") == "mp3"
-        assert calls == [
-            (
-                "ffmpeg",
-                "-y",
-                "-i",
-                str(tmp_path / "input.wav"),
-                "-codec:a",
-                "libmp3lame",
-                "-q:a",
-                "2",
-                str(tmp_path / "nested" / "audio.mp3"),
-            )
-        ]
-
     @pytest.mark.slow
-    @requires_ffmpeg_and_ffprobe
     def test_transcode_audio_to_mp3_creates_real_mp3(self, tmp_path: Path) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
             output_path = transcode_audio_to_mp3(audio_path, tmp_path / "audio.mp3")
 
         assert output_path.exists()
+        container = av.open(str(output_path))
+        try:
+            audio_stream = next(stream for stream in container.streams if stream.type == "audio")
+            assert "mp3" in audio_stream.codec_context.codec.name
+            assert getattr(audio_stream.codec_context, "sample_rate", None) == 16_000
+            assert getattr(audio_stream.codec_context, "channels", None) == 1
+        finally:
+            container.close()
 
-        probe = subprocess.run(
-            [
-                "ffprobe",
-                "-v",
-                "error",
-                "-show_entries",
-                "stream=codec_name",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                str(output_path),
-            ],
-            capture_output=True,
-            check=False,
-            text=True,
+    def test_extract_audio_wraps_open_error(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(
+            "webinar_transcriber.normalized_audio.av.open",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("bad open")),
         )
 
-        assert probe.returncode == 0
-        assert "mp3" in probe.stdout
+        with pytest.raises(MediaProcessingError, match=r"Could not open .*bad open"):
+            extract_audio(FIXTURE_DIR / "sample-audio.mp3", tmp_path / "audio.wav")
+
+    def test_extract_audio_rejects_inputs_without_audio_stream(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        class FakeContainer(FakeContextContainer):
+            def __init__(self) -> None:
+                self.streams = [type("Stream", (), {"type": "video"})()]
+
+        monkeypatch.setattr(
+            "webinar_transcriber.normalized_audio.av.open",
+            lambda *_args, **_kwargs: FakeContainer(),
+        )
+
+        with pytest.raises(MediaProcessingError, match="No audio stream found"):
+            extract_audio(FIXTURE_DIR / "sample-video.mp4", tmp_path / "audio.wav")
+
+    def test_transcode_audio_to_mp3_wraps_open_error(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(
+            "webinar_transcriber.normalized_audio.av.open",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("bad open")),
+        )
+
+        with pytest.raises(MediaProcessingError, match=r"Could not open .*bad open"):
+            transcode_audio_to_mp3(tmp_path / "input.wav", tmp_path / "audio.mp3")
+
+    def test_extract_audio_raises_when_pyav_does_not_write_output(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        class FakeAudioStream:
+            type = "audio"
+
+        class FakeInputContainer(FakeContextContainer):
+            def __init__(self) -> None:
+                self.streams = [FakeAudioStream()]
+
+            def decode(self, *_args, **_kwargs):
+                return iter(())
+
+        class FakeOutputStream:
+            def __init__(self) -> None:
+                self.layout = None
+
+            def encode(self, _frame=None) -> list[str]:
+                return []
+
+        class FakeOutputContainer(FakeContextContainer):
+            def add_stream(self, *_args, **_kwargs) -> FakeOutputStream:
+                return FakeOutputStream()
+
+        monkeypatch.setattr(
+            "webinar_transcriber.normalized_audio.open_input_media_container",
+            lambda *_args, **_kwargs: FakeInputContainer(),
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.normalized_audio.open_output_media_container",
+            lambda *_args, **_kwargs: FakeOutputContainer(),
+        )
+
+        with pytest.raises(MediaProcessingError, match=r"PyAV did not write .*audio.wav"):
+            extract_audio(FIXTURE_DIR / "sample-audio.mp3", tmp_path / "audio.wav")
 
     def test_preserve_transcription_audio_rejects_unknown_output_format(
         self, tmp_path: Path
@@ -185,7 +219,6 @@ class TestNormalizedAudio:
                 tmp_path / "input.wav", tmp_path / "audio.ogg", audio_format="ogg"
             )
 
-    @requires_ffmpeg
     def test_load_normalized_audio_returns_mono_float32_samples(self) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
             samples, sample_rate = load_normalized_audio(audio_path)
@@ -421,7 +454,6 @@ class TestNormalizedAudio:
 
         assert timestamps == [{"start": 200, "end": 1_600}]
 
-    @requires_ffmpeg
     def test_load_normalized_audio_rejects_wrong_sample_rate(self, monkeypatch, tmp_path) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
 
@@ -459,7 +491,6 @@ class TestNormalizedAudio:
         ("channels", "sample_width", "message"),
         [(2, 2, "Expected mono transcription audio"), (1, 1, "Expected 16-bit PCM")],
     )
-    @requires_ffmpeg
     def test_load_normalized_audio_rejects_invalid_channel_or_sample_width(
         self, monkeypatch: pytest.MonkeyPatch, channels: int, sample_width: int, message: str
     ) -> None:

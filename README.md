@@ -12,7 +12,7 @@
 `webinar-transcriber` is a local-first CLI for turning webinar recordings into transcripts,
 structured notes, subtitles, diagnostics, and machine-readable report artifacts. It handles both
 audio-only input and slide-based video, detects scenes for video runs, and keeps the core pipeline
-local with `ffmpeg`, Silero VAD, and `whisper.cpp`.
+local with PyAV, Silero VAD, and `whisper.cpp`.
 
 The default flow is deterministic: normalize the media, detect speech regions, transcribe locally,
 reconcile overlapping windows, and build report sections, summary bullets, and action items with
@@ -23,7 +23,6 @@ top of that local output, but it does not replace the base pipeline.
 
 ### Prerequisites
 
-- `ffmpeg` and `ffprobe` (for media handling).
 - A C/C++ compiler and `cmake` (needed when `pywhispercpp` builds from source for GPU backends).
 - For CUDA: a working CUDA toolkit (`nvcc` on `PATH`, `CUDA_HOME` set).
 

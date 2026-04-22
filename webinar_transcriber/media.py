@@ -1,58 +1,68 @@
-"""Media probing helpers and shared command execution."""
+"""Media probing helpers."""
 
-import json
-import subprocess
-from fractions import Fraction
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING
+
+import av
 
 from webinar_transcriber.models import AudioAsset, MediaAsset, VideoAsset
 
-MEDIA_COMMAND_TIMEOUT_SEC = 300.0
+if TYPE_CHECKING:
+    from av.container import InputContainer, OutputContainer
 
 
 class MediaProcessingError(RuntimeError):
-    """Raised when ffmpeg or ffprobe work cannot be completed."""
+    """Raised when media work cannot be completed."""
 
 
-def run_media_command(
-    *args: str, timeout_sec: float = MEDIA_COMMAND_TIMEOUT_SEC
-) -> subprocess.CompletedProcess[str]:
-    """Run ffmpeg or ffprobe and normalize common failure modes.
-
-    Returns:
-        subprocess.CompletedProcess[str]: The completed subprocess result.
-
-    Raises:
-        MediaProcessingError: If the command fails or times out.
-    """
+@contextmanager
+def open_input_media_container(
+    path: Path,
+    *,
+    error_message: str,
+) -> Iterator["InputContainer"]:
+    """Open a PyAV input container and normalize open-time failures."""
     try:
-        result = subprocess.run(
-            args, capture_output=True, check=True, text=True, timeout=timeout_sec
-        )
-    except subprocess.CalledProcessError as ex:
-        raise MediaProcessingError(ex.stderr.strip() or "External media command failed.") from ex
-    except subprocess.TimeoutExpired as ex:
-        command_name = Path(args[0]).name if args else "External media command"
-        raise MediaProcessingError(f"{command_name} timed out after {timeout_sec:g}s.") from ex
-    return result
+        with av.open(str(path), mode="r") as container:
+            yield container
+    except (FileNotFoundError, OSError, av.FFmpegError) as error:
+        raise MediaProcessingError(error_message.format(path=path, error=error)) from error
 
 
-def _parse_frame_rate(raw_value: str | None) -> float | None:
-    if not raw_value or raw_value == "0/0":
-        return None
-    return float(Fraction(raw_value))
+@contextmanager
+def open_output_media_container(
+    path: Path,
+    *,
+    error_message: str,
+) -> Iterator["OutputContainer"]:
+    """Open a PyAV output container and normalize open-time failures."""
+    try:
+        with av.open(str(path), mode="w") as container:
+            yield container
+    except (FileNotFoundError, OSError, av.FFmpegError) as error:
+        raise MediaProcessingError(error_message.format(path=path, error=error)) from error
 
 
-def _is_attached_picture_stream(stream: dict[str, object]) -> bool:
-    disposition = stream.get("disposition")
-    if not isinstance(disposition, dict):
+def _pyav_stream_has_attached_picture(stream: object) -> bool:
+    disposition = getattr(stream, "disposition", None)
+    attached_pic_flag = getattr(disposition, "attached_pic", None)
+    if disposition is None or attached_pic_flag is None:
         return False
-    return bool(cast("dict[str, object]", disposition).get("attached_pic"))
+    return bool(disposition & attached_pic_flag)
+
+
+def _stream_duration_sec(stream: object) -> float | None:
+    duration = getattr(stream, "duration", None)
+    time_base = getattr(stream, "time_base", None)
+    if duration is None or time_base is None:
+        return None
+    return float(duration * time_base)
 
 
 def probe_media(input_path: Path) -> MediaAsset:
-    """Inspect media with ffprobe and return normalized metadata.
+    """Inspect media metadata with PyAV and return normalized stream details.
 
     Returns:
         MediaAsset: The normalized probed media metadata.
@@ -60,58 +70,62 @@ def probe_media(input_path: Path) -> MediaAsset:
     Raises:
         MediaProcessingError: If the input contains no usable audio or video streams.
     """
-    result = run_media_command(
-        "ffprobe",
-        "-v",
-        "error",
-        "-print_format",
-        "json",
-        "-show_format",
-        "-show_streams",
-        str(input_path),
-    )
-    payload = json.loads(result.stdout)
-    streams = payload.get("streams", [])
-    audio_stream = next((stream for stream in streams if stream.get("codec_type") == "audio"), None)
-    video_stream = next(
-        (
-            stream
-            for stream in streams
-            if stream.get("codec_type") == "video" and not _is_attached_picture_stream(stream)
-        ),
-        None,
-    )
+    with open_input_media_container(
+        input_path,
+        error_message="Could not open {path} with PyAV: {error}",
+    ) as input_container:
+        streams = list(input_container.streams)
+        audio_stream = next((stream for stream in streams if stream.type == "audio"), None)
+        video_stream = next(
+            (
+                stream
+                for stream in streams
+                if stream.type == "video" and not _pyav_stream_has_attached_picture(stream)
+            ),
+            None,
+        )
 
-    if audio_stream is None and video_stream is None:
-        raise MediaProcessingError(f"No audio or video stream found in {input_path}.")
+        if audio_stream is None and video_stream is None:
+            raise MediaProcessingError(f"No audio or video stream found in {input_path}.")
 
-    audio_duration = None
-    parsed_sample_rate = None
-    parsed_channels = None
-    if audio_stream is not None:
-        audio_duration = audio_stream.get("duration")
-        if sample_rate := audio_stream.get("sample_rate"):
-            parsed_sample_rate = int(sample_rate)
-        if channels := audio_stream.get("channels"):
-            parsed_channels = int(channels)
+        audio_duration = _stream_duration_sec(audio_stream) if audio_stream is not None else None
+        duration_sec = (
+            float(input_container.duration / av.time_base)
+            if input_container.duration is not None
+            else (audio_duration or 0.0)
+        )
 
-    duration_raw = payload.get("format", {}).get("duration") or audio_duration or "0"
-    duration_sec = float(duration_raw)
+        audio_codec_context = getattr(audio_stream, "codec_context", None)
+        parsed_sample_rate = (
+            int(sample_rate)
+            if audio_stream is not None
+            and (sample_rate := getattr(audio_codec_context, "sample_rate", None)) is not None
+            else None
+        )
+        parsed_channels = (
+            int(channels)
+            if audio_stream is not None
+            and (channels := getattr(audio_codec_context, "channels", None)) is not None
+            else None
+        )
 
-    if video_stream is None:
-        return AudioAsset(
+        if video_stream is None:
+            return AudioAsset(
+                path=str(input_path),
+                duration_sec=duration_sec,
+                sample_rate=parsed_sample_rate,
+                channels=parsed_channels,
+            )
+
+        video_codec_context = getattr(video_stream, "codec_context", None)
+        width = getattr(video_codec_context, "width", None)
+        height = getattr(video_codec_context, "height", None)
+        return VideoAsset(
             path=str(input_path),
             duration_sec=duration_sec,
             sample_rate=parsed_sample_rate,
             channels=parsed_channels,
+            fps=float(video_stream.average_rate) if video_stream.average_rate is not None else None,
+            width=int(width) if width is not None else None,
+            height=int(height) if height is not None else None,
         )
-
-    return VideoAsset(
-        path=str(input_path),
-        duration_sec=duration_sec,
-        sample_rate=parsed_sample_rate,
-        channels=parsed_channels,
-        fps=_parse_frame_rate(video_stream.get("avg_frame_rate")),
-        width=int(video_stream["width"]) if video_stream.get("width") else None,
-        height=int(video_stream["height"]) if video_stream.get("height") else None,
-    )

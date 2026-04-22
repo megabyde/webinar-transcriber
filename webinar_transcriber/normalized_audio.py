@@ -7,14 +7,23 @@ import wave
 from contextlib import contextmanager
 from pathlib import Path
 from shutil import copy2
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
+import av
 import numpy as np
 
-from webinar_transcriber.media import MediaProcessingError, run_media_command
+from webinar_transcriber.media import (
+    MediaProcessingError,
+    open_input_media_container,
+    open_output_media_container,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+    from av.audio.frame import AudioFrame
+    from av.audio.stream import AudioStream
+    from av.container import OutputContainer
 
 NORMALIZED_SAMPLE_RATE = 16_000
 NORMALIZED_CHANNELS = 1
@@ -27,28 +36,94 @@ def sample_index_for_time(time_sec: float) -> int:
     return max(0, round(time_sec * NORMALIZED_SAMPLE_RATE))
 
 
+def _mux_audio_frames(
+    output_container: OutputContainer,
+    output_stream: AudioStream,
+    audio_frames: list[AudioFrame] | AudioFrame | None,
+) -> None:
+    if audio_frames is None:
+        return
+    if isinstance(audio_frames, list):
+        for audio_frame in cast("list[AudioFrame]", audio_frames):
+            for packet in output_stream.encode(audio_frame):
+                output_container.mux(packet)
+        return
+    for packet in output_stream.encode(audio_frames):
+        output_container.mux(packet)
+
+
+def _transcode_audio_with_pyav(
+    input_path: Path,
+    output_path: Path,
+    *,
+    output_codec: str,
+    resample_format: str,
+    failure_action: str,
+) -> Path:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open_input_media_container(
+        input_path,
+        error_message="Could not open {path}: {error}",
+    ) as input_container:
+        input_stream = cast(
+            "AudioStream | None",
+            next((stream for stream in input_container.streams if stream.type == "audio"), None),
+        )
+        if input_stream is None:
+            raise MediaProcessingError(f"No audio stream found in {input_path}.")
+
+        with open_output_media_container(
+            output_path,
+            error_message=f"Could not {failure_action} audio from {input_path}: {{error}}",
+        ) as output_container:
+            output_stream = cast(
+                "AudioStream",
+                output_container.add_stream(
+                    output_codec,
+                    rate=NORMALIZED_SAMPLE_RATE,
+                ),
+            )
+            output_stream.layout = "mono"
+            resampler = av.AudioResampler(
+                format=resample_format,
+                layout="mono",
+                rate=NORMALIZED_SAMPLE_RATE,
+            )
+
+            for decoded_frame in input_container.decode(input_stream):
+                _mux_audio_frames(
+                    output_container,
+                    output_stream,
+                    resampler.resample(decoded_frame),
+                )
+
+            _mux_audio_frames(
+                output_container,
+                output_stream,
+                resampler.resample(None),
+            )
+
+            for packet in output_stream.encode(None):
+                output_container.mux(packet)
+
+    if not output_path.exists():
+        raise MediaProcessingError(f"PyAV did not write {output_path}.")
+    return output_path
+
+
 def extract_audio(input_path: Path, output_path: Path) -> Path:
     """Convert the input media into a mono 16 kHz WAV file.
 
     Returns:
         Path: The written normalized WAV path.
     """
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    run_media_command(
-        "ffmpeg",
-        "-y",
-        "-i",
-        str(input_path),
-        "-vn",
-        "-ac",
-        str(NORMALIZED_CHANNELS),
-        "-ar",
-        str(NORMALIZED_SAMPLE_RATE),
-        "-c:a",
-        NORMALIZED_AUDIO_CODEC,
-        str(output_path),
+    return _transcode_audio_with_pyav(
+        input_path,
+        output_path,
+        output_codec=NORMALIZED_AUDIO_CODEC,
+        resample_format="s16",
+        failure_action="normalize",
     )
-    return output_path
 
 
 def transcode_audio_to_mp3(input_path: Path, output_path: Path) -> Path:
@@ -57,19 +132,13 @@ def transcode_audio_to_mp3(input_path: Path, output_path: Path) -> Path:
     Returns:
         Path: The written MP3 artifact path.
     """
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    run_media_command(
-        "ffmpeg",
-        "-y",
-        "-i",
-        str(input_path),
-        "-codec:a",
-        "libmp3lame",
-        "-q:a",
-        "2",
-        str(output_path),
+    return _transcode_audio_with_pyav(
+        input_path,
+        output_path,
+        output_codec="mp3",
+        resample_format="fltp",
+        failure_action="transcode",
     )
-    return output_path
 
 
 @contextmanager
