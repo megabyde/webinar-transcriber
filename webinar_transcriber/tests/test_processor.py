@@ -54,6 +54,7 @@ from webinar_transcriber.processor.support import (
     window_transcription_stage_detail,
 )
 from webinar_transcriber.reporter import NullStageReporter
+from webinar_transcriber.segmentation import VadSettings
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 EXPECTED_LLM_WARNING = (
@@ -83,9 +84,7 @@ def install_basic_windowing(
 
     monkeypatch.setattr("webinar_transcriber.processor.asr.load_normalized_audio", load_audio_fn)
 
-    def fake_detect_speech_regions(*_args, progress_callback=None, **_kwargs):
-        if progress_callback is not None:
-            progress_callback(region_end_sec, 1)
+    def fake_detect_speech_regions(*_args, **_kwargs):
         return [SpeechRegion(start_sec=0.0, end_sec=region_end_sec)], []
 
     monkeypatch.setattr(
@@ -316,8 +315,8 @@ class TestProcessInput:
         assert transcribe_start_events == [
             ("start", "transcribe", artifacts.media_asset.duration_sec, "0 segments")
         ]
-        vad_start_events = reporter.progress_stage_events("start", "vad")
-        assert vad_start_events == [("start", "vad", artifacts.media_asset.duration_sec, None)]
+        assert reporter.has_event("start", "vad", "Detecting speech regions")
+        assert reporter.has_event("finish", "vad", "1 region")
         assert reporter.has_progress_event_detail(
             "advance", "transcribe", lambda detail: detail == "2 segments"
         )
@@ -332,9 +331,6 @@ class TestProcessInput:
         ]
         assert reporter.has_progress_event_detail(
             "advance", "structure", lambda detail: detail == "1 section"
-        )
-        assert reporter.has_progress_event_detail(
-            "advance", "vad", lambda detail: detail == "1 region"
         )
         assert diagnostics_payload["asr_backend"] == "whisper.cpp"
         assert diagnostics_payload["asr_model"] == "test-model"
@@ -373,6 +369,17 @@ class TestProcessInput:
 
     def test_keeps_normalized_audio_artifact(self, tmp_path, monkeypatch) -> None:
         install_basic_windowing(monkeypatch)
+        install_processor_media_runtime(
+            monkeypatch,
+            tmp_path,
+            input_path=FIXTURE_DIR / "sample-audio.mp3",
+            media_asset=AudioAsset(
+                path=str(FIXTURE_DIR / "sample-audio.mp3"),
+                duration_sec=6.0,
+                sample_rate=44_100,
+                channels=2,
+            ),
+        )
 
         artifacts = process_input(
             FIXTURE_DIR / "sample-audio.mp3",
@@ -386,6 +393,24 @@ class TestProcessInput:
 
         assert kept_audio_path.exists()
         assert kept_audio_path.read_bytes()[:4] == b"RIFF"
+
+    @pytest.mark.slow
+    def test_keeps_normalized_audio_artifact_with_real_media_prep(self, tmp_path) -> None:
+        artifacts = process_input(
+            FIXTURE_DIR / "sample-audio.mp3",
+            output_dir=tmp_path / "real-run",
+            transcriber=self.FakeTranscriber(),
+            keep_audio=True,
+            kept_audio_format="wav",
+            vad=VadSettings(enabled=False),
+        )
+
+        kept_audio_path = artifacts.layout.transcription_audio_path()
+
+        assert kept_audio_path.exists()
+        assert kept_audio_path.read_bytes()[:4] == b"RIFF"
+        assert artifacts.media_asset.path.endswith("sample-audio.mp3")
+        assert artifacts.media_asset.duration_sec > 0
 
     def test_does_not_close_caller_supplied_transcriber(self, tmp_path, monkeypatch) -> None:
         install_basic_windowing(monkeypatch)

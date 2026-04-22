@@ -46,6 +46,7 @@ class TestNormalizedAudio:
 
         assert not audio_path.exists()
 
+    @pytest.mark.slow
     @requires_ffmpeg_and_ffprobe
     def test_extract_audio_creates_wav(self, tmp_path: Path) -> None:
         output_path = extract_audio(FIXTURE_DIR / "sample-audio.mp3", tmp_path / "audio.wav")
@@ -148,6 +149,33 @@ class TestNormalizedAudio:
                 str(tmp_path / "nested" / "audio.mp3"),
             )
         ]
+
+    @pytest.mark.slow
+    @requires_ffmpeg_and_ffprobe
+    def test_transcode_audio_to_mp3_creates_real_mp3(self, tmp_path: Path) -> None:
+        with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
+            output_path = transcode_audio_to_mp3(audio_path, tmp_path / "audio.mp3")
+
+        assert output_path.exists()
+
+        probe = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "stream=codec_name",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(output_path),
+            ],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+
+        assert probe.returncode == 0
+        assert "mp3" in probe.stdout
 
     def test_preserve_transcription_audio_rejects_unknown_output_format(
         self, tmp_path: Path

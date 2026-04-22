@@ -71,6 +71,9 @@ addopts = [
     "--durations-min=0",
 ]
 testpaths = ["webinar_transcriber"]
+markers = [
+    "slow: exercises real media-processing integration paths",
+]
 
 [tool.uv.sources]
 pywhispercpp = { git = "https://github.com/absadiki/pywhispercpp", tag = "v1.4.1" }

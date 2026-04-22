@@ -55,11 +55,15 @@ lint: ## Run Markdown, Ruff, and type checks
 	uv run ty check webinar_transcriber
 
 .PHONY: test
-test: ## Run pytest with coverage
+test: ## Run the fast pytest subset (skips slow tests, no coverage)
+	uv run pytest --no-cov -m "not slow"
+
+.PHONY: test-all
+test-all: ## Run the full pytest suite with coverage
 	uv run pytest
 
 .PHONY: check
-check: lint test ## Run lint and test
+check: lint test-all ## Run lint and the full test suite
 
 .PHONY: clean
 clean: ## Remove caches and build artifacts
