@@ -45,20 +45,21 @@ def _scene(index: int, start_sec: float, end_sec: float) -> Scene:
     return Scene(id=f"scene-{index}", start_sec=start_sec, end_sec=end_sec)
 
 
+class _FakeHash:
+    def __init__(self, key: int) -> None:
+        self.key = key
+
+    def __sub__(self, other: object) -> int:
+        assert isinstance(other, _FakeHash)
+        return abs(self.key - other.key)
+
+
 def _install_fake_phashes(monkeypatch: pytest.MonkeyPatch, distances: list[int]) -> None:
-    class FakeHash:
-        def __init__(self, key: int) -> None:
-            self.key = key
-
-        def __sub__(self, other: object) -> int:
-            assert isinstance(other, FakeHash)
-            return abs(self.key - other.key)
-
     keys = [0]
     for distance in distances:
         keys.append(keys[-1] + distance)
 
-    fake_hashes = iter(FakeHash(key) for key in keys)
+    fake_hashes = iter(_FakeHash(key) for key in keys)
     monkeypatch.setattr(
         "webinar_transcriber.video.scenes.imagehash.phash",
         lambda *_args, **_kwargs: next(fake_hashes),
