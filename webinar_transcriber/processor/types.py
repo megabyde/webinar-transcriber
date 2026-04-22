@@ -18,7 +18,7 @@ if TYPE_CHECKING:
         TranscriptionResult,
     )
     from webinar_transcriber.paths import RunLayout
-    from webinar_transcriber.reporter import NullStageReporter
+    from webinar_transcriber.reporter import BaseStageReporter
 
 
 @dataclass(frozen=True)
@@ -33,7 +33,7 @@ class ProcessArtifacts:
 
 
 @dataclass(frozen=True)
-class _AsrPipelineState:
+class AsrPipelineState:
     """Collected ASR diagnostics state for one processing run."""
 
     vad_enabled: bool
@@ -43,17 +43,16 @@ class _AsrPipelineState:
     carryover_enabled: bool = False
     window_count: int = 0
     average_window_duration_sec: float | None = None
-    reconciliation_duplicate_segments_dropped: int = 0
     reconciliation_boundary_fixes: int = 0
     system_info: str | None = None
 
 
 @dataclass
-class _RunContext:
+class RunContext:
     """Mutable state for one processing run."""
 
-    reporter: NullStageReporter
-    asr_pipeline: _AsrPipelineState
+    reporter: BaseStageReporter
+    asr_pipeline: AsrPipelineState
     stage_timings: dict[str, float] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     current_stage: str | None = None
@@ -74,7 +73,7 @@ class TranscriptionPhaseResult:
 
     transcription: TranscriptionResult
     normalized_transcription: TranscriptionResult
-    asr_pipeline: _AsrPipelineState
+    asr_pipeline: AsrPipelineState
 
 
 @dataclass(frozen=True)

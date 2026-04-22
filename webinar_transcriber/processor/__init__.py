@@ -12,7 +12,7 @@ from webinar_transcriber.normalized_audio import (
     prepared_transcription_audio,
 )
 from webinar_transcriber.paths import create_run_layout
-from webinar_transcriber.reporter import NullStageReporter
+from webinar_transcriber.reporter import BaseStageReporter
 from webinar_transcriber.segmentation import VadSettings
 
 from .report import run_report_phase
@@ -25,9 +25,9 @@ from .support import (
 )
 from .transcribe import run_transcription_phase
 from .types import (
+    AsrPipelineState,
     ProcessArtifacts,
-    _AsrPipelineState,
-    _RunContext,
+    RunContext,
 )
 
 if TYPE_CHECKING:
@@ -44,7 +44,7 @@ DEFAULT_PROMPT_CARRYOVER_SETTINGS = PromptCarryoverSettings()
 
 
 def _build_run_diagnostics(
-    ctx: _RunContext,
+    ctx: RunContext,
     *,
     status: Literal["succeeded", "failed"],
     asr_model: str | None,
@@ -81,7 +81,7 @@ def _build_run_diagnostics(
 
 
 def _write_run_diagnostics(
-    ctx: _RunContext,
+    ctx: RunContext,
     *,
     status: Literal["succeeded", "failed"],
     asr_model: str | None,
@@ -124,18 +124,18 @@ def process_input(
     enable_llm: bool = False,
     transcriber: WhisperCppTranscriber | None = None,
     llm_processor: LLMProcessor | None = None,
-    reporter: NullStageReporter | None = None,
+    reporter: BaseStageReporter | None = None,
 ) -> ProcessArtifacts:
     """Process a single audio or video file into report artifacts.
 
     Returns:
         ProcessArtifacts: The completed processing artifacts.
     """
-    active_reporter = reporter or NullStageReporter()
+    active_reporter = reporter or BaseStageReporter()
     asr_threads = asr_threads or default_asr_threads()
-    ctx = _RunContext(
+    ctx = RunContext(
         reporter=active_reporter,
-        asr_pipeline=_AsrPipelineState(
+        asr_pipeline=AsrPipelineState(
             vad_enabled=vad.enabled,
             threads=asr_threads,
             carryover_enabled=carryover.enabled,

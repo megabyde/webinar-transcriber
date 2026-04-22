@@ -120,7 +120,7 @@ class TestWhisperCppTranscriber:
 
         message = str(error.value)
         assert "Download a whisper.cpp model there" in message
-        assert str(DEFAULT_WHISPER_CPP_MODEL_EXAMPLE) in message
+        assert DEFAULT_WHISPER_CPP_MODEL_EXAMPLE in message
 
     def test_prepare_model_uses_default_model_identifier(self, monkeypatch) -> None:
         install_fake_pywhispercpp(monkeypatch)
@@ -214,7 +214,6 @@ class TestWhisperCppTranscriber:
 
         assert transcriber.device_name == "metal"
         assert transcriber.system_info == "METAL = 1"
-        assert transcriber.library_path is None
 
     def test_transcriber_context_manager_clears_prepared_model(self, monkeypatch, tmp_path) -> None:
         install_fake_pywhispercpp(monkeypatch)
@@ -417,7 +416,6 @@ class TestWhisperCppTranscriber:
 
         assert transcriber.threads == 1
         assert transcriber.system_info is None
-        assert transcriber.library_path is None
 
     def test_transcribe_inference_windows_reuses_existing_model_without_prepare(
         self, monkeypatch
@@ -474,7 +472,7 @@ class TestPromptCarryover:
 
         assert carryover == "sentence. Third sentence here."
 
-    def test_build_prompt_carryover_drops_fallback_windows(self) -> None:
+    def test_build_prompt_carryover_drops_empty_windows(self) -> None:
         carryover = build_prompt_carryover(
             DecodedWindow(
                 window=InferenceWindow(
@@ -483,9 +481,8 @@ class TestPromptCarryover:
                     start_sec=18.5,
                     end_sec=35.0,
                 ),
-                text="This should not carry.",
+                text="",
                 segments=[],
-                fallback_used=True,
             ),
             settings=PromptCarryoverSettings(),
         )

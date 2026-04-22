@@ -9,11 +9,10 @@ import webinar_transcriber.export as export_runtime
 import webinar_transcriber.structure as structure_runtime
 import webinar_transcriber.video as video_runtime
 from webinar_transcriber.align import align_by_time
-from webinar_transcriber.labels import count_label
 from webinar_transcriber.models import VideoAsset
 
 from .llm import maybe_polish_report, resolve_llm_processor
-from .support import progress_stage, stage, write_json
+from .support import count_label, progress_stage, stage, write_json
 from .types import ReportPhaseResult
 
 if TYPE_CHECKING:
@@ -23,7 +22,7 @@ if TYPE_CHECKING:
     from webinar_transcriber.models import MediaAsset, TranscriptionResult
     from webinar_transcriber.paths import RunLayout
 
-    from .types import _RunContext
+    from .types import RunContext
 
 
 def run_report_phase(
@@ -34,7 +33,7 @@ def run_report_phase(
     normalized_transcription: TranscriptionResult,
     enable_llm: bool,
     llm_processor: LLMProcessor | None,
-    ctx: _RunContext,
+    ctx: RunContext,
 ) -> ReportPhaseResult:
     """Run the video, structure, optional LLM, and export half of the pipeline.
 

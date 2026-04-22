@@ -20,8 +20,8 @@ class StageEvent:
     started_at: float
 
 
-class NullStageReporter:
-    """No-op reporter used by tests and non-interactive code paths."""
+class BaseStageReporter:
+    """Default reporter with no-op stage hooks."""
 
     def begin_run(self, input_path: Path) -> None:
         """Ignore the start of a processing run."""

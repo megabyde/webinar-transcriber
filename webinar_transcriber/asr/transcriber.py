@@ -142,11 +142,6 @@ class WhisperCppTranscriber:
             return None
         return self._model.system_info()
 
-    @property
-    def library_path(self) -> str | None:
-        """Return the loaded whisper.cpp shared library path when available."""
-        return None
-
     def __enter__(self) -> Self:
         """Return the transcriber as a context manager."""
         return self
@@ -317,7 +312,6 @@ class WhisperCppTranscriber:
             window=window,
             text=" ".join(segment.text for segment in segments if segment.text).strip(),
             segments=segments,
-            fallback_used=False,
             language=detected_language,
         )
 
