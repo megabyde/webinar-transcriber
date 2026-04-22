@@ -10,7 +10,6 @@ from time import perf_counter
 from typing import TYPE_CHECKING, Protocol
 
 from webinar_transcriber.asr import ASR_BACKEND_NAME, WhisperCppTranscriber
-from webinar_transcriber.labels import count_label, optional_count_label
 from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
     Diagnostics,
@@ -25,15 +24,15 @@ if TYPE_CHECKING:
 
     from webinar_transcriber.llm import LLMReportPolishPlan
     from webinar_transcriber.paths import RunLayout
-    from webinar_transcriber.reporter import NullStageReporter
+    from webinar_transcriber.reporter import BaseStageReporter
 
-    from .types import _AsrPipelineState
+    from .types import AsrPipelineState
 
 
 class StageContext(Protocol):
     """Shared stage context contract used across processor flows."""
 
-    reporter: NullStageReporter
+    reporter: BaseStageReporter
     stage_timings: dict[str, float]
     current_stage: str | None
 
@@ -56,7 +55,7 @@ class StageHandle:
 class ProgressStageHandle(StageHandle):
     """Mutable progress-stage state shared with the stage context manager body."""
 
-    reporter: NullStageReporter = field(kw_only=True)
+    reporter: BaseStageReporter = field(kw_only=True)
     completed: float = 0.0
 
     def advance(self, advance: float = 1.0, *, detail: str | None = None) -> None:
@@ -75,6 +74,19 @@ class ProgressStageHandle(StageHandle):
     def finish_progress(self, total: float, *, detail: str | None = None) -> None:
         """Advance stage progress through one final total."""
         self.advance_to(total, detail=detail)
+
+
+def count_label(count: int, singular: str, *, plural: str | None = None) -> str:
+    """Return one compact count label with naive English pluralization."""
+    noun = singular if count == 1 else plural or f"{singular}s"
+    return f"{count} {noun}"
+
+
+def optional_count_label(count: int, singular: str, *, plural: str | None = None) -> str:
+    """Return one count label only when the count is positive."""
+    if count <= 0:
+        return ""
+    return count_label(count, singular, plural=plural)
 
 
 @contextmanager
@@ -250,7 +262,7 @@ def build_diagnostics(
     llm_report_latency_sec: float | None,
     llm_report_usage: dict[str, int] | None,
     stage_timings: dict[str, float],
-    asr_pipeline: _AsrPipelineState,
+    asr_pipeline: AsrPipelineState,
     transcript_segment_count: int,
     normalized_transcript_segment_count: int,
     report_section_count: int,

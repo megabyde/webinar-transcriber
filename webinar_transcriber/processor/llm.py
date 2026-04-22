@@ -6,7 +6,6 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.labels import count_label
 from webinar_transcriber.llm import (
     LLMConfigurationError,
     LLMProcessingError,
@@ -14,6 +13,7 @@ from webinar_transcriber.llm import (
 )
 
 from .support import (
+    count_label,
     llm_fallback_detail,
     llm_report_detail,
     llm_report_plan_label_detail,
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from webinar_transcriber.llm import LLMProcessor
     from webinar_transcriber.models import ReportDocument
     from webinar_transcriber.processor.support import ProgressStageHandle, StageContext
-    from webinar_transcriber.reporter import NullStageReporter
+    from webinar_transcriber.reporter import BaseStageReporter
 
 
 @dataclass
@@ -44,7 +44,7 @@ def resolve_llm_processor(
     *,
     enable_llm: bool,
     llm_processor: LLMProcessor | None,
-    reporter: NullStageReporter,
+    reporter: BaseStageReporter,
     warnings: list[str],
     llm_runtime: LLMRuntimeState,
 ) -> tuple[LLMProcessor | None, LLMRuntimeState]:

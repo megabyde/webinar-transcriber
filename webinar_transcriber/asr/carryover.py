@@ -37,8 +37,6 @@ def _carryover_drop_reason(
 ) -> str | None:
     if not settings.enabled:
         return "carryover_disabled"
-    if decoded_window.fallback_used:
-        return "fallback_used"
     if not decoded_window.text.strip():
         return "empty_text"
     return None

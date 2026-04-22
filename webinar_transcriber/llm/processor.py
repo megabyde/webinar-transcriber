@@ -14,8 +14,8 @@ from .contracts import (
     LLMSectionPolishResult,
     ReportPolishResponse,
     SchemaModelT,
+    SectionPolishOutputs,
     SectionTextResponse,
-    _SectionPolishOutputs,
 )
 from .prompts import (
     ACTION_ITEM_LIMIT,
@@ -135,10 +135,10 @@ class InstructorLLMProcessor:
         progress_callback: Callable[[int], None] | None,
         usage_totals: dict[str, int],
         warnings: list[str],
-    ) -> _SectionPolishOutputs:
+    ) -> SectionPolishOutputs:
         plan = self.report_polish_plan(report)
         if not report.sections:
-            return _SectionPolishOutputs(transcripts={}, tldrs={})
+            return SectionPolishOutputs(transcripts={}, tldrs={})
 
         polished_transcripts: dict[str, str] = {}
         polished_tldrs: dict[str, str] = {}
@@ -164,7 +164,7 @@ class InstructorLLMProcessor:
                 if progress_callback is not None:
                     progress_callback(1)
 
-        return _SectionPolishOutputs(transcripts=polished_transcripts, tldrs=polished_tldrs)
+        return SectionPolishOutputs(transcripts=polished_transcripts, tldrs=polished_tldrs)
 
     def _polish_section_text(
         self, section: ReportSection

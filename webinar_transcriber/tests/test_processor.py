@@ -40,20 +40,21 @@ from webinar_transcriber.processor import (
     process_input,
 )
 from webinar_transcriber.processor.__init__ import (
-    _AsrPipelineState,
-    _RunContext,
+    AsrPipelineState,
+    RunContext,
     _write_run_diagnostics,
 )
 from webinar_transcriber.processor.llm import LLMRuntimeState, resolve_llm_processor
 from webinar_transcriber.processor.support import (
     asr_runtime_detail,
     configure_asr_logging,
+    optional_count_label,
     stage,
     title_update_detail,
     token_usage_detail,
     window_transcription_stage_detail,
 )
-from webinar_transcriber.reporter import NullStageReporter
+from webinar_transcriber.reporter import BaseStageReporter
 from webinar_transcriber.segmentation import VadSettings
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
@@ -122,7 +123,7 @@ def install_processor_media_runtime(
     )
 
 
-class RecordingReporter(NullStageReporter):
+class RecordingReporter(BaseStageReporter):
     """Collect stage updates for assertions."""
 
     def __init__(self) -> None:
@@ -338,9 +339,9 @@ class TestProcessInput:
         assert artifacts.layout.docx_report_path.stat().st_size > 0
 
     def test_write_run_diagnostics_returns_none_without_layout(self) -> None:
-        ctx = _RunContext(
-            reporter=NullStageReporter(),
-            asr_pipeline=_AsrPipelineState(vad_enabled=True, threads=1),
+        ctx = RunContext(
+            reporter=BaseStageReporter(),
+            asr_pipeline=AsrPipelineState(vad_enabled=True, threads=1),
         )
 
         diagnostics = _write_run_diagnostics(
@@ -356,9 +357,9 @@ class TestProcessInput:
 
     def test_stage_records_timing_on_failure_without_finish_event(self) -> None:
         reporter = RecordingReporter()
-        ctx = _RunContext(
+        ctx = RunContext(
             reporter=reporter,
-            asr_pipeline=_AsrPipelineState(vad_enabled=True, threads=1),
+            asr_pipeline=AsrPipelineState(vad_enabled=True, threads=1),
         )
 
         with pytest.raises(RuntimeError, match="boom"), stage(ctx, "probe_media", "Probing media"):
@@ -917,6 +918,10 @@ class TestProcessorHelpers:
 
     def test_token_usage_detail_returns_blank_without_total_tokens(self) -> None:
         assert token_usage_detail({"input_tokens": 2}) == ""
+
+    def test_optional_count_label_returns_blank_for_non_positive_counts(self) -> None:
+        assert optional_count_label(0, "segment") == ""
+        assert optional_count_label(-1, "segment") == ""
 
     def test_resolve_llm_processor_uses_environment_processor_details(self, monkeypatch) -> None:
         reporter = RecordingReporter()

@@ -57,7 +57,9 @@ class LLMReportMetadataResult:
 
 
 @dataclass(frozen=True)
-class _SectionPolishOutputs:
+class SectionPolishOutputs:
+    """Polished section transcript and TL;DR payloads keyed by section id."""
+
     transcripts: dict[str, str]
     tldrs: dict[str, str]
 

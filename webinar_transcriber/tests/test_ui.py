@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
-from webinar_transcriber.reporter import NullStageReporter, StageEvent
+from webinar_transcriber.reporter import BaseStageReporter, StageEvent
 from webinar_transcriber.ui import (
     CountColumn,
     RateColumn,
@@ -345,9 +345,9 @@ class TestRichStageReporter:
         print_mock.assert_called_once_with("[green]\u2713[/] Other stage [dim](0.00s)[/]")
 
 
-class TestNullStageReporter:
+class TestBaseStageReporter:
     def test_warning_and_interrupt_noops_accept_calls(self) -> None:
-        reporter = NullStageReporter()
+        reporter = BaseStageReporter()
 
         reporter.warn("warning")
         reporter.interrupted()

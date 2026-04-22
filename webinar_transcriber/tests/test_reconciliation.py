@@ -10,7 +10,6 @@ class TestReconcileDecodedWindows:
 
         assert transcription.segments == []
         assert transcription.detected_language is None
-        assert stats.duplicate_segments_dropped == 0
         assert stats.boundary_fixes == 0
 
     def test_concatenates_non_overlapping_windows_in_order(self) -> None:
@@ -85,7 +84,6 @@ class TestReconcileDecodedWindows:
         ]
         assert transcription.segments[1].start_sec == 3.5
         assert transcription.segments[1].end_sec == 6.0
-        assert stats.duplicate_segments_dropped == 0
         assert stats.boundary_fixes == 1
 
     def test_skips_segment_when_fixing_produces_zero_duration(self) -> None:

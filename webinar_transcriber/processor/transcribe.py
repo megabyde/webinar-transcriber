@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from webinar_transcriber.paths import RunLayout
     from webinar_transcriber.segmentation import VadSettings
 
-    from .types import _RunContext
+    from .types import RunContext
 
 
 def run_transcription_phase(
@@ -30,7 +30,7 @@ def run_transcription_phase(
     media_asset: MediaAsset,
     transcriber: WhisperCppTranscriber,
     layout: RunLayout,
-    ctx: _RunContext,
+    ctx: RunContext,
     vad: VadSettings,
     carryover_enabled: bool,
     keep_audio: bool,

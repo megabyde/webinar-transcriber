@@ -22,7 +22,7 @@ from rich.progress import (
 from rich.table import Table
 from rich.text import Text
 
-from webinar_transcriber.reporter import NullStageReporter, StageEvent
+from webinar_transcriber.reporter import BaseStageReporter, StageEvent
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from webinar_transcriber.processor import ProcessArtifacts
 
 
-class RichStageReporter(NullStageReporter):
+class RichStageReporter(BaseStageReporter):
     """Terminal reporter using Rich status spinners and summaries."""
 
     def __init__(self, console: Console | None = None) -> None:

@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.labels import count_label
 from webinar_transcriber.models import InferenceWindow, TranscriptionResult
 from webinar_transcriber.normalized_audio import load_normalized_audio
 from webinar_transcriber.segmentation import (
@@ -18,13 +17,14 @@ from webinar_transcriber.transcript.normalize import normalize_transcription
 
 from .support import (
     asr_runtime_detail,
+    count_label,
     progress_stage,
     stage,
     window_transcription_stage_detail,
     write_json,
     write_model_json,
 )
-from .types import _AsrPipelineState
+from .types import AsrPipelineState
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -43,7 +43,7 @@ class AsrPipelineResult:
 
     transcription: TranscriptionResult
     normalized_transcription: TranscriptionResult
-    asr_pipeline: _AsrPipelineState
+    asr_pipeline: AsrPipelineState
 
 
 def run_asr_pipeline(
@@ -153,7 +153,7 @@ def run_asr_pipeline(
         normalized_transcription = normalize_transcription(transcription)
         st.detail = count_label(len(normalized_transcription.segments), "segment")
 
-    asr_pipeline = _AsrPipelineState(
+    asr_pipeline = AsrPipelineState(
         vad_enabled=vad.enabled,
         threads=transcriber.threads,
         normalized_audio_duration_sec=normalized_audio_duration_sec,
@@ -161,7 +161,6 @@ def run_asr_pipeline(
         carryover_enabled=carryover_enabled,
         window_count=window_count,
         average_window_duration_sec=average_window_duration_sec,
-        reconciliation_duplicate_segments_dropped=reconciliation_stats.duplicate_segments_dropped,
         reconciliation_boundary_fixes=reconciliation_stats.boundary_fixes,
         system_info=transcriber.system_info,
     )

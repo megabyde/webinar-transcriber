@@ -11,7 +11,6 @@ from webinar_transcriber.models import DecodedWindow, TranscriptionResult, Trans
 class ReconciliationStats:
     """Observed cleanup performed during transcript reconciliation."""
 
-    duplicate_segments_dropped: int = 0
     boundary_fixes: int = 0
 
 

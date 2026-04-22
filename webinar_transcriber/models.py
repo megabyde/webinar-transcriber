@@ -15,7 +15,7 @@ class MediaType(StrEnum):
     VIDEO = "video"
 
 
-class _BaseMediaAsset(BaseModel):
+class BaseMediaAsset(BaseModel):
     """Shared metadata for a probed media asset."""
 
     path: str
@@ -24,13 +24,13 @@ class _BaseMediaAsset(BaseModel):
     channels: int | None = Field(default=None, ge=1)
 
 
-class AudioAsset(_BaseMediaAsset):
+class AudioAsset(BaseMediaAsset):
     """Metadata for a probed audio-only asset."""
 
     media_type: Literal[MediaType.AUDIO] = MediaType.AUDIO
 
 
-class VideoAsset(_BaseMediaAsset):
+class VideoAsset(BaseMediaAsset):
     """Metadata for a probed video asset."""
 
     media_type: Literal[MediaType.VIDEO] = MediaType.VIDEO
@@ -92,7 +92,6 @@ class DecodedWindow:
     input_prompt: str | None = None
     text: str = ""
     segments: list[TranscriptSegment] = dataclass_field(default_factory=list)
-    fallback_used: bool = False
     language: str | None = None
 
 
@@ -168,7 +167,6 @@ class AsrPipelineDiagnostics(BaseModel):
     carryover_enabled: bool = False
     window_count: int = Field(default=0, ge=0)
     average_window_duration_sec: float | None = Field(default=None, ge=0)
-    reconciliation_duplicate_segments_dropped: int = Field(default=0, ge=0)
     reconciliation_boundary_fixes: int = Field(default=0, ge=0)
     threads: int | None = Field(default=None, ge=1)
     system_info: str | None = None
