@@ -33,14 +33,6 @@ FIXTURE_DIR = Path(__file__).parents[2] / "tests" / "fixtures"
 SAMPLE_VIDEO_PATH = FIXTURE_DIR / "sample-video.mp4"
 
 
-def _frame(fill: int, *, invert_quadrants: bool = False) -> np.ndarray:
-    frame = np.full((32, 32), fill, dtype=np.uint8)
-    if invert_quadrants:
-        frame[:16, :16] = 255 - fill
-        frame[16:, 16:] = 255 - fill
-    return frame
-
-
 def _scene(index: int, start_sec: float, end_sec: float) -> Scene:
     return Scene(id=f"scene-{index}", start_sec=start_sec, end_sec=end_sec)
 
