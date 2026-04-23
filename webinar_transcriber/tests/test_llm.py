@@ -630,12 +630,12 @@ class TestLlmNormalization:
     def test_normalize_polished_section_tldr_returns_blank_for_blank_input(self) -> None:
         assert normalize_polished_section_tldr("   ") == ""
 
-    def test_normalize_polished_section_tldr_splits_inline_bullet_items(self) -> None:
+    def test_normalize_polished_section_tldr_collapses_inline_bullet_spacing(self) -> None:
         normalized = normalize_polished_section_tldr(
             "- First point. - Second point. - Third point."
         )
 
-        assert normalized == "- First point.\n\n- Second point.\n\n- Third point."
+        assert normalized == "- First point. - Second point. - Third point."
 
     def test_normalize_report_lines_dedupes_and_limits_case_insensitively(self) -> None:
         normalized = normalize_report_lines(

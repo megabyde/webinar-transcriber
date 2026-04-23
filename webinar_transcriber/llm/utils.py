@@ -22,9 +22,6 @@ if TYPE_CHECKING:
     from webinar_transcriber.models import ReportDocument
 
 
-INLINE_LIST_MARKER_RE = re.compile(r"(?:[-*]|\d+[.)])\s")
-
-
 def required_provider_env(*, api_key_env: str, model_env: str) -> tuple[str, str]:
     """Return the required API key and model name for one provider.
 
@@ -197,9 +194,6 @@ def normalize_polished_section_tldr(tldr: str) -> str:
     cleaned = tldr.strip()
     if not cleaned:
         return ""
-
-    if INLINE_LIST_MARKER_RE.match(cleaned):
-        cleaned = re.sub(rf"(?<=[.!?…])\s+(?={INLINE_LIST_MARKER_RE.pattern})", "\n\n", cleaned)
 
     return _normalize_paragraph_blocks(cleaned)
 
