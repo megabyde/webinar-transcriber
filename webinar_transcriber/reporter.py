@@ -2,22 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from webinar_transcriber.processor import ProcessArtifacts
-
-
-@dataclass
-class StageEvent:
-    """Structured representation of a stage transition."""
-
-    stage_key: str
-    label: str
-    started_at: float
 
 
 class BaseStageReporter:

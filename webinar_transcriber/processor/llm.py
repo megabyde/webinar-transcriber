@@ -25,8 +25,10 @@ from .support import (
 if TYPE_CHECKING:
     from webinar_transcriber.llm import LLMProcessor
     from webinar_transcriber.models import ReportDocument
-    from webinar_transcriber.processor.support import ProgressStageHandle, StageContext
     from webinar_transcriber.reporter import BaseStageReporter
+
+    from .support import ProgressStageHandle
+    from .types import RunContext
 
 
 @dataclass
@@ -78,7 +80,7 @@ def maybe_polish_report(
     report: ReportDocument,
     *,
     llm_processor: LLMProcessor | None,
-    ctx: StageContext,
+    ctx: RunContext,
     warnings: list[str],
     llm_runtime: LLMRuntimeState,
 ) -> tuple[ReportDocument, LLMRuntimeState]:
