@@ -7,7 +7,7 @@ import logging
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from time import perf_counter
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
 from webinar_transcriber.asr import ASR_BACKEND_NAME, WhisperCppTranscriber
 from webinar_transcriber.models import (
@@ -26,15 +26,7 @@ if TYPE_CHECKING:
     from webinar_transcriber.paths import RunLayout
     from webinar_transcriber.reporter import BaseStageReporter
 
-    from .types import AsrPipelineState
-
-
-class StageContext(Protocol):
-    """Shared stage context contract used across processor flows."""
-
-    reporter: BaseStageReporter
-    stage_timings: dict[str, float]
-    current_stage: str | None
+    from .types import AsrPipelineState, RunContext
 
 
 @dataclass
@@ -91,7 +83,7 @@ def optional_count_label(count: int, singular: str, *, plural: str | None = None
 
 @contextmanager
 def stage(
-    ctx: StageContext, key: str, label: str, *, indeterminate: bool = True
+    ctx: RunContext, key: str, label: str, *, indeterminate: bool = True
 ) -> Iterator[StageHandle]:
     """Record one stage's timing and lifecycle through a context manager."""
     handle = StageHandle(key=key, label=label, start_sec=perf_counter())
@@ -109,7 +101,7 @@ def stage(
 
 @contextmanager
 def progress_stage(
-    ctx: StageContext,
+    ctx: RunContext,
     key: str,
     label: str,
     *,

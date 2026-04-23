@@ -34,7 +34,8 @@ if TYPE_CHECKING:
     from webinar_transcriber.paths import RunLayout
     from webinar_transcriber.segmentation import VadSettings
 
-    from .support import ProgressStageHandle, StageContext
+    from .support import ProgressStageHandle
+    from .types import RunContext
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,7 @@ def run_asr_pipeline(
     media_asset: MediaAsset,
     transcriber: WhisperCppTranscriber,
     layout: RunLayout,
-    ctx: StageContext,
+    ctx: RunContext,
     warnings: list[str],
     vad: VadSettings,
     carryover_enabled: bool,

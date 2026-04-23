@@ -9,10 +9,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.progress import (
     BarColumn,
+    MofNCompleteColumn,
     Progress,
-    ProgressColumn,
     SpinnerColumn,
-    Task,
     TaskID,
     TaskProgressColumn,
     TextColumn,
@@ -22,7 +21,7 @@ from rich.progress import (
 from rich.table import Table
 from rich.text import Text
 
-from webinar_transcriber.reporter import BaseStageReporter, StageEvent
+from webinar_transcriber.reporter import BaseStageReporter
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -41,7 +40,9 @@ class RichStageReporter(BaseStageReporter):
         self._active_status: Status | None = None
         self._active_progress: Progress | None = None
         self._active_task_id: TaskID | None = None
-        self._active_event: StageEvent | None = None
+        self._active_stage_key: str | None = None
+        self._active_stage_label: str | None = None
+        self._active_stage_started_at: float | None = None
         self._warnings: list[str] = []
         self._stage_count = 0
 
@@ -53,7 +54,7 @@ class RichStageReporter(BaseStageReporter):
         """Start an indeterminate stage spinner."""
         self._stop_active_display()
         self._stage_count += 1
-        self._active_event = self._new_stage_event(stage_key, label)
+        self._set_active_stage(stage_key, label)
         status = self._console.status(
             f"[bold blue][{self._stage_count}][/bold blue] {label}", spinner="dots"
         )
@@ -75,14 +76,15 @@ class RichStageReporter(BaseStageReporter):
         """Start a determinate progress display for a stage."""
         self._stop_active_display()
         self._stage_count += 1
-        self._active_event = self._new_stage_event(stage_key, label)
+        self._set_active_stage(stage_key, label)
         progress = Progress(
             SpinnerColumn(),
             TextColumn(f"[bold blue][{self._stage_count}][/bold blue] {label}"),
             BarColumn(),
             TaskProgressColumn(),
-            CountColumn(),
-            RateColumn(),
+            MofNCompleteColumn(),
+            TextColumn("{task.fields[count_text]}", style="progress.data.speed"),
+            TextColumn("{task.fields[rate_text]}", style="progress.data.speed"),
             TextColumn("{task.fields[detail_text]}", style="dim"),
             TextColumn("ETA"),
             TimeRemainingColumn(compact=True),
@@ -97,6 +99,12 @@ class RichStageReporter(BaseStageReporter):
             total=max(total, 1.0),
             count_label=count_label,
             count_multiplier=count_multiplier,
+            count_text=_count_text(
+                completed=0.0,
+                total=max(total, 1.0),
+                count_label=count_label,
+                count_multiplier=count_multiplier,
+            ),
             rate_label=rate_label,
             rate_multiplier=rate_multiplier,
             rate_text="",
@@ -107,7 +115,7 @@ class RichStageReporter(BaseStageReporter):
         self, stage_key: str, *, advance: float = 1.0, detail: str | None = None
     ) -> None:
         """Advance the active determinate progress display."""
-        if self._active_event is None or self._active_event.stage_key != stage_key:
+        if self._active_stage_key != stage_key:
             return
         if self._active_progress is None or self._active_task_id is None:
             return
@@ -115,13 +123,17 @@ class RichStageReporter(BaseStageReporter):
             self._active_task_id, advance=advance, detail_text=detail or ""
         )
         task = self._active_progress.tasks[self._active_task_id]
-        now = perf_counter()
         self._active_progress.update(
             self._active_task_id,
-            rate_text=_rate_text_for_update(
+            count_text=_count_text(
                 completed=task.completed,
-                now=now,
-                started_at=self._active_event.started_at,
+                total=task.total,
+                count_label=task.fields.get("count_label"),
+                count_multiplier=float(task.fields.get("count_multiplier", 1.0)),
+            ),
+            rate_text=_rate_text(
+                completed=task.completed,
+                elapsed_sec=perf_counter() - (self._active_stage_started_at or 0.0),
                 rate_label=task.fields.get("rate_label"),
                 rate_multiplier=float(task.fields.get("rate_multiplier", 1.0)),
             ),
@@ -131,13 +143,13 @@ class RichStageReporter(BaseStageReporter):
         """Stop the active display and render a finished-stage line."""
         self._stop_active_display()
         elapsed = 0.0
-        if self._active_event is not None and self._active_event.stage_key == stage_key:
-            elapsed = perf_counter() - self._active_event.started_at
+        if self._active_stage_key == stage_key and self._active_stage_started_at is not None:
+            elapsed = perf_counter() - self._active_stage_started_at
 
         detail_suffix = f" - {detail}" if detail else ""
         self._console.print(f"[green]\u2713[/] {label}{detail_suffix} [dim]({elapsed:.2f}s)[/]")
         self._active_status = None
-        self._active_event = None
+        self._clear_active_stage()
 
     def warn(self, message: str) -> None:
         """Render a warning message."""
@@ -148,8 +160,8 @@ class RichStageReporter(BaseStageReporter):
     def interrupted(self) -> None:
         """Render an interrupted-run message."""
         stage_suffix = ""
-        if self._active_event is not None:
-            stage_suffix = f" during {self._active_event.label.lower()}"
+        if self._active_stage_label is not None:
+            stage_suffix = f" during {self._active_stage_label.lower()}"
         self._clear_active_display()
         self._console.print(f"[red]\u2717[/] Interrupted{stage_suffix}.")
 
@@ -184,81 +196,39 @@ class RichStageReporter(BaseStageReporter):
 
     def _clear_active_display(self) -> None:
         self._stop_active_display()
-        self._active_event = None
+        self._clear_active_stage()
 
-    def _new_stage_event(self, stage_key: str, label: str) -> StageEvent:
-        return StageEvent(stage_key=stage_key, label=label, started_at=perf_counter())
+    def _set_active_stage(self, stage_key: str, label: str) -> None:
+        self._active_stage_key = stage_key
+        self._active_stage_label = label
+        self._active_stage_started_at = perf_counter()
 
-
-class RateColumn(ProgressColumn):
-    """Render an optional rate derived from task completion over time."""
-
-    def render(self, task: Task) -> Text:
-        """Render the current rate text.
-
-        Returns:
-            Text: The rendered rate cell.
-        """
-        rate_text = str(task.fields.get("rate_text", ""))
-        return Text(rate_text, style="progress.data.speed")
+    def _clear_active_stage(self) -> None:
+        self._active_stage_key = None
+        self._active_stage_label = None
+        self._active_stage_started_at = None
 
 
-class CountColumn(ProgressColumn):
-    """Render a done/total counter with optional unit scaling."""
-
-    def render(self, task: Task) -> Text:
-        """Render the current count text.
-
-        Returns:
-            Text: The rendered count cell.
-        """
-        count_text = _format_count(
-            completed=task.completed,
-            total=task.total,
-            count_label=task.fields.get("count_label"),
-            count_multiplier=float(task.fields.get("count_multiplier", 1.0)),
-            has_rate=bool(task.fields.get("rate_text")),
-        )
-        return Text(count_text, style="progress.data.speed")
-
-
-def _format_count(
-    *,
-    completed: float,
-    total: float | None,
-    count_label: str | None,
-    count_multiplier: float,
-    has_rate: bool = False,
+def _count_text(
+    *, completed: float, total: float | None, count_label: object, count_multiplier: float
 ) -> str:
-    if total is None:
+    if total is None or not count_label:
         return ""
 
     completed_count = int(completed * count_multiplier)
     total_count = int(total * count_multiplier)
-    if count_label:
-        sep = "" if count_label in {"s", "ms", "%"} else " "
-        unit_suffix = f"{sep}{count_label}"
-    else:
-        unit_suffix = ""
-    comma_suffix = "," if has_rate else ""
-    return f"{completed_count}/{total_count}{unit_suffix}{comma_suffix}"
+    sep = "" if count_label in {"s", "ms", "%"} else " "
+    return f"{completed_count}/{total_count}{sep}{count_label}"
 
 
-def _rate_text_for_update(
-    *,
-    completed: float,
-    now: float,
-    started_at: float,
-    rate_label: str | None,
-    rate_multiplier: float,
+def _rate_text(
+    *, completed: float, elapsed_sec: float, rate_label: object, rate_multiplier: float
 ) -> str:
     if not rate_label or completed <= 0:
         return ""
-
-    elapsed = now - started_at
-    if elapsed <= 0:
+    if elapsed_sec <= 0:
         return ""
 
-    rate = completed * rate_multiplier / elapsed
+    rate = completed * rate_multiplier / elapsed_sec
     display_rate = f"{rate:.0f}" if rate >= 100 else f"{rate:.1f}"
     return f"{display_rate} {rate_label}"
