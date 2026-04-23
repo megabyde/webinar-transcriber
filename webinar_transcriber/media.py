@@ -3,18 +3,71 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, cast, overload
 
 import av
 
 from webinar_transcriber.models import AudioAsset, MediaAsset, VideoAsset
 
 if TYPE_CHECKING:
+    from av.audio.stream import AudioStream
     from av.container import InputContainer, OutputContainer
+    from av.video.stream import VideoStream
 
 
 class MediaProcessingError(RuntimeError):
     """Raised when media work cannot be completed."""
+
+
+@overload
+def _first_input_stream(
+    input_container: "InputContainer", stream_type: Literal["audio"]
+) -> "AudioStream | None": ...
+
+
+@overload
+def _first_input_stream(
+    input_container: "InputContainer", stream_type: Literal["video"]
+) -> "VideoStream | None": ...
+
+
+def _first_input_stream(
+    input_container: "InputContainer", stream_type: Literal["audio", "video"]
+) -> "AudioStream | VideoStream | None":
+    return cast(
+        "AudioStream | VideoStream | None",
+        next((stream for stream in input_container.streams if stream.type == stream_type), None),
+    )
+
+
+@overload
+def _required_input_stream(
+    input_container: "InputContainer",
+    stream_type: Literal["audio"],
+    *,
+    error_message: str,
+) -> "AudioStream": ...
+
+
+@overload
+def _required_input_stream(
+    input_container: "InputContainer",
+    stream_type: Literal["video"],
+    *,
+    error_message: str,
+) -> "VideoStream": ...
+
+
+def _required_input_stream(
+    input_container: "InputContainer",
+    stream_type: Literal["audio", "video"],
+    *,
+    error_message: str,
+) -> "AudioStream | VideoStream":
+    stream = _first_input_stream(input_container, stream_type)
+    if stream is None:
+        raise MediaProcessingError(error_message)
+    return stream
 
 
 @contextmanager
@@ -75,7 +128,7 @@ def probe_media(input_path: Path) -> MediaAsset:
         error_message="Could not open {path} with PyAV: {error}",
     ) as input_container:
         streams = list(input_container.streams)
-        audio_stream = next((stream for stream in streams if stream.type == "audio"), None)
+        audio_stream = _first_input_stream(input_container, "audio")
         video_stream = next(
             (
                 stream
