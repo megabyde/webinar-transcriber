@@ -8,15 +8,12 @@ from unittest.mock import Mock
 import pytest
 from rich.console import Console
 from rich.panel import Panel
-from rich.text import Text
 
-from webinar_transcriber.reporter import BaseStageReporter, StageEvent
+from webinar_transcriber.reporter import BaseStageReporter
 from webinar_transcriber.ui import (
-    CountColumn,
-    RateColumn,
     RichStageReporter,
-    _format_count,
-    _rate_text_for_update,
+    _count_text,
+    _rate_text,
 )
 
 if TYPE_CHECKING:
@@ -24,40 +21,38 @@ if TYPE_CHECKING:
 
 
 class TestFormatHelpers:
-    def test_format_count_renders_frame_counter(self) -> None:
-        count_text = _format_count(
+    def test_count_text_renders_frame_counter(self) -> None:
+        count_text = _count_text(
             completed=74.0, total=100.0, count_label="frames", count_multiplier=100.0
         )
 
         assert count_text == "7400/10000 frames"
 
-    def test_format_count_renders_compact_seconds_suffix(self) -> None:
-        count_text = _format_count(
-            completed=74.0, total=100.0, count_label="s", count_multiplier=1.0
-        )
+    def test_count_text_renders_compact_seconds_suffix(self) -> None:
+        count_text = _count_text(completed=74.0, total=100.0, count_label="s", count_multiplier=1.0)
 
         assert count_text == "74/100s"
 
-    def test_rate_text_for_update_renders_frames_per_second(self) -> None:
-        rate_text = _rate_text_for_update(
-            completed=74.0, now=2.0, started_at=1.0, rate_label="frames/s", rate_multiplier=100.0
+    def test_rate_text_renders_frames_per_second(self) -> None:
+        rate_text = _rate_text(
+            completed=74.0, elapsed_sec=1.0, rate_label="frames/s", rate_multiplier=100.0
         )
 
         assert rate_text == "7400 frames/s"
 
-    def test_rate_text_for_update_hides_empty_values(self) -> None:
-        rate_text = _rate_text_for_update(
-            completed=0.0, now=2.0, started_at=1.0, rate_label="frames/s", rate_multiplier=100.0
+    def test_rate_text_hides_empty_values(self) -> None:
+        rate_text = _rate_text(
+            completed=0.0, elapsed_sec=1.0, rate_label="frames/s", rate_multiplier=100.0
         )
 
         assert rate_text == ""
 
     def test_count_and_rate_helpers_hide_empty_values(self) -> None:
-        formatted_count = _format_count(
+        formatted_count = _count_text(
             completed=3.0, total=None, count_label="frames", count_multiplier=1.0
         )
-        rate_text = _rate_text_for_update(
-            completed=3.0, now=2.0, started_at=2.0, rate_label="frames/s", rate_multiplier=1.0
+        rate_text = _rate_text(
+            completed=3.0, elapsed_sec=0.0, rate_label="frames/s", rate_multiplier=1.0
         )
 
         assert formatted_count == ""
@@ -153,8 +148,6 @@ class TestRichStageReporter:
         monkeypatch.setattr("webinar_transcriber.ui.TextColumn", fake_column)
         monkeypatch.setattr("webinar_transcriber.ui.BarColumn", fake_column)
         monkeypatch.setattr("webinar_transcriber.ui.TaskProgressColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.CountColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.RateColumn", fake_column)
         monkeypatch.setattr("webinar_transcriber.ui.TimeRemainingColumn", fake_column)
         monkeypatch.setattr("webinar_transcriber.ui.TimeElapsedColumn", fake_column)
         monkeypatch.setattr("webinar_transcriber.ui.perf_counter", lambda: 10.0)
@@ -169,11 +162,9 @@ class TestRichStageReporter:
             detail="scene-1",
         )
 
-        assert reporter._active_event == StageEvent(
-            stage_key="extract_frames",
-            label="Extracting frames",
-            started_at=10.0,
-        )
+        assert reporter._active_stage_key == "extract_frames"
+        assert reporter._active_stage_label == "Extracting frames"
+        assert reporter._active_stage_started_at == 10.0
         assert reporter._active_progress is not None
         active_progress = cast("Any", reporter._active_progress)
         assert active_progress.started
@@ -183,6 +174,7 @@ class TestRichStageReporter:
             {
                 "count_label": "frames",
                 "count_multiplier": 1.0,
+                "count_text": "0/1 frames",
                 "rate_label": "frames/s",
                 "rate_multiplier": 1.0,
                 "rate_text": "",
@@ -229,11 +221,9 @@ class TestRichStageReporter:
         monkeypatch.setattr("webinar_transcriber.ui.perf_counter", lambda: next(perf_values))
 
         any_reporter = cast("Any", reporter)
-        any_reporter._active_event = StageEvent(
-            stage_key="extract_frames",
-            label="Extracting frames",
-            started_at=20.0,
-        )
+        any_reporter._active_stage_key = "extract_frames"
+        any_reporter._active_stage_label = "Extracting frames"
+        any_reporter._active_stage_started_at = 20.0
         any_reporter._active_progress = FakeProgress()
         any_reporter._active_progress.start()
         any_reporter._active_task_id = any_reporter._active_progress.add_task(
@@ -241,6 +231,7 @@ class TestRichStageReporter:
             total=4.0,
             count_label="frames",
             count_multiplier=1.0,
+            count_text="0/4 frames",
             rate_label="frames/s",
             rate_multiplier=1.0,
             rate_text="",
@@ -253,6 +244,7 @@ class TestRichStageReporter:
 
         task = reporter._active_progress.tasks[reporter._active_task_id]
         assert task.fields["detail_text"] == "scene-2"
+        assert task.fields["count_text"] == "2/4 frames"
         assert task.fields["rate_text"] == "1.0 frames/s"
 
         reporter.stage_finished("extract_frames", "Extracting frames", detail="done")
@@ -297,11 +289,9 @@ class TestRichStageReporter:
         reporter.progress_advanced("extract_frames", advance=1.0)
 
         any_reporter = cast("Any", reporter)
-        any_reporter._active_event = StageEvent(
-            stage_key="extract_frames",
-            label="Extracting frames",
-            started_at=0.0,
-        )
+        any_reporter._active_stage_key = "extract_frames"
+        any_reporter._active_stage_label = "Extracting frames"
+        any_reporter._active_stage_started_at = 0.0
         update_mock = Mock()
         any_reporter._active_progress = SimpleNamespace(tasks=[FakeTask()], update=update_mock)
         any_reporter._active_task_id = 0
@@ -316,7 +306,9 @@ class TestRichStageReporter:
 
     def test_progress_advanced_ignores_active_stage_without_progress_display(self) -> None:
         reporter = RichStageReporter(console=Console(record=True, width=100))
-        reporter._active_event = reporter._new_stage_event("extract_frames", "Extracting frames")
+        reporter._active_stage_key = "extract_frames"
+        reporter._active_stage_label = "Extracting frames"
+        reporter._active_stage_started_at = 0.0
 
         reporter.progress_advanced("extract_frames", advance=1.0)
 
@@ -352,22 +344,3 @@ class TestBaseStageReporter:
         reporter.warn("warning")
         reporter.interrupted()
         reporter.reset_active_display()
-
-
-class TestProgressColumns:
-    def test_rate_column_renders_rate_text(self) -> None:
-        task = cast("Any", SimpleNamespace(fields={"rate_text": "12 frames/s"}))
-
-        assert RateColumn().render(task) == Text("12 frames/s", style="progress.data.speed")
-
-    def test_count_column_renders_default_counter_without_unit(self) -> None:
-        task = cast(
-            "Any",
-            SimpleNamespace(
-                completed=1.0,
-                total=3.0,
-                fields={"count_label": None, "count_multiplier": 1.0, "rate_text": ""},
-            ),
-        )
-
-        assert CountColumn().render(task) == Text("1/3", style="progress.data.speed")
