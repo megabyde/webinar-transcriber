@@ -499,7 +499,10 @@ class TestProcessInput:
             ),
         )
 
-        def fake_detect_scenes(*_args, **_kwargs) -> list[Scene]:
+        def fake_detect_scenes(*_args, progress_callback=None, **_kwargs) -> list[Scene]:
+            assert progress_callback is not None
+            progress_callback(1, 1)
+            progress_callback(2, 2)
             return scenes
 
         monkeypatch.setattr("webinar_transcriber.video.detect_scenes", fake_detect_scenes)
@@ -561,6 +564,9 @@ class TestProcessInput:
         assert artifacts.report.sections[0].image_path
         assert reporter.has_event("start", "detect_scenes", "Detecting scenes")
         assert reporter.has_event("finish", "detect_scenes", "2 scenes")
+        assert reporter.has_progress_event("start", "detect_scenes", 2.0, "0 scenes")
+        assert reporter.has_progress_event("advance", "detect_scenes", 1.0, "1 scene")
+        assert reporter.has_progress_event("advance", "detect_scenes", 1.0, "2 scenes")
         assert reporter.has_progress_event(
             "start", "extract_frames", artifacts.diagnostics.item_counts["scenes"], None
         )
@@ -621,6 +627,85 @@ class TestProcessInput:
         assert reporter.warnings == ["Frame extraction failed for scene-1 at 0.9s: decode failed"]
         assert artifacts.diagnostics.warnings == reporter.warnings
         assert artifacts.report.warnings == reporter.warnings
+
+    def test_detect_scenes_uses_spinner_when_video_fps_is_unknown(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        reporter = RecordingReporter()
+        scenes = [Scene(id="scene-1", start_sec=0.0, end_sec=1.8)]
+
+        install_basic_windowing(monkeypatch, region_end_sec=1.8)
+        install_processor_media_runtime(
+            monkeypatch,
+            tmp_path,
+            input_path=FIXTURE_DIR / "sample-video.mp4",
+            media_asset=VideoAsset(
+                path=str(FIXTURE_DIR / "sample-video.mp4"),
+                duration_sec=1.8,
+                sample_rate=48_000,
+                channels=2,
+                fps=None,
+                width=1280,
+                height=720,
+            ),
+        )
+
+        def fake_detect_scenes(*_args, progress_callback=None, **_kwargs) -> list[Scene]:
+            assert progress_callback is None
+            return scenes
+
+        monkeypatch.setattr("webinar_transcriber.video.detect_scenes", fake_detect_scenes)
+
+        def fake_extract_frames(
+            _video_path: Path,
+            scene_items: list[Scene],
+            output_dir: Path,
+            **_kwargs,
+        ) -> list[SlideFrame]:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            frames: list[SlideFrame] = []
+            for scene in scene_items:
+                frame_path = output_dir / f"{scene.id}.png"
+                Image.new("RGB", (1, 1), "white").save(frame_path)
+                frames.append(
+                    SlideFrame(
+                        id=f"frame-{scene.id}",
+                        scene_id=scene.id,
+                        timestamp_sec=scene.midpoint,
+                        image_path=str(frame_path),
+                    )
+                )
+            return frames
+
+        monkeypatch.setattr(
+            "webinar_transcriber.video.extract_representative_frames", fake_extract_frames
+        )
+
+        process_input(
+            FIXTURE_DIR / "sample-video.mp4",
+            output_dir=tmp_path / "video-run-no-fps",
+            transcriber=self.FakeTranscriber(
+                segments=[
+                    TranscriptSegment(
+                        id="segment-1",
+                        text="Agenda overview and open questions.",
+                        start_sec=0.0,
+                        end_sec=0.9,
+                    ),
+                    TranscriptSegment(
+                        id="segment-2",
+                        text="Timeline planning and next step review.",
+                        start_sec=0.9,
+                        end_sec=1.8,
+                    ),
+                ]
+            ),
+            reporter=reporter,
+        )
+
+        assert reporter.has_event("start", "detect_scenes", "Detecting scenes")
+        assert reporter.has_event("finish", "detect_scenes", "1 scene")
+        assert not reporter.progress_stage_events("start", "detect_scenes")
 
     def test_runs_windowed_whispercpp_pipeline(self, tmp_path, monkeypatch) -> None:
         reporter = RecordingReporter()
