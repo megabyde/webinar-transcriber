@@ -88,7 +88,7 @@ def repair_speech_regions(
     min_region_sec: float = DEFAULT_MIN_REPAIRED_REGION_SEC,
     max_gap_sec: float = DEFAULT_REPAIR_MAX_GAP_SEC,
 ) -> list[SpeechRegion]:
-    """Merge short speech regions across nearby pauses until they become usable ASR regions.
+    """Merge nearby speech regions once, then drop any regions still too short for ASR.
 
     Returns:
         list[SpeechRegion]: The repaired speech regions.
@@ -96,40 +96,24 @@ def repair_speech_regions(
     repaired = _normalize_regions(regions)
     min_duration = max(0.0, min_region_sec)
     gap_limit = max(0.0, max_gap_sec)
-    if len(repaired) < 2 or min_duration <= 0:
-        return repaired
+    if not repaired:
+        return []
 
     merged: list[SpeechRegion] = []
     current = repaired[0]
-    next_index = 1
 
-    while True:
-        if (current.end_sec - current.start_sec) >= min_duration:
-            merged.append(current)
-        else:
-            left_gap = current.start_sec - merged[-1].end_sec if merged else float("inf")
-            right_gap = (
-                repaired[next_index].start_sec - current.end_sec
-                if next_index < len(repaired)
-                else float("inf")
-            )
-            if min(left_gap, right_gap) > gap_limit:
-                merged.append(current)
-            elif left_gap <= right_gap:
-                previous = merged.pop()
-                current = SpeechRegion(start_sec=previous.start_sec, end_sec=current.end_sec)
-                continue
-            else:
-                current = SpeechRegion(
-                    start_sec=current.start_sec, end_sec=repaired[next_index].end_sec
-                )
-                next_index += 1
-                continue
+    for region in repaired[1:]:
+        gap_duration = max(0.0, region.start_sec - current.end_sec)
+        if gap_duration < gap_limit:
+            current = SpeechRegion(start_sec=current.start_sec, end_sec=region.end_sec)
+            continue
+        merged.append(current)
+        current = region
 
-        if next_index >= len(repaired):
-            return merged
-        current = repaired[next_index]
-        next_index += 1
+    merged.append(current)
+    if min_duration <= 0:
+        return merged
+    return [region for region in merged if (region.end_sec - region.start_sec) >= min_duration]
 
 
 def normalized_audio_duration(samples: np.ndarray, sample_rate: int) -> float:
