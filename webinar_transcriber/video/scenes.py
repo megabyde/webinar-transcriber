@@ -2,21 +2,24 @@
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import av
 from av.filter import Graph
 
-from webinar_transcriber.media import MediaProcessingError, open_input_media_container
+from webinar_transcriber.media import (
+    MediaProcessingError,
+    _required_input_stream,
+    open_input_media_container,
+)
 from webinar_transcriber.models import Scene
 
 if TYPE_CHECKING:
-    from av.video.frame import VideoFrame
     from av.video.stream import VideoStream
 
 
 MIN_SCENE_LENGTH_SEC = 3.0
-SCENE_SCORE_THRESHOLD = 0.3
+SCENE_SCORE_THRESHOLD = 0.008
 
 
 def detect_scenes(
@@ -57,15 +60,13 @@ def _select_scene_starts(
             video_path,
             error_message="Could not open {path} with PyAV for scene detection: {error}",
         ) as input_container:
-            video_stream = next(
-                (stream for stream in input_container.streams if stream.type == "video"),
-                None,
+            video_stream = _required_input_stream(
+                input_container,
+                "video",
+                error_message=f"No video stream found in {video_path}.",
             )
-            if video_stream is None:
-                raise MediaProcessingError(f"No video stream found in {video_path}.")
-
             scene_filter = _build_scene_filter_graph(
-                cast("VideoStream", video_stream),
+                video_stream,
                 scene_score_threshold=scene_score_threshold,
             )
             scene_starts = [0.0]
@@ -73,7 +74,7 @@ def _select_scene_starts(
 
             for decoded_frame in input_container.decode(video_stream):
                 processed_frame_count += 1
-                scene_filter.vpush(cast("VideoFrame", decoded_frame))
+                scene_filter.vpush(decoded_frame)
                 while True:
                     try:
                         filtered_frame = scene_filter.vpull()
