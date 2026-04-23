@@ -285,7 +285,8 @@ class TestProcessInput:
         assert artifacts.layout.json_report_path.exists()
         assert not (artifacts.layout.run_dir / "audio.wav").exists()
         assert artifacts.report.detected_language == "en"
-        assert artifacts.report.action_items == ["Next step please send the draft by Friday."]
+        assert artifacts.report.summary == []
+        assert artifacts.report.action_items == []
         assert len(artifacts.report.sections) == 1
         assert (
             "Next step please send the draft by Friday."
@@ -1253,7 +1254,8 @@ class TestProcessInputLlm:
 
         fallback_finish = ("finish", "llm_report_sections", "openai | test-llm-model | fallback")
 
-        assert artifacts.report.summary != []
+        assert artifacts.report.summary == []
+        assert artifacts.report.action_items == []
         assert artifacts.diagnostics.llm_report_status == "fallback"
         assert "Report polishing failed: backend timeout" in artifacts.diagnostics.warnings
         assert fallback_finish in reporter.events
