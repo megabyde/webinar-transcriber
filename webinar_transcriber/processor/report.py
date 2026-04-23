@@ -57,24 +57,12 @@ def run_report_phase(
         ctx.reporter.warn(message)
 
     if isinstance(media_asset, VideoAsset):
-        detect_scene_total = video_runtime.estimate_sample_count(media_asset.duration_sec)
-        with progress_stage(
-            ctx,
-            "detect_scenes",
-            "Detecting scenes",
-            total=detect_scene_total,
-            count_label="samples",
-            detail="0 scenes",
-        ) as st:
+        with stage(ctx, "detect_scenes", "Detecting scenes") as st:
             scenes = video_runtime.detect_scenes(
                 input_path,
                 duration_sec=media_asset.duration_sec,
-                progress_callback=lambda sample_count, scene_count: st.advance_to(
-                    float(sample_count),
-                    detail=count_label(scene_count, "scene"),
-                ),
             )
-            st.finish_progress(detect_scene_total, detail=count_label(len(scenes), "scene"))
+            st.detail = count_label(len(scenes), "scene")
         write_json(layout.scenes_path, {"scenes": [asdict(scene) for scene in scenes]})
 
         with progress_stage(

@@ -499,10 +499,7 @@ class TestProcessInput:
             ),
         )
 
-        def fake_detect_scenes(*_args, progress_callback=None, **_kwargs) -> list[Scene]:
-            assert progress_callback is not None
-            progress_callback(1, 1)
-            progress_callback(2, 2)
+        def fake_detect_scenes(*_args, **_kwargs) -> list[Scene]:
             return scenes
 
         monkeypatch.setattr("webinar_transcriber.video.detect_scenes", fake_detect_scenes)
@@ -562,15 +559,8 @@ class TestProcessInput:
         assert any(artifacts.layout.frames_dir.iterdir())
         assert artifacts.report.sections
         assert artifacts.report.sections[0].image_path
-        assert reporter.has_progress_event("start", "detect_scenes", 2, "0 scenes")
-        assert reporter.has_progress_event_detail(
-            "advance", "detect_scenes", lambda detail: detail == "1 scene" or detail == "2 scenes"
-        )
-        assert all(
-            event[2] == 1.0
-            for event in reporter.progress_events
-            if event[0] == "advance" and event[1] == "detect_scenes"
-        )
+        assert reporter.has_event("start", "detect_scenes", "Detecting scenes")
+        assert reporter.has_event("finish", "detect_scenes", "2 scenes")
         assert reporter.has_progress_event(
             "start", "extract_frames", artifacts.diagnostics.item_counts["scenes"], None
         )
