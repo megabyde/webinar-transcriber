@@ -5,13 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from webinar_transcriber.models import ReportSection
-from webinar_transcriber.transcript.normalize import STRONG_SENTENCE_END_RE
 
 from .constants import (
     AUDIO_SECTION_BREAK_GAP_SEC,
-    MAX_AUDIO_SECTION_CHARS,
-    MIN_AUDIO_SECTION_DURATION_SEC,
-    TARGET_AUDIO_SECTION_DURATION_SEC,
     TITLE_WORD_LIMIT,
 )
 from .scoring import _title_from_text
@@ -82,31 +78,9 @@ def _should_start_new_audio_section(
     if not current_segments:
         return False
 
-    current_start = current_segments[0].start_sec
     current_end = current_segments[-1].end_sec
-    current_duration = current_end - current_start
     gap_duration = max(0.0, next_segment.start_sec - current_end)
-    projected_duration = max(0.0, next_segment.end_sec - current_start)
-    current_chars = sum(len(segment.text.strip()) for segment in current_segments)
-    ends_on_sentence_boundary = bool(
-        STRONG_SENTENCE_END_RE.search(current_segments[-1].text.strip())
-    )
-    hard_cap_exceeded = projected_duration > (2 * TARGET_AUDIO_SECTION_DURATION_SEC)
-
-    if gap_duration >= AUDIO_SECTION_BREAK_GAP_SEC:
-        return True
-
-    if current_duration < MIN_AUDIO_SECTION_DURATION_SEC:
-        return False
-
-    split_budget_reached = (
-        projected_duration > TARGET_AUDIO_SECTION_DURATION_SEC
-        or current_chars >= MAX_AUDIO_SECTION_CHARS
-    )
-    if not split_budget_reached:
-        return False
-
-    return hard_cap_exceeded or ends_on_sentence_boundary
+    return gap_duration >= AUDIO_SECTION_BREAK_GAP_SEC
 
 
 def _audio_section_from_segments(

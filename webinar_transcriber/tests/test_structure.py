@@ -23,26 +23,28 @@ from webinar_transcriber.structure.sections import (
 
 class TestAudioSectionBoundaries:
     @pytest.mark.parametrize(
-        ("current_text", "current_end_sec", "next_end_sec", "expected"),
+        ("gap_duration", "expected"),
         [
-            ("This section has enough duration but no sentence boundary", 130.0, 310.0, False),
-            ("This section keeps running without punctuation", 350.0, 610.0, True),
-            (f"{'a' * 3601}.", 130.0, 150.0, True),
+            (7.9, False),
+            (8.0, True),
         ],
     )
     def test_starts_new_audio_section_for_boundary_conditions(
-        self, current_text: str, current_end_sec: float, next_end_sec: float, expected: bool
+        self, gap_duration: float, expected: bool
     ) -> None:
         current_segments = [
             TranscriptSegment(
-                id="segment-1", text=current_text, start_sec=0.0, end_sec=current_end_sec
+                id="segment-1",
+                text="Current section text.",
+                start_sec=0.0,
+                end_sec=10.0,
             )
         ]
         next_segment = TranscriptSegment(
             id="segment-2",
             text="More detail arrives immediately after that",
-            start_sec=current_end_sec,
-            end_sec=next_end_sec,
+            start_sec=10.0 + gap_duration,
+            end_sec=20.0 + gap_duration,
         )
 
         assert _should_start_new_audio_section(current_segments, next_segment) == expected
@@ -184,38 +186,38 @@ class TestBuildReport:
 
 
 class TestAudioSectionHeuristics:
-    def test_build_audio_sections_splits_when_target_duration_would_be_exceeded(self) -> None:
+    def test_build_audio_sections_splits_when_gap_reaches_threshold(self) -> None:
         sections = _build_audio_sections([
             TranscriptSegment(
                 id="segment-1", text="Long section opening.", start_sec=0.0, end_sec=140.0
             ),
             TranscriptSegment(
                 id="segment-2",
-                text="This should start a new section because it pushes duration too far.",
-                start_sec=140.5,
+                text="This should start a new section because the gap is large enough.",
+                start_sec=148.0,
                 end_sec=320.0,
             ),
         ])
 
         assert [(section.start_sec, section.end_sec) for section in sections] == [
             (0.0, 140.0),
-            (140.5, 320.0),
+            (148.0, 320.0),
         ]
 
-    def test_does_not_split_before_budget_or_gap_threshold_is_reached(self) -> None:
+    def test_does_not_split_before_gap_threshold_is_reached(self) -> None:
         current_segments = [
             TranscriptSegment(
                 id="segment-1",
                 text="Agenda review without a sentence break",
                 start_sec=0.0,
-                end_sec=140.0,
+                end_sec=10.0,
             )
         ]
         next_segment = TranscriptSegment(
             id="segment-2",
             text="More detail arrives immediately after that",
-            start_sec=140.2,
-            end_sec=200.0,
+            start_sec=17.9,
+            end_sec=30.0,
         )
 
         assert not _should_start_new_audio_section(current_segments, next_segment)
