@@ -147,7 +147,6 @@ class TestRichStageReporter:
         monkeypatch.setattr("webinar_transcriber.ui.SpinnerColumn", fake_column)
         monkeypatch.setattr("webinar_transcriber.ui.TextColumn", fake_column)
         monkeypatch.setattr("webinar_transcriber.ui.BarColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.MofNCompleteColumn", fake_column)
         monkeypatch.setattr("webinar_transcriber.ui.TaskProgressColumn", fake_column)
         monkeypatch.setattr("webinar_transcriber.ui.TimeRemainingColumn", fake_column)
         monkeypatch.setattr("webinar_transcriber.ui.TimeElapsedColumn", fake_column)

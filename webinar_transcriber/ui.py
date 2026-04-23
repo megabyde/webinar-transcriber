@@ -9,7 +9,6 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.progress import (
     BarColumn,
-    MofNCompleteColumn,
     Progress,
     SpinnerColumn,
     TaskID,
@@ -82,7 +81,6 @@ class RichStageReporter(BaseStageReporter):
             TextColumn(f"[bold blue][{self._stage_count}][/bold blue] {label}"),
             BarColumn(),
             TaskProgressColumn(),
-            MofNCompleteColumn(),
             TextColumn("{task.fields[count_text]}", style="progress.data.speed"),
             TextColumn("{task.fields[rate_text]}", style="progress.data.speed"),
             TextColumn("{task.fields[detail_text]}", style="dim"),
