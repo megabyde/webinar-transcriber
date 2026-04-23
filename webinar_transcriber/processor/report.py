@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict
 from typing import TYPE_CHECKING
 
@@ -57,24 +58,34 @@ def run_report_phase(
         ctx.reporter.warn(message)
 
     if isinstance(media_asset, VideoAsset):
-        detect_scene_total = video_runtime.estimate_sample_count(media_asset.duration_sec)
-        with progress_stage(
-            ctx,
-            "detect_scenes",
-            "Detecting scenes",
-            total=detect_scene_total,
-            count_label="samples",
-            detail="0 scenes",
-        ) as st:
-            scenes = video_runtime.detect_scenes(
-                input_path,
-                duration_sec=media_asset.duration_sec,
-                progress_callback=lambda sample_count, scene_count: st.advance_to(
-                    float(sample_count),
-                    detail=count_label(scene_count, "scene"),
-                ),
-            )
-            st.finish_progress(detect_scene_total, detail=count_label(len(scenes), "scene"))
+        detect_scene_total = _estimated_scene_frame_count(media_asset)
+        if detect_scene_total is None:
+            with stage(ctx, "detect_scenes", "Detecting scenes") as st:
+                scenes = video_runtime.detect_scenes(
+                    input_path,
+                    duration_sec=media_asset.duration_sec,
+                )
+                st.detail = count_label(len(scenes), "scene")
+        else:
+            with progress_stage(
+                ctx,
+                "detect_scenes",
+                "Detecting scenes",
+                total=float(detect_scene_total),
+                count_label="frames",
+                detail="0 scenes",
+            ) as st:
+                scenes = video_runtime.detect_scenes(
+                    input_path,
+                    duration_sec=media_asset.duration_sec,
+                    progress_callback=lambda frame_count, scene_count: st.advance_to(
+                        float(frame_count),
+                        detail=count_label(scene_count, "scene"),
+                    ),
+                )
+                st.finish_progress(
+                    float(detect_scene_total), detail=count_label(len(scenes), "scene")
+                )
         write_json(layout.scenes_path, {"scenes": [asdict(scene) for scene in scenes]})
 
         with progress_stage(
@@ -170,3 +181,10 @@ def run_report_phase(
         scenes=scenes,
         slide_frames=slide_frames,
     )
+
+
+def _estimated_scene_frame_count(media_asset: VideoAsset) -> int | None:
+    fps = media_asset.fps
+    if fps is None or fps <= 0 or media_asset.duration_sec <= 0:
+        return None
+    return max(1, math.ceil(media_asset.duration_sec * fps))

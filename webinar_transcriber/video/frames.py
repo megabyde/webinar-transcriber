@@ -2,16 +2,16 @@
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
 
 import av
 from PIL import Image, ImageOps
 
-from webinar_transcriber.media import MediaProcessingError, open_input_media_container
+from webinar_transcriber.media import (
+    MediaProcessingError,
+    _required_input_stream,
+    open_input_media_container,
+)
 from webinar_transcriber.models import Scene, SlideFrame
-
-if TYPE_CHECKING:
-    from av.video.frame import VideoFrame
 
 REPRESENTATIVE_FRAME_OFFSET_SEC = 0.5
 
@@ -69,21 +69,18 @@ def _extract_frame(
             video_path,
             error_message="{error}",
         ) as input_container:
-            video_stream = next(
-                (stream for stream in input_container.streams if stream.type == "video"),
-                None,
+            video_stream = _required_input_stream(
+                input_container,
+                "video",
+                error_message=f"No video stream found in {video_path}",
             )
-            if video_stream is None:
-                return False, f"No video stream found in {video_path}"
-
             input_container.seek(int(max(timestamp_sec, 0.0) * av.time_base), backward=True)
             frame = None
             for decoded_frame in input_container.decode(video_stream):
-                current_frame = cast("VideoFrame", decoded_frame)
-                if current_frame.time is None:
+                if decoded_frame.time is None:
                     continue
-                frame = current_frame
-                if current_frame.time >= timestamp_sec:
+                frame = decoded_frame
+                if decoded_frame.time >= timestamp_sec:
                     break
             if frame is None:
                 return False, f"PyAV did not decode a frame at {timestamp_sec:.3f}s"

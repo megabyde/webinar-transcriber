@@ -1,6 +1,6 @@
 """Video processing helpers."""
 
 from webinar_transcriber.video.frames import extract_representative_frames
-from webinar_transcriber.video.scenes import detect_scenes, estimate_sample_count
+from webinar_transcriber.video.scenes import detect_scenes
 
-__all__ = ["detect_scenes", "estimate_sample_count", "extract_representative_frames"]
+__all__ = ["detect_scenes", "extract_representative_frames"]
