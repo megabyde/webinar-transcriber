@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import importlib
+import io
+import os
 import re
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager, redirect_stderr, suppress
 from dataclasses import replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, Self, cast
+from typing import TYPE_CHECKING, Protocol, Self
 
 import numpy as np
 
@@ -80,16 +82,17 @@ def _looks_like_model_path(model_name: str) -> bool:
 
 
 @contextmanager
-def _suppress_pywhispercpp_download_progress() -> Iterator[None]:
-    # This monkey-patch relies on pywhispercpp continuing to expose `utils.tqdm`.
-    # If that internal import path changes upstream, download progress suppression silently stops.
-    pywhispercpp_utils = cast("Any", importlib.import_module("pywhispercpp.utils"))
-    original_tqdm = pywhispercpp_utils.tqdm
-    pywhispercpp_utils.tqdm = lambda *args, **kwargs: original_tqdm(*args, disable=True, **kwargs)
+def _disable_tqdm_progress() -> Iterator[None]:
+    previous = os.environ.get("TQDM_DISABLE")
+    os.environ["TQDM_DISABLE"] = "1"
     try:
-        yield
+        with redirect_stderr(io.StringIO()):
+            yield
     finally:
-        pywhispercpp_utils.tqdm = original_tqdm
+        if previous is None:
+            os.environ.pop("TQDM_DISABLE", None)
+        else:
+            os.environ["TQDM_DISABLE"] = previous
 
 
 class ASRProcessingError(RuntimeError):
@@ -171,7 +174,7 @@ class WhisperCppTranscriber:
         if self._log_path is not None:
             model_kwargs["redirect_whispercpp_logs_to"] = str(self._log_path)
         try:
-            with _suppress_pywhispercpp_download_progress():
+            with _disable_tqdm_progress():
                 model = _model_cls()(self._model_name, **model_kwargs)
         except Exception as error:
             raise ASRProcessingError(_model_prepare_error_message(self._model_name)) from error

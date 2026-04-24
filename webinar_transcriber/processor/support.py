@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import logging
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from time import perf_counter
@@ -154,15 +153,7 @@ def write_model_json(output_path: Path, payload: BaseModel) -> None:
 
 def configure_asr_logging(transcriber: WhisperCppTranscriber, layout: RunLayout) -> None:
     """Write pywhispercpp logs into the run directory."""
-    log_path = layout.run_dir / "whisper-cpp.log"
-    logger = logging.getLogger("pywhispercpp")
-    for handler in logger.handlers:
-        handler.close()
-    logger.handlers.clear()
-    logger.addHandler(logging.FileHandler(log_path))
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
-    transcriber.set_log_path(log_path)
+    transcriber.set_log_path(layout.run_dir / "whisper-cpp.log")
 
 
 def asr_runtime_detail(transcriber: WhisperCppTranscriber) -> str:

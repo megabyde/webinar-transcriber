@@ -961,18 +961,18 @@ class TestProcessorHelpers:
         logger = logging.getLogger("pywhispercpp")
         existing_handler = logging.StreamHandler()
         logger.handlers = [existing_handler]
+        logger.level = logging.WARNING
+        logger.propagate = True
         transcriber = cast(
             "WhisperCppTranscriber", SimpleNamespace(set_log_path=lambda _path: None)
         )
 
         configure_asr_logging(transcriber, RunLayout(run_dir=run_dir))
 
-        assert logger.level == logging.INFO
-        assert logger.propagate is False
+        assert logger.level == logging.WARNING
+        assert logger.propagate is True
         assert len(logger.handlers) == 1
-        assert isinstance(logger.handlers[0], logging.FileHandler)
-        assert Path(logger.handlers[0].baseFilename) == run_dir / "whisper-cpp.log"
-        logger.handlers[0].close()
+        assert logger.handlers[0] is existing_handler
         logger.handlers.clear()
 
     def test_configure_asr_logging_sets_transcriber_log_path(self, tmp_path) -> None:
