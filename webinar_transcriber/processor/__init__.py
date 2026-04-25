@@ -2,102 +2,33 @@
 
 from __future__ import annotations
 
-from contextlib import nullcontext, suppress
+from contextlib import nullcontext
 from dataclasses import asdict
 from typing import TYPE_CHECKING
 
 import webinar_transcriber.asr as asr_runtime
 import webinar_transcriber.media as media_runtime
 from webinar_transcriber.asr import PromptCarryoverSettings, default_asr_threads
+from webinar_transcriber.diagnostics import write_run_diagnostics
 from webinar_transcriber.normalized_audio import prepared_transcription_audio
 from webinar_transcriber.paths import create_run_layout
 from webinar_transcriber.reporter import BaseStageReporter
 from webinar_transcriber.segmentation import VadSettings
 
 from .report import run_report_phase
-from .support import build_diagnostics, stage, write_json
+from .support import stage, write_json
 from .transcribe import run_transcription_phase
 from .types import AsrPipelineState, ProcessArtifacts, RunContext
 
 if TYPE_CHECKING:
     from pathlib import Path
-    from typing import Literal
 
     from webinar_transcriber.asr import WhisperCppTranscriber
     from webinar_transcriber.llm import LLMProcessor
-    from webinar_transcriber.models import Diagnostics
 
 
 DEFAULT_VAD_SETTINGS = VadSettings()
 DEFAULT_PROMPT_CARRYOVER_SETTINGS = PromptCarryoverSettings()
-
-
-def _build_run_diagnostics(
-    ctx: RunContext,
-    *,
-    status: Literal["succeeded", "failed"],
-    asr_model: str | None,
-    llm_enabled: bool,
-    failed_stage: str | None = None,
-    error: str | None = None,
-) -> Diagnostics:
-    """Build one diagnostics payload from the accumulated run state.
-
-    Returns:
-        Diagnostics: The assembled run diagnostics payload.
-    """
-    return build_diagnostics(
-        status=status,
-        failed_stage=failed_stage,
-        error=error,
-        asr_model=asr_model,
-        llm_enabled=llm_enabled,
-        llm_model=ctx.llm_runtime.model_name,
-        llm_report_status=ctx.llm_runtime.report_status,
-        llm_report_latency_sec=ctx.llm_runtime.report_latency_sec,
-        llm_report_usage=ctx.llm_runtime.report_usage,
-        stage_timings=ctx.stage_timings,
-        asr_pipeline=ctx.asr_pipeline,
-        transcript_segment_count=len(ctx.transcription.segments) if ctx.transcription else 0,
-        normalized_transcript_segment_count=(
-            len(ctx.normalized_transcription.segments) if ctx.normalized_transcription else 0
-        ),
-        report_section_count=len(ctx.report.sections) if ctx.report else 0,
-        scene_count=len(ctx.scenes),
-        frame_count=len(ctx.slide_frames),
-        warnings=ctx.warnings,
-    )
-
-
-def _write_run_diagnostics(
-    ctx: RunContext,
-    *,
-    status: Literal["succeeded", "failed"],
-    asr_model: str | None,
-    llm_enabled: bool,
-    failed_stage: str | None = None,
-    error: str | None = None,
-    suppress_errors: bool = False,
-) -> Diagnostics | None:
-    """Write diagnostics when a run layout exists and return the payload.
-
-    Returns:
-        Diagnostics | None: The written diagnostics payload, if a run layout exists.
-    """
-    if ctx.layout is None:
-        return None
-    diagnostics = _build_run_diagnostics(
-        ctx,
-        status=status,
-        asr_model=asr_model,
-        llm_enabled=llm_enabled,
-        failed_stage=failed_stage,
-        error=error,
-    )
-    error_scope = suppress(Exception) if suppress_errors else nullcontext()
-    with error_scope:
-        write_json(ctx.layout.diagnostics_path, asdict(diagnostics))
-    return diagnostics
 
 
 def process_input(
@@ -182,7 +113,7 @@ def process_input(
             ctx.slide_frames = report_phase.slide_frames
             ctx.report = report_phase.report
 
-            diagnostics = _write_run_diagnostics(
+            diagnostics = write_run_diagnostics(
                 ctx,
                 status="succeeded",
                 asr_model=active_transcriber.model_name,
@@ -203,7 +134,7 @@ def process_input(
             ctx.reporter.complete_run(artifacts)
             return artifacts
         except Exception as ex:
-            _write_run_diagnostics(
+            write_run_diagnostics(
                 ctx,
                 status="failed",
                 failed_stage=ctx.current_stage,

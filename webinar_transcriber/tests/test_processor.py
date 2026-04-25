@@ -13,6 +13,7 @@ import pytest
 from PIL import Image
 
 from webinar_transcriber.asr import WhisperCppTranscriber
+from webinar_transcriber.diagnostics import write_run_diagnostics
 from webinar_transcriber.llm import (
     LLMConfigurationError,
     LLMProcessingError,
@@ -41,7 +42,6 @@ from webinar_transcriber.processor import (
 from webinar_transcriber.processor.__init__ import (
     AsrPipelineState,
     RunContext,
-    _write_run_diagnostics,
 )
 from webinar_transcriber.processor.llm import LLMRuntimeState, resolve_llm_processor
 from webinar_transcriber.processor.support import (
@@ -343,7 +343,7 @@ class TestProcessInput:
             asr_pipeline=AsrPipelineState(vad_enabled=True, threads=1),
         )
 
-        diagnostics = _write_run_diagnostics(
+        diagnostics = write_run_diagnostics(
             ctx,
             status="failed",
             failed_stage="prepare_run_dir",
