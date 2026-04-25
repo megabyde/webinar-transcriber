@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext, suppress
+from dataclasses import asdict
 from typing import TYPE_CHECKING
 
 import webinar_transcriber.asr as asr_runtime
@@ -14,7 +15,7 @@ from webinar_transcriber.reporter import BaseStageReporter
 from webinar_transcriber.segmentation import VadSettings
 
 from .report import run_report_phase
-from .support import build_diagnostics, stage, write_json, write_model_json
+from .support import build_diagnostics, stage, write_json
 from .transcribe import run_transcription_phase
 from .types import AsrPipelineState, ProcessArtifacts, RunContext
 
@@ -95,7 +96,7 @@ def _write_run_diagnostics(
     )
     error_scope = suppress(Exception) if suppress_errors else nullcontext()
     with error_scope:
-        write_model_json(ctx.layout.diagnostics_path, diagnostics)
+        write_json(ctx.layout.diagnostics_path, asdict(diagnostics))
     return diagnostics
 
 
@@ -148,7 +149,7 @@ def process_input(
             with stage(ctx, "probe_media", "Probing media") as st:
                 media_asset = media_runtime.probe_media(input_path)
                 ctx.media_asset = media_asset
-                write_json(layout.metadata_path, {"media": media_asset.model_dump(mode="json")})
+                write_json(layout.metadata_path, {"media": asdict(media_asset)})
                 st.detail = f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s"
 
             transcription_phase = run_transcription_phase(

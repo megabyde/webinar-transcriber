@@ -17,8 +17,6 @@ from .prompts import REPORT_SECTION_EXCERPT_LIMIT
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from pydantic import BaseModel
-
     from webinar_transcriber.models import ReportDocument
 
 
@@ -240,7 +238,7 @@ def extract_usage(response: object) -> dict[str, int]:
     return extracted
 
 
-def schema_label(response_model: type[BaseModel]) -> str:
+def schema_label(response_model: type[object]) -> str:
     """Return the human-facing label for one structured response schema."""
     if response_model is SectionTextResponse:
         return "Section polish"

@@ -21,7 +21,6 @@ from .support import (
     stage,
     window_transcription_stage_detail,
     write_json,
-    write_model_json,
 )
 from .types import AsrPipelineState
 
@@ -149,7 +148,7 @@ def run_asr_pipeline(
         st.detail = f"{decoded_segment_count} -> {len(transcription.segments)} {segment_label}"
 
     with stage(ctx, "normalize_transcript", "Normalizing transcript") as st:
-        write_model_json(layout.transcript_path, transcription)
+        write_json(layout.transcript_path, asdict(transcription))
         normalized_transcription = normalize_transcription(transcription)
         st.detail = count_label(len(normalized_transcription.segments), "segment")
 
