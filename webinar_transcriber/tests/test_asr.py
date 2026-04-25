@@ -1,5 +1,6 @@
 """Tests for the whisper.cpp ASR adapter."""
 
+import os
 import subprocess
 from pathlib import Path
 from typing import ClassVar, cast
@@ -93,7 +94,7 @@ def install_fake_pywhispercpp(
     model_cls.reset()
     monkeypatch.setattr("webinar_transcriber.asr.transcriber._model_cls", lambda: model_cls)
     monkeypatch.setattr(
-        "webinar_transcriber.asr.transcriber._suppress_pywhispercpp_download_progress",
+        "webinar_transcriber.asr.transcriber._disable_tqdm_progress",
         lambda: __import__("contextlib").nullcontext(),
     )
 
@@ -140,7 +141,7 @@ class TestWhisperCppTranscriber:
         assert FakeModel.init_calls[0][0] == "base"
         assert transcriber.model_name == "base"
 
-    def test_prepare_model_suppresses_pywhispercpp_download_progress(self, monkeypatch) -> None:
+    def test_prepare_model_disables_tqdm_progress_during_model_setup(self, monkeypatch) -> None:
         install_fake_pywhispercpp(monkeypatch)
         progress_context_calls: list[str] = []
 
@@ -156,7 +157,7 @@ class TestWhisperCppTranscriber:
             return _ProgressContext()
 
         monkeypatch.setattr(
-            "webinar_transcriber.asr.transcriber._suppress_pywhispercpp_download_progress",
+            "webinar_transcriber.asr.transcriber._disable_tqdm_progress",
             make_progress_context,
         )
 
@@ -284,44 +285,38 @@ class TestWhisperCppTranscriber:
 
         assert transcriber_module._model_cls() is FakeModel
 
-    def test_suppress_pywhispercpp_download_progress_disables_tqdm(self, monkeypatch) -> None:
-        class FakeUtilsModule:
-            def __init__(self) -> None:
-                self.calls: list[dict[str, object]] = []
+    def test_disable_tqdm_progress_sets_env_var(self, monkeypatch) -> None:
+        from webinar_transcriber.asr import transcriber as transcriber_module
 
-            def tqdm(self, *args, **kwargs):
-                del args
-                self.calls.append(kwargs)
-                return kwargs
+        monkeypatch.delenv("TQDM_DISABLE", raising=False)
 
-        fake_utils_module = FakeUtilsModule()
-        monkeypatch.setattr(
-            "webinar_transcriber.asr.transcriber.importlib.import_module",
-            lambda _name: fake_utils_module,
-        )
+        with transcriber_module._disable_tqdm_progress():
+            assert os.environ["TQDM_DISABLE"] == "1"
+
+        assert "TQDM_DISABLE" not in os.environ
+
+    def test_disable_tqdm_progress_restores_previous_env_value(self, monkeypatch) -> None:
+        from webinar_transcriber.asr import transcriber as transcriber_module
+
+        monkeypatch.setenv("TQDM_DISABLE", "0")
+
+        with transcriber_module._disable_tqdm_progress():
+            assert os.environ["TQDM_DISABLE"] == "1"
+
+        assert os.environ["TQDM_DISABLE"] == "0"
+
+    def test_disable_tqdm_progress_redirects_tqdm_stderr(self, monkeypatch, capsys) -> None:
+        from tqdm import tqdm
 
         from webinar_transcriber.asr import transcriber as transcriber_module
 
-        with transcriber_module._suppress_pywhispercpp_download_progress():
-            fake_utils_module.tqdm(total=1)
+        monkeypatch.delenv("TQDM_DISABLE", raising=False)
 
-        assert fake_utils_module.calls == [{"disable": True, "total": 1}]
+        with transcriber_module._disable_tqdm_progress():
+            progress_bar = tqdm(total=1)
+            progress_bar.close()
 
-    def test_suppress_pywhispercpp_download_progress_targets_real_tqdm_attribute(
-        self, monkeypatch
-    ) -> None:
-        fake_utils_module = type("FakeUtilsModule", (), {"tqdm": object()})()
-        monkeypatch.setattr(
-            "webinar_transcriber.asr.transcriber.importlib.import_module",
-            lambda _name: fake_utils_module,
-        )
-
-        from webinar_transcriber.asr import transcriber as transcriber_module
-
-        assert hasattr(
-            transcriber_module.importlib.import_module("pywhispercpp.utils"),
-            "tqdm",
-        )
+        assert capsys.readouterr().err == ""
 
     def test_transcribe_inference_windows_clips_segment_times_to_window(self, monkeypatch) -> None:
         install_fake_pywhispercpp(monkeypatch)

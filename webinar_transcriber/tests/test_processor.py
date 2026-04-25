@@ -1,7 +1,6 @@
 """Tests for the end-to-end processor flow."""
 
 import json
-import logging
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
@@ -34,7 +33,6 @@ from webinar_transcriber.models import (
     TranscriptSegment,
     VideoAsset,
 )
-from webinar_transcriber.paths import RunLayout
 from webinar_transcriber.processor import (
     ProcessArtifacts,
     process_input,
@@ -47,7 +45,6 @@ from webinar_transcriber.processor.__init__ import (
 from webinar_transcriber.processor.llm import LLMRuntimeState, resolve_llm_processor
 from webinar_transcriber.processor.support import (
     asr_runtime_detail,
-    configure_asr_logging,
     optional_count_label,
     stage,
     title_update_detail,
@@ -954,43 +951,6 @@ class TestProcessorHelpers:
     def test_title_update_detail_reports_partial_title_updates(self) -> None:
         assert title_update_detail(title_count=1, section_count=2) == "1 title updated"
         assert title_update_detail(title_count=2, section_count=3) == "2 titles updated"
-
-    def test_configure_asr_logging_writes_to_run_logger_file(self, tmp_path) -> None:
-        run_dir = tmp_path / "run-dir"
-        run_dir.mkdir()
-        logger = logging.getLogger("pywhispercpp")
-        existing_handler = logging.StreamHandler()
-        logger.handlers = [existing_handler]
-        transcriber = cast(
-            "WhisperCppTranscriber", SimpleNamespace(set_log_path=lambda _path: None)
-        )
-
-        configure_asr_logging(transcriber, RunLayout(run_dir=run_dir))
-
-        assert logger.level == logging.INFO
-        assert logger.propagate is False
-        assert len(logger.handlers) == 1
-        assert isinstance(logger.handlers[0], logging.FileHandler)
-        assert Path(logger.handlers[0].baseFilename) == run_dir / "whisper-cpp.log"
-        logger.handlers[0].close()
-        logger.handlers.clear()
-
-    def test_configure_asr_logging_sets_transcriber_log_path(self, tmp_path) -> None:
-        run_dir = tmp_path / "run-dir"
-        run_dir.mkdir()
-        recorded_paths: list[Path] = []
-
-        def record_log_path(path: Path) -> None:
-            recorded_paths.append(path)
-
-        transcriber = cast(
-            "WhisperCppTranscriber",
-            SimpleNamespace(set_log_path=record_log_path),
-        )
-
-        configure_asr_logging(transcriber, RunLayout(run_dir=run_dir))
-
-        assert recorded_paths == [run_dir / "whisper-cpp.log"]
 
     def test_token_usage_detail_returns_blank_without_total_tokens(self) -> None:
         assert token_usage_detail({"input_tokens": 2}) == ""

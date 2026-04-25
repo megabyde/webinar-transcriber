@@ -40,39 +40,6 @@ class TestAlignByTime:
 
         assert blocks == []
 
-    def test_assigns_orphan_segments_to_previous_blocks(self) -> None:
-        blocks = align_by_time(
-            transcript_segments=[
-                TranscriptSegment(id="seg-1", text="Before", start_sec=0.0, end_sec=0.2),
-                TranscriptSegment(id="seg-2", text="Inside", start_sec=1.2, end_sec=1.6),
-                TranscriptSegment(id="seg-3", text="After", start_sec=3.2, end_sec=3.6),
-            ],
-            scenes=[
-                Scene(id="scene-1", start_sec=1.0, end_sec=2.0),
-                Scene(id="scene-2", start_sec=2.0, end_sec=3.0),
-            ],
-            slide_frames=[],
-        )
-
-        assert [block.transcript_segment_ids for block in blocks] == [["seg-1", "seg-2"], ["seg-3"]]
-
-    def test_orders_orphan_segments_by_timeline_within_blocks(self) -> None:
-        blocks = align_by_time(
-            transcript_segments=[
-                TranscriptSegment(id="seg-2", text="Later", start_sec=2.6, end_sec=2.8),
-                TranscriptSegment(id="seg-1", text="Earlier", start_sec=0.0, end_sec=0.2),
-                TranscriptSegment(id="seg-3", text="Inside", start_sec=1.2, end_sec=1.6),
-            ],
-            scenes=[
-                Scene(id="scene-1", start_sec=1.0, end_sec=2.0),
-                Scene(id="scene-2", start_sec=2.0, end_sec=2.5),
-            ],
-            slide_frames=[],
-        )
-
-        assert blocks[0].transcript_segment_ids == ["seg-1", "seg-3"]
-        assert blocks[0].transcript_text == "Earlier Inside"
-
     def test_keeps_empty_blocks_for_scenes_without_matches(self) -> None:
         blocks = align_by_time(
             transcript_segments=[
@@ -88,18 +55,3 @@ class TestAlignByTime:
         assert blocks[0].transcript_segment_ids == []
         assert blocks[0].transcript_text == ""
         assert blocks[1].transcript_segment_ids == ["seg-1"]
-
-    def test_assigns_boundary_drift_segments_to_previous_scene(self) -> None:
-        blocks = align_by_time(
-            transcript_segments=[
-                TranscriptSegment(id="seg-1", text="Intro", start_sec=0.0, end_sec=0.8),
-                TranscriptSegment(id="seg-2", text="Boundary", start_sec=2.0, end_sec=2.4),
-            ],
-            scenes=[
-                Scene(id="scene-1", start_sec=0.0, end_sec=1.0),
-                Scene(id="scene-2", start_sec=1.0, end_sec=2.0),
-            ],
-            slide_frames=[],
-        )
-
-        assert blocks[1].transcript_segment_ids == ["seg-2"]
