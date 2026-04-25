@@ -1,8 +1,13 @@
 """Subtitle export helpers."""
 
-from pathlib import Path
+from __future__ import annotations
 
-from webinar_transcriber.models import TranscriptionResult
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from webinar_transcriber.models import TranscriptionResult
 
 
 def write_vtt_subtitles(transcription: TranscriptionResult, output_path: Path) -> Path:

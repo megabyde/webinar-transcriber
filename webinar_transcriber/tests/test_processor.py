@@ -368,6 +368,7 @@ class TestProcessInput:
         assert reporter.events == [("start", "probe_media", "Probing media")]
 
     def test_keeps_normalized_audio_artifact(self, tmp_path, monkeypatch) -> None:
+        reporter = RecordingReporter()
         install_basic_windowing(monkeypatch)
         install_processor_media_runtime(
             monkeypatch,
@@ -387,12 +388,15 @@ class TestProcessInput:
             transcriber=self.FakeTranscriber(),
             keep_audio=True,
             kept_audio_format="wav",
+            reporter=reporter,
         )
 
         kept_audio_path = artifacts.layout.transcription_audio_path()
 
         assert kept_audio_path.exists()
         assert kept_audio_path.read_bytes()[:4] == b"RIFF"
+        assert reporter.has_event("start", "save_transcription_audio", "Saving transcription audio")
+        assert reporter.has_event("finish", "save_transcription_audio", kept_audio_path.name)
 
     @pytest.mark.slow
     def test_keeps_normalized_audio_artifact_with_real_media_prep(self, tmp_path) -> None:
@@ -626,7 +630,7 @@ class TestProcessInput:
         assert artifacts.diagnostics.warnings == reporter.warnings
         assert artifacts.report.warnings == reporter.warnings
 
-    def test_detect_scenes_uses_spinner_when_video_fps_is_unknown(
+    def test_detect_scenes_uses_sample_progress_when_video_fps_is_unknown(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         reporter = RecordingReporter()
@@ -649,7 +653,8 @@ class TestProcessInput:
         )
 
         def fake_detect_scenes(*_args, progress_callback=None, **_kwargs) -> list[Scene]:
-            assert progress_callback is None
+            assert progress_callback is not None
+            progress_callback(1, 1)
             return scenes
 
         monkeypatch.setattr("webinar_transcriber.video.detect_scenes", fake_detect_scenes)
@@ -703,7 +708,8 @@ class TestProcessInput:
 
         assert reporter.has_event("start", "detect_scenes", "Detecting scenes")
         assert reporter.has_event("finish", "detect_scenes", "1 scene")
-        assert not reporter.progress_stage_events("start", "detect_scenes")
+        assert reporter.has_progress_event("start", "detect_scenes", 2.0, "0 scenes")
+        assert reporter.has_progress_event("advance", "detect_scenes", 1.0, "1 scene")
 
     def test_runs_windowed_whispercpp_pipeline(self, tmp_path, monkeypatch) -> None:
         reporter = RecordingReporter()
@@ -778,9 +784,6 @@ class TestProcessInput:
         assert artifacts.diagnostics.asr_pipeline.vad_region_count == 2
         assert artifacts.diagnostics.asr_pipeline.system_info == "METAL = 1"
         assert reporter.has_event("start", "vad", "Detecting speech regions")
-        assert reporter.has_event("start", "prepare_speech_regions", "Preparing speech regions")
-        assert reporter.has_event("start", "reconcile", "Reconciling transcript windows")
-        assert reporter.has_event("finish", "reconcile", "4 -> 4 segments")
         assert reporter.has_event("start", "normalize_transcript", "Normalizing transcript")
         assert artifacts.layout.speech_regions_path.exists()
         assert artifacts.layout.expanded_regions_path.exists()

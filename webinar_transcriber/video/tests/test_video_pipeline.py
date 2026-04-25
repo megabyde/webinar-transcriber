@@ -487,11 +487,13 @@ class TestSelectSceneStarts:
 
         assert scene_starts == [0.0, 4.0]
         assert duration_sec == 5.0
-        assert progress_updates == [(1, 1), (2, 1), (3, 2)]
+        assert progress_updates == [(1, 1), (2, 1), (3, 2), (5, 2)]
 
     def test_select_scene_starts_returns_zero_duration_without_container_or_stream_duration(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        progress_updates: list[tuple[int, int]] = []
+
         class FakeVideoStream:
             type = "video"
             duration = None
@@ -526,10 +528,15 @@ class TestSelectSceneStarts:
             SAMPLE_VIDEO_PATH,
             scene_score_threshold=0.3,
             min_scene_length_sec=3.0,
+            progress_callback=lambda sample_count, scene_count: progress_updates.append((
+                sample_count,
+                scene_count,
+            )),
         )
 
         assert scene_starts == [0.0]
         assert duration_sec == 0.0
+        assert progress_updates == [(1, 1)]
 
     def test_select_scene_starts_wraps_filter_errors(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class FakeVideoStream:

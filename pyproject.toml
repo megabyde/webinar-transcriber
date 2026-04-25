@@ -75,15 +75,6 @@ markers = [
     "slow: exercises real media-processing integration paths",
 ]
 
-[tool.uv.sources]
-pywhispercpp = { git = "https://github.com/absadiki/pywhispercpp", tag = "v1.4.1" }
-
-[tool.uv]
-no-build-isolation-package = ["pywhispercpp"]
-
-[tool.uv.extra-build-variables]
-pywhispercpp = { NO_REPAIR = "1" }
-
 [tool.coverage.run]
 branch = false
 source = ["webinar_transcriber"]

@@ -59,12 +59,14 @@ def run_transcription_phase(
         )
 
         if keep_audio:
-            preserved_audio_path = layout.transcription_audio_path(kept_audio_format)
-            preserve_transcription_audio(
-                audio_path,
-                preserved_audio_path,
-                audio_format=kept_audio_format,
-            )
+            with stage(ctx, "save_transcription_audio", "Saving transcription audio") as st:
+                preserved_audio_path = layout.transcription_audio_path(kept_audio_format)
+                preserve_transcription_audio(
+                    audio_path,
+                    preserved_audio_path,
+                    audio_format=kept_audio_format,
+                )
+                st.detail = preserved_audio_path.name
 
     return TranscriptionPhaseResult(
         transcription=asr_result.transcription,

@@ -1,5 +1,7 @@
 """ASR adapter built on top of the whisper.cpp C API."""
 
+from __future__ import annotations
+
 from .carryover import build_prompt_carryover
 from .config import (
     ASR_BACKEND_NAME,

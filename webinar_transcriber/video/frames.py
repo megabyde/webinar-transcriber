@@ -1,7 +1,8 @@
 """Representative frame extraction for detected scenes."""
 
-from collections.abc import Callable
-from pathlib import Path
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import av
 from PIL import Image, ImageOps
@@ -11,7 +12,13 @@ from webinar_transcriber.media import (
     _required_input_stream,
     open_input_media_container,
 )
-from webinar_transcriber.models import Scene, SlideFrame
+from webinar_transcriber.models import SlideFrame
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+    from webinar_transcriber.models import Scene
 
 REPRESENTATIVE_FRAME_OFFSET_SEC = 0.5
 

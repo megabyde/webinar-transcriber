@@ -175,6 +175,7 @@ class RichStageReporter(BaseStageReporter):
         warning_count = len(artifacts.report.warnings)
         warning_text = Text(str(warning_count), style="yellow" if warning_count else "green")
         table.add_row("Run directory", Text(str(artifacts.layout.run_dir), style="cyan"))
+        table.add_row("Diagnostics", Text(str(artifacts.layout.diagnostics_path), style="cyan"))
         table.add_row("Language", Text(artifacts.report.detected_language or "unknown"))
         table.add_row("Sections", Text(str(len(artifacts.report.sections))))
         table.add_row("Warnings", warning_text)

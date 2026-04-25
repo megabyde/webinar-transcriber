@@ -1,5 +1,7 @@
 """Command line interface for webinar-transcriber."""
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import IO, Any
 

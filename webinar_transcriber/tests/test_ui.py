@@ -78,7 +78,9 @@ class TestRichStageReporter:
         artifacts = cast(
             "ProcessArtifacts",
             SimpleNamespace(
-                layout=SimpleNamespace(run_dir="runs/example"),
+                layout=SimpleNamespace(
+                    run_dir="runs/example", diagnostics_path="runs/example/diagnostics.json"
+                ),
                 report=SimpleNamespace(
                     detected_language="ru", sections=[object(), object()], warnings=["warning one"]
                 ),
