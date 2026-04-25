@@ -630,7 +630,7 @@ class TestProcessInput:
         assert artifacts.diagnostics.warnings == reporter.warnings
         assert artifacts.report.warnings == reporter.warnings
 
-    def test_detect_scenes_uses_spinner_when_video_fps_is_unknown(
+    def test_detect_scenes_uses_sample_progress_when_video_fps_is_unknown(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         reporter = RecordingReporter()
@@ -653,7 +653,8 @@ class TestProcessInput:
         )
 
         def fake_detect_scenes(*_args, progress_callback=None, **_kwargs) -> list[Scene]:
-            assert progress_callback is None
+            assert progress_callback is not None
+            progress_callback(1, 1)
             return scenes
 
         monkeypatch.setattr("webinar_transcriber.video.detect_scenes", fake_detect_scenes)
@@ -707,7 +708,8 @@ class TestProcessInput:
 
         assert reporter.has_event("start", "detect_scenes", "Detecting scenes")
         assert reporter.has_event("finish", "detect_scenes", "1 scene")
-        assert not reporter.progress_stage_events("start", "detect_scenes")
+        assert reporter.has_progress_event("start", "detect_scenes", 2.0, "0 scenes")
+        assert reporter.has_progress_event("advance", "detect_scenes", 1.0, "1 scene")
 
     def test_runs_windowed_whispercpp_pipeline(self, tmp_path, monkeypatch) -> None:
         reporter = RecordingReporter()

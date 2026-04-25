@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import av
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
 
 
 MIN_SCENE_LENGTH_SEC = 3.0
+SCENE_SCAN_FPS = 1.0
 SCENE_SCORE_THRESHOLD = 0.008
 
 
@@ -73,10 +75,10 @@ def _select_scene_starts(
                 scene_score_threshold=scene_score_threshold,
             )
             scene_starts = [0.0]
-            processed_frame_count = 0
+            processed_sample_count = 0
+            reported_scene_count = 0
 
             for decoded_frame in input_container.decode(video_stream):
-                processed_frame_count += 1
                 scene_filter.vpush(decoded_frame)
                 while True:
                     try:
@@ -89,9 +91,24 @@ def _select_scene_starts(
                     if (current_time - scene_starts[-1]) >= min_scene_length_sec:
                         scene_starts.append(current_time)
                 if progress_callback is not None:
-                    progress_callback(processed_frame_count, len(scene_starts))
+                    processed_sample_count, reported_scene_count = _report_scene_progress(
+                        progress_callback,
+                        decoded_frame,
+                        processed_sample_count=processed_sample_count,
+                        reported_scene_count=reported_scene_count,
+                        scene_count=len(scene_starts),
+                    )
 
-            return scene_starts, _video_duration_sec(input_container, video_stream)
+            duration_sec = _video_duration_sec(input_container, video_stream)
+            if progress_callback is not None:
+                _report_final_scene_progress(
+                    progress_callback,
+                    duration_sec=duration_sec,
+                    processed_sample_count=processed_sample_count,
+                    reported_scene_count=reported_scene_count,
+                    scene_count=len(scene_starts),
+                )
+            return scene_starts, duration_sec
     except (OSError, av.FFmpegError) as error:
         raise MediaProcessingError(f"Could not detect scenes in {video_path}: {error}") from error
 
@@ -99,12 +116,58 @@ def _select_scene_starts(
 def _build_scene_filter_graph(video_stream: VideoStream, *, scene_score_threshold: float) -> Graph:
     graph = Graph()
     source = graph.add_buffer(template=video_stream)
+    fps = graph.add("fps", fps=f"{SCENE_SCAN_FPS:g}")
     select = graph.add("select", expr=f"gt(scene,{scene_score_threshold})")
     sink = graph.add("buffersink")
-    source.link_to(select)
+    source.link_to(fps)
+    fps.link_to(select)
     select.link_to(sink)
     graph.configure()
     return graph
+
+
+def _sample_count_for_frame(frame: object, *, fallback: int) -> int:
+    frame_time_sec = _frame_time_sec(frame)
+    if frame_time_sec is None:
+        return fallback
+    return max(1, int(frame_time_sec * SCENE_SCAN_FPS) + 1)
+
+
+def _report_scene_progress(
+    progress_callback: Callable[[int, int], None],
+    frame: object,
+    *,
+    processed_sample_count: int,
+    reported_scene_count: int,
+    scene_count: int,
+) -> tuple[int, int]:
+    sample_count = _sample_count_for_frame(frame, fallback=processed_sample_count + 1)
+    if sample_count <= processed_sample_count:
+        return processed_sample_count, reported_scene_count
+    progress_callback(sample_count, scene_count)
+    return sample_count, scene_count
+
+
+def _report_final_scene_progress(
+    progress_callback: Callable[[int, int], None],
+    *,
+    duration_sec: float,
+    processed_sample_count: int,
+    reported_scene_count: int,
+    scene_count: int,
+) -> None:
+    final_sample_count = max(
+        processed_sample_count,
+        _estimated_sample_count(duration_sec),
+    )
+    if final_sample_count != processed_sample_count or reported_scene_count != scene_count:
+        progress_callback(final_sample_count, scene_count)
+
+
+def _estimated_sample_count(duration_sec: float) -> int:
+    if duration_sec <= 0:
+        return 1
+    return max(1, math.ceil(duration_sec * SCENE_SCAN_FPS))
 
 
 def _frame_time_sec(frame: object) -> float | None:
