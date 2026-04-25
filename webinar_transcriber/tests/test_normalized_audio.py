@@ -283,6 +283,14 @@ class TestNormalizedAudio:
             SpeechRegion(start_sec=0.9, end_sec=2.0),
         ])
         assert [(region.start_sec, region.end_sec) for region in normalized] == [(0.0, 2.0)]
+        normalized = _normalize_regions([
+            SpeechRegion(start_sec=0.0, end_sec=1.0),
+            SpeechRegion(start_sec=1.5, end_sec=2.0),
+        ])
+        assert normalized == [
+            SpeechRegion(start_sec=0.0, end_sec=1.0),
+            SpeechRegion(start_sec=1.5, end_sec=2.0),
+        ]
 
     def test_normalize_regions_keeps_disjoint_regions(self) -> None:
         normalized = _normalize_regions([

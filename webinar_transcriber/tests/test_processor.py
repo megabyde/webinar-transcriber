@@ -707,6 +707,10 @@ class TestProcessInput:
 
     def test_runs_windowed_whispercpp_pipeline(self, tmp_path, monkeypatch) -> None:
         reporter = RecordingReporter()
+        detected_regions = [
+            SpeechRegion(start_sec=0.0, end_sec=1.2),
+            SpeechRegion(start_sec=2.1, end_sec=3.0),
+        ]
 
         class WindowedTranscriber(WhisperCppTranscriber):
             @property
@@ -721,31 +725,37 @@ class TestProcessInput:
             ) -> list[DecodedWindow]:
                 del audio_samples
                 assert progress_callback is not None
+                assert windows == [
+                    InferenceWindow(
+                        window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.2
+                    ),
+                    InferenceWindow(
+                        window_id="window-2", region_index=1, start_sec=2.1, end_sec=3.0
+                    ),
+                ]
                 for window in windows:
                     progress_callback(window.end_sec, 2)
                 return [
                     DecodedWindow(
-                        window=windows[0],
-                        text=(
-                            "Agenda review and project status update. "
-                            "Next step please send the draft by Friday."
-                        ),
+                        window=window,
+                        text=f"Text for {window.window_id}.",
                         language="en",
                         segments=[
                             TranscriptSegment(
-                                id="segment-1",
-                                text="Agenda review and project status update.",
-                                start_sec=0.0,
-                                end_sec=3.0,
+                                id=f"segment-{window.window_id}-1",
+                                text=f"First line for {window.window_id}.",
+                                start_sec=window.start_sec,
+                                end_sec=(window.start_sec + window.end_sec) / 2.0,
                             ),
                             TranscriptSegment(
-                                id="segment-2",
-                                text="Next step please send the draft by Friday.",
-                                start_sec=3.0,
-                                end_sec=6.0,
+                                id=f"segment-{window.window_id}-2",
+                                text=f"Second line for {window.window_id}.",
+                                start_sec=(window.start_sec + window.end_sec) / 2.0,
+                                end_sec=window.end_sec,
                             ),
                         ],
                     )
+                    for window in windows
                 ]
 
         monkeypatch.setattr(
@@ -754,7 +764,7 @@ class TestProcessInput:
         )
         monkeypatch.setattr(
             "webinar_transcriber.processor.asr.detect_speech_regions",
-            lambda *_args, **_kwargs: ([SpeechRegion(start_sec=0.0, end_sec=6.0)], []),
+            lambda *_args, **_kwargs: (detected_regions, []),
         )
         artifacts = process_input(
             FIXTURE_DIR / "sample-audio.mp3",
@@ -764,13 +774,13 @@ class TestProcessInput:
         )
 
         assert artifacts.diagnostics.asr_pipeline is not None
-        assert artifacts.diagnostics.asr_pipeline.window_count == 1
-        assert artifacts.diagnostics.asr_pipeline.vad_region_count == 1
+        assert artifacts.diagnostics.asr_pipeline.window_count == 2
+        assert artifacts.diagnostics.asr_pipeline.vad_region_count == 2
         assert artifacts.diagnostics.asr_pipeline.system_info == "METAL = 1"
         assert reporter.has_event("start", "vad", "Detecting speech regions")
         assert reporter.has_event("start", "prepare_speech_regions", "Preparing speech regions")
         assert reporter.has_event("start", "reconcile", "Reconciling transcript windows")
-        assert reporter.has_event("finish", "reconcile", "2 -> 2 segments")
+        assert reporter.has_event("finish", "reconcile", "4 -> 4 segments")
         assert reporter.has_event("start", "normalize_transcript", "Normalizing transcript")
         assert artifacts.layout.speech_regions_path.exists()
         assert artifacts.layout.expanded_regions_path.exists()
@@ -779,6 +789,9 @@ class TestProcessInput:
         speech_regions_payload = json.loads(
             artifacts.layout.speech_regions_path.read_text(encoding="utf-8")
         )
+        expanded_regions_payload = json.loads(
+            artifacts.layout.expanded_regions_path.read_text(encoding="utf-8")
+        )
         decoded_windows_payload = json.loads(
             artifacts.layout.decoded_windows_path.read_text(encoding="utf-8")
         )
@@ -786,11 +799,18 @@ class TestProcessInput:
             artifacts.layout.diagnostics_path.read_text(encoding="utf-8")
         )
 
-        assert speech_regions_payload["speech_regions"][0] == {"start_sec": 0.0, "end_sec": 6.0}
+        assert speech_regions_payload["speech_regions"] == [
+            {"start_sec": 0.0, "end_sec": 1.2},
+            {"start_sec": 2.1, "end_sec": 3.0},
+        ]
+        assert (
+            expanded_regions_payload["expanded_regions"] == speech_regions_payload["speech_regions"]
+        )
         assert decoded_windows_payload["decoded_windows"][0]["window"]["window_id"] == "window-1"
+        assert decoded_windows_payload["decoded_windows"][1]["window"]["window_id"] == "window-2"
         assert decoded_windows_payload["decoded_windows"][0]["language"] == "en"
         assert "input_prompt" in decoded_windows_payload["decoded_windows"][0]
-        assert diagnostics_payload["item_counts"]["windows"] == 1
+        assert diagnostics_payload["item_counts"]["windows"] == 2
 
     def test_uses_raw_vad_regions_as_decode_windows(self, tmp_path, monkeypatch) -> None:
         reporter = RecordingReporter()
