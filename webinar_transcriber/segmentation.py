@@ -24,8 +24,6 @@ DEFAULT_VAD_THRESHOLD = 0.5
 DEFAULT_MIN_SPEECH_DURATION_MS = 250
 DEFAULT_MIN_SILENCE_DURATION_MS = 600
 DEFAULT_SPEECH_REGION_PAD_MS = 200
-DEFAULT_MIN_REPAIRED_REGION_SEC = 3.0
-DEFAULT_REPAIR_MAX_GAP_SEC = 0.9
 
 
 @dataclass(frozen=True)
@@ -80,40 +78,6 @@ def detect_speech_regions(
         if float(timestamp["end"]) > float(timestamp["start"])
     ]
     return _normalize_regions(regions), []
-
-
-def repair_speech_regions(
-    regions: list[SpeechRegion],
-    *,
-    min_region_sec: float = DEFAULT_MIN_REPAIRED_REGION_SEC,
-    max_gap_sec: float = DEFAULT_REPAIR_MAX_GAP_SEC,
-) -> list[SpeechRegion]:
-    """Merge nearby speech regions once, then drop any regions still too short for ASR.
-
-    Returns:
-        list[SpeechRegion]: The repaired speech regions.
-    """
-    repaired = _normalize_regions(regions)
-    min_duration = max(0.0, min_region_sec)
-    gap_limit = max(0.0, max_gap_sec)
-    if not repaired:
-        return []
-
-    merged: list[SpeechRegion] = []
-    current = repaired[0]
-
-    for region in repaired[1:]:
-        gap_duration = max(0.0, region.start_sec - current.end_sec)
-        if gap_duration < gap_limit:
-            current = SpeechRegion(start_sec=current.start_sec, end_sec=region.end_sec)
-            continue
-        merged.append(current)
-        current = region
-
-    merged.append(current)
-    if min_duration <= 0:
-        return merged
-    return [region for region in merged if (region.end_sec - region.start_sec) >= min_duration]
 
 
 def normalized_audio_duration(samples: np.ndarray, sample_rate: int) -> float:

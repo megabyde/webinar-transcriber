@@ -10,7 +10,6 @@ from webinar_transcriber.normalized_audio import load_normalized_audio
 from webinar_transcriber.segmentation import (
     detect_speech_regions,
     normalized_audio_duration,
-    repair_speech_regions,
 )
 from webinar_transcriber.transcript import reconcile_decoded_windows
 from webinar_transcriber.transcript.normalize import normalize_transcription
@@ -91,7 +90,7 @@ def run_asr_pipeline(
     )
 
     with stage(ctx, "prepare_speech_regions", "Preparing speech regions") as st:
-        expanded_regions = repair_speech_regions(speech_regions)
+        expanded_regions = speech_regions
         windows = [
             InferenceWindow(
                 window_id=f"window-{i + 1}",

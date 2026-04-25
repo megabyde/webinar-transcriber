@@ -24,7 +24,6 @@ from webinar_transcriber.segmentation import (
     _silero_speech_timestamps,
     detect_speech_regions,
     normalized_audio_duration,
-    repair_speech_regions,
 )
 from webinar_transcriber.tests.conftest import FakeContextContainer
 
@@ -277,61 +276,6 @@ class TestNormalizedAudio:
     def test_normalized_audio_duration_returns_zero_for_invalid_sample_rate(self) -> None:
         assert normalized_audio_duration(np.zeros(16, dtype=np.float32), 0) == 0.0
 
-    def test_repair_speech_regions_merges_short_region_until_it_reaches_min_duration(self) -> None:
-        repaired = repair_speech_regions([
-            SpeechRegion(start_sec=0.0, end_sec=1.0),
-            SpeechRegion(start_sec=1.4, end_sec=2.1),
-            SpeechRegion(start_sec=2.5, end_sec=4.0),
-        ])
-
-        assert [(r.start_sec, r.end_sec) for r in repaired] == [(0.0, 4.0)]
-
-    def test_repair_speech_regions_merges_across_each_small_gap_once(self) -> None:
-        repaired = repair_speech_regions([
-            SpeechRegion(start_sec=0.0, end_sec=5.0),
-            SpeechRegion(start_sec=5.8, end_sec=6.8),
-            SpeechRegion(start_sec=7.65, end_sec=20.0),
-        ])
-
-        assert [(r.start_sec, r.end_sec) for r in repaired] == [(0.0, 20.0)]
-
-    def test_repair_speech_regions_does_not_merge_when_gap_hits_limit(self) -> None:
-        repaired = repair_speech_regions([
-            SpeechRegion(start_sec=0.0, end_sec=5.0),
-            SpeechRegion(start_sec=5.9, end_sec=6.9),
-            SpeechRegion(start_sec=7.8, end_sec=8.8),
-        ])
-
-        assert [(r.start_sec, r.end_sec) for r in repaired] == [(0.0, 5.0)]
-
-    def test_repair_speech_regions_drops_short_region_when_gaps_are_too_large(self) -> None:
-        repaired = repair_speech_regions([
-            SpeechRegion(start_sec=0.0, end_sec=12.0),
-            SpeechRegion(start_sec=13.1, end_sec=13.9),
-            SpeechRegion(start_sec=15.1, end_sec=28.0),
-        ])
-
-        assert repaired == [
-            SpeechRegion(start_sec=0.0, end_sec=12.0),
-            SpeechRegion(start_sec=15.1, end_sec=28.0),
-        ]
-
-    def test_repair_speech_regions_returns_merged_regions_when_min_duration_is_non_positive(
-        self,
-    ) -> None:
-        repaired = repair_speech_regions(
-            [
-                SpeechRegion(start_sec=0.0, end_sec=1.0),
-                SpeechRegion(start_sec=1.4, end_sec=2.0),
-            ],
-            min_region_sec=0.0,
-        )
-
-        assert repaired == [SpeechRegion(start_sec=0.0, end_sec=2.0)]
-
-    def test_repair_speech_regions_returns_empty_for_no_regions(self) -> None:
-        assert repair_speech_regions([]) == []
-
     def test_normalize_regions_handles_empty_and_overlap(self) -> None:
         assert _normalize_regions([]) == []
         normalized = _normalize_regions([
@@ -339,6 +283,25 @@ class TestNormalizedAudio:
             SpeechRegion(start_sec=0.9, end_sec=2.0),
         ])
         assert [(region.start_sec, region.end_sec) for region in normalized] == [(0.0, 2.0)]
+        normalized = _normalize_regions([
+            SpeechRegion(start_sec=0.0, end_sec=1.0),
+            SpeechRegion(start_sec=1.5, end_sec=2.0),
+        ])
+        assert normalized == [
+            SpeechRegion(start_sec=0.0, end_sec=1.0),
+            SpeechRegion(start_sec=1.5, end_sec=2.0),
+        ]
+
+    def test_normalize_regions_keeps_disjoint_regions(self) -> None:
+        normalized = _normalize_regions([
+            SpeechRegion(start_sec=0.0, end_sec=1.0),
+            SpeechRegion(start_sec=1.5, end_sec=2.0),
+        ])
+
+        assert normalized == [
+            SpeechRegion(start_sec=0.0, end_sec=1.0),
+            SpeechRegion(start_sec=1.5, end_sec=2.0),
+        ]
 
     def test_normalize_regions_drops_non_positive_duration_regions(self) -> None:
         normalized = _normalize_regions([
