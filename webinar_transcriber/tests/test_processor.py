@@ -24,6 +24,7 @@ from webinar_transcriber.llm import (
 from webinar_transcriber.models import (
     AudioAsset,
     DecodedWindow,
+    InferenceWindow,
     MediaType,
     ReportDocument,
     ReportSection,
@@ -790,6 +791,81 @@ class TestProcessInput:
         assert decoded_windows_payload["decoded_windows"][0]["language"] == "en"
         assert "input_prompt" in decoded_windows_payload["decoded_windows"][0]
         assert diagnostics_payload["item_counts"]["windows"] == 1
+
+    def test_uses_raw_vad_regions_as_decode_windows(self, tmp_path, monkeypatch) -> None:
+        reporter = RecordingReporter()
+        detected_regions = [
+            SpeechRegion(start_sec=0.0, end_sec=1.2),
+            SpeechRegion(start_sec=2.1, end_sec=3.0),
+        ]
+
+        class WindowedTranscriber(WhisperCppTranscriber):
+            def prepare_model(self) -> None:
+                return None
+
+            def transcribe_inference_windows(
+                self, audio_samples, windows, *, progress_callback=None
+            ) -> list[DecodedWindow]:
+                del audio_samples
+                assert progress_callback is not None
+                assert windows == [
+                    InferenceWindow(
+                        window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.2
+                    ),
+                    InferenceWindow(
+                        window_id="window-2", region_index=1, start_sec=2.1, end_sec=3.0
+                    ),
+                ]
+                for window in windows:
+                    progress_callback(window.end_sec, 1)
+                return [
+                    DecodedWindow(
+                        window=window,
+                        text=f"Text for {window.window_id}.",
+                        language="en",
+                        segments=[
+                            TranscriptSegment(
+                                id=f"segment-{window.window_id}",
+                                text=f"Text for {window.window_id}.",
+                                start_sec=window.start_sec,
+                                end_sec=window.end_sec,
+                            )
+                        ],
+                    )
+                    for window in windows
+                ]
+
+        monkeypatch.setattr(
+            "webinar_transcriber.processor.asr.load_normalized_audio",
+            lambda _path: (np.zeros(16_000, dtype=np.float32), 16_000),
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.processor.asr.detect_speech_regions",
+            lambda *_args, **_kwargs: (detected_regions, []),
+        )
+
+        artifacts = process_input(
+            FIXTURE_DIR / "sample-audio.mp3",
+            output_dir=tmp_path / "raw-vad-run",
+            transcriber=WindowedTranscriber(model_name="test-model"),
+            reporter=reporter,
+        )
+
+        expanded_regions_payload = json.loads(
+            artifacts.layout.expanded_regions_path.read_text(encoding="utf-8")
+        )
+        diagnostics_payload = json.loads(
+            artifacts.layout.diagnostics_path.read_text(encoding="utf-8")
+        )
+
+        assert expanded_regions_payload["expanded_regions"] == [
+            {"start_sec": 0.0, "end_sec": 1.2},
+            {"start_sec": 2.1, "end_sec": 3.0},
+        ]
+        assert artifacts.diagnostics.asr_pipeline is not None
+        assert artifacts.diagnostics.asr_pipeline.vad_region_count == 2
+        assert artifacts.diagnostics.asr_pipeline.window_count == 2
+        assert diagnostics_payload["item_counts"]["windows"] == 2
 
     def test_normalizes_transcript_before_report_generation(self, tmp_path, monkeypatch) -> None:
         install_basic_windowing(monkeypatch)
