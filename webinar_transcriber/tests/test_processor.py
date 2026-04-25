@@ -368,6 +368,7 @@ class TestProcessInput:
         assert reporter.events == [("start", "probe_media", "Probing media")]
 
     def test_keeps_normalized_audio_artifact(self, tmp_path, monkeypatch) -> None:
+        reporter = RecordingReporter()
         install_basic_windowing(monkeypatch)
         install_processor_media_runtime(
             monkeypatch,
@@ -387,12 +388,15 @@ class TestProcessInput:
             transcriber=self.FakeTranscriber(),
             keep_audio=True,
             kept_audio_format="wav",
+            reporter=reporter,
         )
 
         kept_audio_path = artifacts.layout.transcription_audio_path()
 
         assert kept_audio_path.exists()
         assert kept_audio_path.read_bytes()[:4] == b"RIFF"
+        assert reporter.has_event("start", "save_transcription_audio", "Saving transcription audio")
+        assert reporter.has_event("finish", "save_transcription_audio", kept_audio_path.name)
 
     @pytest.mark.slow
     def test_keeps_normalized_audio_artifact_with_real_media_prep(self, tmp_path) -> None:
