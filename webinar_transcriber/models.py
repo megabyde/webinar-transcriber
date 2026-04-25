@@ -1,5 +1,7 @@
 """Typed models used across the processing pipeline."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from enum import StrEnum

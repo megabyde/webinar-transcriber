@@ -180,16 +180,28 @@ class TestWhisperCppTranscriber:
         assert kwargs["logprob_thold"] == DEFAULT_WHISPER_LOGPROB_THOLD
         assert kwargs["no_speech_thold"] == DEFAULT_WHISPER_NO_SPEECH_THOLD
 
-    def test_prepare_model_passes_native_log_path(self, monkeypatch, tmp_path) -> None:
-        install_fake_pywhispercpp(monkeypatch)
+    def test_prepare_model_redirects_native_output_to_log(
+        self, monkeypatch, tmp_path, capfd
+    ) -> None:
+        class NativeOutputModel(FakeModel):
+            def __init__(self, model_name: str, **kwargs) -> None:
+                os.write(1, b"native stdout\n")
+                os.write(2, b"native stderr\n")
+                super().__init__(model_name, **kwargs)
+
+        install_fake_pywhispercpp(monkeypatch, model_cls=NativeOutputModel)
         log_path = tmp_path / "whisper-cpp.log"
 
         transcriber = WhisperCppTranscriber()
         transcriber.set_log_path(log_path)
         transcriber.prepare_model()
 
-        _, kwargs = FakeModel.init_calls[0]
-        assert kwargs["redirect_whispercpp_logs_to"] == str(log_path)
+        _, kwargs = NativeOutputModel.init_calls[0]
+        assert "redirect_whispercpp_logs_to" not in kwargs
+        captured = capfd.readouterr()
+        assert captured.out == ""
+        assert captured.err == ""
+        assert log_path.read_text(encoding="utf-8") == "native stdout\nnative stderr\n"
 
     def test_prepare_model_wraps_model_initialization_failures(self, monkeypatch) -> None:
         install_fake_pywhispercpp(monkeypatch)
@@ -226,6 +238,59 @@ class TestWhisperCppTranscriber:
             assert transcriber.system_info == "CPU = 1"
 
         assert transcriber.system_info is None
+
+    def test_close_redirects_native_teardown_output_to_log(
+        self, monkeypatch, tmp_path, capfd
+    ) -> None:
+        class NativeTeardownModel(FakeModel):
+            def __del__(self) -> None:
+                os.write(2, b"native teardown\n")
+
+        install_fake_pywhispercpp(monkeypatch, model_cls=NativeTeardownModel)
+        log_path = tmp_path / "whisper-cpp.log"
+        transcriber = WhisperCppTranscriber()
+        transcriber.set_log_path(log_path)
+        transcriber.prepare_model()
+
+        transcriber.close()
+
+        captured = capfd.readouterr()
+        assert captured.err == ""
+        assert log_path.read_text(encoding="utf-8") == "native teardown\n"
+        assert transcriber.system_info is None
+
+    def test_redirect_native_output_falls_back_without_file_descriptors(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        from webinar_transcriber.asr import transcriber as transcriber_module
+
+        log_path = tmp_path / "whisper-cpp.log"
+        monkeypatch.setattr(transcriber_module, "_duplicated_output_fds", list)
+
+        with transcriber_module._redirect_native_output(log_path):
+            print("python stdout")
+
+        assert log_path.read_text(encoding="utf-8") == "python stdout\n"
+
+    def test_output_fds_skips_streams_without_file_descriptors(self, monkeypatch) -> None:
+        from webinar_transcriber.asr import transcriber as transcriber_module
+
+        class StreamWithoutFileDescriptor:
+            def fileno(self) -> int:
+                raise OSError
+
+        stream = StreamWithoutFileDescriptor()
+        monkeypatch.setattr(transcriber_module.sys, "stdout", stream)
+        monkeypatch.setattr(transcriber_module.sys, "stderr", stream)
+
+        assert transcriber_module._output_fds() == [1, 2]
+
+    def test_duplicated_output_fds_skips_invalid_descriptors(self, monkeypatch) -> None:
+        from webinar_transcriber.asr import transcriber as transcriber_module
+
+        monkeypatch.setattr(transcriber_module, "_output_fds", lambda: [-1])
+
+        assert transcriber_module._duplicated_output_fds() == []
 
     def test_set_log_path_updates_transcriber(self) -> None:
         transcriber = WhisperCppTranscriber()

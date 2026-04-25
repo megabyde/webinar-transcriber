@@ -1,7 +1,7 @@
 """Scene detection for webinar videos."""
 
-from collections.abc import Callable
-from pathlib import Path
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 import av
@@ -15,6 +15,9 @@ from webinar_transcriber.media import (
 from webinar_transcriber.models import Scene
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
     from av.video.stream import VideoStream
 
 
@@ -93,9 +96,7 @@ def _select_scene_starts(
         raise MediaProcessingError(f"Could not detect scenes in {video_path}: {error}") from error
 
 
-def _build_scene_filter_graph(
-    video_stream: "VideoStream", *, scene_score_threshold: float
-) -> Graph:
+def _build_scene_filter_graph(video_stream: VideoStream, *, scene_score_threshold: float) -> Graph:
     graph = Graph()
     source = graph.add_buffer(template=video_stream)
     select = graph.add("select", expr=f"gt(scene,{scene_score_threshold})")

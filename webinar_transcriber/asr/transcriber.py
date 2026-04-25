@@ -6,7 +6,8 @@ import importlib
 import io
 import os
 import re
-from contextlib import contextmanager, redirect_stderr, suppress
+import sys
+from contextlib import contextmanager, redirect_stderr, redirect_stdout, suppress
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, Self
@@ -95,6 +96,55 @@ def _disable_tqdm_progress() -> Iterator[None]:
             os.environ["TQDM_DISABLE"] = previous
 
 
+@contextmanager
+def _redirect_native_output(log_path: Path | None) -> Iterator[None]:
+    if log_path is None:
+        yield
+        return
+
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    sys.stdout.flush()
+    sys.stderr.flush()
+    with log_path.open("a", encoding="utf-8") as log_file:
+        saved_fds = _duplicated_output_fds()
+        if not saved_fds:
+            with redirect_stdout(log_file), redirect_stderr(log_file):
+                yield
+            return
+        try:
+            for fd, _saved_fd in saved_fds:
+                os.dup2(log_file.fileno(), fd)
+            yield
+        finally:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            for fd, saved_fd in saved_fds:
+                os.dup2(saved_fd, fd)
+                os.close(saved_fd)
+
+
+def _duplicated_output_fds() -> list[tuple[int, int]]:
+    saved_fds: list[tuple[int, int]] = []
+    for fd in _output_fds():
+        try:
+            saved_fds.append((fd, os.dup(fd)))
+        except OSError:
+            continue
+    return saved_fds
+
+
+def _output_fds() -> list[int]:
+    fds: list[int] = [1, 2]
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            fd = stream.fileno()
+        except (AttributeError, OSError, io.UnsupportedOperation):
+            continue
+        if fd not in fds:
+            fds.append(fd)
+    return fds
+
+
 class ASRProcessingError(RuntimeError):
     """Raised when the whisper.cpp ASR adapter cannot prepare or run."""
 
@@ -171,10 +221,8 @@ class WhisperCppTranscriber:
             "logprob_thold": self._decode_settings.logprob_thold,
             "no_speech_thold": self._decode_settings.no_speech_thold,
         }
-        if self._log_path is not None:
-            model_kwargs["redirect_whispercpp_logs_to"] = str(self._log_path)
         try:
-            with _disable_tqdm_progress():
+            with _redirect_native_output(self._log_path), _disable_tqdm_progress():
                 model = _model_cls()(self._model_name, **model_kwargs)
         except Exception as error:
             raise ASRProcessingError(_model_prepare_error_message(self._model_name)) from error
@@ -225,7 +273,10 @@ class WhisperCppTranscriber:
 
     def close(self) -> None:
         """Release any active pywhispercpp model resources."""
-        self._model = None
+        if self._model is None:
+            return
+        with _redirect_native_output(self._log_path):
+            self._model = None
 
     def __exit__(
         self,

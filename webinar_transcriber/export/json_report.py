@@ -1,10 +1,15 @@
 """JSON export helpers."""
 
+from __future__ import annotations
+
 import json
 from dataclasses import asdict
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-from webinar_transcriber.models import ReportDocument
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from webinar_transcriber.models import ReportDocument
 
 
 def write_json_report(report: ReportDocument, output_path: Path) -> Path:

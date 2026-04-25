@@ -1,5 +1,7 @@
 """Prompt text and sizing constants for optional cloud LLM integrations."""
 
+from __future__ import annotations
+
 REPORT_POLISH_TOTAL_CHAR_BUDGET = 16_000
 REPORT_SECTION_EXCERPT_LIMIT = 1_200
 SUMMARY_ITEM_LIMIT = 5

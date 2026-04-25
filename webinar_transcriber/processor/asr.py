@@ -88,23 +88,21 @@ def run_asr_pipeline(
         {"speech_regions": [asdict(region) for region in speech_regions]},
     )
 
-    with stage(ctx, "prepare_speech_regions", "Preparing speech regions") as st:
-        expanded_regions = speech_regions
-        windows = [
-            InferenceWindow(
-                window_id=f"window-{i + 1}",
-                region_index=i,
-                start_sec=region.start_sec,
-                end_sec=region.end_sec,
-            )
-            for i, region in enumerate(expanded_regions)
-            if region.end_sec > region.start_sec
-        ]
-        write_json(
-            layout.expanded_regions_path,
-            {"expanded_regions": [asdict(region) for region in expanded_regions]},
+    expanded_regions = speech_regions
+    windows = [
+        InferenceWindow(
+            window_id=f"window-{i + 1}",
+            region_index=i,
+            start_sec=region.start_sec,
+            end_sec=region.end_sec,
         )
-        st.detail = count_label(len(expanded_regions), "region")
+        for i, region in enumerate(expanded_regions)
+        if region.end_sec > region.start_sec
+    ]
+    write_json(
+        layout.expanded_regions_path,
+        {"expanded_regions": [asdict(region) for region in expanded_regions]},
+    )
     window_count = len(windows)
     average_window_duration_sec = (
         sum(w.end_sec - w.start_sec for w in windows) / len(windows) if windows else None
@@ -141,11 +139,7 @@ def run_asr_pipeline(
             elapsed_sec=st.elapsed_sec(),
         )
 
-    with stage(ctx, "reconcile", "Reconciling transcript windows") as st:
-        decoded_segment_count = sum(len(window.segments) for window in decoded_windows)
-        transcription, reconciliation_stats = reconcile_decoded_windows(decoded_windows)
-        segment_label = "segment" if len(transcription.segments) == 1 else "segments"
-        st.detail = f"{decoded_segment_count} -> {len(transcription.segments)} {segment_label}"
+    transcription, reconciliation_stats = reconcile_decoded_windows(decoded_windows)
 
     with stage(ctx, "normalize_transcript", "Normalizing transcript") as st:
         write_json(layout.transcript_path, asdict(transcription))

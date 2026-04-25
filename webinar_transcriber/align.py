@@ -1,5 +1,7 @@
 """Alignment helpers for transcript segments and video scenes."""
 
+from __future__ import annotations
+
 from webinar_transcriber.models import AlignmentBlock, Scene, SlideFrame, TranscriptSegment
 
 

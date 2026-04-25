@@ -1,9 +1,15 @@
 """Markdown export helpers."""
 
-from pathlib import Path
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from webinar_transcriber.export.formatting import section_timecode
-from webinar_transcriber.models import ReportDocument
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from webinar_transcriber.models import ReportDocument
 
 
 def write_markdown_report(report: ReportDocument, output_path: Path) -> Path:

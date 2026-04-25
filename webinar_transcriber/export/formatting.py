@@ -1,5 +1,7 @@
 """Shared exporter formatting helpers."""
 
+from __future__ import annotations
+
 from math import floor
 
 EN_DASH = "\N{EN DASH}"

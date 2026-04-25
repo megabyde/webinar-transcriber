@@ -778,9 +778,6 @@ class TestProcessInput:
         assert artifacts.diagnostics.asr_pipeline.vad_region_count == 2
         assert artifacts.diagnostics.asr_pipeline.system_info == "METAL = 1"
         assert reporter.has_event("start", "vad", "Detecting speech regions")
-        assert reporter.has_event("start", "prepare_speech_regions", "Preparing speech regions")
-        assert reporter.has_event("start", "reconcile", "Reconciling transcript windows")
-        assert reporter.has_event("finish", "reconcile", "4 -> 4 segments")
         assert reporter.has_event("start", "normalize_transcript", "Normalizing transcript")
         assert artifacts.layout.speech_regions_path.exists()
         assert artifacts.layout.expanded_regions_path.exists()

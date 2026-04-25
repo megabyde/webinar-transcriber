@@ -1,8 +1,8 @@
 """Media probing helpers."""
 
-from collections.abc import Iterator
+from __future__ import annotations
+
 from contextlib import contextmanager
-from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast, overload
 
 import av
@@ -10,6 +10,9 @@ import av
 from webinar_transcriber.models import AudioAsset, MediaAsset, VideoAsset
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
+
     from av.audio.stream import AudioStream
     from av.container import InputContainer, OutputContainer
     from av.video.stream import VideoStream
@@ -21,19 +24,19 @@ class MediaProcessingError(RuntimeError):
 
 @overload
 def _first_input_stream(
-    input_container: "InputContainer", stream_type: Literal["audio"]
-) -> "AudioStream | None": ...
+    input_container: InputContainer, stream_type: Literal["audio"]
+) -> AudioStream | None: ...
 
 
 @overload
 def _first_input_stream(
-    input_container: "InputContainer", stream_type: Literal["video"]
-) -> "VideoStream | None": ...
+    input_container: InputContainer, stream_type: Literal["video"]
+) -> VideoStream | None: ...
 
 
 def _first_input_stream(
-    input_container: "InputContainer", stream_type: Literal["audio", "video"]
-) -> "AudioStream | VideoStream | None":
+    input_container: InputContainer, stream_type: Literal["audio", "video"]
+) -> AudioStream | VideoStream | None:
     return cast(
         "AudioStream | VideoStream | None",
         next((stream for stream in input_container.streams if stream.type == stream_type), None),
@@ -42,28 +45,28 @@ def _first_input_stream(
 
 @overload
 def _required_input_stream(
-    input_container: "InputContainer",
+    input_container: InputContainer,
     stream_type: Literal["audio"],
     *,
     error_message: str,
-) -> "AudioStream": ...
+) -> AudioStream: ...
 
 
 @overload
 def _required_input_stream(
-    input_container: "InputContainer",
+    input_container: InputContainer,
     stream_type: Literal["video"],
     *,
     error_message: str,
-) -> "VideoStream": ...
+) -> VideoStream: ...
 
 
 def _required_input_stream(
-    input_container: "InputContainer",
+    input_container: InputContainer,
     stream_type: Literal["audio", "video"],
     *,
     error_message: str,
-) -> "AudioStream | VideoStream":
+) -> AudioStream | VideoStream:
     stream = _first_input_stream(input_container, stream_type)
     if stream is None:
         raise MediaProcessingError(error_message)
@@ -75,7 +78,7 @@ def open_input_media_container(
     path: Path,
     *,
     error_message: str,
-) -> Iterator["InputContainer"]:
+) -> Iterator[InputContainer]:
     """Open a PyAV input container and normalize open-time failures."""
     try:
         with av.open(str(path), mode="r") as container:
@@ -89,7 +92,7 @@ def open_output_media_container(
     path: Path,
     *,
     error_message: str,
-) -> Iterator["OutputContainer"]:
+) -> Iterator[OutputContainer]:
     """Open a PyAV output container and normalize open-time failures."""
     try:
         with av.open(str(path), mode="w") as container:

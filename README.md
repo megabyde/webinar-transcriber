@@ -23,8 +23,9 @@ top of that local output, but it does not replace the base pipeline.
 
 ### Prerequisites
 
-- A C/C++ compiler and `cmake` (needed when `pywhispercpp` builds from source for GPU backends).
-- For CUDA: a working CUDA toolkit (`nvcc` on `PATH`, `CUDA_HOME` set).
+- Python 3.12 and `uv`.
+- CUDA source builds also require a C/C++ compiler, `cmake`, and a working CUDA toolkit (`nvcc` on
+  `PATH`, `CUDA_HOME` set).
 
 ### Quick Install (CPU Everywhere, Metal by Default on macOS)
 
@@ -32,25 +33,27 @@ top of that local output, but it does not replace the base pipeline.
 uv tool install .
 ```
 
-This works on every supported platform. On Linux and Windows, this is the CPU install path. On
-macOS, when `pywhispercpp` is source-built, whisper.cpp enables Metal automatically. The default
-`large-v3-turbo` model is downloaded on first transcription run, not during `uv tool install .`. To
-verify the active backend after a run, look for `Metal = 1` under `diagnostics.json` →
-`asr_pipeline.system_info`.
+This pulls the published `pywhispercpp` wheels from PyPI. On Linux and Windows, those wheels use the
+CPU backend. On macOS, the Apple Silicon wheels include Metal support. The default `large-v3-turbo`
+model is downloaded on first transcription run, not during `uv tool install .`. To verify the active
+backend after a run, inspect `diagnostics.json` → `asr_pipeline.system_info`. Native whisper.cpp
+initialization and teardown logs are written to `whisper-cpp.log` in the run directory.
 
 ### NVIDIA (CUDA on Linux or Windows)
 
+CUDA is the only supported path that builds `pywhispercpp` from source. From a repository checkout,
+rebuild only `pywhispercpp` with CUDA enabled:
+
 ```bash
-GGML_CUDA=1 uv tool install --reinstall .
+make sync-reinstall
 ```
 
-### Switching Backends During Development
-
-If you're working from a repository checkout and want to rebuild only `pywhispercpp` with a
-different backend:
+For a tool install from this checkout, use the same uv build controls directly:
 
 ```bash
-make sync-reinstall PYWHISPERCPP_BACKEND=cuda
+GGML_CUDA=1 uv tool install --reinstall . \
+    --reinstall-package pywhispercpp \
+    --no-binary-package pywhispercpp
 ```
 
 For contributor/development workflows from a checkout, use `make sync` to create the project
@@ -226,6 +229,12 @@ runs/<timestamp>_<basename>/
 
 ```bash
 make sync
+```
+
+To add optional LLM dependencies to a checkout environment, run:
+
+```bash
+uv sync --extra llm
 ```
 
 ### Running from a Checkout

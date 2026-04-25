@@ -1,16 +1,22 @@
 """DOCX export helpers."""
 
+from __future__ import annotations
+
 import re
-from collections.abc import Callable
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from docx import Document
-from docx.document import Document as DocxDocument
 from docx.shared import Inches
 
 from webinar_transcriber.export.formatting import section_timecode
-from webinar_transcriber.models import ReportDocument, ReportSection
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from docx.document import Document as DocxDocument
+
+    from webinar_transcriber.models import ReportDocument, ReportSection
 
 
 def write_docx_report(

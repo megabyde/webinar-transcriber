@@ -1,5 +1,7 @@
 """Report export helpers."""
 
+from __future__ import annotations
+
 from webinar_transcriber.export.docx_report import write_docx_report
 from webinar_transcriber.export.json_report import write_json_report
 from webinar_transcriber.export.markdown import write_markdown_report
