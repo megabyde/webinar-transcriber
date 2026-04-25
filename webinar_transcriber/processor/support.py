@@ -9,10 +9,7 @@ from time import perf_counter
 from typing import TYPE_CHECKING
 
 from webinar_transcriber.asr import ASR_BACKEND_NAME, WhisperCppTranscriber
-from webinar_transcriber.models import (
-    AsrPipelineDiagnostics,
-    Diagnostics,
-)
+from webinar_transcriber.models import AsrPipelineDiagnostics, Diagnostics
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -22,7 +19,6 @@ if TYPE_CHECKING:
     from pydantic import BaseModel
 
     from webinar_transcriber.llm import LLMReportPolishPlan
-    from webinar_transcriber.paths import RunLayout
     from webinar_transcriber.reporter import BaseStageReporter
 
     from .types import AsrPipelineState, RunContext
@@ -149,11 +145,6 @@ def write_model_json(output_path: Path, payload: BaseModel) -> None:
     """Write one top-level Pydantic payload with stable UTF-8 formatting."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(payload.model_dump_json(indent=2), encoding="utf-8")
-
-
-def configure_asr_logging(transcriber: WhisperCppTranscriber, layout: RunLayout) -> None:
-    """Write pywhispercpp logs into the run directory."""
-    transcriber.set_log_path(layout.run_dir / "whisper-cpp.log")
 
 
 def asr_runtime_detail(transcriber: WhisperCppTranscriber) -> str:

@@ -8,27 +8,15 @@ from typing import TYPE_CHECKING
 import webinar_transcriber.asr as asr_runtime
 import webinar_transcriber.media as media_runtime
 from webinar_transcriber.asr import PromptCarryoverSettings, default_asr_threads
-from webinar_transcriber.normalized_audio import (
-    prepared_transcription_audio,
-)
+from webinar_transcriber.normalized_audio import prepared_transcription_audio
 from webinar_transcriber.paths import create_run_layout
 from webinar_transcriber.reporter import BaseStageReporter
 from webinar_transcriber.segmentation import VadSettings
 
 from .report import run_report_phase
-from .support import (
-    build_diagnostics,
-    configure_asr_logging,
-    stage,
-    write_json,
-    write_model_json,
-)
+from .support import build_diagnostics, stage, write_json, write_model_json
 from .transcribe import run_transcription_phase
-from .types import (
-    AsrPipelineState,
-    ProcessArtifacts,
-    RunContext,
-)
+from .types import AsrPipelineState, ProcessArtifacts, RunContext
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -155,7 +143,7 @@ def process_input(
                 layout = create_run_layout(input_path=input_path, output_dir=output_dir)
                 ctx.layout = layout
                 st.detail = str(layout.run_dir)
-            configure_asr_logging(active_transcriber, layout)
+            active_transcriber.set_log_path(layout.run_dir / "whisper-cpp.log")
 
             with stage(ctx, "probe_media", "Probing media") as st:
                 media_asset = media_runtime.probe_media(input_path)
