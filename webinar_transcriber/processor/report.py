@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from typing import TYPE_CHECKING
 
 import webinar_transcriber.export as export_runtime
@@ -143,17 +143,14 @@ def run_report_phase(
 
     if slide_frames:
         frame_by_id = {frame.id: frame for frame in slide_frames}
-        report = report.model_copy(
-            update={
-                "sections": [
-                    section.model_copy(
-                        update={"image_path": frame_by_id[section.frame_id].image_path}
-                    )
-                    if section.frame_id and section.frame_id in frame_by_id
-                    else section
-                    for section in report.sections
-                ]
-            }
+        report = replace(
+            report,
+            sections=[
+                replace(section, image_path=frame_by_id[section.frame_id].image_path)
+                if section.frame_id and section.frame_id in frame_by_id
+                else section
+                for section in report.sections
+            ],
         )
 
     report, ctx.llm_runtime = maybe_polish_report(
@@ -163,7 +160,7 @@ def run_report_phase(
         warnings=ctx.warnings,
         llm_runtime=ctx.llm_runtime,
     )
-    report = report.model_copy(update={"warnings": list(ctx.warnings)})
+    report = replace(report, warnings=list(ctx.warnings))
 
     with stage(ctx, "export", "Writing artifacts"):
         export_runtime.write_markdown_report(report, layout.markdown_report_path)

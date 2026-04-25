@@ -252,9 +252,23 @@ class TestJsonReport:
         write_json_report(report, output_path)
 
         payload = json.loads(output_path.read_text(encoding="utf-8"))
-        restored = ReportDocument.model_validate(payload)
 
-        assert restored == report
+        assert payload["title"] == "Demo"
+        assert payload["media_type"] == "audio"
+        assert payload["summary"] == ["Summary point."]
+        assert payload["action_items"] == ["Follow up."]
+        assert payload["sections"] == [
+            {
+                "id": "section-1",
+                "title": "Section 1",
+                "start_sec": 0.0,
+                "end_sec": 5.0,
+                "transcript_text": "Paragraph one.",
+                "tldr": None,
+                "frame_id": None,
+                "image_path": None,
+            }
+        ]
 
 
 class TestSubtitles:

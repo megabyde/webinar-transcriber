@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from webinar_transcriber.llm import (
@@ -171,23 +171,21 @@ def maybe_polish_report(
         return report, llm_runtime
 
     report_latency_sec = section_elapsed_sec + metadata_elapsed_sec
-    report = report.model_copy(
-        update={
-            "summary": metadata_result.summary,
-            "action_items": metadata_result.action_items,
-            "sections": [
-                section.model_copy(
-                    update={
-                        "title": metadata_result.section_titles.get(section.id, section.title),
-                        "tldr": section_result.section_tldrs.get(section.id, section.tldr),
-                        "transcript_text": section_result.section_transcripts.get(
-                            section.id, section.transcript_text
-                        ),
-                    }
-                )
-                for section in report.sections
-            ],
-        }
+    report = replace(
+        report,
+        summary=metadata_result.summary,
+        action_items=metadata_result.action_items,
+        sections=[
+            replace(
+                section,
+                title=metadata_result.section_titles.get(section.id, section.title),
+                tldr=section_result.section_tldrs.get(section.id, section.tldr),
+                transcript_text=section_result.section_transcripts.get(
+                    section.id, section.transcript_text
+                ),
+            )
+            for section in report.sections
+        ],
     )
     llm_runtime.report_status = "applied"
     llm_runtime.report_latency_sec = report_latency_sec
