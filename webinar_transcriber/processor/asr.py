@@ -55,6 +55,7 @@ def run_asr_pipeline(
     warnings: list[str],
     vad: VadSettings,
     carryover_enabled: bool,
+    language: str | None,
 ) -> AsrPipelineResult:
     """Run the deterministic local ASR pipeline and persist intermediate artifacts.
 
@@ -126,6 +127,7 @@ def run_asr_pipeline(
         decoded_windows = transcriber.transcribe_inference_windows(
             audio_samples,
             windows,
+            language=language,
             progress_callback=on_window_completed,
         )
         write_json(

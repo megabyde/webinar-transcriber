@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import subprocess
 from dataclasses import dataclass
 
 ASR_BACKEND_NAME = "whisper.cpp"
@@ -14,41 +13,11 @@ DEFAULT_CARRYOVER_MAX_TOKENS = 64
 DEFAULT_WHISPER_ENTROPY_THOLD = 2.4
 DEFAULT_WHISPER_LOGPROB_THOLD = -1.0
 DEFAULT_WHISPER_NO_SPEECH_THOLD = 0.6
-SYSCTL_TIMEOUT_SEC = 1.0
-
-
-def _read_sysctl_int(name: str) -> int | None:
-    try:
-        result = subprocess.run(
-            ["sysctl", "-n", name],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=SYSCTL_TIMEOUT_SEC,
-        )
-    except (
-        FileNotFoundError,
-        PermissionError,
-        subprocess.CalledProcessError,
-        subprocess.TimeoutExpired,
-    ):
-        return None
-
-    value = result.stdout.strip()
-    if not value.isdigit():
-        return None
-    parsed = int(value)
-    return parsed if parsed > 0 else None
 
 
 def default_asr_threads() -> int:
     """Return the preferred default whisper.cpp thread count for this host."""
-    return (
-        _read_sysctl_int("hw.perflevel0.physicalcpu")
-        or _read_sysctl_int("hw.physicalcpu")
-        or os.cpu_count()
-        or 4
-    )
+    return max(1, os.cpu_count() or 4)
 
 
 @dataclass(frozen=True)

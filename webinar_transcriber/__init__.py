@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
-from importlib import import_module
+from importlib.metadata import PackageNotFoundError, version
 
 __all__ = ["__version__"]
+
+try:
+    from webinar_transcriber._version import __version__ as _source_version
+except ModuleNotFoundError:
+    _source_version = "0.0.0"
 
 
 def _resolve_version() -> str:
     try:
-        return import_module("webinar_transcriber._version").__version__
-    except ModuleNotFoundError:
-        return "0.0.0"
+        return version("webinar-transcriber")
+    except PackageNotFoundError:
+        return _source_version
 
 
 __version__ = _resolve_version()

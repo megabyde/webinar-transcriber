@@ -1,7 +1,6 @@
 """Tests for the whisper.cpp ASR adapter."""
 
 import os
-import subprocess
 from pathlib import Path
 from typing import cast
 
@@ -21,7 +20,6 @@ from webinar_transcriber.asr.config import (
     DEFAULT_WHISPER_ENTROPY_THOLD,
     DEFAULT_WHISPER_LOGPROB_THOLD,
     DEFAULT_WHISPER_NO_SPEECH_THOLD,
-    _read_sysctl_int,
     default_asr_threads,
 )
 from webinar_transcriber.asr.transcriber import _device_name_from_system_info, _PyWhisperModel
@@ -340,6 +338,18 @@ class TestWhisperCppTranscriber:
             "language": "ru",
         }
 
+    def test_transcribe_inference_windows_uses_forced_language(self, fake_model: FakeModel) -> None:
+        fake_model.detected_language = "ru"
+
+        decoded_windows = WhisperCppTranscriber(language="en").transcribe_inference_windows(
+            np.zeros(16_000, dtype=np.float32),
+            [InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
+        )
+
+        assert [window.language for window in decoded_windows] == ["en"]
+        assert fake_model.auto_detect_calls == []
+        assert fake_model.transcribe_calls[0][1] == {"language": "en"}
+
     def test_model_cls_imports_pywhispercpp_model(self, monkeypatch) -> None:
         monkeypatch.setattr(
             "webinar_transcriber.asr.transcriber.importlib.import_module",
@@ -438,38 +448,17 @@ class TestWhisperCppTranscriber:
                 [InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
             )
 
-    @pytest.mark.parametrize("stdout", ["abc", "0"])
-    def test_read_sysctl_int_returns_none_for_invalid_or_nonpositive_values(
-        self, monkeypatch: pytest.MonkeyPatch, stdout: str
-    ) -> None:
-        monkeypatch.setattr(
-            "webinar_transcriber.asr.config.subprocess.run",
-            lambda *_args, **_kwargs: type("Result", (), {"stdout": stdout})(),
-        )
-
-        assert _read_sysctl_int("hw.physicalcpu") is None
-
-    def test_read_sysctl_int_returns_none_on_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        def fake_run(*_args, **_kwargs):
-            raise subprocess.TimeoutExpired(cmd=["sysctl"], timeout=1.0)
-
-        monkeypatch.setattr("webinar_transcriber.asr.config.subprocess.run", fake_run)
-
-        assert _read_sysctl_int("hw.physicalcpu") is None
-
-    def test_default_asr_threads_uses_sysctl_priority_then_cpu_count(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        values = {
-            "hw.perflevel0.physicalcpu": None,
-            "hw.physicalcpu": 6,
-        }
-        monkeypatch.setattr(
-            "webinar_transcriber.asr.config._read_sysctl_int", lambda name: values[name]
-        )
+    def test_default_asr_threads_uses_cpu_count(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr("webinar_transcriber.asr.config.os.cpu_count", lambda: 8)
 
-        assert default_asr_threads() == 6
+        assert default_asr_threads() == 8
+
+    def test_default_asr_threads_falls_back_to_positive_default(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("webinar_transcriber.asr.config.os.cpu_count", lambda: None)
+
+        assert default_asr_threads() == 4
 
     def test_transcriber_properties_are_safe_before_runtime_is_prepared(self) -> None:
         transcriber = WhisperCppTranscriber(threads=0)

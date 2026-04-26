@@ -36,6 +36,7 @@ def process_input(
     *,
     output_dir: Path | None = None,
     asr_model: str | None = None,
+    language: str | None = None,
     vad: VadSettings = DEFAULT_VAD_SETTINGS,
     carryover: PromptCarryoverSettings = DEFAULT_PROMPT_CARRYOVER_SETTINGS,
     asr_threads: int | None = None,
@@ -63,7 +64,10 @@ def process_input(
     )
 
     active_transcriber = transcriber or asr_runtime.WhisperCppTranscriber(
-        model_name=asr_model, threads=asr_threads, carryover_settings=carryover
+        model_name=asr_model,
+        threads=asr_threads,
+        language=language,
+        carryover_settings=carryover,
     )
     transcriber_scope = (
         active_transcriber if transcriber is None else nullcontext(active_transcriber)
@@ -91,6 +95,7 @@ def process_input(
                 ctx=ctx,
                 vad=vad,
                 carryover_enabled=carryover.enabled,
+                language=language,
                 keep_audio=keep_audio,
                 kept_audio_format=kept_audio_format,
                 prepared_audio_factory=prepared_transcription_audio,

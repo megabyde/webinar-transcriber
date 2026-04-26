@@ -33,6 +33,7 @@ def run_transcription_phase(
     ctx: RunContext,
     vad: VadSettings,
     carryover_enabled: bool,
+    language: str | None,
     keep_audio: bool,
     kept_audio_format: str,
     prepared_audio_factory: Callable[[Path], AbstractContextManager[Path]],
@@ -56,6 +57,7 @@ def run_transcription_phase(
             warnings=ctx.warnings,
             vad=vad,
             carryover_enabled=carryover_enabled,
+            language=language,
         )
 
         if keep_audio:

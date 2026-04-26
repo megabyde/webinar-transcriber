@@ -157,6 +157,7 @@ class WhisperCppTranscriber:
         model_name: str | None = None,
         *,
         threads: int = 4,
+        language: str | None = None,
         carryover_settings: PromptCarryoverSettings | None = None,
         log_path: Path | None = None,
     ) -> None:
@@ -165,6 +166,7 @@ class WhisperCppTranscriber:
         self._uses_default_model_name = model_name is None
         self._model_name = model_name or DEFAULT_WHISPER_CPP_MODEL_FILENAME
         self._threads = max(1, threads)
+        self._language = language.strip() if language else None
         self._decode_settings = WhisperDecodeSettings(
             carryover=carryover_settings or PromptCarryoverSettings()
         )
@@ -235,6 +237,7 @@ class WhisperCppTranscriber:
         audio_samples: np.ndarray,
         windows: list[InferenceWindow],
         *,
+        language: str | None = None,
         progress_callback: Callable[[float, int], None] | None = None,
     ) -> list[DecodedWindow]:
         """Decode ordered inference windows into transcript segments.
@@ -247,7 +250,8 @@ class WhisperCppTranscriber:
             windows,
             key=lambda item: (item.start_sec, item.end_sec, item.region_index, item.window_id),
         )
-        language_hint: str | None = None
+        forced_language = language.strip() if language else self._language
+        language_hint: str | None = forced_language
         carryover_prompt: str | None = None
         decoded_windows: list[DecodedWindow] = []
         decoded_segment_count = 0
@@ -265,7 +269,7 @@ class WhisperCppTranscriber:
             next_carryover = build_prompt_carryover(
                 decoded_window, settings=self._decode_settings.carryover
             )
-            language_hint = language_hint or decoded_window.language
+            language_hint = forced_language or language_hint or decoded_window.language
             carryover_prompt = next_carryover
             if progress_callback is not None:
                 progress_callback(window.end_sec, decoded_segment_count)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import IO, Any
 
 import click
 
@@ -28,13 +27,7 @@ from webinar_transcriber.ui import RichStageReporter
 
 
 class CLIError(click.ClickException):
-    """Styled CLI error that keeps terminal failures visually consistent."""
-
-    def show(self, file: IO[Any] | None = None) -> None:
-        """Render the CLI error with consistent styling."""
-        stream = file or click.get_text_stream("stderr")
-        click.secho("Error:", fg="red", bold=True, nl=False, err=True, file=stream)
-        click.echo(f" {self.format_message()}", err=True, file=stream)
+    """CLI error for actionable user-facing failures."""
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -54,38 +47,16 @@ class CLIError(click.ClickException):
     "'large-v3-turbo' or 'models/whisper-cpp/ggml-large-v3-turbo.bin'.",
 )
 @click.option(
+    "--language",
+    type=str,
+    default=None,
+    help="Force a Whisper language code, for example 'en' or 'ru'.",
+)
+@click.option(
     "--vad/--no-vad",
     default=True,
     show_default=True,
     help="Enable Silero speech-region detection before transcription planning.",
-)
-@click.option(
-    "--vad-threshold",
-    type=float,
-    default=DEFAULT_VAD_THRESHOLD,
-    show_default=True,
-    help="Silero speech detection threshold.",
-)
-@click.option(
-    "--min-speech-ms",
-    type=int,
-    default=DEFAULT_MIN_SPEECH_DURATION_MS,
-    show_default=True,
-    help="Minimum speech duration for Silero region detection.",
-)
-@click.option(
-    "--min-silence-ms",
-    type=int,
-    default=DEFAULT_MIN_SILENCE_DURATION_MS,
-    show_default=True,
-    help="Minimum silence duration for Silero region separation.",
-)
-@click.option(
-    "--speech-region-pad-ms",
-    type=int,
-    default=DEFAULT_SPEECH_REGION_PAD_MS,
-    show_default=True,
-    help="Symmetric extra context added around detected speech regions.",
 )
 @click.option(
     "--carryover/--no-carryover",
@@ -94,57 +65,22 @@ class CLIError(click.ClickException):
     help="Carry a bounded prompt suffix across adjacent inference windows.",
 )
 @click.option(
-    "--carryover-max-sentences",
-    type=int,
-    default=DEFAULT_CARRYOVER_MAX_SENTENCES,
-    show_default=True,
-    help="Maximum trailing sentences to reuse as prompt carryover.",
-)
-@click.option(
-    "--carryover-max-tokens",
-    type=int,
-    default=DEFAULT_CARRYOVER_MAX_TOKENS,
-    show_default=True,
-    help="Approximate token budget for prompt carryover per inference window.",
-)
-@click.option(
-    "--threads",
-    "asr_threads",
-    type=int,
-    default=None,
-    show_default="auto",
-    help="Number of whisper.cpp inference threads to use.",
-)
-@click.option(
-    "--keep-audio/--no-keep-audio",
-    default=False,
-    show_default=True,
-    help="Keep the normalized transcription audio as a run artifact.",
-)
-@click.option(
-    "--audio-format",
+    "--keep-audio",
     "kept_audio_format",
     type=click.Choice(["wav", "mp3"], case_sensitive=False),
-    default="wav",
-    show_default=True,
-    help="Format for the kept transcription audio artifact.",
+    default=None,
+    metavar="FORMAT",
+    help="Keep normalized transcription audio as FORMAT: wav or mp3.",
 )
 @click.option("--llm", is_flag=True, help="Enable optional provider-backed report enhancement.")
 def main(
     input_path: Path,
     output_dir: Path | None,
     asr_model: str | None,
+    language: str | None,
     vad: bool,
-    vad_threshold: float,
-    min_speech_ms: int,
-    min_silence_ms: int,
-    speech_region_pad_ms: int,
     carryover: bool,
-    carryover_max_sentences: int,
-    carryover_max_tokens: int,
-    asr_threads: int | None,
-    keep_audio: bool,
-    kept_audio_format: str,
+    kept_audio_format: str | None,
     llm: bool,
 ) -> None:
     """Transcribe an audio or video input file.
@@ -160,28 +96,28 @@ def main(
         raise CLIError(f"Input path is not a file: {input_path}")
 
     reporter = RichStageReporter()
-    asr_threads = asr_threads or default_asr_threads()
 
     try:
         process_input(
             input_path=input_path,
             output_dir=output_dir,
             asr_model=asr_model,
+            language=language,
             vad=VadSettings(
                 enabled=vad,
-                threshold=vad_threshold,
-                min_speech_duration_ms=min_speech_ms,
-                min_silence_duration_ms=min_silence_ms,
-                speech_region_pad_ms=speech_region_pad_ms,
+                threshold=DEFAULT_VAD_THRESHOLD,
+                min_speech_duration_ms=DEFAULT_MIN_SPEECH_DURATION_MS,
+                min_silence_duration_ms=DEFAULT_MIN_SILENCE_DURATION_MS,
+                speech_region_pad_ms=DEFAULT_SPEECH_REGION_PAD_MS,
             ),
             carryover=PromptCarryoverSettings(
                 enabled=carryover,
-                max_sentences=carryover_max_sentences,
-                max_tokens=carryover_max_tokens,
+                max_sentences=DEFAULT_CARRYOVER_MAX_SENTENCES,
+                max_tokens=DEFAULT_CARRYOVER_MAX_TOKENS,
             ),
-            asr_threads=asr_threads,
-            keep_audio=keep_audio,
-            kept_audio_format=kept_audio_format,
+            asr_threads=default_asr_threads(),
+            keep_audio=kept_audio_format is not None,
+            kept_audio_format=kept_audio_format or "wav",
             enable_llm=llm,
             reporter=reporter,
         )

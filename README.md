@@ -70,7 +70,7 @@ run directory under `runs/`. Use `--output-dir` to choose a specific location.
 
 ```bash
 webinar-transcriber INPUT
-webinar-transcriber INPUT --keep-audio --audio-format mp3
+webinar-transcriber INPUT --keep-audio mp3
 webinar-transcriber INPUT --output-dir runs/custom-demo
 ```
 
@@ -126,7 +126,7 @@ Successful default runs write:
 
 Depending on options and input type, successful default runs also write:
 
-- `transcription-audio.wav` or `transcription-audio.mp3` with `--keep-audio`
+- `transcription-audio.wav` or `transcription-audio.mp3` with `--keep-audio FORMAT`
 - `scenes.json` and `frames/` for video input
 
 Failed runs also write `diagnostics.json` once the run directory exists, though they may still leave
@@ -173,27 +173,19 @@ curl -L \
     https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin
 ```
 
-### VAD Tuning
+### Speech Detection
 
-Silero VAD behavior can be tuned from the CLI:
+Silero VAD is enabled by default and uses the project's selected speech-region defaults. Pass
+`--no-vad` only when you need to transcribe the full audio without speech-region planning.
 
-- `--vad/--no-vad`: enable or disable Silero speech-region detection before ASR planning.
-- `--vad-threshold FLOAT`: set the Silero speech detection threshold.
-- `--min-speech-ms INT`: require this much speech before a region is kept.
-- `--min-silence-ms INT`: require this much silence before adjacent regions are split.
-- `--speech-region-pad-ms INT`: add symmetric padding to detected speech regions during ASR
-  planning.
+### ASR Controls
 
-### ASR Tuning
+The default ASR path uses the selected `whisper.cpp` model, automatic language detection, bounded
+prompt carryover, and an automatically selected thread count.
 
-`whisper.cpp` decode behavior can be tuned from the CLI:
-
+- `--language CODE`: force a Whisper language code such as `en` or `ru`.
 - `--carryover/--no-carryover`: enable or disable bounded prompt carryover between adjacent
   inference windows.
-- `--carryover-max-sentences INT`: cap how many trailing sentences can be reused as carryover.
-- `--carryover-max-tokens INT`: cap the approximate token budget for carryover text per inference
-  window.
-- `--threads INT`: set the number of `whisper.cpp` inference threads.
 
 ## Reference
 
@@ -210,8 +202,8 @@ runs/<timestamp>_<basename>/
 ├─ metadata.json
 ├─ transcript.json
 ├─ transcript.vtt
-├─ transcription-audio.wav # optional via --keep-audio
-├─ transcription-audio.mp3 # optional via --keep-audio --audio-format mp3
+├─ transcription-audio.wav # optional via --keep-audio wav
+├─ transcription-audio.mp3 # optional via --keep-audio mp3
 ├─ scenes.json             # video only
 ├─ diagnostics.json
 ├─ report.md

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from contextlib import nullcontext, suppress
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -96,13 +95,15 @@ def write_diagnostics(
         failed_stage=failed_stage,
         error=error,
     )
-    error_scope = suppress(Exception) if suppress_errors else nullcontext()
-    with error_scope:
+    try:
         layout.diagnostics_path.parent.mkdir(parents=True, exist_ok=True)
         layout.diagnostics_path.write_text(
             json.dumps(asdict(diagnostics), indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+    except Exception:
+        if not suppress_errors:
+            raise
     return diagnostics
 
 
