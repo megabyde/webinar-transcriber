@@ -16,7 +16,7 @@ from webinar_transcriber.video.scenes import (
     _select_scene_starts,
 )
 
-FIXTURE_DIR = Path(__file__).parents[2] / "tests" / "fixtures"
+FIXTURE_DIR = Path(__file__).parent / "fixtures"
 SAMPLE_VIDEO_PATH = FIXTURE_DIR / "sample-video.mp4"
 
 

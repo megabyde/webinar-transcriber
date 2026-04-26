@@ -104,8 +104,12 @@ class TestBuildLlmProcessorFromEnv:
         assert fake_instructor.calls == [
             (
                 "anthropic/claude-test",
-                {"api_key": "test-key", "mode": FakeInstructorModule.Mode.TOOLS},
-            )
+                {
+                    "async_client": True,
+                    "api_key": "test-key",
+                    "mode": FakeInstructorModule.Mode.TOOLS,
+                },
+            ),
         ]
 
     def test_requires_llm_extra_for_anthropic(self, monkeypatch) -> None:
@@ -148,8 +152,12 @@ class TestBuildLlmProcessorFromEnv:
         assert fake_instructor.calls == [
             (
                 "openai/gpt-test",
-                {"api_key": "test-key", "mode": FakeInstructorModule.Mode.TOOLS},
-            )
+                {
+                    "async_client": True,
+                    "api_key": "test-key",
+                    "mode": FakeInstructorModule.Mode.TOOLS,
+                },
+            ),
         ]
 
 
@@ -163,7 +171,7 @@ class TestInstructorLlmProcessor:
             self.calls: list[dict[str, object]] = []
             self._responses = list(responses)
 
-        def create_with_completion(self, **kwargs):
+        async def create_with_completion(self, **kwargs):
             self.calls.append(kwargs)
             response = self._responses.pop(0)
             if isinstance(response, Exception):
@@ -448,7 +456,7 @@ class TestInstructorLlmProcessor:
 class TestInstructorProcessorFlow:
     class StubProcessor(InstructorLLMProcessor):
         class UnusedClient:
-            def create_with_completion(self, **_kwargs):
+            async def create_with_completion(self, **_kwargs):
                 raise AssertionError("unused")
 
         def __init__(
@@ -467,6 +475,11 @@ class TestInstructorProcessorFlow:
             if isinstance(response, Exception):
                 raise response
             return response
+
+        async def _create_structured_response_async(
+            self, **kwargs
+        ) -> tuple[BaseModel, dict[str, int]]:
+            return self._create_structured_response(**kwargs)
 
     def test_returns_empty_section_result_for_report_without_sections(self) -> None:
         processor = self.StubProcessor({})
