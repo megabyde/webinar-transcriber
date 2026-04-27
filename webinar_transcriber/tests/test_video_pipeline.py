@@ -76,7 +76,7 @@ class TestFrameExtraction:
         )
 
         assert [frame.scene_id for frame in frames] == ["scene-1", "scene-2"]
-        assert [frame.timestamp_sec for frame in frames] == [0.5, 1.5]
+        assert [frame.timestamp_sec for frame in frames] == [1.0, 2.0]
         assert all(Path(frame.image_path).exists() for frame in frames)
         for frame in frames:
             with Image.open(frame.image_path) as image:
@@ -156,7 +156,7 @@ class TestFrameExtraction:
         assert [frame.scene_id for frame in frames] == ["scene-2"]
         assert len(progress_ticks) == 2
         assert warnings == [
-            f"Frame extraction failed for scene-1 at 0.5s: "
+            f"Frame extraction failed for scene-1 at 1.0s: "
             f"ffmpeg did not write {tmp_path / 'frames' / 'scene-1.png'}"
         ]
 
@@ -183,8 +183,8 @@ class TestFrameExtraction:
             tmp_path / "frames",
         )
 
-        assert captured_timestamps == [2.5]
-        assert frames[0].timestamp_sec == 2.5
+        assert captured_timestamps == [3.0]
+        assert frames[0].timestamp_sec == 3.0
 
     def test_extract_frame_returns_false_when_open_fails(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -487,7 +487,7 @@ class TestSelectSceneStarts:
 
         assert scene_starts == [0.0, 4.0]
         assert duration_sec == 5.0
-        assert progress_updates == [(1, 1), (2, 1), (3, 2), (5, 2)]
+        assert progress_updates == [(1, 1), (2, 1), (3, 2), (10, 2)]
 
     def test_select_scene_starts_returns_zero_duration_without_container_or_stream_duration(
         self, monkeypatch: pytest.MonkeyPatch

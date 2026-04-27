@@ -610,7 +610,7 @@ class TestProcessInput:
         assert artifacts.report.sections[0].image_path
         assert reporter.has_event("start", "detect_scenes", "Detecting scenes")
         assert reporter.has_event("finish", "detect_scenes", "2 scenes")
-        assert reporter.has_progress_event("start", "detect_scenes", 2.0, "0 scenes")
+        assert reporter.has_progress_event("start", "detect_scenes", 4.0, "0 scenes")
         assert reporter.has_progress_event("advance", "detect_scenes", 1.0, "1 scene")
         assert reporter.has_progress_event("advance", "detect_scenes", 1.0, "2 scenes")
         assert reporter.has_progress_event(
@@ -752,7 +752,7 @@ class TestProcessInput:
 
         assert reporter.has_event("start", "detect_scenes", "Detecting scenes")
         assert reporter.has_event("finish", "detect_scenes", "1 scene")
-        assert reporter.has_progress_event("start", "detect_scenes", 2.0, "0 scenes")
+        assert reporter.has_progress_event("start", "detect_scenes", 4.0, "0 scenes")
         assert reporter.has_progress_event("advance", "detect_scenes", 1.0, "1 scene")
 
     def test_runs_windowed_whispercpp_pipeline(self, tmp_path, monkeypatch) -> None:

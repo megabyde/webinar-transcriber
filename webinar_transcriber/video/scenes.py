@@ -22,9 +22,9 @@ if TYPE_CHECKING:
     from av.video.stream import VideoStream
 
 
-MIN_SCENE_LENGTH_SEC = 3.0
-SCENE_SCAN_FPS = 1.0
-SCENE_SCORE_THRESHOLD = 0.008
+MIN_SCENE_LENGTH_SEC = 2.0
+SCENE_SCAN_FPS = 2.0
+SCENE_SCORE_THRESHOLD = 0.006
 
 
 def detect_scenes(
