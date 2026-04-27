@@ -15,9 +15,10 @@ audio-only input and slide-based video, detects scenes for video runs, and keeps
 local with PyAV, Silero VAD, and `whisper.cpp`.
 
 The default flow is deterministic: normalize the media, detect speech regions, transcribe locally,
-reconcile overlapping windows, and build report sections, summary bullets, and action items with
-heuristics. Optional provider-backed LLM refinement can polish section text and report metadata on
-top of that local output, but it does not replace the base pipeline.
+reconcile overlapping windows, and build report sections with local heuristics. Optional
+provider-backed LLM refinement can polish section text and add summary bullets, action items,
+section titles, and section TL;DRs on top of that local output, but it does not replace the base
+pipeline.
 
 ## Install
 
@@ -145,7 +146,7 @@ only partial intermediate artifacts and no final report outputs.
 1. Transcribe the windows locally with `whisper.cpp`.
 1. Reconcile adjacent windows into one transcript.
 1. Detect scenes and extract representative frames for video input.
-1. Build sections, summaries, and action items.
+1. Build report sections with local heuristics.
 1. Optionally polish the report with an LLM.
 1. Write report, subtitle, diagnostic, and intermediate artifacts.
 
