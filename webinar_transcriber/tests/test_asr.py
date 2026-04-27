@@ -1,9 +1,8 @@
 """Tests for the whisper.cpp ASR adapter."""
 
 import os
-import subprocess
 from pathlib import Path
-from typing import ClassVar, cast
+from typing import cast
 
 import numpy as np
 import pytest
@@ -21,7 +20,6 @@ from webinar_transcriber.asr.config import (
     DEFAULT_WHISPER_ENTROPY_THOLD,
     DEFAULT_WHISPER_LOGPROB_THOLD,
     DEFAULT_WHISPER_NO_SPEECH_THOLD,
-    _read_sysctl_int,
     default_asr_threads,
 )
 from webinar_transcriber.asr.transcriber import _device_name_from_system_info, _PyWhisperModel
@@ -36,67 +34,65 @@ class FakeSegment:
 
 
 class FakeModel:
-    init_calls: ClassVar[list[tuple[str, dict[str, object]]]] = []
-    transcribe_calls: ClassVar[list[tuple[np.ndarray, dict[str, str | None]]]] = []
-    auto_detect_calls: ClassVar[list[tuple[np.ndarray, int]]] = []
-    system_info_value: ClassVar[str] = "CPU = 1"
-    detected_language: ClassVar[str] = "en"
-    returned_segments: ClassVar[list[list[FakeSegment]]] = [[FakeSegment(0, 100, "agenda review")]]
-    init_error: ClassVar[Exception | None] = None
-    transcribe_error: ClassVar[Exception | None] = None
+    def __init__(self) -> None:
+        self.init_calls: list[tuple[str, dict[str, object]]] = []
+        self.transcribe_calls: list[tuple[np.ndarray, dict[str, str | None]]] = []
+        self.auto_detect_calls: list[tuple[np.ndarray, int]] = []
+        self.system_info_value = "CPU = 1"
+        self.detected_language = "en"
+        self.returned_segments = [[FakeSegment(0, 100, "agenda review")]]
+        self.init_error: Exception | None = None
+        self.transcribe_error: Exception | None = None
 
-    def __init__(self, model_name: str, **kwargs) -> None:
-        type(self).init_calls.append((model_name, kwargs))
-        if (init_error := type(self).init_error) is not None:
+    def __call__(self, model_name: str, **kwargs) -> "FakeModel":
+        self.init_calls.append((model_name, kwargs))
+        if (init_error := self.init_error) is not None:
             raise init_error
-
-    @classmethod
-    def reset(cls) -> None:
-        cls.init_calls = []
-        cls.transcribe_calls = []
-        cls.auto_detect_calls = []
-        cls.system_info_value = "CPU = 1"
-        cls.detected_language = "en"
-        cls.returned_segments = [[FakeSegment(0, 100, "agenda review")]]
-        cls.init_error = None
-        cls.transcribe_error = None
+        return self
 
     def system_info(self) -> str:
-        return type(self).system_info_value
+        return self.system_info_value
 
     def transcribe(self, audio_samples: np.ndarray, **kwargs: str | None) -> list[FakeSegment]:
-        type(self).transcribe_calls.append((audio_samples.copy(), kwargs))
-        if (transcribe_error := type(self).transcribe_error) is not None:
+        self.transcribe_calls.append((audio_samples.copy(), kwargs))
+        if (transcribe_error := self.transcribe_error) is not None:
             raise transcribe_error
-        call_index = len(type(self).transcribe_calls) - 1
-        if call_index < len(type(self).returned_segments):
-            return type(self).returned_segments[call_index]
+        call_index = len(self.transcribe_calls) - 1
+        if call_index < len(self.returned_segments):
+            return self.returned_segments[call_index]
         return []
 
     def auto_detect_language(
         self, audio_samples: np.ndarray, *, n_threads: int
     ) -> tuple[tuple[str, float], dict[str, float]]:
-        type(self).auto_detect_calls.append((audio_samples.copy(), n_threads))
-        return ((type(self).detected_language, 0.99), {type(self).detected_language: 0.99})
+        self.auto_detect_calls.append((audio_samples.copy(), n_threads))
+        return ((self.detected_language, 0.99), {self.detected_language: 0.99})
 
 
 class FakeModelWithNullContext(FakeModel):
-    def __init__(self, model_name: str, **kwargs) -> None:
-        super().__init__(model_name, **kwargs)
+    def __call__(self, model_name: str, **kwargs) -> "FakeModelWithNullContext":
+        super().__call__(model_name, **kwargs)
         self._ctx = None
+        return self
 
 
 def install_fake_pywhispercpp(
     monkeypatch: pytest.MonkeyPatch,
     *,
-    model_cls: type[FakeModel] = FakeModel,
-) -> None:
-    model_cls.reset()
-    monkeypatch.setattr("webinar_transcriber.asr.transcriber._model_cls", lambda: model_cls)
+    model: FakeModel | None = None,
+) -> FakeModel:
+    fake_model = model or FakeModel()
+    monkeypatch.setattr("webinar_transcriber.asr.transcriber._model_cls", lambda: fake_model)
     monkeypatch.setattr(
         "webinar_transcriber.asr.transcriber._disable_tqdm_progress",
         lambda: __import__("contextlib").nullcontext(),
     )
+    return fake_model
+
+
+@pytest.fixture
+def fake_model(monkeypatch: pytest.MonkeyPatch) -> FakeModel:
+    return install_fake_pywhispercpp(monkeypatch)
 
 
 class TestWhisperCppTranscriber:
@@ -123,26 +119,25 @@ class TestWhisperCppTranscriber:
         assert "Download a whisper.cpp model there" in message
         assert DEFAULT_WHISPER_CPP_MODEL_EXAMPLE in message
 
-    def test_prepare_model_uses_default_model_identifier(self, monkeypatch) -> None:
-        install_fake_pywhispercpp(monkeypatch)
+    def test_prepare_model_uses_default_model_identifier(self, fake_model: FakeModel) -> None:
         transcriber = WhisperCppTranscriber()
 
         transcriber.prepare_model()
 
-        assert FakeModel.init_calls[0][0] == DEFAULT_WHISPER_CPP_MODEL_FILENAME
+        assert fake_model.init_calls[0][0] == DEFAULT_WHISPER_CPP_MODEL_FILENAME
         assert transcriber.model_name == DEFAULT_WHISPER_CPP_MODEL_FILENAME
 
-    def test_prepare_model_uses_explicit_model_identifier(self, monkeypatch) -> None:
-        install_fake_pywhispercpp(monkeypatch)
+    def test_prepare_model_uses_explicit_model_identifier(self, fake_model: FakeModel) -> None:
         transcriber = WhisperCppTranscriber(model_name="base")
 
         transcriber.prepare_model()
 
-        assert FakeModel.init_calls[0][0] == "base"
+        assert fake_model.init_calls[0][0] == "base"
         assert transcriber.model_name == "base"
 
-    def test_prepare_model_disables_tqdm_progress_during_model_setup(self, monkeypatch) -> None:
-        install_fake_pywhispercpp(monkeypatch)
+    def test_prepare_model_disables_tqdm_progress_during_model_setup(
+        self, monkeypatch, fake_model: FakeModel
+    ) -> None:
         progress_context_calls: list[str] = []
 
         class _ProgressContext:
@@ -165,12 +160,10 @@ class TestWhisperCppTranscriber:
 
         assert progress_context_calls == ["enter", "exit"]
 
-    def test_prepare_model_passes_decode_settings(self, monkeypatch) -> None:
-        install_fake_pywhispercpp(monkeypatch)
-
+    def test_prepare_model_passes_decode_settings(self, fake_model: FakeModel) -> None:
         WhisperCppTranscriber(threads=6).prepare_model()
 
-        _, kwargs = FakeModel.init_calls[0]
+        _, kwargs = fake_model.init_calls[0]
         assert kwargs["n_threads"] == 6
         assert kwargs["print_realtime"] is False
         assert kwargs["print_progress"] is False
@@ -184,41 +177,41 @@ class TestWhisperCppTranscriber:
         self, monkeypatch, tmp_path, capfd
     ) -> None:
         class NativeOutputModel(FakeModel):
-            def __init__(self, model_name: str, **kwargs) -> None:
+            def __call__(self, model_name: str, **kwargs) -> "NativeOutputModel":
                 os.write(1, b"native stdout\n")
                 os.write(2, b"native stderr\n")
-                super().__init__(model_name, **kwargs)
+                super().__call__(model_name, **kwargs)
+                return self
 
-        install_fake_pywhispercpp(monkeypatch, model_cls=NativeOutputModel)
+        native_model = NativeOutputModel()
+        install_fake_pywhispercpp(monkeypatch, model=native_model)
         log_path = tmp_path / "whisper-cpp.log"
 
         transcriber = WhisperCppTranscriber()
         transcriber.set_log_path(log_path)
         transcriber.prepare_model()
 
-        _, kwargs = NativeOutputModel.init_calls[0]
+        _, kwargs = native_model.init_calls[0]
         assert "redirect_whispercpp_logs_to" not in kwargs
         captured = capfd.readouterr()
         assert captured.out == ""
         assert captured.err == ""
         assert log_path.read_text(encoding="utf-8") == "native stdout\nnative stderr\n"
 
-    def test_prepare_model_wraps_model_initialization_failures(self, monkeypatch) -> None:
-        install_fake_pywhispercpp(monkeypatch)
-        FakeModel.init_error = RuntimeError("boom")
+    def test_prepare_model_wraps_model_initialization_failures(self, fake_model: FakeModel) -> None:
+        fake_model.init_error = RuntimeError("boom")
 
         with pytest.raises(ASRProcessingError, match=r"Could not prepare whisper\.cpp model"):
             WhisperCppTranscriber().prepare_model()
 
     def test_prepare_model_rejects_model_without_native_context(self, monkeypatch) -> None:
-        install_fake_pywhispercpp(monkeypatch, model_cls=FakeModelWithNullContext)
+        install_fake_pywhispercpp(monkeypatch, model=FakeModelWithNullContext())
 
         with pytest.raises(ASRProcessingError, match=r"Could not prepare whisper\.cpp model"):
             WhisperCppTranscriber().prepare_model()
 
-    def test_prepare_model_reads_runtime_details(self, monkeypatch, tmp_path) -> None:
-        install_fake_pywhispercpp(monkeypatch)
-        FakeModel.system_info_value = "METAL = 1"
+    def test_prepare_model_reads_runtime_details(self, fake_model: FakeModel, tmp_path) -> None:
+        fake_model.system_info_value = "METAL = 1"
         model_path = tmp_path / "model.bin"
         model_path.write_text("stub", encoding="utf-8")
 
@@ -228,8 +221,9 @@ class TestWhisperCppTranscriber:
         assert transcriber.device_name == "metal"
         assert transcriber.system_info == "METAL = 1"
 
-    def test_transcriber_context_manager_clears_prepared_model(self, monkeypatch, tmp_path) -> None:
-        install_fake_pywhispercpp(monkeypatch)
+    def test_transcriber_context_manager_clears_prepared_model(
+        self, fake_model: FakeModel, tmp_path
+    ) -> None:
         model_path = tmp_path / "model.bin"
         model_path.write_text("stub", encoding="utf-8")
 
@@ -242,11 +236,16 @@ class TestWhisperCppTranscriber:
     def test_close_redirects_native_teardown_output_to_log(
         self, monkeypatch, tmp_path, capfd
     ) -> None:
-        class NativeTeardownModel(FakeModel):
+        class NativeTeardownRuntime(FakeModel):
             def __del__(self) -> None:
                 os.write(2, b"native teardown\n")
 
-        install_fake_pywhispercpp(monkeypatch, model_cls=NativeTeardownModel)
+        class NativeTeardownModel(FakeModel):
+            def __call__(self, model_name: str, **kwargs) -> NativeTeardownRuntime:
+                super().__call__(model_name, **kwargs)
+                return NativeTeardownRuntime()
+
+        install_fake_pywhispercpp(monkeypatch, model=NativeTeardownModel())
         log_path = tmp_path / "whisper-cpp.log"
         transcriber = WhisperCppTranscriber()
         transcriber.set_log_path(log_path)
@@ -301,12 +300,11 @@ class TestWhisperCppTranscriber:
         assert transcriber._log_path == log_path
 
     def test_whisper_cpp_transcriber_carries_input_prompt_into_decoded_windows(
-        self, monkeypatch
+        self, fake_model: FakeModel
     ) -> None:
-        install_fake_pywhispercpp(monkeypatch)
-        FakeModel.system_info_value = "CPU = 1 | CUDA = 1"
-        FakeModel.detected_language = "ru"
-        FakeModel.returned_segments = [
+        fake_model.system_info_value = "CPU = 1 | CUDA = 1"
+        fake_model.detected_language = "ru"
+        fake_model.returned_segments = [
             [FakeSegment(0, 100, "agenda review")],
             [FakeSegment(0, 100, "agenda review follow up")],
         ]
@@ -329,16 +327,28 @@ class TestWhisperCppTranscriber:
         assert [w.input_prompt for w in decoded_windows] == [None, "agenda review"]
         assert progress_updates == [1.0, 2.0]
         assert transcriber.device_name == "cuda"
-        assert len(FakeModel.auto_detect_calls) == 1
+        assert len(fake_model.auto_detect_calls) == 1
         np.testing.assert_array_equal(
-            FakeModel.auto_detect_calls[0][0], np.zeros(16_000, dtype=np.float32)
+            fake_model.auto_detect_calls[0][0], np.zeros(16_000, dtype=np.float32)
         )
-        assert FakeModel.auto_detect_calls[0][1] == 6
-        assert FakeModel.transcribe_calls[0][1] == {}
-        assert FakeModel.transcribe_calls[1][1] == {
+        assert fake_model.auto_detect_calls[0][1] == 6
+        assert fake_model.transcribe_calls[0][1] == {}
+        assert fake_model.transcribe_calls[1][1] == {
             "initial_prompt": "agenda review",
             "language": "ru",
         }
+
+    def test_transcribe_inference_windows_uses_forced_language(self, fake_model: FakeModel) -> None:
+        fake_model.detected_language = "ru"
+
+        decoded_windows = WhisperCppTranscriber(language="en").transcribe_inference_windows(
+            np.zeros(16_000, dtype=np.float32),
+            [InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
+        )
+
+        assert [window.language for window in decoded_windows] == ["en"]
+        assert fake_model.auto_detect_calls == []
+        assert fake_model.transcribe_calls[0][1] == {"language": "en"}
 
     def test_model_cls_imports_pywhispercpp_model(self, monkeypatch) -> None:
         monkeypatch.setattr(
@@ -383,9 +393,10 @@ class TestWhisperCppTranscriber:
 
         assert capsys.readouterr().err == ""
 
-    def test_transcribe_inference_windows_clips_segment_times_to_window(self, monkeypatch) -> None:
-        install_fake_pywhispercpp(monkeypatch)
-        FakeModel.returned_segments = [[FakeSegment(-50, 300, "agenda review")]]
+    def test_transcribe_inference_windows_clips_segment_times_to_window(
+        self, fake_model: FakeModel
+    ) -> None:
+        fake_model.returned_segments = [[FakeSegment(-50, 300, "agenda review")]]
         transcriber = WhisperCppTranscriber()
 
         decoded_window = transcriber.transcribe_inference_windows(
@@ -403,9 +414,8 @@ class TestWhisperCppTranscriber:
         ]
 
     def test_transcribe_inference_windows_returns_empty_window_for_empty_audio(
-        self, monkeypatch
+        self, fake_model: FakeModel
     ) -> None:
-        install_fake_pywhispercpp(monkeypatch)
         transcriber = WhisperCppTranscriber()
 
         decoded_window = transcriber.transcribe_inference_windows(
@@ -414,11 +424,12 @@ class TestWhisperCppTranscriber:
         )[0]
 
         assert decoded_window.segments == []
-        assert FakeModel.transcribe_calls == []
+        assert fake_model.transcribe_calls == []
 
-    def test_transcribe_inference_windows_handles_model_without_segments(self, monkeypatch) -> None:
-        install_fake_pywhispercpp(monkeypatch)
-        FakeModel.returned_segments = []
+    def test_transcribe_inference_windows_handles_model_without_segments(
+        self, fake_model: FakeModel
+    ) -> None:
+        fake_model.returned_segments = []
 
         decoded_window = WhisperCppTranscriber().transcribe_inference_windows(
             np.zeros(16_000, dtype=np.float32),
@@ -428,9 +439,8 @@ class TestWhisperCppTranscriber:
         assert decoded_window.text == ""
         assert decoded_window.segments == []
 
-    def test_transcribe_inference_windows_wraps_model_failures(self, monkeypatch) -> None:
-        install_fake_pywhispercpp(monkeypatch)
-        FakeModel.transcribe_error = RuntimeError("boom")
+    def test_transcribe_inference_windows_wraps_model_failures(self, fake_model: FakeModel) -> None:
+        fake_model.transcribe_error = RuntimeError("boom")
 
         with pytest.raises(ASRProcessingError, match=r"whisper\.cpp inference failed for window-1"):
             WhisperCppTranscriber().transcribe_inference_windows(
@@ -438,38 +448,17 @@ class TestWhisperCppTranscriber:
                 [InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
             )
 
-    @pytest.mark.parametrize("stdout", ["abc", "0"])
-    def test_read_sysctl_int_returns_none_for_invalid_or_nonpositive_values(
-        self, monkeypatch: pytest.MonkeyPatch, stdout: str
-    ) -> None:
-        monkeypatch.setattr(
-            "webinar_transcriber.asr.config.subprocess.run",
-            lambda *_args, **_kwargs: type("Result", (), {"stdout": stdout})(),
-        )
-
-        assert _read_sysctl_int("hw.physicalcpu") is None
-
-    def test_read_sysctl_int_returns_none_on_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        def fake_run(*_args, **_kwargs):
-            raise subprocess.TimeoutExpired(cmd=["sysctl"], timeout=1.0)
-
-        monkeypatch.setattr("webinar_transcriber.asr.config.subprocess.run", fake_run)
-
-        assert _read_sysctl_int("hw.physicalcpu") is None
-
-    def test_default_asr_threads_uses_sysctl_priority_then_cpu_count(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        values = {
-            "hw.perflevel0.physicalcpu": None,
-            "hw.physicalcpu": 6,
-        }
-        monkeypatch.setattr(
-            "webinar_transcriber.asr.config._read_sysctl_int", lambda name: values[name]
-        )
+    def test_default_asr_threads_uses_cpu_count(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr("webinar_transcriber.asr.config.os.cpu_count", lambda: 8)
 
-        assert default_asr_threads() == 6
+        assert default_asr_threads() == 8
+
+    def test_default_asr_threads_falls_back_to_positive_default(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("webinar_transcriber.asr.config.os.cpu_count", lambda: None)
+
+        assert default_asr_threads() == 4
 
     def test_transcriber_properties_are_safe_before_runtime_is_prepared(self) -> None:
         transcriber = WhisperCppTranscriber(threads=0)
@@ -478,10 +467,9 @@ class TestWhisperCppTranscriber:
         assert transcriber.system_info is None
 
     def test_transcribe_inference_windows_reuses_existing_model_without_prepare(
-        self, monkeypatch
+        self, fake_model: FakeModel
     ) -> None:
-        install_fake_pywhispercpp(monkeypatch)
-        fake_model = FakeModel("stub.bin")
+        fake_model("stub.bin")
 
         class ReuseModelTranscriber(WhisperCppTranscriber):
             def prepare_model(self) -> None:

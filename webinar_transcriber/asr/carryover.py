@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 _CARRYOVER_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 _CARRYOVER_WHITESPACE = re.compile(r"\s+")
-_CARRYOVER_TRAILING_NOISE = re.compile(r"[\(\[\{<\"'`]+$|[\s\-:,;]+$")
+_CARRYOVER_TRAILING_NOISE = re.compile(r"[(\[{<\"'`]+$|[\s\-:,;]+$")
 
 
 def build_prompt_carryover(

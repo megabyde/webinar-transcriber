@@ -35,6 +35,7 @@ from webinar_transcriber.models import (
     TranscriptSegment,
     VideoAsset,
 )
+from webinar_transcriber.paths import RunLayout
 from webinar_transcriber.processor import (
     ProcessArtifacts,
     process_input,
@@ -211,6 +212,7 @@ class TestProcessInput:
         ) -> None:
             super().__init__(model_name="test-model")
             self._detected_language = detected_language
+            self.language_hints: list[str | None] = []
             self._segments = segments or [
                 TranscriptSegment(
                     id="segment-1",
@@ -238,9 +240,10 @@ class TestProcessInput:
             """No-op test hook for the ASR preparation stage."""
 
         def transcribe_inference_windows(
-            self, audio_samples, windows, *, progress_callback=None
+            self, audio_samples, windows, *, language=None, progress_callback=None
         ) -> list[DecodedWindow]:
             del audio_samples
+            self.language_hints.append(language)
             assert progress_callback is not None
             for window in windows:
                 progress_callback(window.end_sec, len(self._segments))
@@ -268,13 +271,16 @@ class TestProcessInput:
             ),
         )
         reporter = RecordingReporter()
+        transcriber = self.FakeTranscriber()
         artifacts = process_input(
             FIXTURE_DIR / "sample-audio.mp3",
             output_dir=tmp_path / "run",
-            transcriber=self.FakeTranscriber(),
+            language="en",
+            transcriber=transcriber,
             reporter=reporter,
         )
 
+        assert transcriber.language_hints == ["en"]
         assert artifacts.layout.metadata_path.exists()
         assert artifacts.layout.transcript_path.exists()
         assert artifacts.layout.subtitle_vtt_path.exists()
@@ -353,6 +359,44 @@ class TestProcessInput:
         )
 
         assert diagnostics is None
+
+    def test_write_run_diagnostics_can_suppress_write_errors(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        ctx = RunContext(
+            reporter=BaseStageReporter(),
+            asr_pipeline=AsrPipelineState(vad_enabled=True, threads=1),
+            layout=RunLayout(run_dir=tmp_path),
+        )
+
+        def fail_write_text(self, *args, **kwargs):
+            del self, args, kwargs
+            raise OSError("readonly")
+
+        monkeypatch.setattr(Path, "write_text", fail_write_text)
+
+        diagnostics = write_run_diagnostics(
+            ctx,
+            status="failed",
+            failed_stage="prepare_run_dir",
+            error="boom",
+            asr_model="test-model",
+            llm_enabled=False,
+            suppress_errors=True,
+        )
+
+        assert diagnostics is not None
+        assert diagnostics.error == "boom"
+
+        with pytest.raises(OSError, match="readonly"):
+            write_run_diagnostics(
+                ctx,
+                status="failed",
+                failed_stage="prepare_run_dir",
+                error="boom",
+                asr_model="test-model",
+                llm_enabled=False,
+            )
 
     def test_stage_records_timing_on_failure_without_finish_event(self) -> None:
         reporter = RecordingReporter()
@@ -727,9 +771,10 @@ class TestProcessInput:
                 return None
 
             def transcribe_inference_windows(
-                self, audio_samples, windows, *, progress_callback=None
+                self, audio_samples, windows, *, language=None, progress_callback=None
             ) -> list[DecodedWindow]:
                 del audio_samples
+                assert language is None
                 assert progress_callback is not None
                 assert windows == [
                     InferenceWindow(
@@ -827,9 +872,10 @@ class TestProcessInput:
                 return None
 
             def transcribe_inference_windows(
-                self, audio_samples, windows, *, progress_callback=None
+                self, audio_samples, windows, *, language=None, progress_callback=None
             ) -> list[DecodedWindow]:
                 del audio_samples
+                assert language is None
                 assert progress_callback is not None
                 assert windows == [
                     InferenceWindow(
@@ -941,9 +987,9 @@ class TestProcessInput:
                 return None
 
             def transcribe_inference_windows(
-                self, audio_samples, windows, *, progress_callback=None
+                self, audio_samples, windows, *, language=None, progress_callback=None
             ) -> list[DecodedWindow]:
-                del audio_samples, progress_callback
+                del audio_samples, language, progress_callback
                 return [
                     DecodedWindow(
                         window=windows[0],

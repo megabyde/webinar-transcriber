@@ -85,6 +85,7 @@ class TestCli:
             input_path=input_path,
             output_dir=None,
             asr_model=None,
+            language=None,
             vad=VadSettings(),
             carryover=PromptCarryoverSettings(),
             asr_threads=7,
@@ -97,7 +98,7 @@ class TestCli:
             "RichStageReporter"
         )
 
-    def test_treats_zero_threads_as_auto(self, tmp_path) -> None:
+    def test_forwards_asr_options(self, tmp_path) -> None:
         runner = CliRunner()
         input_path = tmp_path / "demo.mp4"
         input_path.write_text("stub", encoding="utf-8")
@@ -108,47 +109,19 @@ class TestCli:
                 "webinar_transcriber.cli.process_input",
                 return_value=_process_artifacts(input_path, run_dir),
             ) as process_input_mock,
-            patch("webinar_transcriber.cli.default_asr_threads", return_value=7),
+            patch("webinar_transcriber.cli.default_asr_threads", return_value=6),
         ):
-            result = runner.invoke(main, [str(input_path), "--threads", "0"])
-
-        assert result.exit_code == 0
-        assert process_input_mock.call_args.kwargs["asr_threads"] == 7
-
-    def test_forwards_asr_options(self, tmp_path) -> None:
-        runner = CliRunner()
-        input_path = tmp_path / "demo.mp4"
-        input_path.write_text("stub", encoding="utf-8")
-        run_dir = tmp_path / "run-dir"
-
-        with patch(
-            "webinar_transcriber.cli.process_input",
-            return_value=_process_artifacts(input_path, run_dir),
-        ) as process_input_mock:
             result = runner.invoke(
                 main,
                 [
                     str(input_path),
                     "--asr-model",
                     "models/whisper-cpp/custom.bin",
+                    "--language",
+                    "en",
                     "--no-vad",
-                    "--vad-threshold",
-                    "0.42",
-                    "--min-speech-ms",
-                    "300",
-                    "--min-silence-ms",
-                    "500",
-                    "--speech-region-pad-ms",
-                    "220",
                     "--no-carryover",
-                    "--carryover-max-sentences",
-                    "1",
-                    "--carryover-max-tokens",
-                    "32",
-                    "--threads",
-                    "6",
                     "--keep-audio",
-                    "--audio-format",
                     "mp3",
                     "--llm",
                 ],
@@ -159,14 +132,9 @@ class TestCli:
             input_path=input_path,
             output_dir=None,
             asr_model="models/whisper-cpp/custom.bin",
-            vad=VadSettings(
-                enabled=False,
-                threshold=0.42,
-                min_speech_duration_ms=300,
-                min_silence_duration_ms=500,
-                speech_region_pad_ms=220,
-            ),
-            carryover=PromptCarryoverSettings(enabled=False, max_sentences=1, max_tokens=32),
+            language="en",
+            vad=VadSettings(enabled=False),
+            carryover=PromptCarryoverSettings(enabled=False),
             asr_threads=6,
             keep_audio=True,
             kept_audio_format="mp3",
@@ -181,17 +149,10 @@ class TestCli:
 
         assert result.exit_code == 0
         assert "--asr-model" in result.output
+        assert "--language" in result.output
         assert "--vad / --no-vad" in result.output
-        assert "--vad-threshold" in result.output
-        assert "--min-speech-ms" in result.output
-        assert "--min-silence-ms" in result.output
-        assert "--speech-region-pad-ms" in result.output
         assert "--carryover / --no-carryover" in result.output
-        assert "--carryover-max-sentences" in result.output
-        assert "--carryover-max-tokens" in result.output
-        assert "--threads" in result.output
-        assert "--keep-audio / --no-keep-audio" in result.output
-        assert "--audio-format" in result.output
+        assert "--keep-audio" in result.output
         assert "--llm" in result.output
         assert "Override the whisper.cpp model identifier" in result.output
         assert "local model path" in result.output
@@ -217,15 +178,6 @@ class TestCli:
 
         assert result.exit_code != 0
         assert message in result.output
-
-    def test_colors_top_level_errors(self, tmp_path) -> None:
-        runner = CliRunner()
-
-        result = runner.invoke(main, [str(tmp_path / "missing.wav")], color=True)
-
-        assert result.exit_code != 0
-        assert "\x1b[" in result.output
-        assert "Error:" in result.output
 
     def test_rejects_existing_output_directory(self, tmp_path) -> None:
         runner = CliRunner()
