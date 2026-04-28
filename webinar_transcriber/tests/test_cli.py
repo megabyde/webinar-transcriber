@@ -119,6 +119,8 @@ class TestCli:
                     "models/whisper-cpp/custom.bin",
                     "--language",
                     "en",
+                    "--threads",
+                    "3",
                     "--no-vad",
                     "--no-carryover",
                     "--keep-audio",
@@ -135,7 +137,7 @@ class TestCli:
             language="en",
             vad=VadSettings(enabled=False),
             carryover=PromptCarryoverSettings(enabled=False),
-            asr_threads=6,
+            asr_threads=3,
             keep_audio=True,
             kept_audio_format="mp3",
             enable_llm=True,
@@ -150,6 +152,7 @@ class TestCli:
         assert result.exit_code == 0
         assert "--asr-model" in result.output
         assert "--language" in result.output
+        assert "--threads" in result.output
         assert "--vad / --no-vad" in result.output
         assert "--carryover / --no-carryover" in result.output
         assert "--keep-audio" in result.output
@@ -178,6 +181,16 @@ class TestCli:
 
         assert result.exit_code != 0
         assert message in result.output
+
+    def test_rejects_invalid_thread_count(self, tmp_path) -> None:
+        runner = CliRunner()
+        input_path = tmp_path / "demo.wav"
+        input_path.write_text("stub", encoding="utf-8")
+
+        result = runner.invoke(main, [str(input_path), "--threads", "0"])
+
+        assert result.exit_code != 0
+        assert "Invalid value for '--threads'" in result.output
 
     def test_rejects_existing_output_directory(self, tmp_path) -> None:
         runner = CliRunner()
