@@ -59,11 +59,6 @@ class RunLayout:
         return self.asr_dir / "speech_regions.json"
 
     @property
-    def expanded_regions_path(self) -> Path:
-        """Return the repaired speech-region artifact path."""
-        return self.asr_dir / "expanded_regions.json"
-
-    @property
     def decoded_windows_path(self) -> Path:
         """Return the decoded-window artifact path."""
         return self.asr_dir / "decoded_windows.json"

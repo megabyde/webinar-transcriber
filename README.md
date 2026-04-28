@@ -142,12 +142,12 @@ only partial intermediate artifacts and no final report outputs.
    path, resolves the execution backend, and records runtime details for diagnostics and CLI
    progress reporting.
 1. Detect speech regions with Silero VAD.
-1. Expand and repair speech regions into ASR windows.
+1. Create ASR windows from the detected speech regions.
 1. Transcribe the windows locally with `whisper.cpp`.
 1. Reconcile adjacent windows into one transcript.
 1. Detect scenes and extract representative frames for video input.
 1. Build report sections with local heuristics.
-1. Optionally polish the report with an LLM.
+1. Optionally polish the report with an LLM, including summary bullets and action items.
 1. Write report, subtitle, diagnostic, and intermediate artifacts.
 
 ## Advanced Usage
@@ -200,7 +200,6 @@ Successful default runs write:
 runs/<timestamp>_<basename>/
 ├─ asr/
 │  ├─ speech_regions.json
-│  ├─ expanded_regions.json
 │  └─ decoded_windows.json
 ├─ metadata.json
 ├─ transcript.json
