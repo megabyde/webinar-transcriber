@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from webinar_transcriber.asr import WhisperCppTranscriber
-    from webinar_transcriber.llm import LLMReportPolishPlan
     from webinar_transcriber.reporter import BaseStageReporter
 
     from .types import RunContext
@@ -64,11 +63,12 @@ def count_label(count: int, singular: str, *, plural: str | None = None) -> str:
     return f"{count} {noun}"
 
 
-def optional_count_label(count: int, singular: str, *, plural: str | None = None) -> str:
-    """Return one count label only when the count is positive."""
-    if count <= 0:
-        return ""
-    return count_label(count, singular, plural=plural)
+def _count_label_if_positive(count: int, singular: str, *, plural: str | None = None) -> str | None:
+    return count_label(count, singular, plural=plural) if count > 0 else None
+
+
+def _detail_label(*parts: str | None) -> str:
+    return " | ".join(part for part in parts if part)
 
 
 @contextmanager
@@ -147,23 +147,21 @@ def window_transcription_stage_detail(
     """Return the transcribe-stage summary with window count and real-time factor."""
     details = [count_label(window_count, "window")]
     if total_duration_sec > 0 and elapsed_sec > 0:
-        realtime_multiple = f"{total_duration_sec / elapsed_sec:.2f}".rstrip("0").rstrip(".")
+        realtime_multiple = format(round(total_duration_sec / elapsed_sec, 2), "g")
         details.append(f"RTF {realtime_multiple}x")
     return " | ".join(details)
 
 
-def llm_runtime_detail(*, provider_name: str | None, model_name: str | None) -> str:
-    """Return a compact provider/model label for the LLM runtime."""
-    parts = [value for value in (provider_name, model_name) if value]
-    return " | ".join(parts)
+def _llm_runtime_detail(*, provider_name: str | None, model_name: str | None) -> str:
+    return _detail_label(provider_name, model_name)
 
 
 def llm_stage_label(
     base_label: str, *, provider_name: str | None, model_name: str | None, detail: str | None = None
 ) -> str:
     """Return one stage label decorated with provider/model details."""
-    runtime_detail = llm_runtime_detail(provider_name=provider_name, model_name=model_name)
-    parenthetical = " | ".join(part for part in (runtime_detail, detail) if part)
+    runtime_detail = _llm_runtime_detail(provider_name=provider_name, model_name=model_name)
+    parenthetical = _detail_label(runtime_detail, detail)
     return f"{base_label} ({parenthetical})" if parenthetical else base_label
 
 
@@ -177,37 +175,21 @@ def llm_report_detail(
     usage: dict[str, int],
 ) -> str:
     """Return the summary detail string for the report-polish stage."""
-    parts = [
-        optional_count_label(summary_count, "summary bullet"),
-        optional_count_label(action_item_count, "action item"),
-        optional_count_label(tldr_count, "TL;DR"),
-        title_update_detail(title_count=title_count, section_count=section_count),
-        token_usage_detail(usage),
-    ]
-    return " | ".join(part for part in parts if part)
+    title_update_count = title_count if title_count > 0 and title_count != section_count else 0
+    return _detail_label(
+        _count_label_if_positive(summary_count, "summary bullet"),
+        _count_label_if_positive(action_item_count, "action item"),
+        _count_label_if_positive(tldr_count, "TL;DR"),
+        _count_label_if_positive(
+            title_update_count,
+            "title updated",
+            plural="titles updated",
+        ),
+        _count_label_if_positive(usage.get("total_tokens", 0), "token"),
+    )
 
 
 def llm_fallback_detail(*, provider_name: str | None, model_name: str | None) -> str:
     """Return the fallback detail string for failed LLM stages."""
-    runtime_detail = llm_runtime_detail(provider_name=provider_name, model_name=model_name)
-    return " | ".join(part for part in (runtime_detail, "fallback") if part)
-
-
-def llm_report_plan_label_detail(plan: LLMReportPolishPlan) -> str:
-    """Return the worker-count detail for the section-polish stage."""
-    return count_label(plan.worker_count, "worker")
-
-
-def token_usage_detail(usage: dict[str, int]) -> str:
-    """Return a compact total-token label when token accounting is available."""
-    total_tokens = usage.get("total_tokens")
-    if total_tokens is None:
-        return ""
-    return count_label(total_tokens, "token")
-
-
-def title_update_detail(*, title_count: int, section_count: int) -> str:
-    """Return a title-update detail only when some but not all titles changed."""
-    if title_count <= 0 or title_count == section_count:
-        return ""
-    return count_label(title_count, "title updated", plural="titles updated")
+    runtime_detail = _llm_runtime_detail(provider_name=provider_name, model_name=model_name)
+    return _detail_label(runtime_detail, "fallback")

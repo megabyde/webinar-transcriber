@@ -10,7 +10,7 @@ from av.filter import Graph
 
 from webinar_transcriber.media import (
     MediaProcessingError,
-    _required_input_stream,
+    _required_video_stream,
     open_input_media_container,
 )
 from webinar_transcriber.models import Scene
@@ -65,9 +65,8 @@ def _select_scene_starts(
             video_path,
             error_message="Could not open {path} with PyAV for scene detection: {error}",
         ) as input_container:
-            video_stream = _required_input_stream(
+            video_stream = _required_video_stream(
                 input_container,
-                "video",
                 error_message=f"No video stream found in {video_path}.",
             )
             scene_filter = _build_scene_filter_graph(

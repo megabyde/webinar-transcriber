@@ -10,7 +10,7 @@ import sys
 from contextlib import contextmanager, redirect_stderr, redirect_stdout, suppress
 from dataclasses import replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, Self
+from typing import TYPE_CHECKING, Any, Self, cast
 
 import numpy as np
 
@@ -28,28 +28,12 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from types import TracebackType
 
+    from pywhispercpp.model import Model
+
     from webinar_transcriber.models import InferenceWindow
 
 GPU_BACKEND_PATTERN = re.compile(r"(?i)\b(metal|mtl|cuda)\b[^|]*?(?:=|:)\s*(?:1|true)")
 _WHISPER_TICKS_PER_SECOND = 100.0
-
-
-class _PyWhisperSegment(Protocol):
-    t0: int | float
-    t1: int | float
-    text: str
-
-
-class _PyWhisperModel(Protocol):
-    def system_info(self) -> str: ...
-
-    def transcribe(
-        self, audio_samples: np.ndarray, **kwargs: str | None
-    ) -> list[_PyWhisperSegment]: ...
-
-    def auto_detect_language(
-        self, audio_samples: np.ndarray, *, n_threads: int
-    ) -> tuple[tuple[str, float], dict[str, float]]: ...
 
 
 def _missing_model_error_message(model_path: Path | None) -> str:
@@ -73,7 +57,7 @@ def _model_prepare_error_message(model_name: str) -> str:
     )
 
 
-def _model_cls() -> type[_PyWhisperModel]:
+def _model_cls() -> type[Model]:
     return importlib.import_module("pywhispercpp.model").Model
 
 
@@ -171,7 +155,7 @@ class WhisperCppTranscriber:
             carryover=carryover_settings or PromptCarryoverSettings()
         )
         self._log_path = log_path
-        self._model: _PyWhisperModel | None = None
+        self._model: Model | None = None
 
     @property
     def model_name(self) -> str:
@@ -225,7 +209,7 @@ class WhisperCppTranscriber:
         }
         try:
             with _redirect_native_output(self._log_path), _disable_tqdm_progress():
-                model = _model_cls()(self._model_name, **model_kwargs)
+                model = cast("Model", cast("Any", _model_cls())(self._model_name, **model_kwargs))
         except Exception as error:
             raise ASRProcessingError(_model_prepare_error_message(self._model_name)) from error
         if getattr(model, "_ctx", True) is None:
@@ -291,7 +275,7 @@ class WhisperCppTranscriber:
         """Close the transcriber when leaving a context manager block."""
         self.close()
 
-    def _ensure_model(self) -> _PyWhisperModel:
+    def _ensure_model(self) -> Model:
         if self._model is None:
             self.prepare_model()
         if self._model is None:
@@ -314,7 +298,7 @@ class WhisperCppTranscriber:
 
     def _transcribe_window(
         self,
-        model: _PyWhisperModel,
+        model: Model,
         audio_samples: np.ndarray,
         window: InferenceWindow,
         *,
@@ -335,7 +319,9 @@ class WhisperCppTranscriber:
         if language_hint is not None:
             transcribe_kwargs["language"] = language_hint
         try:
-            raw_segments = model.transcribe(window_samples, **transcribe_kwargs)
+            raw_segments: list[Any] = cast("Any", model).transcribe(
+                window_samples, **transcribe_kwargs
+            )
         except Exception as error:
             raise ASRProcessingError(
                 f"whisper.cpp inference failed for {window.window_id}."

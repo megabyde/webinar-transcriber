@@ -9,7 +9,7 @@ from PIL import Image, ImageOps
 
 from webinar_transcriber.media import (
     MediaProcessingError,
-    _required_input_stream,
+    _required_video_stream,
     open_input_media_container,
 )
 from webinar_transcriber.models import SlideFrame
@@ -76,9 +76,8 @@ def _extract_frame(
             video_path,
             error_message="{error}",
         ) as input_container:
-            video_stream = _required_input_stream(
+            video_stream = _required_video_stream(
                 input_container,
-                "video",
                 error_message=f"No video stream found in {video_path}",
             )
             input_container.seek(int(max(timestamp_sec, 0.0) * av.time_base), backward=True)

@@ -19,7 +19,7 @@ def build_prompt_carryover(
     decoded_window: DecodedWindow, *, settings: PromptCarryoverSettings
 ) -> str | None:
     """Return a bounded prompt suffix for the next window, or `None` when confidence is weak."""
-    if _carryover_drop_reason(decoded_window, settings=settings) is not None:
+    if _should_drop_carryover(decoded_window, settings=settings):
         return None
 
     sentences = [
@@ -32,14 +32,10 @@ def build_prompt_carryover(
     return carryover or None
 
 
-def _carryover_drop_reason(
+def _should_drop_carryover(
     decoded_window: DecodedWindow, *, settings: PromptCarryoverSettings
-) -> str | None:
-    if not settings.enabled:
-        return "carryover_disabled"
-    if not decoded_window.text.strip():
-        return "empty_text"
-    return None
+) -> bool:
+    return not settings.enabled or not decoded_window.text.strip()
 
 
 def _sanitize_prompt(prompt: str | None, *, max_tokens: int) -> str:

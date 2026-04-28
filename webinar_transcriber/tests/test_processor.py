@@ -47,10 +47,7 @@ from webinar_transcriber.processor.__init__ import (
 from webinar_transcriber.processor.llm import LLMRuntimeState, resolve_llm_processor
 from webinar_transcriber.processor.support import (
     asr_runtime_detail,
-    optional_count_label,
     stage,
-    title_update_detail,
-    token_usage_detail,
     window_transcription_stage_detail,
 )
 from webinar_transcriber.reporter import BaseStageReporter
@@ -1094,17 +1091,6 @@ class TestProcessorHelpers:
         )
 
         assert asr_runtime_detail(transcriber) == "/tmp/models/local-model.bin | cpu"
-
-    def test_title_update_detail_reports_partial_title_updates(self) -> None:
-        assert title_update_detail(title_count=1, section_count=2) == "1 title updated"
-        assert title_update_detail(title_count=2, section_count=3) == "2 titles updated"
-
-    def test_token_usage_detail_returns_blank_without_total_tokens(self) -> None:
-        assert token_usage_detail({"input_tokens": 2}) == ""
-
-    def test_optional_count_label_returns_blank_for_non_positive_counts(self) -> None:
-        assert optional_count_label(0, "segment") == ""
-        assert optional_count_label(-1, "segment") == ""
 
     def test_resolve_llm_processor_uses_environment_processor_details(self, monkeypatch) -> None:
         reporter = RecordingReporter()
