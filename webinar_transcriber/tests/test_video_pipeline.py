@@ -24,6 +24,49 @@ def _scene(index: int, start_sec: float, end_sec: float) -> Scene:
     return Scene(id=f"scene-{index}", start_sec=start_sec, end_sec=end_sec)
 
 
+class FakeImage:
+    def __init__(self, *, save_output: bool = True) -> None:
+        self.save_output = save_output
+
+    def convert(self, _mode: str) -> "FakeImage":
+        return self
+
+    def save(self, path: Path) -> None:
+        if self.save_output:
+            path.write_bytes(b"frame")
+
+
+class FakeFrame:
+    def __init__(self, time: float | None, *, save_output: bool = True) -> None:
+        self.time = time
+        self.save_output = save_output
+
+    def to_image(self) -> FakeImage:
+        return FakeImage(save_output=self.save_output)
+
+
+class FakeVideoStream:
+    type = "video"
+    index = 0
+
+
+class FakeFrameContainer(FakeContextContainer):
+    def __init__(self, frame_batches: list[list[FakeFrame]] | None = None) -> None:
+        self.streams = [FakeVideoStream()]
+        self.frame_batches = list(frame_batches or [])
+        self.seek_offsets: list[int] = []
+        self.decode_calls = 0
+
+    def seek(self, offset: int, *_args, **_kwargs) -> None:
+        self.seek_offsets.append(offset)
+
+    def decode(self, *_args, **_kwargs):
+        self.decode_calls += 1
+        if self.frame_batches:
+            return iter(self.frame_batches.pop(0))
+        return iter([FakeFrame(999.0)])
+
+
 class TestDetectScenes:
     @pytest.mark.slow
     def test_detect_scenes_finds_multiple_segments(self) -> None:
@@ -89,14 +132,14 @@ class TestFrameExtraction:
     ) -> None:
         scenes = [_scene(1, 0.0, 2.0), _scene(2, 2.0, 4.0)]
         progress_ticks: list[int] = []
+        open_calls: list[Path] = []
+        container = FakeFrameContainer()
 
-        def fake_extract_frame(
-            _video_path: Path, _timestamp_sec: float, output_path: Path
-        ) -> tuple[bool, str | None]:
-            output_path.write_bytes(b"frame")
-            return True, None
+        def fake_open(path: str, **_kwargs) -> FakeFrameContainer:
+            open_calls.append(Path(path))
+            return container
 
-        monkeypatch.setattr("webinar_transcriber.video.frames._extract_frame", fake_extract_frame)
+        monkeypatch.setattr("webinar_transcriber.video.frames.av.open", fake_open)
         monkeypatch.setattr(
             "webinar_transcriber.video.frames._normalize_extracted_frame", lambda _p: None
         )
@@ -111,6 +154,8 @@ class TestFrameExtraction:
         assert len(frames) >= 2
         assert all(Path(frame.image_path).exists() for frame in frames)
         assert len(progress_ticks) == len(scenes)
+        assert open_calls == [SAMPLE_VIDEO_PATH]
+        assert container.decode_calls == len(scenes)
 
     def test_normalize_extracted_frame_applies_exif_orientation(self, tmp_path) -> None:
         image_path = tmp_path / "rotated.jpg"
@@ -131,16 +176,14 @@ class TestFrameExtraction:
         progress_ticks: list[int] = []
         warnings: list[str] = []
         scenes = [_scene(1, 0.0, 2.0), _scene(2, 2.0, 4.0)]
+        container = FakeFrameContainer([
+            [FakeFrame(None)],
+            [FakeFrame(3.0)],
+        ])
 
-        def fake_extract_frame(
-            _video_path: Path, _timestamp_sec: float, output_path: Path
-        ) -> tuple[bool, str | None]:
-            if output_path.stem == "scene-1":
-                return False, f"ffmpeg did not write {output_path}"
-            output_path.write_bytes(b"frame")
-            return True, None
-
-        monkeypatch.setattr("webinar_transcriber.video.frames._extract_frame", fake_extract_frame)
+        monkeypatch.setattr(
+            "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: container
+        )
         monkeypatch.setattr(
             "webinar_transcriber.video.frames._normalize_extracted_frame", lambda _p: None
         )
@@ -156,23 +199,17 @@ class TestFrameExtraction:
         assert [frame.scene_id for frame in frames] == ["scene-2"]
         assert len(progress_ticks) == 2
         assert warnings == [
-            f"Frame extraction failed for scene-1 at 1.0s: "
-            f"ffmpeg did not write {tmp_path / 'frames' / 'scene-1.png'}"
+            "Frame extraction failed for scene-1 at 1.0s: PyAV did not decode a frame at 1.000s"
         ]
 
     def test_extract_representative_frames_uses_first_stable_frame(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        captured_timestamps: list[float] = []
+        container = FakeFrameContainer([[FakeFrame(3.0)]])
 
-        def fake_extract_frame(
-            _video_path: Path, timestamp_sec: float, output_path: Path
-        ) -> tuple[bool, str | None]:
-            captured_timestamps.append(timestamp_sec)
-            output_path.write_bytes(b"frame")
-            return True, None
-
-        monkeypatch.setattr("webinar_transcriber.video.frames._extract_frame", fake_extract_frame)
+        monkeypatch.setattr(
+            "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: container
+        )
         monkeypatch.setattr(
             "webinar_transcriber.video.frames._normalize_extracted_frame", lambda _p: None
         )
@@ -183,8 +220,34 @@ class TestFrameExtraction:
             tmp_path / "frames",
         )
 
-        assert captured_timestamps == [3.0]
+        assert container.seek_offsets == [int(3.0 * av.time_base)]
         assert frames[0].timestamp_sec == 3.0
+
+    def test_extract_representative_frames_warns_each_scene_when_open_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        progress_ticks: list[int] = []
+        warnings: list[str] = []
+        scenes = [_scene(1, 0.0, 2.0), _scene(2, 2.0, 4.0)]
+        monkeypatch.setattr(
+            "webinar_transcriber.video.frames.av.open",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("bad open")),
+        )
+
+        frames = extract_representative_frames(
+            SAMPLE_VIDEO_PATH,
+            scenes,
+            tmp_path / "frames",
+            progress_callback=lambda: progress_ticks.append(1),
+            warning_callback=warnings.append,
+        )
+
+        assert frames == []
+        assert progress_ticks == [1, 1]
+        assert warnings == [
+            "Frame extraction failed for scene-1 at 1.0s: bad open",
+            "Frame extraction failed for scene-2 at 3.0s: bad open",
+        ]
 
     def test_extract_frame_returns_false_when_open_fails(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -220,24 +283,6 @@ class TestFrameExtraction:
     ) -> None:
         output_path = tmp_path / "scene-1.png"
 
-        class FakeImage:
-            def convert(self, _mode: str) -> "FakeImage":
-                return self
-
-            def save(self, path: Path) -> None:
-                path.write_bytes(b"frame")
-
-        class FakeFrame:
-            def __init__(self, time: float | None) -> None:
-                self.time = time
-
-            def to_image(self) -> FakeImage:
-                return FakeImage()
-
-        class FakeVideoStream:
-            type = "video"
-            index = 0
-
         class FakeContainer(FakeContextContainer):
             def __init__(self) -> None:
                 self.streams = [FakeVideoStream()]
@@ -261,10 +306,6 @@ class TestFrameExtraction:
     def test_extract_frame_returns_false_when_no_frame_is_decoded(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        class FakeVideoStream:
-            type = "video"
-            index = 0
-
         class FakeContainer(FakeContextContainer):
             def __init__(self) -> None:
                 self.streams = [FakeVideoStream()]
@@ -287,22 +328,16 @@ class TestFrameExtraction:
     def test_extract_frame_returns_false_when_save_fails(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        class FakeImage:
-            def convert(self, _mode: str) -> "FakeImage":
-                return self
-
-            def save(self, _path: Path) -> None:
+        class FailingImage(FakeImage):
+            def save(self, path: Path) -> None:
+                del path
                 raise OSError("save failed")
 
-        class FakeFrame:
+        class SaveFailingFrame:
             time = 1.0
 
-            def to_image(self) -> FakeImage:
-                return FakeImage()
-
-        class FakeVideoStream:
-            type = "video"
-            index = 0
+            def to_image(self) -> FailingImage:
+                return FailingImage()
 
         class FakeContainer(FakeContextContainer):
             def __init__(self) -> None:
@@ -312,7 +347,7 @@ class TestFrameExtraction:
                 return None
 
             def decode(self, *_args, **_kwargs):
-                return iter([FakeFrame()])
+                return iter([SaveFailingFrame()])
 
         monkeypatch.setattr(
             "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: FakeContainer()
@@ -328,23 +363,6 @@ class TestFrameExtraction:
     ) -> None:
         output_path = tmp_path / "scene-1.png"
 
-        class FakeImage:
-            def convert(self, _mode: str) -> "FakeImage":
-                return self
-
-            def save(self, _path: Path) -> None:
-                return None
-
-        class FakeFrame:
-            time = 1.0
-
-            def to_image(self) -> FakeImage:
-                return FakeImage()
-
-        class FakeVideoStream:
-            type = "video"
-            index = 0
-
         class FakeContainer(FakeContextContainer):
             def __init__(self) -> None:
                 self.streams = [FakeVideoStream()]
@@ -353,7 +371,7 @@ class TestFrameExtraction:
                 return None
 
             def decode(self, *_args, **_kwargs):
-                return iter([FakeFrame()])
+                return iter([FakeFrame(1.0, save_output=False)])
 
         monkeypatch.setattr(
             "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: FakeContainer()
