@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -15,14 +15,14 @@ from webinar_transcriber.asr import (
     WhisperCppTranscriber,
     build_prompt_carryover,
 )
-from webinar_transcriber.asr.carryover import _carryover_drop_reason, _sanitize_prompt
+from webinar_transcriber.asr.carryover import _sanitize_prompt
 from webinar_transcriber.asr.config import (
     DEFAULT_WHISPER_ENTROPY_THOLD,
     DEFAULT_WHISPER_LOGPROB_THOLD,
     DEFAULT_WHISPER_NO_SPEECH_THOLD,
     default_asr_threads,
 )
-from webinar_transcriber.asr.transcriber import _device_name_from_system_info, _PyWhisperModel
+from webinar_transcriber.asr.transcriber import _device_name_from_system_info
 from webinar_transcriber.models import DecodedWindow, InferenceWindow, TranscriptSegment
 
 
@@ -476,7 +476,7 @@ class TestWhisperCppTranscriber:
                 raise AssertionError("should not prepare")
 
         transcriber = ReuseModelTranscriber(model_name="stub.bin")
-        transcriber._model = cast("_PyWhisperModel", fake_model)
+        transcriber._model = cast("Any", fake_model)
 
         decoded_windows = transcriber.transcribe_inference_windows(
             np.zeros(16_000, dtype=np.float32),
@@ -544,27 +544,25 @@ class TestPromptCarryover:
         assert _device_name_from_system_info(system_info) == "metal"
         assert _device_name_from_system_info("CPU = 1") == "cpu"
 
-    def test_carryover_drop_reason_covers_disabled_and_empty_windows(self) -> None:
-        decoded_window = DecodedWindow(
-            window=InferenceWindow(
-                window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0
+    def test_build_prompt_carryover_drops_when_disabled(self) -> None:
+        carryover = build_prompt_carryover(
+            DecodedWindow(
+                window=InferenceWindow(
+                    window_id="window-1",
+                    region_index=0,
+                    start_sec=0.0,
+                    end_sec=1.0,
+                ),
+                text="Carry this.",
+                segments=[],
             ),
-            text="",
-            segments=[],
+            settings=PromptCarryoverSettings(enabled=False),
         )
 
-        disabled_reason = _carryover_drop_reason(
-            decoded_window, settings=PromptCarryoverSettings(enabled=False)
-        )
-        empty_text_reason = _carryover_drop_reason(
-            decoded_window, settings=PromptCarryoverSettings()
-        )
+        assert carryover is None
 
-        assert disabled_reason == "carryover_disabled"
-        assert empty_text_reason == "empty_text"
-
-    def test_carryover_drop_reason_keeps_punctuation_only_text(self) -> None:
-        reason = _carryover_drop_reason(
+    def test_build_prompt_carryover_drops_noise_only_text(self) -> None:
+        carryover = build_prompt_carryover(
             DecodedWindow(
                 window=InferenceWindow(
                     window_id="window-5",
@@ -578,7 +576,7 @@ class TestPromptCarryover:
             settings=PromptCarryoverSettings(),
         )
 
-        assert reason is None
+        assert carryover is None
 
     def test_sanitize_prompt_drops_missing_and_noise_only_prompts(self) -> None:
         assert _sanitize_prompt(None, max_tokens=8) == ""

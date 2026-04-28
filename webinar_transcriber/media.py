@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Literal, cast, overload
+from typing import TYPE_CHECKING, Literal, cast
 
 import av
 
@@ -22,55 +22,35 @@ class MediaProcessingError(RuntimeError):
     """Raised when media work cannot be completed."""
 
 
-@overload
-def _first_input_stream(
-    input_container: InputContainer, stream_type: Literal["audio"]
-) -> AudioStream | None: ...
-
-
-@overload
-def _first_input_stream(
-    input_container: InputContainer, stream_type: Literal["video"]
-) -> VideoStream | None: ...
-
-
 def _first_input_stream(
     input_container: InputContainer, stream_type: Literal["audio", "video"]
-) -> AudioStream | VideoStream | None:
-    return cast(
-        "AudioStream | VideoStream | None",
-        next((stream for stream in input_container.streams if stream.type == stream_type), None),
-    )
+) -> object | None:
+    return next((stream for stream in input_container.streams if stream.type == stream_type), None)
 
 
-@overload
-def _required_input_stream(
+def _required_audio_stream(
     input_container: InputContainer,
-    stream_type: Literal["audio"],
     *,
     error_message: str,
-) -> AudioStream: ...
-
-
-@overload
-def _required_input_stream(
-    input_container: InputContainer,
-    stream_type: Literal["video"],
-    *,
-    error_message: str,
-) -> VideoStream: ...
-
-
-def _required_input_stream(
-    input_container: InputContainer,
-    stream_type: Literal["audio", "video"],
-    *,
-    error_message: str,
-) -> AudioStream | VideoStream:
-    stream = _first_input_stream(input_container, stream_type)
+) -> AudioStream:
+    stream = _first_input_stream(input_container, "audio")
     if stream is None:
         raise MediaProcessingError(error_message)
-    return stream
+    return cast("AudioStream", stream)
+
+
+def _required_video_stream(
+    input_container: InputContainer,
+    *,
+    error_message: str,
+) -> VideoStream:
+    stream = _first_input_stream(input_container, "video")
+    if stream is None:
+        raise MediaProcessingError(error_message)
+    return cast(
+        "VideoStream",
+        stream,
+    )
 
 
 @contextmanager

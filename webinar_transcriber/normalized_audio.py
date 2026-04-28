@@ -14,7 +14,7 @@ import numpy as np
 
 from webinar_transcriber.media import (
     MediaProcessingError,
-    _required_input_stream,
+    _required_audio_stream,
     open_input_media_container,
     open_output_media_container,
 )
@@ -66,9 +66,8 @@ def _transcode_audio_with_pyav(
         input_path,
         error_message="Could not open {path}: {error}",
     ) as input_container:
-        input_stream = _required_input_stream(
+        input_stream = _required_audio_stream(
             input_container,
-            "audio",
             error_message=f"No audio stream found in {input_path}.",
         )
         with open_output_media_container(

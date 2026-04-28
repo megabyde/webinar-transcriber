@@ -16,7 +16,6 @@ from .support import (
     count_label,
     llm_fallback_detail,
     llm_report_detail,
-    llm_report_plan_label_detail,
     llm_stage_label,
     progress_stage,
     stage,
@@ -97,7 +96,7 @@ def maybe_polish_report(
         "Polishing section text with LLM",
         provider_name=llm_runtime.provider_name,
         model_name=llm_runtime.model_name,
-        detail=llm_report_plan_label_detail(polish_plan),
+        detail=count_label(polish_plan.worker_count, "worker"),
     )
     summary_label = llm_stage_label(
         "Polishing report summary with LLM",
