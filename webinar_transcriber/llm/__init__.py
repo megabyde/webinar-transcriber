@@ -26,7 +26,7 @@ from .prompts import (
 from .utils import required_provider_env
 
 if TYPE_CHECKING:
-    from .processor import AsyncInstructorClient
+    from .processor import InstructorClient
 
     class _InstructorMode(Protocol):
         TOOLS: object
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     class InstructorModule(Protocol):
         Mode: _InstructorMode
 
-        def from_provider(self, provider_model: str, **kwargs: object) -> AsyncInstructorClient: ...
+        def from_provider(self, provider_model: str, **kwargs: object) -> InstructorClient: ...
 
 
 def _required_llm_module(module_name: str, *, provider_label: str) -> object:
@@ -70,7 +70,6 @@ def build_llm_processor_from_env() -> LLMProcessor:
             return InstructorLLMProcessor(
                 client=instructor.from_provider(
                     f"openai/{model_name}",
-                    async_client=True,
                     api_key=api_key,
                     mode=instructor.Mode.TOOLS,
                 ),
@@ -89,7 +88,6 @@ def build_llm_processor_from_env() -> LLMProcessor:
             return InstructorLLMProcessor(
                 client=instructor.from_provider(
                     f"anthropic/{model_name}",
-                    async_client=True,
                     api_key=api_key,
                     mode=instructor.Mode.TOOLS,
                 ),

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Protocol
 
 from .contracts import (
@@ -41,10 +41,10 @@ if TYPE_CHECKING:
     from webinar_transcriber.models import ReportDocument, ReportSection
 
 
-class AsyncInstructorClient(Protocol):
-    """Protocol for the async patched Instructor client used by this module."""
+class InstructorClient(Protocol):
+    """Protocol for the patched Instructor client used by this module."""
 
-    async def create_with_completion(self, **kwargs: object) -> tuple[object, object]:
+    def create_with_completion(self, **kwargs: object) -> tuple[object, object]:
         """Return the parsed response model alongside the raw completion."""
 
 
@@ -54,7 +54,7 @@ class InstructorLLMProcessor:
     def __init__(
         self,
         *,
-        client: AsyncInstructorClient,
+        client: InstructorClient,
         provider_name: str,
         model_name: str,
         request_kwargs: Mapping[str, object] | None = None,
@@ -140,60 +140,35 @@ class InstructorLLMProcessor:
         if not report.sections:
             return SectionPolishOutputs(transcripts={}, tldrs={})
 
-        return asyncio.run(
-            self._polish_section_texts_async(
-                report,
-                progress_callback=progress_callback,
-                usage_totals=usage_totals,
-                warnings=warnings,
-                worker_count=plan.worker_count,
-            )
-        )
-
-    async def _polish_section_texts_async(
-        self,
-        report: ReportDocument,
-        *,
-        progress_callback: Callable[[int], None] | None,
-        usage_totals: dict[str, int],
-        warnings: list[str],
-        worker_count: int,
-    ) -> SectionPolishOutputs:
         polished_transcripts: dict[str, str] = {}
         polished_tldrs: dict[str, str] = {}
-        semaphore = asyncio.Semaphore(worker_count)
 
-        async def polish_section(
-            section: ReportSection,
-        ) -> tuple[str, str, str, dict[str, int], list[str]]:
-            async with semaphore:
-                try:
-                    (
-                        transcript_text,
-                        tldr,
-                        usage,
-                        section_warnings,
-                    ) = await self._polish_section_text_async(section)
-                except LLMProcessingError as error:
-                    transcript_text = section.transcript_text
-                    tldr = section.tldr or ""
-                    usage = {}
-                    section_warnings = [str(error)]
+        with ThreadPoolExecutor(max_workers=plan.worker_count) as executor:
+            results = executor.map(self._polish_section, report.sections)
+            for section_id, transcript_text, tldr, usage, section_warnings in results:
+                polished_transcripts[section_id] = transcript_text
+                if tldr:
+                    polished_tldrs[section_id] = tldr
+                usage_totals.update(Counter(usage_totals) + Counter(usage))
+                warnings.extend(section_warnings)
                 if progress_callback is not None:
                     progress_callback(1)
-                return section.id, transcript_text, tldr, usage, section_warnings
-
-        results = await asyncio.gather(*(polish_section(section) for section in report.sections))
-        for section_id, transcript_text, tldr, usage, section_warnings in results:
-            polished_transcripts[section_id] = transcript_text
-            if tldr:
-                polished_tldrs[section_id] = tldr
-            usage_totals.update(Counter(usage_totals) + Counter(usage))
-            warnings.extend(section_warnings)
 
         return SectionPolishOutputs(transcripts=polished_transcripts, tldrs=polished_tldrs)
 
-    async def _polish_section_text_async(
+    def _polish_section(
+        self, section: ReportSection
+    ) -> tuple[str, str, str, dict[str, int], list[str]]:
+        try:
+            transcript_text, tldr, usage, section_warnings = self._polish_section_text(section)
+        except LLMProcessingError as error:
+            transcript_text = section.transcript_text
+            tldr = section.tldr or ""
+            usage = {}
+            section_warnings = [str(error)]
+        return section.id, transcript_text, tldr, usage, section_warnings
+
+    def _polish_section_text(
         self, section: ReportSection
     ) -> tuple[str, str, dict[str, int], list[str]]:
         payload = {
@@ -203,7 +178,7 @@ class InstructorLLMProcessor:
             "end_sec": section.end_sec,
             "transcript_text": section.transcript_text,
         }
-        parsed, usage = await self._create_structured_response_async(
+        parsed, usage = self._create_structured_response(
             system_prompt=SECTION_POLISH_SYSTEM_PROMPT,
             user_payload=payload,
             response_model=SectionTextResponse,
@@ -233,25 +208,8 @@ class InstructorLLMProcessor:
         response_model: type[SchemaModelT],
         error_prefix: str,
     ) -> tuple[SchemaModelT, dict[str, int]]:
-        return asyncio.run(
-            self._create_structured_response_async(
-                system_prompt=system_prompt,
-                user_payload=user_payload,
-                response_model=response_model,
-                error_prefix=error_prefix,
-            )
-        )
-
-    async def _create_structured_response_async(
-        self,
-        *,
-        system_prompt: str,
-        user_payload: Mapping[str, object],
-        response_model: type[SchemaModelT],
-        error_prefix: str,
-    ) -> tuple[SchemaModelT, dict[str, int]]:
         try:
-            parsed, completion = await self._client.create_with_completion(
+            parsed, completion = self._client.create_with_completion(
                 response_model=response_model,
                 messages=[
                     {"role": "system", "content": system_prompt},

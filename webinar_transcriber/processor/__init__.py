@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from contextlib import nullcontext
+from contextlib import ExitStack, nullcontext
 from dataclasses import asdict
 from typing import TYPE_CHECKING
 
@@ -10,25 +10,85 @@ import webinar_transcriber.asr as asr_runtime
 import webinar_transcriber.media as media_runtime
 from webinar_transcriber.asr import PromptCarryoverSettings, default_asr_threads
 from webinar_transcriber.diagnostics import write_run_diagnostics
-from webinar_transcriber.normalized_audio import prepared_transcription_audio
+from webinar_transcriber.normalized_audio import (
+    prepared_transcription_audio,
+    preserve_transcription_audio,
+)
 from webinar_transcriber.paths import create_run_layout
 from webinar_transcriber.reporter import BaseStageReporter
 from webinar_transcriber.segmentation import VadSettings
 
+from . import asr as processor_asr
 from .report import run_report_phase
 from .support import stage, write_json
-from .transcribe import run_transcription_phase
-from .types import AsrPipelineState, ProcessArtifacts, RunContext
+from .types import AsrPipelineState, ProcessArtifacts, RunContext, TranscriptionPhaseResult
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from contextlib import AbstractContextManager
     from pathlib import Path
 
     from webinar_transcriber.asr import WhisperCppTranscriber
     from webinar_transcriber.llm import LLMProcessor
+    from webinar_transcriber.models import MediaAsset
+    from webinar_transcriber.paths import RunLayout
 
 
 DEFAULT_VAD_SETTINGS = VadSettings()
 DEFAULT_PROMPT_CARRYOVER_SETTINGS = PromptCarryoverSettings()
+
+
+def run_transcription_phase(
+    *,
+    input_path: Path,
+    media_asset: MediaAsset,
+    transcriber: WhisperCppTranscriber,
+    layout: RunLayout,
+    ctx: RunContext,
+    vad: VadSettings,
+    carryover_enabled: bool,
+    language: str | None,
+    keep_audio: bool,
+    kept_audio_format: str,
+    prepared_audio_factory: Callable[[Path], AbstractContextManager[Path]],
+) -> TranscriptionPhaseResult:
+    """Run the audio preparation and ASR half of the pipeline.
+
+    Returns:
+        TranscriptionPhaseResult: The transcription artifacts and ASR diagnostics.
+    """
+    with ExitStack() as audio_scope:
+        with stage(ctx, "prepare_transcription_audio", "Preparing audio") as st:
+            audio_path = audio_scope.enter_context(prepared_audio_factory(input_path))
+            st.detail = str(audio_path.name)
+
+        asr_result = processor_asr.run_asr_pipeline(
+            audio_path=audio_path,
+            media_asset=media_asset,
+            transcriber=transcriber,
+            layout=layout,
+            ctx=ctx,
+            warnings=ctx.warnings,
+            vad=vad,
+            carryover_enabled=carryover_enabled,
+            language=language,
+        )
+
+        if keep_audio:
+            with stage(ctx, "save_transcription_audio", "Saving transcription audio") as st:
+                preserved_audio_path = layout.transcription_audio_path(kept_audio_format)
+                preserve_transcription_audio(
+                    audio_path,
+                    preserved_audio_path,
+                    audio_format=kept_audio_format,
+                )
+                st.detail = preserved_audio_path.name
+
+    return TranscriptionPhaseResult(
+        transcription=asr_result.transcription,
+        normalized_transcription=asr_result.normalized_transcription,
+        asr_pipeline=asr_result.asr_pipeline,
+    )
 
 
 def process_input(
