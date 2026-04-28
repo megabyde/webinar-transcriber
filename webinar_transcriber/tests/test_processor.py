@@ -831,14 +831,10 @@ class TestProcessInput:
         assert reporter.has_event("start", "vad", "Detecting speech regions")
         assert reporter.has_event("start", "normalize_transcript", "Normalizing transcript")
         assert artifacts.layout.speech_regions_path.exists()
-        assert artifacts.layout.expanded_regions_path.exists()
         assert artifacts.layout.decoded_windows_path.exists()
 
         speech_regions_payload = json.loads(
             artifacts.layout.speech_regions_path.read_text(encoding="utf-8")
-        )
-        expanded_regions_payload = json.loads(
-            artifacts.layout.expanded_regions_path.read_text(encoding="utf-8")
         )
         decoded_windows_payload = json.loads(
             artifacts.layout.decoded_windows_path.read_text(encoding="utf-8")
@@ -851,9 +847,6 @@ class TestProcessInput:
             {"start_sec": 0.0, "end_sec": 1.2},
             {"start_sec": 2.1, "end_sec": 3.0},
         ]
-        assert (
-            expanded_regions_payload["expanded_regions"] == speech_regions_payload["speech_regions"]
-        )
         assert decoded_windows_payload["decoded_windows"][0]["window"]["window_id"] == "window-1"
         assert decoded_windows_payload["decoded_windows"][1]["window"]["window_id"] == "window-2"
         assert decoded_windows_payload["decoded_windows"][0]["language"] == "en"
@@ -920,16 +913,26 @@ class TestProcessInput:
             reporter=reporter,
         )
 
-        expanded_regions_payload = json.loads(
-            artifacts.layout.expanded_regions_path.read_text(encoding="utf-8")
+        decoded_windows_payload = json.loads(
+            artifacts.layout.decoded_windows_path.read_text(encoding="utf-8")
         )
         diagnostics_payload = json.loads(
             artifacts.layout.diagnostics_path.read_text(encoding="utf-8")
         )
 
-        assert expanded_regions_payload["expanded_regions"] == [
-            {"start_sec": 0.0, "end_sec": 1.2},
-            {"start_sec": 2.1, "end_sec": 3.0},
+        assert [window["window"] for window in decoded_windows_payload["decoded_windows"]] == [
+            {
+                "window_id": "window-1",
+                "region_index": 0,
+                "start_sec": 0.0,
+                "end_sec": 1.2,
+            },
+            {
+                "window_id": "window-2",
+                "region_index": 1,
+                "start_sec": 2.1,
+                "end_sec": 3.0,
+            },
         ]
         assert artifacts.diagnostics.asr_pipeline is not None
         assert artifacts.diagnostics.asr_pipeline.vad_region_count == 2
@@ -1029,7 +1032,6 @@ class TestProcessInput:
         assert (output_dir / "metadata.json").exists()
         assert (output_dir / "transcript.json").exists()
         assert (output_dir / "asr" / "speech_regions.json").exists()
-        assert (output_dir / "asr" / "expanded_regions.json").exists()
         assert (output_dir / "asr" / "decoded_windows.json").exists()
         diagnostics_payload = json.loads(
             (output_dir / "diagnostics.json").read_text(encoding="utf-8")

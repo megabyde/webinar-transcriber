@@ -24,19 +24,6 @@ class LLMProcessingError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class LLMReportPolishResult:
-    """Validated result from the report-polishing LLM stage."""
-
-    summary: list[str]
-    action_items: list[str]
-    section_titles: dict[str, str]
-    section_tldrs: dict[str, str]
-    section_transcripts: dict[str, str]
-    usage: dict[str, int]
-    warnings: list[str] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
 class LLMSectionPolishResult:
     """Validated result from the section-text polishing phase."""
 

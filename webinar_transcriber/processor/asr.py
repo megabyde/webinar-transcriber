@@ -89,7 +89,6 @@ def run_asr_pipeline(
         {"speech_regions": [asdict(region) for region in speech_regions]},
     )
 
-    expanded_regions = speech_regions
     windows = [
         InferenceWindow(
             window_id=f"window-{i + 1}",
@@ -97,13 +96,9 @@ def run_asr_pipeline(
             start_sec=region.start_sec,
             end_sec=region.end_sec,
         )
-        for i, region in enumerate(expanded_regions)
+        for i, region in enumerate(speech_regions)
         if region.end_sec > region.start_sec
     ]
-    write_json(
-        layout.expanded_regions_path,
-        {"expanded_regions": [asdict(region) for region in expanded_regions]},
-    )
     window_count = len(windows)
     average_window_duration_sec = (
         sum(w.end_sec - w.start_sec for w in windows) / len(windows) if windows else None
