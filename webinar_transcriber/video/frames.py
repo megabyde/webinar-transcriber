@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from webinar_transcriber.models import Scene
 
-REPRESENTATIVE_FRAME_OFFSET_SEC = 0.5
+REPRESENTATIVE_FRAME_OFFSET_SEC = 1.0
 
 
 def extract_representative_frames(

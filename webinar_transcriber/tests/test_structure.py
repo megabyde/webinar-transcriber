@@ -25,8 +25,8 @@ class TestAudioSectionBoundaries:
     @pytest.mark.parametrize(
         ("gap_duration", "expected"),
         [
-            (7.9, False),
-            (8.0, True),
+            (4.9, False),
+            (5.0, True),
         ],
     )
     def test_starts_new_audio_section_for_boundary_conditions(
@@ -216,7 +216,7 @@ class TestAudioSectionHeuristics:
         next_segment = TranscriptSegment(
             id="segment-2",
             text="More detail arrives immediately after that",
-            start_sec=17.9,
+            start_sec=14.9,
             end_sec=30.0,
         )
 
