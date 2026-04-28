@@ -53,6 +53,12 @@ class CLIError(click.ClickException):
     help="Force a Whisper language code, for example 'en' or 'ru'.",
 )
 @click.option(
+    "--threads",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Number of ASR threads. Defaults to the host CPU count.",
+)
+@click.option(
     "--vad/--no-vad",
     default=True,
     show_default=True,
@@ -78,6 +84,7 @@ def main(
     output_dir: Path | None,
     asr_model: str | None,
     language: str | None,
+    threads: int | None,
     vad: bool,
     carryover: bool,
     kept_audio_format: str | None,
@@ -115,7 +122,7 @@ def main(
                 max_sentences=DEFAULT_CARRYOVER_MAX_SENTENCES,
                 max_tokens=DEFAULT_CARRYOVER_MAX_TOKENS,
             ),
-            asr_threads=default_asr_threads(),
+            asr_threads=threads or default_asr_threads(),
             keep_audio=kept_audio_format is not None,
             kept_audio_format=kept_audio_format or "wav",
             enable_llm=llm,
