@@ -242,11 +242,7 @@ class WhisperCppTranscriber:
 
         for window in ordered_windows:
             decoded_window = self._transcribe_window(
-                model,
-                audio_samples,
-                window,
-                prompt=carryover_prompt,
-                language_hint=language_hint,
+                model, audio_samples, window, prompt=carryover_prompt, language_hint=language_hint
             )
             decoded_windows.append(replace(decoded_window, input_prompt=carryover_prompt))
             decoded_segment_count += len(decoded_window.segments)

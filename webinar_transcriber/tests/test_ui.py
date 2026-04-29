@@ -10,11 +10,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from webinar_transcriber.reporter import BaseStageReporter
-from webinar_transcriber.ui import (
-    RichStageReporter,
-    _count_text,
-    _rate_text,
-)
+from webinar_transcriber.ui import RichStageReporter, _count_text, _rate_text
 
 if TYPE_CHECKING:
     from webinar_transcriber.processor import ProcessArtifacts

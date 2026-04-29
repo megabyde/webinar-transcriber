@@ -6,10 +6,7 @@ from typing import TYPE_CHECKING
 
 from webinar_transcriber.models import ReportSection
 
-from .constants import (
-    AUDIO_SECTION_BREAK_GAP_SEC,
-    TITLE_WORD_LIMIT,
-)
+from .constants import AUDIO_SECTION_BREAK_GAP_SEC, TITLE_WORD_LIMIT
 from .scoring import _title_from_text
 
 if TYPE_CHECKING:
@@ -35,9 +32,7 @@ def _build_sections_from_blocks(
         ]
         sections.extend(
             _sections_from_block(
-                block,
-                block_segments=block_segments,
-                next_section_index=len(sections) + 1,
+                block, block_segments=block_segments, next_section_index=len(sections) + 1
             )
         )
         if progress_callback is not None:
@@ -119,10 +114,7 @@ def _section_from_segments(
 
 
 def _sections_from_block(
-    block: AlignmentBlock,
-    *,
-    block_segments: list[TranscriptSegment],
-    next_section_index: int,
+    block: AlignmentBlock, *, block_segments: list[TranscriptSegment], next_section_index: int
 ) -> list[ReportSection]:
     if not block_segments:
         # Keep slide-backed sections even when no transcript segments aligned, so frame/title
@@ -142,9 +134,6 @@ def _sections_from_block(
     title = _title_from_text(block.transcript_text, fallback=f"Slide {next_section_index}")
     return [
         _section_from_segments(
-            block_segments,
-            section_index=next_section_index,
-            title=title,
-            frame_id=block.frame_id,
+            block_segments, section_index=next_section_index, title=title, frame_id=block.frame_id
         )
     ]

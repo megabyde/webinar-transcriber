@@ -63,12 +63,10 @@ def _transcode_audio_with_pyav(
 ) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open_input_media_container(
-        input_path,
-        error_message="Could not open {path}: {error}",
+        input_path, error_message="Could not open {path}: {error}"
     ) as input_container:
         input_stream = _required_audio_stream(
-            input_container,
-            error_message=f"No audio stream found in {input_path}.",
+            input_container, error_message=f"No audio stream found in {input_path}."
         )
         with open_output_media_container(
             output_path,
@@ -76,30 +74,19 @@ def _transcode_audio_with_pyav(
         ) as output_container:
             output_stream = cast(
                 "AudioStream",
-                output_container.add_stream(
-                    output_codec,
-                    rate=NORMALIZED_SAMPLE_RATE,
-                ),
+                output_container.add_stream(output_codec, rate=NORMALIZED_SAMPLE_RATE),
             )
             output_stream.layout = "mono"
             resampler = av.AudioResampler(
-                format=resample_format,
-                layout="mono",
-                rate=NORMALIZED_SAMPLE_RATE,
+                format=resample_format, layout="mono", rate=NORMALIZED_SAMPLE_RATE
             )
 
             for decoded_frame in input_container.decode(input_stream):
                 _mux_audio_frames(
-                    output_container,
-                    output_stream,
-                    resampler.resample(decoded_frame),
+                    output_container, output_stream, resampler.resample(decoded_frame)
                 )
 
-            _mux_audio_frames(
-                output_container,
-                output_stream,
-                resampler.resample(None),
-            )
+            _mux_audio_frames(output_container, output_stream, resampler.resample(None))
 
             for packet in output_stream.encode(None):
                 output_container.mux(packet)

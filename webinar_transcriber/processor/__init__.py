@@ -78,9 +78,7 @@ def run_transcription_phase(
             with stage(ctx, "save_transcription_audio", "Saving transcription audio") as st:
                 preserved_audio_path = layout.transcription_audio_path(kept_audio_format)
                 preserve_transcription_audio(
-                    audio_path,
-                    preserved_audio_path,
-                    audio_format=kept_audio_format,
+                    audio_path, preserved_audio_path, audio_format=kept_audio_format
                 )
                 st.detail = preserved_audio_path.name
 
@@ -117,17 +115,12 @@ def process_input(
     ctx = RunContext(
         reporter=active_reporter,
         asr_pipeline=AsrPipelineState(
-            vad_enabled=vad.enabled,
-            threads=asr_threads,
-            carryover_enabled=carryover.enabled,
+            vad_enabled=vad.enabled, threads=asr_threads, carryover_enabled=carryover.enabled
         ),
     )
 
     active_transcriber = transcriber or asr_runtime.WhisperCppTranscriber(
-        model_name=asr_model,
-        threads=asr_threads,
-        language=language,
-        carryover_settings=carryover,
+        model_name=asr_model, threads=asr_threads, language=language, carryover_settings=carryover
     )
     transcriber_scope = (
         active_transcriber if transcriber is None else nullcontext(active_transcriber)

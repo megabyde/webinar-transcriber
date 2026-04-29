@@ -62,16 +62,13 @@ def _select_scene_starts(
 ) -> tuple[list[float], float]:
     try:
         with open_input_media_container(
-            video_path,
-            error_message="Could not open {path} with PyAV for scene detection: {error}",
+            video_path, error_message="Could not open {path} with PyAV for scene detection: {error}"
         ) as input_container:
             video_stream = _required_video_stream(
-                input_container,
-                error_message=f"No video stream found in {video_path}.",
+                input_container, error_message=f"No video stream found in {video_path}."
             )
             scene_filter = _build_scene_filter_graph(
-                video_stream,
-                scene_score_threshold=scene_score_threshold,
+                video_stream, scene_score_threshold=scene_score_threshold
             )
             scene_starts = [0.0]
             processed_sample_count = 0
@@ -155,10 +152,7 @@ def _report_final_scene_progress(
     reported_scene_count: int,
     scene_count: int,
 ) -> None:
-    final_sample_count = max(
-        processed_sample_count,
-        _estimated_sample_count(duration_sec),
-    )
+    final_sample_count = max(processed_sample_count, _estimated_sample_count(duration_sec))
     if final_sample_count != processed_sample_count or reported_scene_count != scene_count:
         progress_callback(final_sample_count, scene_count)
 

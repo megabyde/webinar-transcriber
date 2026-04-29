@@ -18,11 +18,7 @@ from .contracts import (
     SectionTextResponse,
 )
 from .processor import InstructorLLMProcessor
-from .prompts import (
-    ACTION_ITEM_LIMIT,
-    REPORT_POLISH_TOTAL_CHAR_BUDGET,
-    SECTION_POLISH_MAX_WORKERS,
-)
+from .prompts import ACTION_ITEM_LIMIT, REPORT_POLISH_TOTAL_CHAR_BUDGET, SECTION_POLISH_MAX_WORKERS
 from .utils import required_provider_env
 
 if TYPE_CHECKING:
@@ -60,8 +56,7 @@ def build_llm_processor_from_env() -> LLMProcessor:
     match provider:
         case "openai":
             instructor = cast(
-                "InstructorModule",
-                _required_llm_module("instructor", provider_label="OpenAI"),
+                "InstructorModule", _required_llm_module("instructor", provider_label="OpenAI")
             )
             _required_llm_module("openai", provider_label="OpenAI")
             api_key, model_name = required_provider_env(
@@ -69,17 +64,14 @@ def build_llm_processor_from_env() -> LLMProcessor:
             )
             return InstructorLLMProcessor(
                 client=instructor.from_provider(
-                    f"openai/{model_name}",
-                    api_key=api_key,
-                    mode=instructor.Mode.TOOLS,
+                    f"openai/{model_name}", api_key=api_key, mode=instructor.Mode.TOOLS
                 ),
                 provider_name="openai",
                 model_name=model_name,
             )
         case "anthropic":
             instructor = cast(
-                "InstructorModule",
-                _required_llm_module("instructor", provider_label="Anthropic"),
+                "InstructorModule", _required_llm_module("instructor", provider_label="Anthropic")
             )
             _required_llm_module("anthropic", provider_label="Anthropic")
             api_key, model_name = required_provider_env(
@@ -87,9 +79,7 @@ def build_llm_processor_from_env() -> LLMProcessor:
             )
             return InstructorLLMProcessor(
                 client=instructor.from_provider(
-                    f"anthropic/{model_name}",
-                    api_key=api_key,
-                    mode=instructor.Mode.TOOLS,
+                    f"anthropic/{model_name}", api_key=api_key, mode=instructor.Mode.TOOLS
                 ),
                 provider_name="anthropic",
                 model_name=model_name,

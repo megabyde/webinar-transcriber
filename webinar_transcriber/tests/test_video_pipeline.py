@@ -12,9 +12,7 @@ from webinar_transcriber.models import Scene
 from webinar_transcriber.tests.conftest import FakeContextContainer
 from webinar_transcriber.video import detect_scenes, extract_representative_frames
 from webinar_transcriber.video.frames import _extract_frame, _normalize_extracted_frame
-from webinar_transcriber.video.scenes import (
-    _select_scene_starts,
-)
+from webinar_transcriber.video.scenes import _select_scene_starts
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 SAMPLE_VIDEO_PATH = FIXTURE_DIR / "sample-video.mp4"
@@ -33,9 +31,7 @@ class TestDetectScenes:
             progress_updates.append((sample_count, scene_count))
 
         scenes = detect_scenes(
-            SAMPLE_VIDEO_PATH,
-            min_scene_length_sec=1.0,
-            progress_callback=on_progress,
+            SAMPLE_VIDEO_PATH, min_scene_length_sec=1.0, progress_callback=on_progress
         )
 
         assert len(scenes) >= 2
@@ -69,11 +65,7 @@ class TestFrameExtraction:
     def test_extract_representative_frames_creates_real_images(self, tmp_path: Path) -> None:
         scenes = [_scene(1, 0.0, 1.0), _scene(2, 1.0, 2.0)]
 
-        frames = extract_representative_frames(
-            SAMPLE_VIDEO_PATH,
-            scenes,
-            tmp_path / "frames",
-        )
+        frames = extract_representative_frames(SAMPLE_VIDEO_PATH, scenes, tmp_path / "frames")
 
         assert [frame.scene_id for frame in frames] == ["scene-1", "scene-2"]
         assert [frame.timestamp_sec for frame in frames] == [1.0, 2.0]
@@ -178,9 +170,7 @@ class TestFrameExtraction:
         )
 
         frames = extract_representative_frames(
-            SAMPLE_VIDEO_PATH,
-            [_scene(1, 2.0, 5.0)],
-            tmp_path / "frames",
+            SAMPLE_VIDEO_PATH, [_scene(1, 2.0, 5.0)], tmp_path / "frames"
         )
 
         assert captured_timestamps == [3.0]
@@ -398,9 +388,7 @@ class TestSelectSceneStarts:
 
         with pytest.raises(MediaProcessingError, match="bad open"):
             _select_scene_starts(
-                SAMPLE_VIDEO_PATH,
-                scene_score_threshold=0.3,
-                min_scene_length_sec=3.0,
+                SAMPLE_VIDEO_PATH, scene_score_threshold=0.3, min_scene_length_sec=3.0
             )
 
     def test_select_scene_starts_raises_when_no_video_stream(
@@ -419,9 +407,7 @@ class TestSelectSceneStarts:
             MediaProcessingError, match=f"No video stream found in {SAMPLE_VIDEO_PATH}."
         ):
             _select_scene_starts(
-                SAMPLE_VIDEO_PATH,
-                scene_score_threshold=0.3,
-                min_scene_length_sec=3.0,
+                SAMPLE_VIDEO_PATH, scene_score_threshold=0.3, min_scene_length_sec=3.0
             )
 
     def test_select_scene_starts_reports_progress(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -571,7 +557,5 @@ class TestSelectSceneStarts:
             match=f"Could not detect scenes in {SAMPLE_VIDEO_PATH}: filter failed",
         ):
             _select_scene_starts(
-                SAMPLE_VIDEO_PATH,
-                scene_score_threshold=0.3,
-                min_scene_length_sec=3.0,
+                SAMPLE_VIDEO_PATH, scene_score_threshold=0.3, min_scene_length_sec=3.0
             )

@@ -31,18 +31,15 @@ def build_report(
     Returns:
         ReportDocument: The structured report document.
     """
-    sections = (
-        _build_sections_from_blocks(
+    transcript_segments = transcription.segments
+    if alignment_blocks is not None:
+        sections = _build_sections_from_blocks(
             alignment_blocks,
-            transcript_segments=transcription.segments,
+            transcript_segments=transcript_segments,
             progress_callback=progress_callback,
         )
-        if alignment_blocks is not None
-        else _build_audio_sections(
-            transcription.segments,
-            progress_callback=progress_callback,
-        )
-    )
+    else:
+        sections = _build_audio_sections(transcript_segments, progress_callback=progress_callback)
     return ReportDocument(
         title=_derive_title(media_asset.path),
         source_file=media_asset.path,

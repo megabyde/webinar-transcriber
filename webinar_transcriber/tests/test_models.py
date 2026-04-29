@@ -134,8 +134,7 @@ class TestCoreModels:
         segment_ids = [
             segment.id
             for segment in sorted(
-                segments,
-                key=lambda item: (item.start_sec, item.end_sec, item.id),
+                segments, key=lambda item: (item.start_sec, item.end_sec, item.id)
             )
         ]
 
