@@ -80,8 +80,7 @@ def write_run_diagnostics(
     try:
         ctx.layout.diagnostics_path.parent.mkdir(parents=True, exist_ok=True)
         ctx.layout.diagnostics_path.write_text(
-            json.dumps(asdict(diagnostics), indent=2, ensure_ascii=False),
-            encoding="utf-8",
+            json.dumps(asdict(diagnostics), indent=2, ensure_ascii=False), encoding="utf-8"
         )
     except Exception:
         if not suppress_errors:

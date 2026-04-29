@@ -61,10 +61,7 @@ class TestBuildLlmProcessorFromEnv:
         monkeypatch.delenv("OPENAI_MODEL", raising=False)
         monkeypatch.setattr(
             "webinar_transcriber.llm.importlib.import_module",
-            _fake_import_module({
-                "instructor": FakeInstructorModule(object()),
-                "openai": object(),
-            }),
+            _fake_import_module({"instructor": FakeInstructorModule(object()), "openai": object()}),
         )
 
         with pytest.raises(LLMConfigurationError):
@@ -73,8 +70,7 @@ class TestBuildLlmProcessorFromEnv:
     def test_requires_llm_extra_for_openai(self, monkeypatch) -> None:
         monkeypatch.delenv("LLM_PROVIDER", raising=False)
         monkeypatch.setattr(
-            "webinar_transcriber.llm.importlib.import_module",
-            _fake_import_module({}),
+            "webinar_transcriber.llm.importlib.import_module", _fake_import_module({})
         )
 
         with pytest.raises(
@@ -90,10 +86,7 @@ class TestBuildLlmProcessorFromEnv:
         monkeypatch.setenv("ANTHROPIC_MODEL", "claude-test")
         monkeypatch.setattr(
             "webinar_transcriber.llm.importlib.import_module",
-            _fake_import_module({
-                "instructor": fake_instructor,
-                "anthropic": object(),
-            }),
+            _fake_import_module({"instructor": fake_instructor, "anthropic": object()}),
         )
 
         processor = build_llm_processor_from_env()
@@ -104,18 +97,14 @@ class TestBuildLlmProcessorFromEnv:
         assert fake_instructor.calls == [
             (
                 "anthropic/claude-test",
-                {
-                    "api_key": "test-key",
-                    "mode": FakeInstructorModule.Mode.TOOLS,
-                },
-            ),
+                {"api_key": "test-key", "mode": FakeInstructorModule.Mode.TOOLS},
+            )
         ]
 
     def test_requires_llm_extra_for_anthropic(self, monkeypatch) -> None:
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         monkeypatch.setattr(
-            "webinar_transcriber.llm.importlib.import_module",
-            _fake_import_module({}),
+            "webinar_transcriber.llm.importlib.import_module", _fake_import_module({})
         )
 
         with pytest.raises(
@@ -137,10 +126,7 @@ class TestBuildLlmProcessorFromEnv:
         monkeypatch.setenv("OPENAI_MODEL", "gpt-test")
         monkeypatch.setattr(
             "webinar_transcriber.llm.importlib.import_module",
-            _fake_import_module({
-                "instructor": fake_instructor,
-                "openai": object(),
-            }),
+            _fake_import_module({"instructor": fake_instructor, "openai": object()}),
         )
 
         processor = build_llm_processor_from_env()
@@ -149,13 +135,7 @@ class TestBuildLlmProcessorFromEnv:
         assert processor.provider_name == "openai"
         assert processor.model_name == "gpt-test"
         assert fake_instructor.calls == [
-            (
-                "openai/gpt-test",
-                {
-                    "api_key": "test-key",
-                    "mode": FakeInstructorModule.Mode.TOOLS,
-                },
-            ),
+            ("openai/gpt-test", {"api_key": "test-key", "mode": FakeInstructorModule.Mode.TOOLS})
         ]
 
 
@@ -198,9 +178,7 @@ class TestInstructorLlmProcessor:
         ])
 
         processor = InstructorLLMProcessor(
-            client=fake_client,
-            provider_name="openai",
-            model_name="gpt-test",
+            client=fake_client, provider_name="openai", model_name="gpt-test"
         )
         report = ReportDocument(
             title="Demo",
@@ -232,11 +210,7 @@ class TestInstructorLlmProcessor:
             "section-1": "Agenda review and project status update.\n\nPlease listen."
         }
         assert section_result.usage == {"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}
-        assert metadata_result.usage == {
-            "input_tokens": 12,
-            "output_tokens": 8,
-            "total_tokens": 20,
-        }
+        assert metadata_result.usage == {"input_tokens": 12, "output_tokens": 8, "total_tokens": 20}
         assert report.sections[0].transcript_text == "Agenda review and project status update."
         assert len(fake_client.calls) == 2
         assert fake_client.calls[0]["max_retries"] == 1
@@ -281,8 +255,7 @@ class TestInstructorLlmProcessor:
         fake_client = self.FakeClient([
             (
                 SectionTextResponse(
-                    tldr="Agenda recap.",
-                    transcript_text="Agenda review and project status update.",
+                    tldr="Agenda recap.", transcript_text="Agenda review and project status update."
                 ),
                 self.FakeCompletion({"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}),
             ),
@@ -295,9 +268,7 @@ class TestInstructorLlmProcessor:
         ])
 
         processor = InstructorLLMProcessor(
-            client=fake_client,
-            provider_name="openai",
-            model_name="gpt-test",
+            client=fake_client, provider_name="openai", model_name="gpt-test"
         )
         report = ReportDocument(
             title="Demo",
@@ -330,9 +301,7 @@ class TestInstructorLlmProcessor:
         ])
 
         processor = InstructorLLMProcessor(
-            client=fake_client,
-            provider_name="openai",
-            model_name="gpt-test",
+            client=fake_client, provider_name="openai", model_name="gpt-test"
         )
         report = ReportDocument(
             title="Demo",
@@ -358,9 +327,7 @@ class TestInstructorLlmProcessor:
     def test_wraps_client_errors(self) -> None:
         fake_client = self.FakeClient([RuntimeError("boom")])
         processor = InstructorLLMProcessor(
-            client=fake_client,
-            provider_name="openai",
-            model_name="gpt-test",
+            client=fake_client, provider_name="openai", model_name="gpt-test"
         )
         report = ReportDocument(title="Demo", source_file="demo.wav", media_type=MediaType.AUDIO)
 
@@ -372,24 +339,20 @@ class TestInstructorLlmProcessor:
         fake_client = self.FakeClient([
             (
                 SectionTextResponse(
-                    tldr="Intro recap.",
-                    transcript_text="Intro review and project status update.",
+                    tldr="Intro recap.", transcript_text="Intro review and project status update."
                 ),
                 self.FakeCompletion({"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}),
             ),
             (
                 SectionTextResponse(
-                    tldr="Agenda recap.",
-                    transcript_text="Agenda review and project status update.",
+                    tldr="Agenda recap.", transcript_text="Agenda review and project status update."
                 ),
                 self.FakeCompletion({"input_tokens": 6, "output_tokens": 5, "total_tokens": 11}),
             ),
         ])
 
         processor = InstructorLLMProcessor(
-            client=fake_client,
-            provider_name="openai",
-            model_name="gpt-test",
+            client=fake_client, provider_name="openai", model_name="gpt-test"
         )
         report = ReportDocument(
             title="Demo",
@@ -461,9 +424,7 @@ class TestInstructorProcessorFlow:
             self, responses: dict[str, tuple[BaseModel, dict[str, int]] | Exception]
         ) -> None:
             super().__init__(
-                client=self.UnusedClient(),
-                provider_name="stub",
-                model_name="stub-model",
+                client=self.UnusedClient(), provider_name="stub", model_name="stub-model"
             )
             self._responses = responses
 
@@ -510,14 +471,11 @@ class TestInstructorProcessorFlow:
         )
 
         assert processor.report_polish_plan(report) == LLMReportPolishPlan(
-            section_count=2,
-            worker_count=2,
+            section_count=2, worker_count=2
         )
 
     def test_turns_section_polish_errors_into_warnings(self) -> None:
-        processor = self.StubProcessor({
-            "section-1": LLMProcessingError("bad section"),
-        })
+        processor = self.StubProcessor({"section-1": LLMProcessingError("bad section")})
         progress_updates: list[int] = []
         report = ReportDocument(
             title="Demo",
@@ -611,9 +569,7 @@ class TestLlmNormalization:
         self,
     ) -> None:
         normalized = normalize_polished_section_text(
-            original_text="Original sentence.",
-            polished_text="   ",
-            section_id="section-1",
+            original_text="Original sentence.", polished_text="   ", section_id="section-1"
         )
 
         assert normalized == "Original sentence."

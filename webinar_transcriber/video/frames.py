@@ -99,13 +99,9 @@ def _extract_frame(
     video_path: Path, timestamp_sec: float, output_path: Path
 ) -> tuple[bool, str | None]:
     try:
-        with open_input_media_container(
-            video_path,
-            error_message="{error}",
-        ) as input_container:
+        with open_input_media_container(video_path, error_message="{error}") as input_container:
             video_stream = _required_video_stream(
-                input_container,
-                error_message=f"No video stream found in {video_path}",
+                input_container, error_message=f"No video stream found in {video_path}"
             )
             return _extract_frame_from_container(
                 input_container, video_stream, timestamp_sec, output_path

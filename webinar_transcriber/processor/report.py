@@ -52,6 +52,7 @@ def run_report_phase(
     scenes = list(ctx.scenes)
     slide_frames = list(ctx.slide_frames)
     alignment_blocks = ctx.alignment_blocks
+    transcript_segments = normalized_transcription.segments
 
     def record_warning(message: str) -> None:
         ctx.warnings.append(message)
@@ -71,18 +72,14 @@ def run_report_phase(
                 input_path,
                 duration_sec=media_asset.duration_sec,
                 progress_callback=lambda sample_count, scene_count: st.advance_to(
-                    float(sample_count),
-                    detail=count_label(scene_count, "scene"),
+                    float(sample_count), detail=count_label(scene_count, "scene")
                 ),
             )
             st.finish_progress(float(detect_scene_total), detail=count_label(len(scenes), "scene"))
         write_json(layout.scenes_path, {"scenes": [asdict(scene) for scene in scenes]})
 
         with progress_stage(
-            ctx,
-            "extract_frames",
-            "Extracting slide frames",
-            total=float(len(scenes)),
+            ctx, "extract_frames", "Extracting slide frames", total=float(len(scenes))
         ) as st:
             slide_frames = video_runtime.extract_representative_frames(
                 input_path,
@@ -93,21 +90,15 @@ def run_report_phase(
             )
             st.detail = count_label(len(slide_frames), "frame")
 
-        alignment_blocks = align_by_time(
-            normalized_transcription.segments,
-            scenes,
-            slide_frames,
-        )
+        alignment_blocks = align_by_time(transcript_segments, scenes, slide_frames)
 
-    structure_total = max(
-        (
-            len(alignment_blocks)
-            if alignment_blocks is not None
-            else len(normalized_transcription.segments)
-        ),
-        1,
-    )
-    structure_count_label = "blocks" if alignment_blocks is not None else "segments"
+    if alignment_blocks is not None:
+        structure_item_count = len(alignment_blocks)
+        structure_count_label = "blocks"
+    else:
+        structure_item_count = len(transcript_segments)
+        structure_count_label = "segments"
+    structure_total = max(structure_item_count, 1)
     with progress_stage(
         ctx,
         "structure",
@@ -122,26 +113,21 @@ def run_report_phase(
             alignment_blocks=alignment_blocks,
             warnings=ctx.warnings,
             progress_callback=lambda completed_count, section_count: st.advance_to(
-                float(completed_count),
-                detail=count_label(section_count, "section"),
+                float(completed_count), detail=count_label(section_count, "section")
             ),
         )
         st.finish_progress(
-            float(structure_total),
-            detail=count_label(len(report.sections), "section"),
+            float(structure_total), detail=count_label(len(report.sections), "section")
         )
 
     if slide_frames:
         frame_by_id = {frame.id: frame for frame in slide_frames}
-        report = replace(
-            report,
-            sections=[
-                replace(section, image_path=frame_by_id[section.frame_id].image_path)
-                if section.frame_id and section.frame_id in frame_by_id
-                else section
-                for section in report.sections
-            ],
-        )
+        sections = []
+        for section in report.sections:
+            frame_id = section.frame_id
+            frame = frame_by_id.get(frame_id) if frame_id else None
+            sections.append(replace(section, image_path=frame.image_path) if frame else section)
+        report = replace(report, sections=sections)
 
     report, ctx.llm_runtime = maybe_polish_report(
         report,
@@ -155,18 +141,13 @@ def run_report_phase(
     with stage(ctx, "export", "Writing artifacts"):
         export_runtime.write_markdown_report(report, layout.markdown_report_path)
         export_runtime.write_docx_report(
-            report,
-            layout.docx_report_path,
-            warning_callback=record_warning,
+            report, layout.docx_report_path, warning_callback=record_warning
         )
         export_runtime.write_json_report(report, layout.json_report_path)
         export_runtime.write_vtt_subtitles(normalized_transcription, layout.subtitle_vtt_path)
 
     return ReportPhaseResult(
-        report=report,
-        alignment_blocks=alignment_blocks,
-        scenes=scenes,
-        slide_frames=slide_frames,
+        report=report, alignment_blocks=alignment_blocks, scenes=scenes, slide_frames=slide_frames
     )
 
 

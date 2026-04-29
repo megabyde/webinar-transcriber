@@ -77,9 +77,7 @@ class FakeModelWithNullContext(FakeModel):
 
 
 def install_fake_pywhispercpp(
-    monkeypatch: pytest.MonkeyPatch,
-    *,
-    model: FakeModel | None = None,
+    monkeypatch: pytest.MonkeyPatch, *, model: FakeModel | None = None
 ) -> FakeModel:
     fake_model = model or FakeModel()
     monkeypatch.setattr("webinar_transcriber.asr.transcriber._model_cls", lambda: fake_model)
@@ -152,8 +150,7 @@ class TestWhisperCppTranscriber:
             return _ProgressContext()
 
         monkeypatch.setattr(
-            "webinar_transcriber.asr.transcriber._disable_tqdm_progress",
-            make_progress_context,
+            "webinar_transcriber.asr.transcriber._disable_tqdm_progress", make_progress_context
         )
 
         WhisperCppTranscriber().prepare_model()
@@ -406,10 +403,7 @@ class TestWhisperCppTranscriber:
 
         assert decoded_window.segments == [
             TranscriptSegment(
-                id="window-1-segment-1",
-                text="agenda review",
-                start_sec=1.0,
-                end_sec=2.0,
+                id="window-1-segment-1", text="agenda review", start_sec=1.0, end_sec=2.0
             )
         ]
 
@@ -507,10 +501,7 @@ class TestPromptCarryover:
         carryover = build_prompt_carryover(
             DecodedWindow(
                 window=InferenceWindow(
-                    window_id="window-2",
-                    region_index=0,
-                    start_sec=18.5,
-                    end_sec=35.0,
+                    window_id="window-2", region_index=0, start_sec=18.5, end_sec=35.0
                 ),
                 text="First sentence. Second sentence. Third sentence here.",
                 segments=[],
@@ -524,10 +515,7 @@ class TestPromptCarryover:
         carryover = build_prompt_carryover(
             DecodedWindow(
                 window=InferenceWindow(
-                    window_id="window-2",
-                    region_index=0,
-                    start_sec=18.5,
-                    end_sec=35.0,
+                    window_id="window-2", region_index=0, start_sec=18.5, end_sec=35.0
                 ),
                 text="",
                 segments=[],
@@ -548,10 +536,7 @@ class TestPromptCarryover:
         carryover = build_prompt_carryover(
             DecodedWindow(
                 window=InferenceWindow(
-                    window_id="window-1",
-                    region_index=0,
-                    start_sec=0.0,
-                    end_sec=1.0,
+                    window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0
                 ),
                 text="Carry this.",
                 segments=[],
@@ -565,10 +550,7 @@ class TestPromptCarryover:
         carryover = build_prompt_carryover(
             DecodedWindow(
                 window=InferenceWindow(
-                    window_id="window-5",
-                    region_index=0,
-                    start_sec=0.0,
-                    end_sec=1.0,
+                    window_id="window-5", region_index=0, start_sec=0.0, end_sec=1.0
                 ),
                 text="(((",
                 segments=[],

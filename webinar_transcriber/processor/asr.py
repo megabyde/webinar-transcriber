@@ -7,10 +7,7 @@ from typing import TYPE_CHECKING
 
 from webinar_transcriber.models import InferenceWindow, TranscriptionResult
 from webinar_transcriber.normalized_audio import load_normalized_audio
-from webinar_transcriber.segmentation import (
-    detect_speech_regions,
-    normalized_audio_duration,
-)
+from webinar_transcriber.segmentation import detect_speech_regions, normalized_audio_duration
 from webinar_transcriber.transcript import reconcile_decoded_windows
 from webinar_transcriber.transcript.normalize import normalize_transcription
 
@@ -113,17 +110,12 @@ def run_asr_pipeline(
     ) as st:
 
         def on_window_completed(
-            completed_sec: float,
-            segment_count: int,
-            handle: ProgressStageHandle = st,
+            completed_sec: float, segment_count: int, handle: ProgressStageHandle = st
         ) -> None:
             handle.advance_to(completed_sec, detail=count_label(segment_count, "segment"))
 
         decoded_windows = transcriber.transcribe_inference_windows(
-            audio_samples,
-            windows,
-            language=language,
-            progress_callback=on_window_completed,
+            audio_samples, windows, language=language, progress_callback=on_window_completed
         )
         write_json(
             layout.decoded_windows_path,

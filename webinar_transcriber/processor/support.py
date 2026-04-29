@@ -104,11 +104,7 @@ def progress_stage(
 ) -> Iterator[ProgressStageHandle]:
     """Record one determinate stage's timing and progress through a context manager."""
     handle = ProgressStageHandle(
-        key=key,
-        label=label,
-        detail=detail,
-        start_sec=perf_counter(),
-        reporter=ctx.reporter,
+        key=key, label=label, detail=detail, start_sec=perf_counter(), reporter=ctx.reporter
     )
     ctx.current_stage = key
     ctx.reporter.progress_started(
@@ -180,11 +176,7 @@ def llm_report_detail(
         _count_label_if_positive(summary_count, "summary bullet"),
         _count_label_if_positive(action_item_count, "action item"),
         _count_label_if_positive(tldr_count, "TL;DR"),
-        _count_label_if_positive(
-            title_update_count,
-            "title updated",
-            plural="titles updated",
-        ),
+        _count_label_if_positive(title_update_count, "title updated", plural="titles updated"),
         _count_label_if_positive(usage.get("total_tokens", 0), "token"),
     )
 

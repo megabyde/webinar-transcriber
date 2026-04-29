@@ -116,8 +116,7 @@ def maybe_polish_report(
 
         try:
             section_result = llm_processor.polish_report_sections_with_progress(
-                report,
-                progress_callback=on_section_progress,
+                report, progress_callback=on_section_progress
             )
         except LLMProcessingError as error:
             warnings.append(str(error))

@@ -87,6 +87,5 @@ class TestOpenOutputMediaContainer:
 
         with pytest.raises(MediaProcessingError, match="wrapped bad open"):
             open_output_media_container(
-                tmp_path / "out.wav",
-                error_message="wrapped {error}",
+                tmp_path / "out.wav", error_message="wrapped {error}"
             ).__enter__()

@@ -10,9 +10,7 @@ from webinar_transcriber.models import (
     VideoAsset,
 )
 from webinar_transcriber.structure import build_report
-from webinar_transcriber.structure.scoring import (
-    _derive_title,
-)
+from webinar_transcriber.structure.scoring import _derive_title
 from webinar_transcriber.structure.sections import (
     _build_audio_sections,
     _first_words_title,
@@ -22,22 +20,13 @@ from webinar_transcriber.structure.sections import (
 
 
 class TestAudioSectionBoundaries:
-    @pytest.mark.parametrize(
-        ("gap_duration", "expected"),
-        [
-            (4.9, False),
-            (5.0, True),
-        ],
-    )
+    @pytest.mark.parametrize(("gap_duration", "expected"), [(4.9, False), (5.0, True)])
     def test_starts_new_audio_section_for_boundary_conditions(
         self, gap_duration: float, expected: bool
     ) -> None:
         current_segments = [
             TranscriptSegment(
-                id="segment-1",
-                text="Current section text.",
-                start_sec=0.0,
-                end_sec=10.0,
+                id="segment-1", text="Current section text.", start_sec=0.0, end_sec=10.0
             )
         ]
         next_segment = TranscriptSegment(
@@ -233,11 +222,7 @@ class TestAudioSectionHeuristics:
             frame_id="frame-1",
         )
 
-        sections = _sections_from_block(
-            block,
-            block_segments=[],
-            next_section_index=1,
-        )
+        sections = _sections_from_block(block, block_segments=[], next_section_index=1)
 
         assert len(sections) == 1
         assert sections[0].title == "Fallback block text"
@@ -255,10 +240,7 @@ class TestAudioSectionHeuristics:
             (
                 [
                     TranscriptSegment(
-                        id="segment-1",
-                        text="So, okay, well.",
-                        start_sec=0.0,
-                        end_sec=5.0,
+                        id="segment-1", text="So, okay, well.", start_sec=0.0, end_sec=5.0
                     )
                 ],
                 "Fallback Title",

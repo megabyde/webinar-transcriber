@@ -28,37 +28,22 @@ def _first_input_stream(
     return next((stream for stream in input_container.streams if stream.type == stream_type), None)
 
 
-def _required_audio_stream(
-    input_container: InputContainer,
-    *,
-    error_message: str,
-) -> AudioStream:
+def _required_audio_stream(input_container: InputContainer, *, error_message: str) -> AudioStream:
     stream = _first_input_stream(input_container, "audio")
     if stream is None:
         raise MediaProcessingError(error_message)
     return cast("AudioStream", stream)
 
 
-def _required_video_stream(
-    input_container: InputContainer,
-    *,
-    error_message: str,
-) -> VideoStream:
+def _required_video_stream(input_container: InputContainer, *, error_message: str) -> VideoStream:
     stream = _first_input_stream(input_container, "video")
     if stream is None:
         raise MediaProcessingError(error_message)
-    return cast(
-        "VideoStream",
-        stream,
-    )
+    return cast("VideoStream", stream)
 
 
 @contextmanager
-def open_input_media_container(
-    path: Path,
-    *,
-    error_message: str,
-) -> Iterator[InputContainer]:
+def open_input_media_container(path: Path, *, error_message: str) -> Iterator[InputContainer]:
     """Open a PyAV input container and normalize open-time failures."""
     try:
         with av.open(str(path), mode="r") as container:
@@ -68,11 +53,7 @@ def open_input_media_container(
 
 
 @contextmanager
-def open_output_media_container(
-    path: Path,
-    *,
-    error_message: str,
-) -> Iterator[OutputContainer]:
+def open_output_media_container(path: Path, *, error_message: str) -> Iterator[OutputContainer]:
     """Open a PyAV output container and normalize open-time failures."""
     try:
         with av.open(str(path), mode="w") as container:
@@ -107,8 +88,7 @@ def probe_media(input_path: Path) -> MediaAsset:
         MediaProcessingError: If the input contains no usable audio or video streams.
     """
     with open_input_media_container(
-        input_path,
-        error_message="Could not open {path} with PyAV: {error}",
+        input_path, error_message="Could not open {path} with PyAV: {error}"
     ) as input_container:
         streams = list(input_container.streams)
         audio_stream = _first_input_stream(input_container, "audio")
@@ -125,25 +105,19 @@ def probe_media(input_path: Path) -> MediaAsset:
             raise MediaProcessingError(f"No audio or video stream found in {input_path}.")
 
         audio_duration = _stream_duration_sec(audio_stream) if audio_stream is not None else None
-        duration_sec = (
-            float(input_container.duration / av.time_base)
-            if input_container.duration is not None
-            else (audio_duration or 0.0)
-        )
+        container_duration = input_container.duration
+        duration_sec = audio_duration or 0.0
+        if container_duration is not None:
+            duration_sec = float(container_duration / av.time_base)
 
         audio_codec_context = getattr(audio_stream, "codec_context", None)
-        parsed_sample_rate = (
-            int(sample_rate)
-            if audio_stream is not None
-            and (sample_rate := getattr(audio_codec_context, "sample_rate", None)) is not None
-            else None
-        )
-        parsed_channels = (
-            int(channels)
-            if audio_stream is not None
-            and (channels := getattr(audio_codec_context, "channels", None)) is not None
-            else None
-        )
+        parsed_sample_rate = None
+        parsed_channels = None
+        if audio_stream is not None:
+            sample_rate = getattr(audio_codec_context, "sample_rate", None)
+            channels = getattr(audio_codec_context, "channels", None)
+            parsed_sample_rate = int(sample_rate) if sample_rate is not None else None
+            parsed_channels = int(channels) if channels is not None else None
 
         if video_stream is None:
             return AudioAsset(
