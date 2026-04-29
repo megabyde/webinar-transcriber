@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from typing import TYPE_CHECKING, Literal
 
 from webinar_transcriber.asr import ASR_BACKEND_NAME
-from webinar_transcriber.models import AsrPipelineDiagnostics, Diagnostics
+from webinar_transcriber.models import Diagnostics
 
 if TYPE_CHECKING:
     from webinar_transcriber.processor.types import RunContext
@@ -50,7 +50,7 @@ def build_diagnostics(
             "scenes": len(ctx.scenes),
             "frames": len(ctx.slide_frames),
         },
-        asr_pipeline=AsrPipelineDiagnostics(**asdict(ctx.asr_pipeline)),
+        asr_pipeline=replace(ctx.asr_pipeline),
         warnings=ctx.warnings,
     )
 
