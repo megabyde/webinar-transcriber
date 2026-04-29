@@ -8,8 +8,6 @@ import click
 
 from webinar_transcriber import __version__
 from webinar_transcriber.asr import (
-    DEFAULT_CARRYOVER_MAX_SENTENCES,
-    DEFAULT_CARRYOVER_MAX_TOKENS,
     PromptCarryoverSettings,
     default_asr_threads,
 )
@@ -65,12 +63,6 @@ class CLIError(click.ClickException):
     help="Enable Silero speech-region detection before transcription planning.",
 )
 @click.option(
-    "--carryover/--no-carryover",
-    default=True,
-    show_default=True,
-    help="Carry a bounded prompt suffix across adjacent inference windows.",
-)
-@click.option(
     "--keep-audio",
     "kept_audio_format",
     type=click.Choice(["wav", "mp3"], case_sensitive=False),
@@ -86,7 +78,6 @@ def main(
     language: str | None,
     threads: int | None,
     vad: bool,
-    carryover: bool,
     kept_audio_format: str | None,
     llm: bool,
 ) -> None:
@@ -117,11 +108,7 @@ def main(
                 min_silence_duration_ms=DEFAULT_MIN_SILENCE_DURATION_MS,
                 speech_region_pad_ms=DEFAULT_SPEECH_REGION_PAD_MS,
             ),
-            carryover=PromptCarryoverSettings(
-                enabled=carryover,
-                max_sentences=DEFAULT_CARRYOVER_MAX_SENTENCES,
-                max_tokens=DEFAULT_CARRYOVER_MAX_TOKENS,
-            ),
+            carryover=PromptCarryoverSettings(),
             asr_threads=threads or default_asr_threads(),
             keep_audio=kept_audio_format is not None,
             kept_audio_format=kept_audio_format or "wav",

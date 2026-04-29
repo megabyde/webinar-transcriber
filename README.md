@@ -187,9 +187,10 @@ The default ASR path uses the selected `whisper.cpp` model, automatic language d
 prompt carryover, and an automatically selected thread count.
 
 - `--language CODE`: force a Whisper language code such as `en` or `ru`.
-- `--threads N`: set the whisper.cpp ASR thread count.
-- `--carryover/--no-carryover`: enable or disable bounded prompt carryover between adjacent
-  inference windows.
+- `--threads N`: set the CPU worker count passed to `whisper.cpp`. GPU-enabled builds can offload
+  supported model work to the GPU, but `whisper.cpp` still uses CPU threads for non-offloaded work,
+  scheduling, and language detection. By default, the transcriber uses the host CPU count; lower
+  this when you need to leave CPU capacity for other work.
 
 ## Reference
 
