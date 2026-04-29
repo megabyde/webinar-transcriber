@@ -122,7 +122,6 @@ class TestCli:
                     "--threads",
                     "3",
                     "--no-vad",
-                    "--no-carryover",
                     "--keep-audio",
                     "mp3",
                     "--llm",
@@ -136,7 +135,7 @@ class TestCli:
             asr_model="models/whisper-cpp/custom.bin",
             language="en",
             vad=VadSettings(enabled=False),
-            carryover=PromptCarryoverSettings(enabled=False),
+            carryover=PromptCarryoverSettings(),
             asr_threads=3,
             keep_audio=True,
             kept_audio_format="mp3",
@@ -154,11 +153,12 @@ class TestCli:
         assert "--language" in result.output
         assert "--threads" in result.output
         assert "--vad / --no-vad" in result.output
-        assert "--carryover / --no-carryover" in result.output
+        assert "--carryover" not in result.output
+        assert "--no-carryover" not in result.output
         assert "--keep-audio" in result.output
         assert "--llm" in result.output
         assert "Override the whisper.cpp model identifier" in result.output
-        assert "local model path" in result.output
+        assert "model path" in result.output
         assert "provider-backed report" in result.output
         assert "enhancement." in result.output
 
