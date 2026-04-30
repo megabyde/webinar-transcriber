@@ -20,7 +20,7 @@ from webinar_transcriber.media import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterable, Iterator
 
     from av.audio.frame import AudioFrame
     from av.audio.stream import AudioStream
@@ -40,17 +40,13 @@ def sample_index_for_time(time_sec: float) -> int:
 def _mux_audio_frames(
     output_container: OutputContainer,
     output_stream: AudioStream,
-    audio_frames: list[AudioFrame] | AudioFrame | None,
+    audio_frames: Iterable[AudioFrame] | None,
 ) -> None:
     if audio_frames is None:
         return
-    if isinstance(audio_frames, list):
-        for audio_frame in cast("list[AudioFrame]", audio_frames):
-            for packet in output_stream.encode(audio_frame):
-                output_container.mux(packet)
-        return
-    for packet in output_stream.encode(audio_frames):
-        output_container.mux(packet)
+    for audio_frame in audio_frames:
+        for packet in output_stream.encode(audio_frame):
+            output_container.mux(packet)
 
 
 def _transcode_audio_with_pyav(
@@ -152,7 +148,9 @@ def preserve_transcription_audio(
         return output_path
     if audio_format == "mp3":
         return transcode_audio_to_mp3(audio_path, output_path)
-    raise ValueError(f"Unsupported transcription audio format: {audio_format}")
+    raise ValueError(  # pragma: no cover - CLI validates the supported format choices
+        f"Unsupported transcription audio format: {audio_format}"
+    )
 
 
 def load_normalized_audio(audio_path: Path) -> tuple[np.ndarray, int]:

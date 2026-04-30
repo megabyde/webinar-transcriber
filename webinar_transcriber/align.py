@@ -17,7 +17,6 @@ def align_by_time(
     """
     frame_by_scene = {frame.scene_id: frame for frame in slide_frames}
     blocks: list[AlignmentBlock] = []
-    assigned_segment_ids: set[str] = set()
 
     for index, scene in enumerate(scenes, start=1):
         scene_segments = [
@@ -25,7 +24,6 @@ def align_by_time(
             for segment in transcript_segments
             if scene.start_sec <= segment.midpoint < scene.end_sec
         ]
-        assigned_segment_ids.update(segment.id for segment in scene_segments)
         transcript_text = " ".join(segment.text for segment in scene_segments).strip()
         frame = frame_by_scene.get(scene.id)
         blocks.append(

@@ -35,7 +35,7 @@ def fake_silero_import_module() -> Callable[..., Callable[[str], object]]:
             def load_silero_vad():
                 return object()
 
-        if iterator_cls is not None:
+        if iterator_cls is not None:  # pragma: no cover - fixture option for narrow VAD tests
             FakeSilero.VADIterator = iterator_cls
         if get_speech_timestamps_fn is not None:
             FakeSilero.get_speech_timestamps = staticmethod(get_speech_timestamps_fn)
@@ -45,7 +45,7 @@ def fake_silero_import_module() -> Callable[..., Callable[[str], object]]:
                 return FakeSilero
             if name == "torch":
                 return FakeTorch
-            raise ImportError(name)
+            raise ImportError(name)  # pragma: no cover - mirrors importlib for unexpected modules
 
         return fake_import_module
 

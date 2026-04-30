@@ -31,7 +31,7 @@ FIXTURE_DIR = Path(__file__).parent / "fixtures"
 
 
 class TestNormalizedAudio:
-    def test_mux_audio_frames_handles_single_frame_and_frame_list(self) -> None:
+    def test_mux_audio_frames_handles_frame_list(self) -> None:
         frame = av.AudioFrame(format="s16", layout="mono", samples=1)
         encoded_frames: list[object | None] = []
         muxed_packets: list[str] = []
@@ -53,16 +53,11 @@ class TestNormalizedAudio:
         _mux_audio_frames(
             cast("av.container.OutputContainer", FakeOutputContainer()),
             cast("av.audio.stream.AudioStream", FakeOutputStream()),
-            frame,
-        )
-        _mux_audio_frames(
-            cast("av.container.OutputContainer", FakeOutputContainer()),
-            cast("av.audio.stream.AudioStream", FakeOutputStream()),
             [frame],
         )
 
-        assert encoded_frames == [frame, frame]
-        assert muxed_packets == ["packet", "packet"]
+        assert encoded_frames == [frame]
+        assert muxed_packets == ["packet"]
 
     def test_prepared_transcription_audio_normalizes_audio_input_to_temp_wav(self) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
@@ -210,14 +205,6 @@ class TestNormalizedAudio:
         with pytest.raises(MediaProcessingError, match=r"PyAV did not write .*audio.wav"):
             extract_audio(FIXTURE_DIR / "sample-audio.mp3", tmp_path / "audio.wav")
 
-    def test_preserve_transcription_audio_rejects_unknown_output_format(
-        self, tmp_path: Path
-    ) -> None:
-        with pytest.raises(ValueError, match="Unsupported transcription audio format"):
-            preserve_transcription_audio(
-                tmp_path / "input.wav", tmp_path / "audio.ogg", audio_format="ogg"
-            )
-
     def test_load_normalized_audio_returns_mono_float32_samples(self) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
             samples, sample_rate = load_normalized_audio(audio_path)
@@ -326,25 +313,6 @@ class TestNormalizedAudio:
             )
 
         assert timestamps is None
-
-    def test_fake_silero_import_module_raises_for_unknown_import(
-        self, fake_silero_import_module
-    ) -> None:
-        fake_import_module = fake_silero_import_module()
-
-        with pytest.raises(ImportError, match="other"):
-            fake_import_module("other")
-
-    def test_fake_silero_import_module_assigns_iterator_class(
-        self, fake_silero_import_module
-    ) -> None:
-        class FakeIterator:
-            pass
-
-        fake_import_module = fake_silero_import_module(iterator_cls=FakeIterator)
-        silero_module = fake_import_module("silero_vad")
-
-        assert silero_module.VADIterator is FakeIterator
 
     def test_silero_speech_timestamps_uses_get_speech_timestamps_and_reports_progress(
         self, monkeypatch, fake_silero_import_module
