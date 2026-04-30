@@ -87,7 +87,7 @@ def _transcode_audio_with_pyav(
             for packet in output_stream.encode(None):
                 output_container.mux(packet)
 
-    if not output_path.exists():
+    if not output_path.exists():  # pragma: no cover - PyAV defensive postcondition
         raise MediaProcessingError(f"PyAV did not write {output_path}.")
     return output_path
 

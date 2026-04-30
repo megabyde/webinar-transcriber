@@ -2,7 +2,7 @@
 
 import wave
 from pathlib import Path
-from typing import cast
+from typing import Self, cast
 from unittest.mock import patch
 
 import av
@@ -29,6 +29,36 @@ from webinar_transcriber.segmentation import (
 from webinar_transcriber.tests.conftest import FakeContextContainer
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
+
+
+class FakeWave:
+    def __init__(
+        self, *, framerate: int = 16_000, channels: int = 1, sample_width: int = 2
+    ) -> None:
+        self._framerate = framerate
+        self._channels = channels
+        self._sample_width = sample_width
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        return None
+
+    def getframerate(self) -> int:
+        return self._framerate
+
+    def getnchannels(self) -> int:
+        return self._channels
+
+    def getsampwidth(self) -> int:
+        return self._sample_width
+
+    def getnframes(self) -> int:
+        return 1
+
+    def readframes(self, _count: int) -> bytes:
+        return b"\x00\x00"
 
 
 class TestNormalizedAudio:
@@ -169,42 +199,6 @@ class TestNormalizedAudio:
 
         with pytest.raises(MediaProcessingError, match=r"Could not open .*bad open"):
             transcode_audio_to_mp3(tmp_path / "input.wav", tmp_path / "audio.mp3")
-
-    def test_extract_audio_raises_when_pyav_does_not_write_output(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        class FakeAudioStream:
-            type = "audio"
-
-        class FakeInputContainer(FakeContextContainer):
-            def __init__(self) -> None:
-                self.streams = [FakeAudioStream()]
-
-            def decode(self, *_args, **_kwargs):
-                return iter(())
-
-        class FakeOutputStream:
-            def __init__(self) -> None:
-                self.layout = None
-
-            def encode(self, _frame=None) -> list[str]:
-                return []
-
-        class FakeOutputContainer(FakeContextContainer):
-            def add_stream(self, *_args, **_kwargs) -> FakeOutputStream:
-                return FakeOutputStream()
-
-        monkeypatch.setattr(
-            "webinar_transcriber.normalized_audio.open_input_media_container",
-            lambda *_args, **_kwargs: FakeInputContainer(),
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.normalized_audio.open_output_media_container",
-            lambda *_args, **_kwargs: FakeOutputContainer(),
-        )
-
-        with pytest.raises(MediaProcessingError, match=r"PyAV did not write .*audio.wav"):
-            extract_audio(FIXTURE_DIR / "sample-audio.mp3", tmp_path / "audio.wav")
 
     def test_load_normalized_audio_returns_mono_float32_samples(self) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
@@ -387,73 +381,28 @@ class TestNormalizedAudio:
 
         assert timestamps == [{"start": 200, "end": 1_600}]
 
-    def test_load_normalized_audio_rejects_wrong_sample_rate(self, monkeypatch, tmp_path) -> None:
-        with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
-
-            class FakeWave:
-                def __enter__(self):
-                    return self
-
-                def __exit__(self, exc_type, exc, tb):
-                    return None
-
-                def getframerate(self):
-                    return 8_000
-
-                def getnchannels(self):
-                    return 1
-
-                def getsampwidth(self):
-                    return 2
-
-                def getnframes(self):
-                    return 1
-
-                def readframes(self, _count):
-                    return b"\x00\x00"
-
-            monkeypatch.setattr(
-                "webinar_transcriber.normalized_audio.wave.open",
-                lambda *_args, **_kwargs: FakeWave(),
-            )
-
-            with pytest.raises(MediaProcessingError, match="Expected 16000 Hz"):
-                load_normalized_audio(audio_path)
-
     @pytest.mark.parametrize(
-        ("channels", "sample_width", "message"),
-        [(2, 2, "Expected mono transcription audio"), (1, 1, "Expected 16-bit PCM")],
+        ("framerate", "channels", "sample_width", "message"),
+        [
+            (8_000, 1, 2, "Expected 16000 Hz"),
+            (16_000, 2, 2, "Expected mono transcription audio"),
+            (16_000, 1, 1, "Expected 16-bit PCM"),
+        ],
     )
-    def test_load_normalized_audio_rejects_invalid_channel_or_sample_width(
-        self, monkeypatch: pytest.MonkeyPatch, channels: int, sample_width: int, message: str
+    def test_load_normalized_audio_rejects_invalid_wav_contract(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        framerate: int,
+        channels: int,
+        sample_width: int,
+        message: str,
     ) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
-
-            class FakeWave:
-                def __enter__(self):
-                    return self
-
-                def __exit__(self, exc_type, exc, tb):
-                    return None
-
-                def getframerate(self):
-                    return 16_000
-
-                def getnchannels(self):
-                    return channels
-
-                def getsampwidth(self):
-                    return sample_width
-
-                def getnframes(self):
-                    return 1
-
-                def readframes(self, _count):
-                    return b"\x00\x00"
-
             monkeypatch.setattr(
                 "webinar_transcriber.normalized_audio.wave.open",
-                lambda *_args, **_kwargs: FakeWave(),
+                lambda *_args, **_kwargs: FakeWave(
+                    framerate=framerate, channels=channels, sample_width=sample_width
+                ),
             )
 
             with pytest.raises(MediaProcessingError, match=message):

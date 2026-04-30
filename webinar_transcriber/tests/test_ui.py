@@ -7,7 +7,6 @@ from unittest.mock import Mock
 
 import pytest
 from rich.console import Console
-from rich.panel import Panel
 
 from webinar_transcriber.reporter import BaseStageReporter
 from webinar_transcriber.ui import RichStageReporter, _count_text, _rate_text
@@ -56,20 +55,16 @@ class TestFormatHelpers:
 
 
 class TestRichStageReporter:
-    def test_begin_run_prints_input_name(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        console = Console(width=100)
-        print_mock = Mock()
-        monkeypatch.setattr(console, "print", print_mock)
+    def test_begin_run_prints_input_name(self) -> None:
+        console = Console(record=True, width=100)
         reporter = RichStageReporter(console=console)
 
         reporter.begin_run(Path("demo.wav"))
 
-        print_mock.assert_called_once_with("[bold cyan]Starting[/] demo.wav")
+        assert console.export_text() == "Starting demo.wav\n"
 
-    def test_complete_run_renders_completion_panel(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        console = Console(width=100)
-        print_mock = Mock()
-        monkeypatch.setattr(console, "print", print_mock)
+    def test_complete_run_renders_completion_panel(self) -> None:
+        console = Console(record=True, width=100)
         reporter = RichStageReporter(console=console)
         artifacts = cast(
             "ProcessArtifacts",
@@ -85,30 +80,21 @@ class TestRichStageReporter:
 
         reporter.complete_run(artifacts)
 
-        assert print_mock.call_count == 2
-        assert print_mock.call_args_list[0].args == ()
-        panel = print_mock.call_args_list[1].args[0]
-        assert isinstance(panel, Panel)
-        assert panel.title == "[bold green]Completed[/]"
+        output = console.export_text()
+        assert "Completed" in output
+        assert "Run directory" in output
+        assert "runs/example" in output
+        assert "Diagnostics" in output
+        assert "runs/example/diagnostics.json" in output
+        assert "Language" in output
+        assert "ru" in output
+        assert "Sections" in output
+        assert "2" in output
+        assert "Warnings" in output
+        assert "1" in output
 
     def test_stage_started_records_elapsed_time(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        class FakeStatus:
-            def __init__(self) -> None:
-                self.started = False
-                self.stopped = False
-
-            def start(self) -> None:
-                self.started = True
-
-            def stop(self) -> None:
-                self.stopped = True
-
-        console = Console(width=100)
-        print_mock = Mock()
-        fake_status = FakeStatus()
-        status_mock = Mock(return_value=fake_status)
-        monkeypatch.setattr(console, "print", print_mock)
-        monkeypatch.setattr(console, "status", status_mock)
+        console = Console(record=True, width=100)
         reporter = RichStageReporter(console=console)
         perf_values = iter([10.0, 13.5])
         monkeypatch.setattr("webinar_transcriber.ui.perf_counter", lambda: next(perf_values))
@@ -116,12 +102,7 @@ class TestRichStageReporter:
         reporter.stage_started("llm_report", "Polishing report")
         reporter.stage_finished("llm_report", "Polishing report")
 
-        status_mock.assert_called_once_with(
-            "[bold blue][1][/bold blue] Polishing report", spinner="dots"
-        )
-        assert fake_status.started
-        assert fake_status.stopped
-        print_mock.assert_called_once_with("[green]\u2713[/] Polishing report [dim](3.50s)[/]")
+        assert console.export_text() == "✓ Polishing report (3.50s)\n"
 
     def test_progress_started_initializes_progress_display(
         self, monkeypatch: pytest.MonkeyPatch
@@ -181,7 +162,7 @@ class TestRichStageReporter:
         )
         assert reporter._active_task_id == 7
 
-    def test_progress_updates_compute_rate_and_preserve_detail(
+    def test_progress_updates_compute_rate_and_preserve_detail_in_progress_adapter(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         class FakeTask:
@@ -211,60 +192,50 @@ class TestRichStageReporter:
                 task.completed += advance
                 task.fields.update(fields)
 
-        console = Console(width=100)
-        print_mock = Mock()
-        monkeypatch.setattr(console, "print", print_mock)
-        reporter = RichStageReporter(console=console)
-        perf_values = iter([22.0, 23.0])
+        fake_progresses: list[FakeProgress] = []
+
+        def fake_progress(*_args: object, **_kwargs: object) -> FakeProgress:
+            progress = FakeProgress()
+            fake_progresses.append(progress)
+            return progress
+
+        def fake_column(*_args: object, **_kwargs: object) -> object:
+            return object()
+
+        monkeypatch.setattr("webinar_transcriber.ui.Progress", fake_progress)
+        monkeypatch.setattr("webinar_transcriber.ui.SpinnerColumn", fake_column)
+        monkeypatch.setattr("webinar_transcriber.ui.TextColumn", fake_column)
+        monkeypatch.setattr("webinar_transcriber.ui.BarColumn", fake_column)
+        monkeypatch.setattr("webinar_transcriber.ui.TaskProgressColumn", fake_column)
+        monkeypatch.setattr("webinar_transcriber.ui.TimeRemainingColumn", fake_column)
+        monkeypatch.setattr("webinar_transcriber.ui.TimeElapsedColumn", fake_column)
+        perf_values = iter([22.0, 23.0, 25.0])
         monkeypatch.setattr("webinar_transcriber.ui.perf_counter", lambda: next(perf_values))
 
-        any_reporter = cast("Any", reporter)
-        any_reporter._active_stage_key = "extract_frames"
-        any_reporter._active_stage_label = "Extracting frames"
-        any_reporter._active_stage_started_at = 20.0
-        any_reporter._active_progress = FakeProgress()
-        any_reporter._active_progress.start()
-        any_reporter._active_task_id = any_reporter._active_progress.add_task(
+        console = Console(record=True, width=100)
+        reporter = RichStageReporter(console=console)
+        reporter.progress_started(
+            "extract_frames",
             "Extracting frames",
             total=4.0,
             count_label="frames",
-            count_multiplier=1.0,
-            count_text="0/4 frames",
             rate_label="frames/s",
-            rate_multiplier=1.0,
-            rate_text="",
-            detail_text="",
         )
         reporter.progress_advanced("extract_frames", advance=2.0, detail="scene-2")
 
-        assert reporter._active_progress is not None
-        assert reporter._active_task_id is not None
-
-        task = reporter._active_progress.tasks[reporter._active_task_id]
+        progress = fake_progresses[0]
+        task = progress.tasks[0]
         assert task.fields["detail_text"] == "scene-2"
         assert task.fields["count_text"] == "2/4 frames"
-        assert task.fields["rate_text"] == "1.0 frames/s"
+        assert task.fields["rate_text"] == "2.0 frames/s"
 
         reporter.stage_finished("extract_frames", "Extracting frames", detail="done")
 
-        assert reporter._active_progress is None
-        print_mock.assert_called_once_with(
-            "[green]\u2713[/] Extracting frames - done [dim](3.00s)[/]"
-        )
+        assert progress.stopped
+        assert console.export_text() == "✓ Extracting frames - done (3.00s)\n"
 
-    def test_warn_and_interrupted_render_messages(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        class FakeStatus:
-            def start(self) -> None:
-                pass
-
-            def stop(self) -> None:
-                pass
-
-        console = Console(width=100)
-        print_mock = Mock()
-        status_mock = Mock(return_value=FakeStatus())
-        monkeypatch.setattr(console, "print", print_mock)
-        monkeypatch.setattr(console, "status", status_mock)
+    def test_warn_and_interrupted_render_messages(self) -> None:
+        console = Console(record=True, width=100)
         reporter = RichStageReporter(console=console)
 
         reporter.stage_started("probe_media", "Probing media")
@@ -272,67 +243,75 @@ class TestRichStageReporter:
         reporter.stage_started("detect_scenes", "Detecting scenes")
         reporter.interrupted()
 
-        assert print_mock.call_args_list[0].args == ("[yellow]![/] ffprobe returned a warning",)
-        assert print_mock.call_args_list[1].args == (
-            "[red]\u2717[/] Interrupted during detecting scenes.",
+        assert console.export_text() == (
+            "! ffprobe returned a warning\n✗ Interrupted during detecting scenes.\n"
         )
 
-    def test_progress_advanced_ignores_inactive_or_mismatched_stage_keys(self) -> None:
+    def test_progress_advanced_ignores_inactive_or_mismatched_stage_keys(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         class FakeTask:
             def __init__(self) -> None:
                 self.completed = 0.0
 
+        class FakeProgress:
+            def __init__(self, *_args, **_kwargs) -> None:
+                self.tasks = [FakeTask()]
+                self.start = Mock()
+                self.stop = Mock()
+                self.update = Mock()
+
+            def add_task(self, *_args: object, **_kwargs: object) -> int:
+                return 0
+
+        fake_progresses: list[FakeProgress] = []
+
+        def fake_progress(*_args: object, **_kwargs: object) -> FakeProgress:
+            progress = FakeProgress()
+            fake_progresses.append(progress)
+            return progress
+
+        def fake_column(*_args: object, **_kwargs: object) -> object:
+            return object()
+
+        monkeypatch.setattr("webinar_transcriber.ui.Progress", fake_progress)
+        monkeypatch.setattr("webinar_transcriber.ui.SpinnerColumn", fake_column)
+        monkeypatch.setattr("webinar_transcriber.ui.TextColumn", fake_column)
+        monkeypatch.setattr("webinar_transcriber.ui.BarColumn", fake_column)
+        monkeypatch.setattr("webinar_transcriber.ui.TaskProgressColumn", fake_column)
+        monkeypatch.setattr("webinar_transcriber.ui.TimeRemainingColumn", fake_column)
+        monkeypatch.setattr("webinar_transcriber.ui.TimeElapsedColumn", fake_column)
         reporter = RichStageReporter(console=Console(width=100))
 
         reporter.progress_advanced("extract_frames", advance=1.0)
+        reporter.progress_started("extract_frames", "Extracting frames", total=1.0)
+        progress = fake_progresses[0]
 
-        any_reporter = cast("Any", reporter)
-        any_reporter._active_stage_key = "extract_frames"
-        any_reporter._active_stage_label = "Extracting frames"
-        any_reporter._active_stage_started_at = 0.0
-        update_mock = Mock()
-        any_reporter._active_progress = SimpleNamespace(tasks=[FakeTask()], update=update_mock)
-        any_reporter._active_task_id = 0
         reporter.progress_advanced("detect_scenes", advance=1.0)
 
-        assert reporter._active_progress is not None
-        assert reporter._active_task_id is not None
+        assert progress.tasks[0].completed == 0
+        progress.update.assert_not_called()
 
-        task = reporter._active_progress.tasks[reporter._active_task_id]
-        assert task.completed == 0
-        update_mock.assert_not_called()
-
-    def test_progress_advanced_ignores_active_stage_without_progress_display(self) -> None:
-        reporter = RichStageReporter(console=Console(record=True, width=100))
-        reporter._active_stage_key = "extract_frames"
-        reporter._active_stage_label = "Extracting frames"
-        reporter._active_stage_started_at = 0.0
+    def test_progress_advanced_ignores_indeterminate_stage(self) -> None:
+        console = Console(record=True, width=100)
+        reporter = RichStageReporter(console=console)
+        reporter.stage_started("extract_frames", "Extracting frames")
 
         reporter.progress_advanced("extract_frames", advance=1.0)
 
-        assert reporter._active_progress is None
+        reporter.stage_finished("extract_frames", "Extracting frames")
+        assert console.export_text() == "✓ Extracting frames (0.00s)\n"
 
     def test_stage_finished_without_matching_active_event_reports_zero_elapsed(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
     ) -> None:
-        class FakeStatus:
-            def start(self) -> None:
-                pass
-
-            def stop(self) -> None:
-                pass
-
-        console = Console(width=100)
-        print_mock = Mock()
-        status_mock = Mock(return_value=FakeStatus())
-        monkeypatch.setattr(console, "print", print_mock)
-        monkeypatch.setattr(console, "status", status_mock)
+        console = Console(record=True, width=100)
         reporter = RichStageReporter(console=console)
 
         reporter.stage_started("probe_media", "Probing media")
         reporter.stage_finished("other_stage", "Other stage")
 
-        print_mock.assert_called_once_with("[green]\u2713[/] Other stage [dim](0.00s)[/]")
+        assert console.export_text() == "✓ Other stage (0.00s)\n"
 
 
 class TestBaseStageReporter:

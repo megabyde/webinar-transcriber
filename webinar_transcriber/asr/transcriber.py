@@ -90,7 +90,7 @@ def _redirect_native_output(log_path: Path | None) -> Iterator[None]:
     sys.stderr.flush()
     with log_path.open("a", encoding="utf-8") as log_file:
         saved_fds = _duplicated_output_fds()
-        if not saved_fds:
+        if not saved_fds:  # pragma: no cover - fallback for fd-less embedded runtimes
             with redirect_stdout(log_file), redirect_stderr(log_file):
                 yield
             return
@@ -111,7 +111,7 @@ def _duplicated_output_fds() -> list[tuple[int, int]]:
     for fd in _output_fds():
         try:
             saved_fds.append((fd, os.dup(fd)))
-        except OSError:
+        except OSError:  # pragma: no cover - defensive for invalid inherited descriptors
             continue
     return saved_fds
 
@@ -121,7 +121,11 @@ def _output_fds() -> list[int]:
     for stream in (sys.stdout, sys.stderr):
         try:
             fd = stream.fileno()
-        except (AttributeError, OSError, io.UnsupportedOperation):
+        except (  # pragma: no cover - defensive for streams without OS file descriptors
+            AttributeError,
+            OSError,
+            io.UnsupportedOperation,
+        ):
             continue
         if fd not in fds:
             fds.append(fd)

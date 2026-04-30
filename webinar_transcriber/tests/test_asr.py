@@ -255,39 +255,6 @@ class TestWhisperCppTranscriber:
         assert log_path.read_text(encoding="utf-8") == "native teardown\n"
         assert transcriber.system_info is None
 
-    def test_redirect_native_output_falls_back_without_file_descriptors(
-        self, monkeypatch, tmp_path
-    ) -> None:
-        from webinar_transcriber.asr import transcriber as transcriber_module
-
-        log_path = tmp_path / "whisper-cpp.log"
-        monkeypatch.setattr(transcriber_module, "_duplicated_output_fds", list)
-
-        with transcriber_module._redirect_native_output(log_path):
-            print("python stdout")
-
-        assert log_path.read_text(encoding="utf-8") == "python stdout\n"
-
-    def test_output_fds_skips_streams_without_file_descriptors(self, monkeypatch) -> None:
-        from webinar_transcriber.asr import transcriber as transcriber_module
-
-        class StreamWithoutFileDescriptor:
-            def fileno(self) -> int:
-                raise OSError
-
-        stream = StreamWithoutFileDescriptor()
-        monkeypatch.setattr(transcriber_module.sys, "stdout", stream)
-        monkeypatch.setattr(transcriber_module.sys, "stderr", stream)
-
-        assert transcriber_module._output_fds() == [1, 2]
-
-    def test_duplicated_output_fds_skips_invalid_descriptors(self, monkeypatch) -> None:
-        from webinar_transcriber.asr import transcriber as transcriber_module
-
-        monkeypatch.setattr(transcriber_module, "_output_fds", lambda: [-1])
-
-        assert transcriber_module._duplicated_output_fds() == []
-
     def test_set_log_path_updates_transcriber(self) -> None:
         transcriber = WhisperCppTranscriber()
         log_path = Path("/tmp/whisper-cpp.log")

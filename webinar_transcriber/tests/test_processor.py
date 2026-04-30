@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-from contextlib import contextmanager
-from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
@@ -25,7 +23,6 @@ from webinar_transcriber.llm.contracts import (
     LLMSectionPolishResult,
 )
 from webinar_transcriber.models import (
-    AudioAsset,
     DecodedWindow,
     InferenceWindow,
     ReportDocument,
@@ -33,7 +30,6 @@ from webinar_transcriber.models import (
     SlideFrame,
     SpeechRegion,
     TranscriptSegment,
-    VideoAsset,
 )
 from webinar_transcriber.paths import RunLayout
 from webinar_transcriber.processor import ProcessArtifacts, RunContext, process_input
@@ -46,6 +42,13 @@ from webinar_transcriber.processor.support import (
 )
 from webinar_transcriber.reporter import BaseStageReporter
 from webinar_transcriber.segmentation import VadSettings
+from webinar_transcriber.tests.conftest import (
+    FakeTranscriber,
+    RecordingReporter,
+    audio_runtime,
+    install_pipeline_runtime,
+    video_runtime,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -60,192 +63,65 @@ EXPECTED_LLM_SECTION_TEXT = (
 )
 
 
-@dataclass
-class PipelineRuntime:
-    media_asset: AudioAsset | VideoAsset
-    speech_regions: list[SpeechRegion]
-    audio_samples: np.ndarray
-    sample_rate: int = 16_000
-    vad_warnings: list[str] | None = None
-
-
-class RecordingReporter(BaseStageReporter):
-    """Small reporter fake that records observable pipeline notifications."""
-
-    def __init__(self) -> None:
-        self.started: list[tuple[str, str]] = []
-        self.finished: list[tuple[str, str]] = []
-        self.progress: list[tuple[str, str, float, str | None]] = []
-        self.warnings: list[str] = []
-        self.completed: ProcessArtifacts | None = None
-
-    def stage_started(self, stage_key: str, label: str) -> None:
-        self.started.append((stage_key, label))
-
-    def progress_started(
-        self,
-        stage_key: str,
-        label: str,
-        *,
-        total: float,
-        count_label: str | None = None,
-        count_multiplier: float = 1.0,
-        rate_label: str | None = None,
-        rate_multiplier: float = 1.0,
-        detail: str | None = None,
-    ) -> None:
-        del count_label, count_multiplier, rate_label, rate_multiplier
-        self.started.append((stage_key, label))
-        self.progress.append(("start", stage_key, total, detail))
-
-    def progress_advanced(
-        self, stage_key: str, *, advance: float = 1.0, detail: str | None = None
-    ) -> None:
-        self.progress.append(("advance", stage_key, advance, detail))
-
-    def stage_finished(self, stage_key: str, label: str, *, detail: str | None = None) -> None:
-        del label
-        self.finished.append((stage_key, detail or ""))
-
-    def warn(self, message: str) -> None:
-        self.warnings.append(message)
-
-    def complete_run(self, artifacts: ProcessArtifacts) -> None:
-        self.completed = artifacts
-
-
-class FakeTranscriber(WhisperCppTranscriber):
-    """Stable whisper-style test double for deterministic transcripts."""
-
-    def __init__(
-        self, *, detected_language: str = "en", segments: list[TranscriptSegment] | None = None
-    ) -> None:
-        super().__init__(model_name="test-model")
-        self._detected_language = detected_language
-        self.language_hints: list[str | None] = []
-        self.windows_seen: list[InferenceWindow] = []
-        self._segments = segments or [
-            TranscriptSegment(
-                id="segment-1",
-                text="Agenda review and project status update.",
-                start_sec=0.0,
-                end_sec=3.0,
-            ),
-            TranscriptSegment(
-                id="segment-2",
-                text="Next step please send the draft by Friday.",
-                start_sec=3.0,
-                end_sec=6.0,
-            ),
-        ]
-
-    @property
-    def device_name(self) -> str:
-        return "cpu"
-
-    @property
-    def system_info(self) -> str:
-        return "CPU = 1"
-
-    def prepare_model(self) -> None:
-        return None
-
-    def transcribe_inference_windows(
-        self,
-        audio_samples: np.ndarray,
-        windows: list[InferenceWindow],
-        *,
-        language: str | None = None,
-        progress_callback: Callable[[float, int], None] | None = None,
-    ) -> list[DecodedWindow]:
-        del audio_samples
-        self.language_hints.append(language)
-        self.windows_seen = list(windows)
-        assert progress_callback is not None
-        for window in windows:
-            progress_callback(window.end_sec, len(self._segments))
-        return [
-            DecodedWindow(
-                window=window,
-                text=" ".join(segment.text for segment in self._segments),
-                language=self._detected_language,
-                segments=list(self._segments),
-            )
-            for window in windows
-        ]
-
-
-def install_pipeline_runtime(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, input_path: Path, runtime: PipelineRuntime
-) -> None:
-    """Patch expensive processor seams while letting the real pipeline run."""
-    audio_path = tmp_path / f"{input_path.stem}.wav"
-
-    @contextmanager
-    def fake_prepared_transcription_audio(_input_path: Path):
-        audio_path.write_bytes(b"RIFFstub")
-        try:
-            yield audio_path
-        finally:
-            audio_path.unlink(missing_ok=True)
-
-    def fake_detect_speech_regions(*_args, **_kwargs):
-        return runtime.speech_regions, list(runtime.vad_warnings or [])
-
-    monkeypatch.setattr(
-        "webinar_transcriber.processor.prepared_transcription_audio",
-        fake_prepared_transcription_audio,
-    )
-    monkeypatch.setattr(
-        "webinar_transcriber.processor.media_runtime.probe_media",
-        lambda _input_path: runtime.media_asset,
-    )
-    monkeypatch.setattr(
-        "webinar_transcriber.processor.asr.load_normalized_audio",
-        lambda _path: (runtime.audio_samples, runtime.sample_rate),
-    )
-    monkeypatch.setattr(
-        "webinar_transcriber.processor.asr.detect_speech_regions", fake_detect_speech_regions
-    )
-
-
-def audio_runtime(
-    *,
-    duration_sec: float = 6.0,
-    speech_regions: list[SpeechRegion] | None = None,
-    vad_warnings: list[str] | None = None,
-) -> PipelineRuntime:
-    return PipelineRuntime(
-        media_asset=AudioAsset(
-            path=str(FIXTURE_DIR / "sample-audio.mp3"),
-            duration_sec=duration_sec,
-            sample_rate=44_100,
-            channels=2,
-        ),
-        speech_regions=speech_regions or [SpeechRegion(start_sec=0.0, end_sec=duration_sec)],
-        audio_samples=np.zeros(16_000, dtype=np.float32),
-        vad_warnings=vad_warnings,
-    )
-
-
-def video_runtime() -> PipelineRuntime:
-    return PipelineRuntime(
-        media_asset=VideoAsset(
-            path=str(FIXTURE_DIR / "sample-video.mp4"),
-            duration_sec=2.0,
-            sample_rate=48_000,
-            channels=2,
-            fps=25.0,
-            width=320,
-            height=240,
-        ),
-        speech_regions=[SpeechRegion(start_sec=0.0, end_sec=1.8)],
-        audio_samples=np.zeros(32_000, dtype=np.float32),
-    )
-
-
 def read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+class ConfigurableLLMProcessor:
+    provider_name = "openai"
+    model_name = "test-llm-model"
+
+    def __init__(
+        self,
+        *,
+        section_result: LLMSectionPolishResult | Callable[[ReportDocument], LLMSectionPolishResult],
+        metadata_result: (
+            LLMReportMetadataResult
+            | Callable[[ReportDocument, dict[str, str]], LLMReportMetadataResult]
+            | None
+        ) = None,
+        section_error: LLMProcessingError | None = None,
+        metadata_error: LLMProcessingError | None = None,
+        section_progress: list[int] | None = None,
+        worker_count: int = 1,
+    ) -> None:
+        if isinstance(section_result, LLMSectionPolishResult):
+            self._section_result = lambda _report: section_result
+        else:
+            self._section_result = section_result
+        metadata_result = metadata_result or LLMReportMetadataResult(
+            summary=[], action_items=[], section_titles={}, usage={}
+        )
+        if isinstance(metadata_result, LLMReportMetadataResult):
+            self._metadata_result = lambda _report, _section_transcripts: metadata_result
+        else:
+            self._metadata_result = metadata_result
+        self._section_error = section_error
+        self._metadata_error = metadata_error
+        self._section_progress = section_progress
+        self._worker_count = worker_count
+
+    def report_polish_plan(self, report: ReportDocument) -> LLMReportPolishPlan:
+        return LLMReportPolishPlan(
+            section_count=len(report.sections), worker_count=self._worker_count
+        )
+
+    def polish_report_sections_with_progress(
+        self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
+    ) -> LLMSectionPolishResult:
+        if self._section_error is not None:
+            raise self._section_error
+        if progress_callback is not None:
+            for completed_count in self._section_progress or [len(report.sections)]:
+                progress_callback(completed_count)
+        return self._section_result(report)
+
+    def polish_report_metadata(
+        self, report: ReportDocument, *, section_transcripts: dict[str, str]
+    ) -> LLMReportMetadataResult:
+        if self._metadata_error is not None:
+            raise self._metadata_error
+        return self._metadata_result(report, section_transcripts)
 
 
 class TestProcessInput:
@@ -860,42 +736,34 @@ def llm_success_result(
     install_pipeline_runtime(monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime())
     reporter = RecordingReporter()
 
-    class FakeLLMProcessor:
-        provider_name = "openai"
-        model_name = "test-llm-model"
-
-        def report_polish_plan(self, report: ReportDocument) -> LLMReportPolishPlan:
-            return LLMReportPolishPlan(section_count=len(report.sections), worker_count=1)
-
-        def polish_report_sections_with_progress(
-            self, report, *, progress_callback: Callable[[int], None] | None = None
-        ) -> LLMSectionPolishResult:
-            assert progress_callback is not None
-            progress_callback(len(report.sections))
-            return LLMSectionPolishResult(
-                section_tldrs={"section-1": "Updated section TL;DR."},
-                section_transcripts={"section-1": EXPECTED_LLM_SECTION_TEXT},
-                usage={"input_tokens": 8, "output_tokens": 3, "total_tokens": 11},
-                warnings=[EXPECTED_LLM_WARNING],
-            )
-
-        def polish_report_metadata(
-            self, report: ReportDocument, *, section_transcripts: dict[str, str]
-        ) -> LLMReportMetadataResult:
-            assert section_transcripts == {"section-1": EXPECTED_LLM_SECTION_TEXT}
-            return LLMReportMetadataResult(
-                summary=["Refined summary point."],
-                action_items=["Send the draft by Friday."],
-                section_titles={"section-1": "Refined Section Title"},
-                usage={"input_tokens": 12, "output_tokens": 3, "total_tokens": 15},
-            )
+    def polished_metadata(
+        _report: ReportDocument, section_transcripts: dict[str, str]
+    ) -> LLMReportMetadataResult:
+        assert section_transcripts == {"section-1": EXPECTED_LLM_SECTION_TEXT}
+        return LLMReportMetadataResult(
+            summary=["Refined summary point."],
+            action_items=["Send the draft by Friday."],
+            section_titles={"section-1": "Refined Section Title"},
+            usage={"input_tokens": 12, "output_tokens": 3, "total_tokens": 15},
+        )
 
     artifacts = process_input(
         input_path,
         output_dir=tmp_path / "llm-run",
         transcriber=FakeTranscriber(),
         enable_llm=True,
-        llm_processor=cast("LLMProcessor", FakeLLMProcessor()),
+        llm_processor=cast(
+            "LLMProcessor",
+            ConfigurableLLMProcessor(
+                section_result=LLMSectionPolishResult(
+                    section_tldrs={"section-1": "Updated section TL;DR."},
+                    section_transcripts={"section-1": EXPECTED_LLM_SECTION_TEXT},
+                    usage={"input_tokens": 8, "output_tokens": 3, "total_tokens": 11},
+                    warnings=[EXPECTED_LLM_WARNING],
+                ),
+                metadata_result=polished_metadata,
+            ),
+        ),
         reporter=reporter,
     )
     return artifacts, reporter
@@ -980,45 +848,39 @@ class TestProcessInputLlm:
                     for index, window in enumerate(windows)
                 ]
 
-        class TwoSectionLLMProcessor:
-            provider_name = "openai"
-            model_name = "test-llm-model"
+        def section_polish(report: ReportDocument) -> LLMSectionPolishResult:
+            return LLMSectionPolishResult(
+                section_tldrs={section.id: f"{section.title} recap" for section in report.sections},
+                section_transcripts={
+                    section.id: section.transcript_text for section in report.sections
+                },
+                usage={"total_tokens": 2},
+            )
 
-            def report_polish_plan(self, report: ReportDocument) -> LLMReportPolishPlan:
-                return LLMReportPolishPlan(section_count=len(report.sections), worker_count=2)
-
-            def polish_report_sections_with_progress(
-                self, report, *, progress_callback: Callable[[int], None] | None = None
-            ) -> LLMSectionPolishResult:
-                assert progress_callback is not None
-                progress_callback(1)
-                progress_callback(1)
-                return LLMSectionPolishResult(
-                    section_tldrs={
-                        section.id: f"{section.title} recap" for section in report.sections
-                    },
-                    section_transcripts={
-                        section.id: section.transcript_text for section in report.sections
-                    },
-                    usage={"total_tokens": 2},
-                )
-
-            def polish_report_metadata(
-                self, report: ReportDocument, *, section_transcripts: dict[str, str]
-            ) -> LLMReportMetadataResult:
-                return LLMReportMetadataResult(
-                    summary=[],
-                    action_items=[],
-                    section_titles={report.sections[0].id: "Renamed first section"},
-                    usage={"total_tokens": 3},
-                )
+        def metadata_polish(
+            report: ReportDocument, _section_transcripts: dict[str, str]
+        ) -> LLMReportMetadataResult:
+            return LLMReportMetadataResult(
+                summary=[],
+                action_items=[],
+                section_titles={report.sections[0].id: "Renamed first section"},
+                usage={"total_tokens": 3},
+            )
 
         artifacts = process_input(
             input_path,
             output_dir=tmp_path / "llm-two-section-run",
             transcriber=TwoSectionTranscriber(),
             enable_llm=True,
-            llm_processor=cast("LLMProcessor", TwoSectionLLMProcessor()),
+            llm_processor=cast(
+                "LLMProcessor",
+                ConfigurableLLMProcessor(
+                    section_result=section_polish,
+                    metadata_result=metadata_polish,
+                    section_progress=[1, 1],
+                    worker_count=2,
+                ),
+            ),
             reporter=reporter,
         )
 
@@ -1071,30 +933,20 @@ class TestProcessInputLlm:
         )
         reporter = RecordingReporter()
 
-        class FailingSectionLLMProcessor:
-            provider_name = "openai"
-            model_name = "test-llm-model"
-
-            def report_polish_plan(self, report: ReportDocument) -> LLMReportPolishPlan:
-                return LLMReportPolishPlan(section_count=len(report.sections), worker_count=1)
-
-            def polish_report_sections_with_progress(
-                self, report, *, progress_callback: Callable[[int], None] | None = None
-            ) -> LLMSectionPolishResult:
-                del report, progress_callback
-                raise LLMProcessingError("section polish failed")
-
-            def polish_report_metadata(
-                self, report: ReportDocument, *, section_transcripts: dict[str, str]
-            ) -> LLMReportMetadataResult:
-                raise AssertionError("metadata polish should not run")
-
         artifacts = process_input(
             input_path,
             output_dir=tmp_path / "section-fallback-run",
             transcriber=FakeTranscriber(),
             enable_llm=True,
-            llm_processor=cast("LLMProcessor", FailingSectionLLMProcessor()),
+            llm_processor=cast(
+                "LLMProcessor",
+                ConfigurableLLMProcessor(
+                    section_result=LLMSectionPolishResult(
+                        section_tldrs={}, section_transcripts={}, usage={}
+                    ),
+                    section_error=LLMProcessingError("section polish failed"),
+                ),
+            ),
             reporter=reporter,
         )
 
@@ -1112,38 +964,27 @@ class TestProcessInputLlm:
         )
         reporter = RecordingReporter()
 
-        class MetadataFailingLLMProcessor:
-            provider_name = "openai"
-            model_name = "test-llm-model"
-
-            def report_polish_plan(self, report: ReportDocument) -> LLMReportPolishPlan:
-                return LLMReportPolishPlan(section_count=len(report.sections), worker_count=1)
-
-            def polish_report_sections_with_progress(
-                self, report, *, progress_callback: Callable[[int], None] | None = None
-            ) -> LLMSectionPolishResult:
-                assert progress_callback is not None
-                progress_callback(len(report.sections))
-                return LLMSectionPolishResult(
-                    section_tldrs={},
-                    section_transcripts={
-                        section.id: section.transcript_text for section in report.sections
-                    },
-                    usage={"total_tokens": 11},
-                )
-
-            def polish_report_metadata(
-                self, report: ReportDocument, *, section_transcripts: dict[str, str]
-            ) -> LLMReportMetadataResult:
-                del report, section_transcripts
-                raise LLMProcessingError("metadata failed")
+        def section_polish(report: ReportDocument) -> LLMSectionPolishResult:
+            return LLMSectionPolishResult(
+                section_tldrs={},
+                section_transcripts={
+                    section.id: section.transcript_text for section in report.sections
+                },
+                usage={"total_tokens": 11},
+            )
 
         artifacts = process_input(
             input_path,
             output_dir=tmp_path / "metadata-fallback-run",
             transcriber=FakeTranscriber(),
             enable_llm=True,
-            llm_processor=cast("LLMProcessor", MetadataFailingLLMProcessor()),
+            llm_processor=cast(
+                "LLMProcessor",
+                ConfigurableLLMProcessor(
+                    section_result=section_polish,
+                    metadata_error=LLMProcessingError("metadata failed"),
+                ),
+            ),
             reporter=reporter,
         )
 
