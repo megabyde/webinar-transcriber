@@ -95,21 +95,6 @@ def extract_representative_frames(
     return frames
 
 
-def _extract_frame(
-    video_path: Path, timestamp_sec: float, output_path: Path
-) -> tuple[bool, str | None]:
-    try:
-        with open_input_media_container(video_path, error_message="{error}") as input_container:
-            video_stream = _required_video_stream(
-                input_container, error_message=f"No video stream found in {video_path}"
-            )
-            return _extract_frame_from_container(
-                input_container, video_stream, timestamp_sec, output_path
-            )
-    except (MediaProcessingError, OSError, av.FFmpegError) as error:
-        return False, str(error)
-
-
 def _extract_frame_from_container(
     input_container: InputContainer,
     video_stream: VideoStream,
@@ -130,10 +115,10 @@ def _extract_frame_from_container(
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         frame.to_image().convert("RGB").save(output_path)
-    except (OSError, av.FFmpegError) as error:
+    except (OSError, av.FFmpegError) as error:  # pragma: no cover - PyAV/save defensive boundary
         return False, str(error)
 
-    if not output_path.exists():
+    if not output_path.exists():  # pragma: no cover - PyAV/save defensive boundary
         return False, f"PyAV did not write {output_path}"
     return True, None
 

@@ -403,6 +403,42 @@ class TestProcessInput:
         assert artifacts.media_asset.path.endswith("sample-audio.mp3")
         assert artifacts.media_asset.duration_sec > 0
 
+    @pytest.mark.slow
+    def test_video_artifact_contract_with_real_media_pipeline(self, tmp_path: Path) -> None:
+        artifacts = process_input(
+            FIXTURE_DIR / "sample-video.mp4",
+            output_dir=tmp_path / "real-video-run",
+            transcriber=FakeTranscriber(
+                segments=[
+                    TranscriptSegment(
+                        id="segment-1",
+                        text="Opening slide.",
+                        start_sec=0.0,
+                        end_sec=0.8,
+                    ),
+                    TranscriptSegment(
+                        id="segment-2",
+                        text="Closing slide.",
+                        start_sec=0.8,
+                        end_sec=1.8,
+                    ),
+                ]
+            ),
+            vad=VadSettings(enabled=False),
+        )
+
+        assert artifacts.layout.metadata_path.exists()
+        assert artifacts.layout.scenes_path.exists()
+        assert artifacts.layout.frames_dir.exists()
+        assert artifacts.layout.markdown_report_path.exists()
+        assert artifacts.layout.docx_report_path.stat().st_size > 0
+        assert artifacts.layout.json_report_path.exists()
+        assert artifacts.layout.subtitle_vtt_path.exists()
+        assert artifacts.diagnostics.item_counts["scenes"] >= 1
+        assert artifacts.diagnostics.item_counts["frames"] >= 1
+        assert artifacts.report.sections
+        assert any(section.image_path for section in artifacts.report.sections)
+
     def test_does_not_close_caller_supplied_transcriber(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

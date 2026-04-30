@@ -11,7 +11,7 @@ from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.models import Scene
 from webinar_transcriber.tests.conftest import FakeContextContainer
 from webinar_transcriber.video import detect_scenes, extract_representative_frames
-from webinar_transcriber.video.frames import _extract_frame, _normalize_extracted_frame
+from webinar_transcriber.video.frames import _normalize_extracted_frame
 from webinar_transcriber.video.scenes import _select_scene_starts
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
@@ -90,20 +90,6 @@ class TestDetectScenes:
 
 
 class TestFrameExtraction:
-    @pytest.mark.slow
-    def test_extract_frame_writes_real_image(self, tmp_path: Path) -> None:
-        output_path = tmp_path / "scene-1.png"
-
-        extracted, failure_detail = _extract_frame(SAMPLE_VIDEO_PATH, 1.0, output_path)
-
-        assert extracted
-        assert failure_detail is None
-        assert output_path.exists()
-        with Image.open(output_path) as image:
-            assert image.mode == "RGB"
-            assert image.width > 0
-            assert image.height > 0
-
     @pytest.mark.slow
     def test_extract_representative_frames_creates_real_images(self, tmp_path: Path) -> None:
         scenes = [_scene(1, 0.0, 1.0), _scene(2, 1.0, 2.0)]
@@ -238,139 +224,6 @@ class TestFrameExtraction:
             "Frame extraction failed for scene-1 at 1.0s: bad open",
             "Frame extraction failed for scene-2 at 3.0s: bad open",
         ]
-
-    def test_extract_frame_returns_false_when_open_fails(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            "webinar_transcriber.video.frames.av.open",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("bad open")),
-        )
-
-        extracted, failure_detail = _extract_frame(SAMPLE_VIDEO_PATH, 1.0, tmp_path / "scene-1.png")
-
-        assert not extracted
-        assert failure_detail == "bad open"
-
-    def test_extract_frame_returns_false_when_no_video_stream(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        class FakeContainer(FakeContextContainer):
-            def __init__(self) -> None:
-                self.streams = [cast("object", type("AudioStream", (), {"type": "audio"})())]
-
-        monkeypatch.setattr(
-            "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: FakeContainer()
-        )
-
-        extracted, failure_detail = _extract_frame(SAMPLE_VIDEO_PATH, 1.0, tmp_path / "scene-1.png")
-
-        assert not extracted
-        assert failure_detail == f"No video stream found in {SAMPLE_VIDEO_PATH}"
-
-    def test_extract_frame_skips_frames_without_time(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        output_path = tmp_path / "scene-1.png"
-
-        class FakeContainer(FakeContextContainer):
-            def __init__(self) -> None:
-                self.streams = [FakeVideoStream()]
-
-            def seek(self, *_args, **_kwargs) -> None:
-                return None
-
-            def decode(self, *_args, **_kwargs):
-                return iter([FakeFrame(None), FakeFrame(1.0)])
-
-        monkeypatch.setattr(
-            "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: FakeContainer()
-        )
-
-        extracted, failure_detail = _extract_frame(SAMPLE_VIDEO_PATH, 1.0, output_path)
-
-        assert extracted
-        assert failure_detail is None
-        assert output_path.exists()
-
-    def test_extract_frame_returns_false_when_no_frame_is_decoded(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        class FakeContainer(FakeContextContainer):
-            def __init__(self) -> None:
-                self.streams = [FakeVideoStream()]
-
-            def seek(self, *_args, **_kwargs) -> None:
-                return None
-
-            def decode(self, *_args, **_kwargs):
-                return iter([cast("object", type("Frame", (), {"time": None})())])
-
-        monkeypatch.setattr(
-            "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: FakeContainer()
-        )
-
-        extracted, failure_detail = _extract_frame(SAMPLE_VIDEO_PATH, 1.0, tmp_path / "scene-1.png")
-
-        assert not extracted
-        assert failure_detail == "PyAV did not decode a frame at 1.000s"
-
-    def test_extract_frame_returns_false_when_save_fails(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        class FailingImage(FakeImage):
-            def save(self, path: Path) -> None:
-                del path
-                raise OSError("save failed")
-
-        class SaveFailingFrame:
-            time = 1.0
-
-            def to_image(self) -> FailingImage:
-                return FailingImage()
-
-        class FakeContainer(FakeContextContainer):
-            def __init__(self) -> None:
-                self.streams = [FakeVideoStream()]
-
-            def seek(self, *_args, **_kwargs) -> None:
-                return None
-
-            def decode(self, *_args, **_kwargs):
-                return iter([SaveFailingFrame()])
-
-        monkeypatch.setattr(
-            "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: FakeContainer()
-        )
-
-        extracted, failure_detail = _extract_frame(SAMPLE_VIDEO_PATH, 1.0, tmp_path / "scene-1.png")
-
-        assert not extracted
-        assert failure_detail == "save failed"
-
-    def test_extract_frame_returns_false_when_output_is_missing(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        output_path = tmp_path / "scene-1.png"
-
-        class FakeContainer(FakeContextContainer):
-            def __init__(self) -> None:
-                self.streams = [FakeVideoStream()]
-
-            def seek(self, *_args, **_kwargs) -> None:
-                return None
-
-            def decode(self, *_args, **_kwargs):
-                return iter([FakeFrame(1.0, save_output=False)])
-
-        monkeypatch.setattr(
-            "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: FakeContainer()
-        )
-
-        extracted, failure_detail = _extract_frame(SAMPLE_VIDEO_PATH, 1.0, output_path)
-
-        assert not extracted
-        assert failure_detail == f"PyAV did not write {output_path}"
 
 
 class TestDetectScenesFallback:

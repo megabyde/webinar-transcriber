@@ -10,7 +10,6 @@ from .config import (
     DEFAULT_WHISPER_CPP_MODEL_EXAMPLE,
     DEFAULT_WHISPER_CPP_MODEL_FILENAME,
     PromptCarryoverSettings,
-    WhisperDecodeSettings,
     default_asr_threads,
 )
 from .transcriber import ASRProcessingError, WhisperCppTranscriber
@@ -24,7 +23,6 @@ __all__ = [
     "ASRProcessingError",
     "PromptCarryoverSettings",
     "WhisperCppTranscriber",
-    "WhisperDecodeSettings",
     "build_prompt_carryover",
     "default_asr_threads",
 ]
