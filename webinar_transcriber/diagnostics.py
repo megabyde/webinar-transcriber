@@ -7,7 +7,7 @@ from dataclasses import asdict, replace
 from typing import TYPE_CHECKING, Literal
 
 from webinar_transcriber.asr import ASR_BACKEND_NAME
-from webinar_transcriber.models import Diagnostics
+from webinar_transcriber.models import AsrPipelineDiagnostics, Diagnostics
 
 if TYPE_CHECKING:
     from webinar_transcriber.processor.types import RunContext
@@ -27,6 +27,7 @@ def build_diagnostics(
     Returns:
         Diagnostics: The final diagnostics payload.
     """
+    asr_pipeline = ctx.asr_pipeline or AsrPipelineDiagnostics(vad_enabled=False, threads=0)
     return Diagnostics(
         status=status,
         failed_stage=failed_stage,
@@ -44,13 +45,13 @@ def build_diagnostics(
             "normalized_transcript_segments": (
                 len(ctx.normalized_transcription.segments) if ctx.normalized_transcription else 0
             ),
-            "vad_regions": ctx.asr_pipeline.vad_region_count,
-            "windows": ctx.asr_pipeline.window_count,
+            "vad_regions": asr_pipeline.vad_region_count,
+            "windows": asr_pipeline.window_count,
             "report_sections": len(ctx.report.sections) if ctx.report else 0,
             "scenes": len(ctx.scenes),
             "frames": len(ctx.slide_frames),
         },
-        asr_pipeline=replace(ctx.asr_pipeline),
+        asr_pipeline=replace(asr_pipeline),
         warnings=ctx.warnings,
     )
 

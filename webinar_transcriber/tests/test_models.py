@@ -5,6 +5,7 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from webinar_transcriber.models import (
+    AsrPipelineDiagnostics,
     AudioAsset,
     DecodedWindow,
     Diagnostics,
@@ -17,7 +18,6 @@ from webinar_transcriber.models import (
     TranscriptSegment,
     VideoAsset,
 )
-from webinar_transcriber.processor.types import AsrPipelineState
 
 
 class TestCoreModels:
@@ -93,7 +93,7 @@ class TestCoreModels:
             text="hello",
             segments=[TranscriptSegment(id="segment-1", text="hello", start_sec=0.0, end_sec=1.0)],
         )
-        diagnostics = AsrPipelineState(
+        diagnostics = AsrPipelineDiagnostics(
             normalized_audio_duration_sec=120.0,
             vad_enabled=True,
             threads=4,
