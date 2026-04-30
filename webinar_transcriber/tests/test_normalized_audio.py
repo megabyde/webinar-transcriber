@@ -311,11 +311,9 @@ class TestNormalizedAudio:
 
         assert timestamps is None
 
-    def test_silero_speech_timestamps_uses_get_speech_timestamps_and_reports_progress(
+    def test_silero_speech_timestamps_uses_get_speech_timestamps(
         self, monkeypatch, fake_silero_import_module
     ) -> None:
-        progress: list[tuple[float, int]] = []
-
         def fake_get_speech_timestamps(
             samples,
             _model,
@@ -346,15 +344,9 @@ class TestNormalizedAudio:
             min_speech_duration_ms=10,
             min_silence_duration_ms=600,
             speech_pad_ms=200,
-            progress_callback=lambda completed_sec, detected_count: progress.append((
-                completed_sec,
-                detected_count,
-            )),
         )
 
         assert timestamps == [{"start": 100, "end": 900}]
-        assert progress[-1][0] == pytest.approx(0.1)
-        assert progress[-1][1] == 1
 
     def test_silero_speech_timestamps_requires_normalized_16khz_audio(
         self, monkeypatch, fake_silero_import_module
