@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from .llm import LLMRuntimeState
+from .llm_types import LLMRuntimeState
 
 if TYPE_CHECKING:
     from webinar_transcriber.models import (

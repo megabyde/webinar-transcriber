@@ -16,7 +16,7 @@ from PIL import Image
 
 from webinar_transcriber.asr import WhisperCppTranscriber
 from webinar_transcriber.diagnostics import write_run_diagnostics
-from webinar_transcriber.llm import (
+from webinar_transcriber.llm.contracts import (
     LLMConfigurationError,
     LLMProcessingError,
     LLMProcessor,
@@ -38,7 +38,8 @@ from webinar_transcriber.models import (
 )
 from webinar_transcriber.paths import RunLayout
 from webinar_transcriber.processor import ProcessArtifacts, RunContext, process_input
-from webinar_transcriber.processor.llm import LLMRuntimeState, resolve_llm_processor
+from webinar_transcriber.processor.llm import resolve_llm_processor
+from webinar_transcriber.processor.llm_types import LLMRuntimeState
 from webinar_transcriber.processor.support import (
     asr_runtime_detail,
     stage,

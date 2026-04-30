@@ -27,7 +27,6 @@ dependencies = [
     "click>=8.3.1,<9.0.0",
     "numpy>=2.4.3,<3.0.0",
     "pillow>=12.1.1,<13.0.0",
-    "pydantic>=2.12.5,<3.0.0",
     "pywhispercpp>=1.4.1,<2.0.0",
     "python-docx>=1.2.0,<2.0.0",
     "rich>=14.3.3,<15.0.0",
@@ -40,6 +39,7 @@ llm = [
     "openai>=2.30.0,<3.0.0",
     "anthropic>=0.72.0,<1.0.0",
     "instructor>=1.9.0,<2.0.0",
+    "pydantic>=2.12.5,<3.0.0",
 ]
 
 [project.scripts]
@@ -54,6 +54,7 @@ dev = [
     "coverage[toml]>=7.13.5,<8.0.0",
     "mdformat>=1.0.0,<2.0.0",
     "pymarkdownlnt>=0.9.36,<1.0.0",
+    "pydantic>=2.12.5,<3.0.0",
     "pytest>=8.4.2,<9.0.0",
     "pytest-cov>=7.1.0,<8.0.0",
     "ruff>=0.15.7,<1.0.0",

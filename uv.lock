@@ -2178,7 +2178,6 @@ dependencies = [
     { name = "click" },
     { name = "numpy" },
     { name = "pillow" },
-    { name = "pydantic" },
     { name = "python-docx" },
     { name = "pywhispercpp" },
     { name = "rich" },
@@ -2190,12 +2189,14 @@ llm = [
     { name = "anthropic" },
     { name = "instructor" },
     { name = "openai" },
+    { name = "pydantic" },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "coverage" },
     { name = "mdformat" },
+    { name = "pydantic" },
     { name = "pymarkdownlnt" },
     { name = "pytest" },
     { name = "pytest-cov" },
@@ -2212,7 +2213,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.4.3,<3.0.0" },
     { name = "openai", marker = "extra == 'llm'", specifier = ">=2.30.0,<3.0.0" },
     { name = "pillow", specifier = ">=12.1.1,<13.0.0" },
-    { name = "pydantic", specifier = ">=2.12.5,<3.0.0" },
+    { name = "pydantic", marker = "extra == 'llm'", specifier = ">=2.12.5,<3.0.0" },
     { name = "python-docx", specifier = ">=1.2.0,<2.0.0" },
     { name = "pywhispercpp", specifier = ">=1.4.1,<2.0.0" },
     { name = "rich", specifier = ">=14.3.3,<15.0.0" },
@@ -2224,6 +2225,7 @@ provides-extras = ["llm"]
 dev = [
     { name = "coverage", extras = ["toml"], specifier = ">=7.13.5,<8.0.0" },
     { name = "mdformat", specifier = ">=1.0.0,<2.0.0" },
+    { name = "pydantic", specifier = ">=2.12.5,<3.0.0" },
     { name = "pymarkdownlnt", specifier = ">=0.9.36,<1.0.0" },
     { name = "pytest", specifier = ">=8.4.2,<9.0.0" },
     { name = "pytest-cov", specifier = ">=7.1.0,<8.0.0" },

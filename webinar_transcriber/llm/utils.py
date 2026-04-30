@@ -10,14 +10,13 @@ from typing import TYPE_CHECKING, cast
 from .contracts import (
     LLMConfigurationError,
     LLMProcessingError,
-    ReportSectionUpdate,
-    SectionTextResponse,
 )
 from .prompts import REPORT_SECTION_EXCERPT_LIMIT
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from webinar_transcriber.llm.schemas import ReportSectionUpdate
     from webinar_transcriber.models import ReportDocument
 
 
@@ -242,7 +241,7 @@ def extract_usage(response: object) -> dict[str, int]:
 
 def schema_label(response_model: type[object]) -> str:
     """Return the human-facing label for one structured response schema."""
-    if response_model is SectionTextResponse:
+    if response_model.__name__ == "SectionTextResponse":
         return "Section polish"
     if response_model.__name__ == "ReportPolishResponse":
         return "Report polish"
