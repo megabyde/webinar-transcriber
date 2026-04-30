@@ -8,9 +8,11 @@ import click
 
 from webinar_transcriber import __version__
 from webinar_transcriber.asr import (
+    ASRProcessingError,
     PromptCarryoverSettings,
     default_asr_threads,
 )
+from webinar_transcriber.llm import LLMConfigurationError, LLMProcessingError
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.processor import process_input
@@ -118,6 +120,12 @@ def main(
     except KeyboardInterrupt:
         reporter.interrupted()
         raise click.exceptions.Exit(130) from None
-    except (MediaProcessingError, OutputDirectoryExistsError) as error:
+    except (
+        ASRProcessingError,
+        LLMConfigurationError,
+        LLMProcessingError,
+        MediaProcessingError,
+        OutputDirectoryExistsError,
+    ) as error:
         reporter.reset_active_display()
         raise CLIError(str(error)) from error

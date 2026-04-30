@@ -5,10 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from enum import StrEnum
-from typing import TYPE_CHECKING, Literal
-
-if TYPE_CHECKING:
-    from webinar_transcriber.processor.types import AsrPipelineState
+from typing import Literal
 
 
 class MediaType(StrEnum):
@@ -166,6 +163,21 @@ class ReportDocument:
 
 
 @dataclass(slots=True, frozen=True)
+class AsrPipelineDiagnostics:
+    """Collected ASR diagnostics state for one processing run."""
+
+    vad_enabled: bool
+    threads: int
+    normalized_audio_duration_sec: float | None = None
+    vad_region_count: int = 0
+    carryover_enabled: bool = False
+    window_count: int = 0
+    average_window_duration_sec: float | None = None
+    reconciliation_boundary_fixes: int = 0
+    system_info: str | None = None
+
+
+@dataclass(slots=True, frozen=True)
 class Diagnostics:
     """Execution metadata recorded for a processing run."""
 
@@ -181,5 +193,5 @@ class Diagnostics:
     llm_report_usage: dict[str, int] = dataclass_field(default_factory=dict)
     stage_durations_sec: dict[str, float] = dataclass_field(default_factory=dict)
     item_counts: dict[str, int] = dataclass_field(default_factory=dict)
-    asr_pipeline: AsrPipelineState | None = None
+    asr_pipeline: AsrPipelineDiagnostics | None = None
     warnings: list[str] = dataclass_field(default_factory=list)

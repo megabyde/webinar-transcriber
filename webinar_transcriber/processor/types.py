@@ -10,6 +10,7 @@ from .llm import LLMRuntimeState
 if TYPE_CHECKING:
     from webinar_transcriber.models import (
         AlignmentBlock,
+        AsrPipelineDiagnostics,
         Diagnostics,
         MediaAsset,
         ReportDocument,
@@ -32,27 +33,12 @@ class ProcessArtifacts:
     diagnostics: Diagnostics
 
 
-@dataclass(frozen=True)
-class AsrPipelineState:
-    """Collected ASR diagnostics state for one processing run."""
-
-    vad_enabled: bool
-    threads: int
-    normalized_audio_duration_sec: float | None = None
-    vad_region_count: int = 0
-    carryover_enabled: bool = False
-    window_count: int = 0
-    average_window_duration_sec: float | None = None
-    reconciliation_boundary_fixes: int = 0
-    system_info: str | None = None
-
-
 @dataclass
 class RunContext:
     """Mutable state for one processing run."""
 
     reporter: BaseStageReporter
-    asr_pipeline: AsrPipelineState
+    asr_pipeline: AsrPipelineDiagnostics | None = None
     stage_timings: dict[str, float] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     current_stage: str | None = None
@@ -73,7 +59,7 @@ class TranscriptionPhaseResult:
 
     transcription: TranscriptionResult
     normalized_transcription: TranscriptionResult
-    asr_pipeline: AsrPipelineState
+    asr_pipeline: AsrPipelineDiagnostics
 
 
 @dataclass(frozen=True)
