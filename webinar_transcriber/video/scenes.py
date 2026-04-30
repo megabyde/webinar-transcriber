@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import av
 from av.filter import Graph
@@ -188,20 +188,25 @@ def estimated_scene_sample_count(
 
 
 def _frame_time_sec(frame: object) -> float | None:
-    if (time := getattr(frame, "time", None)) is not None:
+    timed_frame = cast("Any", frame)
+    if timed_frame.time is not None:
+        time = timed_frame.time
         return float(time)
-    pts = getattr(frame, "pts", None)
-    time_base = getattr(frame, "time_base", None)
+    pts = timed_frame.pts
+    time_base = timed_frame.time_base
     if pts is None or time_base is None:
         return None
     return float(pts * time_base)
 
 
 def _video_duration_sec(input_container: object, video_stream: object) -> float:
-    if (duration := getattr(input_container, "duration", None)) is not None:
+    typed_container = cast("Any", input_container)
+    typed_stream = cast("Any", video_stream)
+    if typed_container.duration is not None:
+        duration = typed_container.duration
         return float(duration / av.time_base)
-    stream_duration = getattr(video_stream, "duration", None)
-    stream_time_base = getattr(video_stream, "time_base", None)
+    stream_duration = typed_stream.duration
+    stream_time_base = typed_stream.time_base
     if stream_duration is None or stream_time_base is None:
         return 0.0
     return float(stream_duration * stream_time_base)

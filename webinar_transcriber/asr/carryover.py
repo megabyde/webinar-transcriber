@@ -12,7 +12,6 @@ if TYPE_CHECKING:
 
 _CARRYOVER_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 _CARRYOVER_WHITESPACE = re.compile(r"\s+")
-_CARRYOVER_TRAILING_NOISE = re.compile(r"[(\[{<\"'`]+$|[\s\-:,;]+$")
 
 
 def build_prompt_carryover(
@@ -43,7 +42,6 @@ def _sanitize_prompt(prompt: str | None, *, max_tokens: int) -> str:
         return ""
 
     cleaned = _CARRYOVER_WHITESPACE.sub(" ", prompt.strip())
-    cleaned = _CARRYOVER_TRAILING_NOISE.sub("", cleaned).strip()
     if not cleaned:
         return ""
 
