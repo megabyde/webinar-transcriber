@@ -40,8 +40,17 @@ class FakeImage:
 
 
 class FakeFrame:
-    def __init__(self, time: float | None, *, save_output: bool = True) -> None:
+    def __init__(
+        self,
+        time: float | None,
+        *,
+        pts: int | None = None,
+        time_base: float | None = None,
+        save_output: bool = True,
+    ) -> None:
         self.time = time
+        self.pts = pts
+        self.time_base = time_base
         self.save_output = save_output
 
     def to_image(self) -> FakeImage:
@@ -339,7 +348,7 @@ class TestSelectSceneStarts:
                 self.streams = [FakeVideoStream()]
 
             def decode(self, *_args, **_kwargs):
-                return iter([object(), object(), object()])
+                return iter([FakeFrame(None), FakeFrame(None), FakeFrame(None)])
 
         monkeypatch.setattr(
             "webinar_transcriber.video.scenes.open_input_media_container",
@@ -389,7 +398,7 @@ class TestSelectSceneStarts:
                 self.streams = [FakeVideoStream()]
 
             def decode(self, *_args, **_kwargs):
-                return iter([object()])
+                return iter([FakeFrame(None)])
 
         monkeypatch.setattr(
             "webinar_transcriber.video.scenes.open_input_media_container",
@@ -430,7 +439,7 @@ class TestSelectSceneStarts:
                 self.streams = [FakeVideoStream()]
 
             def decode(self, *_args, **_kwargs):
-                return iter([object()])
+                return iter([FakeFrame(None)])
 
         monkeypatch.setattr(
             "webinar_transcriber.video.scenes.open_input_media_container",

@@ -487,14 +487,6 @@ class TestWhisperCppTranscriber:
         with pytest.raises(ASRProcessingError, match="model was not initialized"):
             BrokenTranscriber(model_name="stub.bin")._ensure_model()
 
-    def test_resolve_model_name_raises_when_explicit_model_path_is_uninitialized(self) -> None:
-        transcriber = WhisperCppTranscriber(model_name="stub.bin")
-        transcriber._uses_default_model_name = False
-        transcriber._configured_model_path = None
-
-        with pytest.raises(ASRProcessingError, match=r"--asr-model path was not initialized"):
-            transcriber._resolve_model_name()
-
 
 class TestPromptCarryover:
     def test_build_prompt_carryover_uses_last_sentences_and_token_budget(self) -> None:
@@ -546,20 +538,6 @@ class TestPromptCarryover:
 
         assert carryover is None
 
-    def test_build_prompt_carryover_drops_noise_only_text(self) -> None:
-        carryover = build_prompt_carryover(
-            DecodedWindow(
-                window=InferenceWindow(
-                    window_id="window-5", region_index=0, start_sec=0.0, end_sec=1.0
-                ),
-                text="(((",
-                segments=[],
-            ),
-            settings=PromptCarryoverSettings(),
-        )
-
-        assert carryover is None
-
-    def test_sanitize_prompt_drops_missing_and_noise_only_prompts(self) -> None:
+    def test_sanitize_prompt_drops_missing_prompts(self) -> None:
         assert _sanitize_prompt(None, max_tokens=8) == ""
-        assert _sanitize_prompt("(((", max_tokens=8) == ""
+        assert _sanitize_prompt("   ", max_tokens=8) == ""

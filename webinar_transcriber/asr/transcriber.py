@@ -38,11 +38,8 @@ GPU_BACKEND_PATTERN = re.compile(r"(?i)\b(metal|mtl|cuda)\b[^|]*?(?:=|:)\s*(?:1|
 _WHISPER_TICKS_PER_SECOND = 100.0
 
 
-def _missing_model_error_message(model_path: Path | None) -> str:
-    if model_path is not None:
-        model_path_text = str(model_path)
-    else:
-        model_path_text = "--asr-model path was not initialized for the explicit whisper.cpp model"
+def _missing_model_error_message(model_path: Path) -> str:
+    model_path_text = str(model_path)
     example_path = DEFAULT_WHISPER_CPP_MODEL_EXAMPLE
     location_hint = f"Download a whisper.cpp model there, or use --asr-model {example_path}."
     return (
@@ -148,8 +145,7 @@ class WhisperCppTranscriber:
         log_path: Path | None = None,
     ) -> None:
         """Initialize the whisper.cpp transcriber wrapper."""
-        self._configured_model_path = Path(model_name) if model_name else None
-        self._uses_default_model_name = model_name is None
+        self._requested_model_name = model_name
         self._model_name = model_name or DEFAULT_WHISPER_CPP_MODEL_FILENAME
         self._threads = max(1, threads)
         self._language = language.strip() if language else None
@@ -281,16 +277,14 @@ class WhisperCppTranscriber:
         return self._model
 
     def _resolve_model_name(self) -> str:
-        if not self._uses_default_model_name:
-            if not _looks_like_model_path(self._model_name):
-                return self._model_name
-            configured_model_path = None
-            if self._configured_model_path is not None:
-                configured_model_path = self._configured_model_path.expanduser()
-            if configured_model_path is None or not configured_model_path.exists():
-                raise ASRProcessingError(_missing_model_error_message(configured_model_path))
-            return str(configured_model_path)
-        return DEFAULT_WHISPER_CPP_MODEL_FILENAME
+        if self._requested_model_name is None:
+            return DEFAULT_WHISPER_CPP_MODEL_FILENAME
+        if not _looks_like_model_path(self._requested_model_name):
+            return self._requested_model_name
+        configured_model_path = Path(self._requested_model_name).expanduser()
+        if not configured_model_path.exists():
+            raise ASRProcessingError(_missing_model_error_message(configured_model_path))
+        return str(configured_model_path)
 
     def _transcribe_window(
         self,
@@ -330,24 +324,18 @@ class WhisperCppTranscriber:
                     window_samples, n_threads=self._threads
                 )[0][0]
 
-        segments = [
-            TranscriptSegment(
-                id=f"{window.window_id}-segment-{segment_index + 1}",
-                text=str(raw_segment.text).strip(),
-                start_sec=max(
-                    window.start_sec,
-                    window.start_sec + (float(raw_segment.t0) / _WHISPER_TICKS_PER_SECOND),
-                ),
-                end_sec=min(
-                    window.end_sec,
-                    max(
-                        window.start_sec + (float(raw_segment.t0) / _WHISPER_TICKS_PER_SECOND),
-                        window.start_sec + (float(raw_segment.t1) / _WHISPER_TICKS_PER_SECOND),
-                    ),
+        segments: list[TranscriptSegment] = []
+        for segment_index, raw_segment in enumerate(raw_segments):
+            seg_start = window.start_sec + (float(raw_segment.t0) / _WHISPER_TICKS_PER_SECOND)
+            seg_end = window.start_sec + (float(raw_segment.t1) / _WHISPER_TICKS_PER_SECOND)
+            segments.append(
+                TranscriptSegment(
+                    id=f"{window.window_id}-segment-{segment_index + 1}",
+                    text=str(raw_segment.text).strip(),
+                    start_sec=max(window.start_sec, seg_start),
+                    end_sec=min(window.end_sec, max(seg_start, seg_end)),
                 ),
             )
-            for segment_index, raw_segment in enumerate(raw_segments)
-        ]
         return DecodedWindow(
             window=window,
             text=" ".join(segment.text for segment in segments if segment.text).strip(),

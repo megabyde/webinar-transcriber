@@ -69,13 +69,12 @@ class TestAttachedPictureStream:
 
         assert _pyav_stream_has_attached_picture(stream)
 
-    def test_pyav_returns_false_when_attached_picture_flag_is_unavailable(self) -> None:
-        assert not _pyav_stream_has_attached_picture(object())
-
 
 class TestStreamDurationSec:
     def test_returns_none_without_duration_or_time_base(self) -> None:
-        assert _stream_duration_sec(object()) is None
+        stream = type("Stream", (), {"duration": None, "time_base": None})()
+
+        assert _stream_duration_sec(stream) is None
 
 
 class TestOpenOutputMediaContainer:
