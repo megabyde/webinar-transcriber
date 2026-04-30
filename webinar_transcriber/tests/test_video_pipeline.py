@@ -10,7 +10,12 @@ from PIL import Image
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.models import Scene
 from webinar_transcriber.tests.conftest import FakeContextContainer
-from webinar_transcriber.video import detect_scenes, extract_representative_frames
+from webinar_transcriber.video import (
+    SceneDetectionSettings,
+    detect_scenes,
+    estimated_scene_sample_count,
+    extract_representative_frames,
+)
 from webinar_transcriber.video.frames import _normalize_extracted_frame
 from webinar_transcriber.video.scenes import _select_scene_starts
 
@@ -74,7 +79,11 @@ class TestDetectScenes:
             progress_updates.append((sample_count, scene_count))
 
         scenes = detect_scenes(
-            SAMPLE_VIDEO_PATH, min_scene_length_sec=1.0, progress_callback=on_progress
+            SAMPLE_VIDEO_PATH,
+            settings=SceneDetectionSettings(
+                scan_fps=2.0, score_threshold=0.006, min_scene_length_sec=1.0
+            ),
+            progress_callback=on_progress,
         )
 
         assert len(scenes) >= 2
@@ -227,6 +236,13 @@ class TestFrameExtraction:
 
 
 class TestDetectScenesFallback:
+    def test_estimated_scene_sample_count_uses_detection_settings(self) -> None:
+        sample_count = estimated_scene_sample_count(
+            9.1, settings=SceneDetectionSettings(scan_fps=0.5)
+        )
+
+        assert sample_count == 5
+
     def test_detect_scenes_returns_single_zero_length_scene_when_no_frames(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -259,7 +275,8 @@ class TestSelectSceneStarts:
 
         with pytest.raises(MediaProcessingError, match="bad open"):
             _select_scene_starts(
-                SAMPLE_VIDEO_PATH, scene_score_threshold=0.3, min_scene_length_sec=3.0
+                SAMPLE_VIDEO_PATH,
+                settings=SceneDetectionSettings(score_threshold=0.3, min_scene_length_sec=3.0),
             )
 
     def test_select_scene_starts_raises_when_no_video_stream(
@@ -278,7 +295,8 @@ class TestSelectSceneStarts:
             MediaProcessingError, match=f"No video stream found in {SAMPLE_VIDEO_PATH}."
         ):
             _select_scene_starts(
-                SAMPLE_VIDEO_PATH, scene_score_threshold=0.3, min_scene_length_sec=3.0
+                SAMPLE_VIDEO_PATH,
+                settings=SceneDetectionSettings(score_threshold=0.3, min_scene_length_sec=3.0),
             )
 
     def test_select_scene_starts_reports_progress(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -334,8 +352,9 @@ class TestSelectSceneStarts:
 
         scene_starts, duration_sec = _select_scene_starts(
             SAMPLE_VIDEO_PATH,
-            scene_score_threshold=0.3,
-            min_scene_length_sec=3.0,
+            settings=SceneDetectionSettings(
+                scan_fps=2.0, score_threshold=0.3, min_scene_length_sec=3.0
+            ),
             progress_callback=lambda sample_count, scene_count: progress_updates.append((
                 sample_count,
                 scene_count,
@@ -383,8 +402,7 @@ class TestSelectSceneStarts:
 
         scene_starts, duration_sec = _select_scene_starts(
             SAMPLE_VIDEO_PATH,
-            scene_score_threshold=0.3,
-            min_scene_length_sec=3.0,
+            settings=SceneDetectionSettings(score_threshold=0.3, min_scene_length_sec=3.0),
             progress_callback=lambda sample_count, scene_count: progress_updates.append((
                 sample_count,
                 scene_count,
@@ -428,5 +446,6 @@ class TestSelectSceneStarts:
             match=f"Could not detect scenes in {SAMPLE_VIDEO_PATH}: filter failed",
         ):
             _select_scene_starts(
-                SAMPLE_VIDEO_PATH, scene_score_threshold=0.3, min_scene_length_sec=3.0
+                SAMPLE_VIDEO_PATH,
+                settings=SceneDetectionSettings(score_threshold=0.3, min_scene_length_sec=3.0),
             )
