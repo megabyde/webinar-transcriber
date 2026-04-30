@@ -63,6 +63,68 @@ class FakeInstructorModule:
 
 
 class TestBuildLlmProcessorFromEnv:
+    @pytest.mark.parametrize(
+        (
+            "provider_env",
+            "api_key_env",
+            "model_env",
+            "provider_name",
+            "provider_module",
+            "provider_model",
+        ),
+        [
+            (
+                None,
+                "OPENAI_API_KEY",
+                "OPENAI_MODEL",
+                "openai",
+                "openai",
+                "openai/gpt-test",
+            ),
+            (
+                "anthropic",
+                "ANTHROPIC_API_KEY",
+                "ANTHROPIC_MODEL",
+                "anthropic",
+                "anthropic",
+                "anthropic/claude-test",
+            ),
+        ],
+    )
+    def test_builds_supported_provider_from_env(
+        self,
+        monkeypatch,
+        provider_env: str | None,
+        api_key_env: str,
+        model_env: str,
+        provider_name: str,
+        provider_module: str,
+        provider_model: str,
+    ) -> None:
+        fake_instructor = FakeInstructorModule(object())
+        if provider_env is None:
+            monkeypatch.delenv("LLM_PROVIDER", raising=False)
+        else:
+            monkeypatch.setenv("LLM_PROVIDER", provider_env)
+        monkeypatch.setenv(api_key_env, "test-key")
+        monkeypatch.setenv(model_env, provider_model.rsplit("/", 1)[1])
+        monkeypatch.setattr(
+            "webinar_transcriber.llm.importlib.import_module",
+            _fake_import_module({"instructor": fake_instructor, provider_module: object()}),
+        )
+
+        processor = build_llm_processor_from_env()
+
+        assert isinstance(processor, InstructorLLMProcessor)
+        assert processor.provider_name == provider_name
+        assert processor.model_name == provider_model.rsplit("/", 1)[1]
+        assert fake_instructor.calls == [
+            (
+                provider_model,
+                {"api_key": "test-key", "mode": FakeInstructorModule.Mode.TOOLS},
+            )
+        ]
+
     def test_requires_api_key_and_model(self, monkeypatch) -> None:
         monkeypatch.delenv("LLM_PROVIDER", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -87,28 +149,6 @@ class TestBuildLlmProcessorFromEnv:
         ):
             build_llm_processor_from_env()
 
-    def test_supports_anthropic(self, monkeypatch) -> None:
-        fake_instructor = FakeInstructorModule(object())
-        monkeypatch.setenv("LLM_PROVIDER", "anthropic")
-        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-        monkeypatch.setenv("ANTHROPIC_MODEL", "claude-test")
-        monkeypatch.setattr(
-            "webinar_transcriber.llm.importlib.import_module",
-            _fake_import_module({"instructor": fake_instructor, "anthropic": object()}),
-        )
-
-        processor = build_llm_processor_from_env()
-
-        assert isinstance(processor, InstructorLLMProcessor)
-        assert processor.provider_name == "anthropic"
-        assert processor.model_name == "claude-test"
-        assert fake_instructor.calls == [
-            (
-                "anthropic/claude-test",
-                {"api_key": "test-key", "mode": FakeInstructorModule.Mode.TOOLS},
-            )
-        ]
-
     def test_requires_llm_extra_for_anthropic(self, monkeypatch) -> None:
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         monkeypatch.setattr(
@@ -126,25 +166,6 @@ class TestBuildLlmProcessorFromEnv:
 
         with pytest.raises(LLMConfigurationError, match="Unsupported LLM provider"):
             build_llm_processor_from_env()
-
-    def test_defaults_to_openai(self, monkeypatch) -> None:
-        fake_instructor = FakeInstructorModule(object())
-        monkeypatch.delenv("LLM_PROVIDER", raising=False)
-        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-        monkeypatch.setenv("OPENAI_MODEL", "gpt-test")
-        monkeypatch.setattr(
-            "webinar_transcriber.llm.importlib.import_module",
-            _fake_import_module({"instructor": fake_instructor, "openai": object()}),
-        )
-
-        processor = build_llm_processor_from_env()
-
-        assert isinstance(processor, InstructorLLMProcessor)
-        assert processor.provider_name == "openai"
-        assert processor.model_name == "gpt-test"
-        assert fake_instructor.calls == [
-            ("openai/gpt-test", {"api_key": "test-key", "mode": FakeInstructorModule.Mode.TOOLS})
-        ]
 
 
 class TestInstructorLlmProcessor:
@@ -491,28 +512,28 @@ class TestInstructorLlmProcessor:
 
 
 class TestInstructorProcessorFlow:
-    class StubProcessor(InstructorLLMProcessor):
-        class UnusedClient:
-            def create_with_completion(self, **_kwargs):
-                raise AssertionError("unused")
-
-        def __init__(
-            self, responses: dict[str, tuple[BaseModel, dict[str, int]] | Exception]
-        ) -> None:
-            super().__init__(
-                client=self.UnusedClient(), provider_name="stub", model_name="stub-model"
-            )
+    class ResponseClient:
+        def __init__(self, responses: dict[str, tuple[BaseModel, dict[str, int]] | Exception]):
             self._responses = responses
 
-        def _create_structured_response(self, **kwargs) -> tuple[BaseModel, dict[str, int]]:
-            response_key = cast("str", kwargs["user_payload"].get("id", "__metadata__"))
+        def create_with_completion(self, **kwargs):
+            messages = cast("list[dict[str, object]]", kwargs["messages"])
+            payload = json.loads(cast("str", messages[1]["content"]))
+            response_key = cast("str", payload.get("id", "__metadata__"))
             response = self._responses[response_key]
             if isinstance(response, Exception):
                 raise response
             return response
 
+    def processor(
+        self, responses: dict[str, tuple[BaseModel, dict[str, int]] | Exception]
+    ) -> InstructorLLMProcessor:
+        return InstructorLLMProcessor(
+            client=self.ResponseClient(responses), provider_name="stub", model_name="stub-model"
+        )
+
     def test_returns_empty_section_result_for_report_without_sections(self) -> None:
-        processor = self.StubProcessor({})
+        processor = self.processor({})
         report = ReportDocument(title="Demo", source_file="demo.wav", media_type=MediaType.AUDIO)
 
         result = processor.polish_report_sections_with_progress(report)
@@ -523,7 +544,7 @@ class TestInstructorProcessorFlow:
         assert result.warnings == []
 
     def test_report_polish_plan_counts_all_sections(self) -> None:
-        processor = self.StubProcessor({})
+        processor = self.processor({})
         report = ReportDocument(
             title="Demo",
             source_file="demo.wav",
@@ -551,7 +572,7 @@ class TestInstructorProcessorFlow:
         )
 
     def test_turns_section_polish_errors_into_warnings(self) -> None:
-        processor = self.StubProcessor({"section-1": LLMProcessingError("bad section")})
+        processor = self.processor({"section-1": RuntimeError("bad section")})
         progress_updates: list[int] = []
         report = ReportDocument(
             title="Demo",
@@ -576,11 +597,11 @@ class TestInstructorProcessorFlow:
         assert result.section_transcripts == {"section-1": "Agenda review."}
         assert result.section_tldrs == {"section-1": "Existing recap."}
         assert result.usage == {}
-        assert result.warnings == ["bad section"]
+        assert result.warnings == ["Section polishing failed for section-1: bad section"]
         assert progress_updates == [1]
 
     def test_warns_when_section_polish_returns_empty_transcript(self) -> None:
-        processor = self.StubProcessor({
+        processor = self.processor({
             "section-1": (
                 SectionTextResponse(tldr="Recap.", transcript_text="   "),
                 {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5},
