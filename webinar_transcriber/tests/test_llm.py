@@ -1,6 +1,7 @@
 """Tests for optional cloud LLM helpers."""
 
 import json
+from threading import Event
 from typing import cast
 
 import pytest
@@ -214,6 +215,7 @@ class TestInstructorLlmProcessor:
         assert report.sections[0].transcript_text == "Agenda review and project status update."
         assert len(fake_client.calls) == 2
         assert fake_client.calls[0]["max_retries"] == 1
+        assert fake_client.calls[0]["timeout"] == 120
         assert fake_client.calls[0]["response_model"] is SectionTextResponse
         assert fake_client.calls[1]["response_model"] is ReportPolishResponse
         messages = cast("list[dict[str, object]]", fake_client.calls[0]["messages"])
@@ -408,10 +410,77 @@ class TestInstructorLlmProcessor:
         assert len(fake_client.calls) == 1
         assert fake_client.calls[0]["response_model"] is ReportPolishResponse
         assert fake_client.calls[0]["max_retries"] == 1
+        assert fake_client.calls[0]["timeout"] == 120
         assert fake_client.calls[0]["max_tokens"] == 4096
         messages = cast("list[dict[str, object]]", fake_client.calls[0]["messages"])
         assert messages[0]["role"] == "system"
         assert messages[1]["role"] == "user"
+
+    def test_reports_section_progress_in_completion_order_but_preserves_output_order(
+        self,
+    ) -> None:
+        section_2_done = Event()
+        completions: list[str] = []
+        progress_updates: list[int] = []
+        fake_completion_cls = self.FakeCompletion
+
+        class CompletionOrderClient:
+            def create_with_completion(self, **kwargs):
+                messages = cast("list[dict[str, object]]", kwargs["messages"])
+                payload = json.loads(cast("str", messages[1]["content"]))
+                section_id = payload["id"]
+                if section_id == "section-1":
+                    assert section_2_done.wait(timeout=1)
+                else:
+                    section_2_done.set()
+                completions.append(section_id)
+                return (
+                    SectionTextResponse(
+                        tldr=f"{section_id} recap.",
+                        transcript_text=f"{section_id} transcript.",
+                    ),
+                    fake_completion_cls({"input_tokens": 1, "output_tokens": 1}),
+                )
+
+        processor = InstructorLLMProcessor(
+            client=CompletionOrderClient(),
+            provider_name="openai",
+            model_name="gpt-test",
+            section_max_workers=2,
+        )
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Intro",
+                    start_sec=0.0,
+                    end_sec=10.0,
+                    transcript_text="First original transcript text.",
+                ),
+                ReportSection(
+                    id="section-2",
+                    title="Agenda",
+                    start_sec=10.0,
+                    end_sec=20.0,
+                    transcript_text="Second original transcript text.",
+                ),
+            ],
+        )
+
+        result = processor.polish_report_sections_with_progress(
+            report, progress_callback=progress_updates.append
+        )
+
+        assert completions == ["section-2", "section-1"]
+        assert progress_updates == [1, 1]
+        assert list(result.section_transcripts) == ["section-1", "section-2"]
+        assert result.section_transcripts == {
+            "section-1": "section-1 transcript.",
+            "section-2": "section-2 transcript.",
+        }
 
 
 class TestInstructorProcessorFlow:
@@ -649,6 +718,11 @@ class TestLlmNormalization:
         assert extract_usage(
             type("Response", (), {"usage": {"input_tokens": 2, "other": 1}})()
         ) == {"input_tokens": 2}
+        assert extract_usage({"usage": {"input_tokens": 2, "output_tokens": 3}}) == {
+            "input_tokens": 2,
+            "output_tokens": 3,
+            "total_tokens": 5,
+        }
 
         usage_obj = type("Usage", (), {"input_tokens": 3, "output_tokens": 4})()
         response_obj = type("Response", (), {"usage": usage_obj})()

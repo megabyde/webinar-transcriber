@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Protocol
 
 from .contracts import (
@@ -65,7 +65,7 @@ class InstructorLLMProcessor:
         self._client = client
         self._provider_name = provider_name
         self._model_name = model_name
-        self._request_kwargs = dict(request_kwargs or {})
+        self._request_kwargs = {"timeout": 120, **dict(request_kwargs or {})}
         self._report_char_budget = report_char_budget
         self._section_max_workers = section_max_workers
 
@@ -140,19 +140,31 @@ class InstructorLLMProcessor:
         if not report.sections:
             return SectionPolishOutputs(transcripts={}, tldrs={})
 
-        polished_transcripts: dict[str, str] = {}
-        polished_tldrs: dict[str, str] = {}
+        section_results: list[tuple[str, str, str, dict[str, int], list[str]] | None] = [
+            None
+        ] * len(report.sections)
 
         with ThreadPoolExecutor(max_workers=plan.worker_count) as executor:
-            results = executor.map(self._polish_section, report.sections)
-            for section_id, transcript_text, tldr, usage, section_warnings in results:
-                polished_transcripts[section_id] = transcript_text
-                if tldr:
-                    polished_tldrs[section_id] = tldr
-                usage_totals.update(Counter(usage_totals) + Counter(usage))
-                warnings.extend(section_warnings)
+            futures = {
+                executor.submit(self._polish_section, section): index
+                for index, section in enumerate(report.sections)
+            }
+            for future in as_completed(futures):
+                section_results[futures[future]] = future.result()
                 if progress_callback is not None:
                     progress_callback(1)
+
+        polished_transcripts: dict[str, str] = {}
+        polished_tldrs: dict[str, str] = {}
+        for result in section_results:
+            if result is None:  # pragma: no cover - all submitted futures completed
+                continue
+            section_id, transcript_text, tldr, usage, section_warnings = result
+            polished_transcripts[section_id] = transcript_text
+            if tldr:
+                polished_tldrs[section_id] = tldr
+            usage_totals.update(Counter(usage_totals) + Counter(usage))
+            warnings.extend(section_warnings)
 
         return SectionPolishOutputs(transcripts=polished_transcripts, tldrs=polished_tldrs)
 
