@@ -34,17 +34,10 @@ jobs:
         run: |
           uv run webinar-transcriber --help
       - name: Smoke whisper runtime
-        if: runner.os == 'macOS'
         run: |
           uv run python -c "from pywhispercpp.model import Model; assert Model.system_info().strip()"
       - name: Run CI
         run: make check
-      - name: Upload coverage
-        if: always() && runner.os == 'Linux'
-        uses: actions/upload-artifact@v6
-        with:
-          name: coverage-xml
-          path: coverage.xml
 
   test-llm-extra-linux:
     runs-on: ubuntu-latest
