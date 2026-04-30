@@ -7,12 +7,27 @@ on:
 
 jobs:
   lint-test:
-    name: lint-test (${{ matrix.os }})
+    name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - name: lint-test (ubuntu-latest)
+            os: ubuntu-latest
+            sync_command: make sync
+            test_command: make check
+            smoke_runtime: true
+          - name: lint-test (macos-latest)
+            os: macos-latest
+            sync_command: make sync
+            test_command: make check
+            smoke_runtime: true
+          - name: test-llm-extra (ubuntu-latest)
+            os: ubuntu-latest
+            sync_command: uv sync --extra llm --group dev
+            test_command: uv run pytest --no-cov webinar_transcriber/tests/test_llm.py
+            smoke_runtime: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -29,34 +44,14 @@ jobs:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-py3.12-${{ hashFiles('uv.lock') }}
       - name: Sync dependencies
-        run: make sync
+        run: ${{ matrix.sync_command }}
       - name: Smoke CLI help
+        if: matrix.smoke_runtime
         run: |
           uv run webinar-transcriber --help
       - name: Smoke whisper runtime
+        if: matrix.smoke_runtime
         run: |
           uv run python -c "from pywhispercpp.model import Model; assert Model.system_info().strip()"
-      - name: Run CI
-        run: make check
-
-  test-llm-extra-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - uses: astral-sh/setup-uv@v7
-        with:
-          version: "0.11.7"
-          enable-cache: false
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: uv-${{ runner.os }}-py3.12-${{ hashFiles('uv.lock') }}
-      - name: Sync dependencies with LLM extra
-        run: uv sync --extra llm --group dev
-      - name: Run LLM tests
-        run: uv run pytest --no-cov webinar_transcriber/tests/test_llm.py
+      - name: Run tests
+        run: ${{ matrix.test_command }}
