@@ -38,18 +38,10 @@ class RunContext:
     """Mutable state for one processing run."""
 
     reporter: BaseStageReporter
-    asr_pipeline: AsrPipelineDiagnostics | None = None
     stage_timings: dict[str, float] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     current_stage: str | None = None
     layout: RunLayout | None = None
-    media_asset: MediaAsset | None = None
-    alignment_blocks: list[AlignmentBlock] | None = None
-    scenes: list[Scene] = field(default_factory=list)
-    slide_frames: list[SlideFrame] = field(default_factory=list)
-    transcription: TranscriptionResult | None = None
-    normalized_transcription: TranscriptionResult | None = None
-    report: ReportDocument | None = None
     llm_runtime: LLMRuntimeState = field(default_factory=LLMRuntimeState)
 
 

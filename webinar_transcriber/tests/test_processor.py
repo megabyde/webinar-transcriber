@@ -25,7 +25,6 @@ from webinar_transcriber.llm.contracts import (
     LLMSectionPolishResult,
 )
 from webinar_transcriber.models import (
-    AsrPipelineDiagnostics,
     AudioAsset,
     DecodedWindow,
     InferenceWindow,
@@ -543,6 +542,8 @@ class TestProcessInput:
         assert diagnostics_payload["status"] == "failed"
         assert diagnostics_payload["failed_stage"] == "structure"
         assert diagnostics_payload["error"] == "boom"
+        assert diagnostics_payload["item_counts"]["transcript_segments"] == 1
+        assert diagnostics_payload["item_counts"]["windows"] == 1
         assert not (output_dir / "report.json").exists()
 
     def test_forwards_vad_warnings_to_report_and_reporter(
@@ -732,7 +733,6 @@ class TestProcessorSupport:
     ) -> None:
         ctx = RunContext(
             reporter=BaseStageReporter(),
-            asr_pipeline=AsrPipelineDiagnostics(vad_enabled=True, threads=1),
             layout=RunLayout(run_dir=tmp_path),
         )
 

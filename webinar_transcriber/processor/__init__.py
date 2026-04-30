@@ -21,7 +21,7 @@ from webinar_transcriber.segmentation import VadSettings
 from . import asr as processor_asr
 from .report import run_report_phase
 from .support import stage, write_json
-from .types import ProcessArtifacts, RunContext, TranscriptionPhaseResult
+from .types import ProcessArtifacts, ReportPhaseResult, RunContext, TranscriptionPhaseResult
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -121,6 +121,8 @@ def process_input(
         active_transcriber if transcriber is None else nullcontext(active_transcriber)
     )
     with transcriber_scope as active_transcriber:
+        transcription_phase: TranscriptionPhaseResult | None = None
+        report_phase: ReportPhaseResult | None = None
         ctx.reporter.begin_run(input_path)
         try:
             with stage(ctx, "prepare_run_dir", "Preparing run directory") as st:
@@ -131,7 +133,6 @@ def process_input(
 
             with stage(ctx, "probe_media", "Probing media") as st:
                 media_asset = media_runtime.probe_media(input_path)
-                ctx.media_asset = media_asset
                 write_json(layout.metadata_path, {"media": asdict(media_asset)})
                 st.detail = f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s"
 
@@ -148,9 +149,6 @@ def process_input(
                 kept_audio_format=kept_audio_format,
                 prepared_audio_factory=prepared_transcription_audio,
             )
-            ctx.transcription = transcription_phase.transcription
-            ctx.normalized_transcription = transcription_phase.normalized_transcription
-            ctx.asr_pipeline = transcription_phase.asr_pipeline
 
             report_phase = run_report_phase(
                 input_path=input_path,
@@ -161,16 +159,14 @@ def process_input(
                 llm_processor=llm_processor,
                 ctx=ctx,
             )
-            ctx.alignment_blocks = report_phase.alignment_blocks
-            ctx.scenes = report_phase.scenes
-            ctx.slide_frames = report_phase.slide_frames
-            ctx.report = report_phase.report
 
             diagnostics = write_run_diagnostics(
                 ctx,
                 status="succeeded",
                 asr_model=active_transcriber.model_name,
                 llm_enabled=enable_llm,
+                transcription_phase=transcription_phase,
+                report_phase=report_phase,
             )
             if diagnostics is None:  # pragma: no cover - run layout always exists on success
                 raise RuntimeError(
@@ -194,6 +190,8 @@ def process_input(
                 error=str(ex),
                 asr_model=active_transcriber.model_name,
                 llm_enabled=enable_llm,
+                transcription_phase=transcription_phase,
+                report_phase=report_phase,
                 suppress_errors=True,
             )
             raise
