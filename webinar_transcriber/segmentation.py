@@ -37,32 +37,31 @@ class VadSettings:
     speech_region_pad_ms: int = DEFAULT_SPEECH_REGION_PAD_MS
 
 
+DEFAULT_VAD_SETTINGS = VadSettings()
+
+
 def detect_speech_regions(
     samples: np.ndarray,
     sample_rate: int,
     *,
-    threshold: float = DEFAULT_VAD_THRESHOLD,
-    min_speech_duration_ms: int = DEFAULT_MIN_SPEECH_DURATION_MS,
-    min_silence_duration_ms: int = DEFAULT_MIN_SILENCE_DURATION_MS,
-    speech_pad_ms: int = DEFAULT_SPEECH_REGION_PAD_MS,
+    settings: VadSettings = DEFAULT_VAD_SETTINGS,
     progress_callback: Callable[[float, int], None] | None = None,
-    enabled: bool = True,
 ) -> tuple[list[SpeechRegion], list[str]]:
     """Return coarse Silero speech regions and any warnings emitted during detection."""
     duration_sec = len(samples) / float(sample_rate) if sample_rate > 0 else 0.0
     if duration_sec <= 0:
         return [], []
 
-    if not enabled:
+    if not settings.enabled:
         return [SpeechRegion(start_sec=0.0, end_sec=duration_sec)], []
 
     timestamps = _silero_speech_timestamps(
         samples,
         sample_rate=sample_rate,
-        threshold=threshold,
-        min_speech_duration_ms=min_speech_duration_ms,
-        min_silence_duration_ms=min_silence_duration_ms,
-        speech_pad_ms=speech_pad_ms,
+        threshold=settings.threshold,
+        min_speech_duration_ms=settings.min_speech_duration_ms,
+        min_silence_duration_ms=settings.min_silence_duration_ms,
+        speech_pad_ms=settings.speech_region_pad_ms,
         progress_callback=progress_callback,
     )
     if timestamps is None:

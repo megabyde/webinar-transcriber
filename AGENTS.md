@@ -62,7 +62,10 @@ The package intentionally avoids deep nesting.
   naturally becomes a clear input/output table; avoid it when cases need materially different
   fixtures, monkeypatching, or fake-object wiring.
 - Prefer asserting current observable behavior over asserting that recently removed options, fields,
-  or artifacts are absent. Deletion-based assertions are usually shallow and brittle.
+  dependencies, import paths, or artifacts are absent. Deletion-based assertions are usually shallow
+  and brittle.
+- Avoid tests that only prove one function forwards fields into another helper unless that wiring is
+  itself a meaningful behavioral contract.
 - For predicate-style tests, prefer `assert expr` / `assert not expr`. Reserve `is True` /
   `is False` for cases where exact boolean identity matters.
 
