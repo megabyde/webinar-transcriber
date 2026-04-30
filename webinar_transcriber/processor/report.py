@@ -19,7 +19,7 @@ from .types import ReportPhaseResult
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from webinar_transcriber.llm import LLMProcessor
+    from webinar_transcriber.llm.contracts import LLMProcessor
     from webinar_transcriber.models import MediaAsset, TranscriptionResult
     from webinar_transcriber.paths import RunLayout
 

@@ -13,16 +13,13 @@ from .contracts import (
     LLMReportMetadataResult,
     LLMReportPolishPlan,
     LLMSectionPolishResult,
-    ReportPolishResponse,
-    ReportSectionUpdate,
-    SectionTextResponse,
 )
-from .processor import InstructorLLMProcessor
 from .prompts import ACTION_ITEM_LIMIT, REPORT_POLISH_TOTAL_CHAR_BUDGET, SECTION_POLISH_MAX_WORKERS
 from .utils import required_provider_env
 
 if TYPE_CHECKING:
-    from .processor import InstructorClient
+    from .processor import InstructorClient, InstructorLLMProcessor
+    from .schemas import ReportPolishResponse, ReportSectionUpdate, SectionTextResponse
 
     class _InstructorMode(Protocol):
         TOOLS: object
@@ -41,6 +38,14 @@ def _required_llm_module(module_name: str, *, provider_label: str) -> object:
             f"The {provider_label} provider requires the 'llm' extra. "
             'Install it with: uv tool install --reinstall ".[llm]"'
         ) from error
+
+
+def _instructor_llm_processor_cls() -> type[InstructorLLMProcessor]:
+    processor_module = importlib.import_module("webinar_transcriber.llm.processor")
+    return cast(
+        "type[InstructorLLMProcessor]",
+        processor_module.InstructorLLMProcessor,
+    )
 
 
 def build_llm_processor_from_env() -> LLMProcessor:
@@ -62,7 +67,9 @@ def build_llm_processor_from_env() -> LLMProcessor:
             api_key, model_name = required_provider_env(
                 api_key_env="OPENAI_API_KEY", model_env="OPENAI_MODEL"
             )
-            return InstructorLLMProcessor(
+
+            processor_cls = _instructor_llm_processor_cls()
+            return processor_cls(
                 client=instructor.from_provider(
                     f"openai/{model_name}", api_key=api_key, mode=instructor.Mode.TOOLS
                 ),
@@ -77,7 +84,9 @@ def build_llm_processor_from_env() -> LLMProcessor:
             api_key, model_name = required_provider_env(
                 api_key_env="ANTHROPIC_API_KEY", model_env="ANTHROPIC_MODEL"
             )
-            return InstructorLLMProcessor(
+
+            processor_cls = _instructor_llm_processor_cls()
+            return processor_cls(
                 client=instructor.from_provider(
                     f"anthropic/{model_name}", api_key=api_key, mode=instructor.Mode.TOOLS
                 ),
@@ -89,6 +98,22 @@ def build_llm_processor_from_env() -> LLMProcessor:
             raise LLMConfigurationError(
                 "Unsupported LLM provider. Set LLM_PROVIDER to 'openai' or 'anthropic'."
             )
+
+
+_LAZY_EXPORTS = {
+    "InstructorLLMProcessor": ("webinar_transcriber.llm.processor", "InstructorLLMProcessor"),
+    "ReportPolishResponse": ("webinar_transcriber.llm.schemas", "ReportPolishResponse"),
+    "ReportSectionUpdate": ("webinar_transcriber.llm.schemas", "ReportSectionUpdate"),
+    "SectionTextResponse": ("webinar_transcriber.llm.schemas", "SectionTextResponse"),
+}
+
+
+def __getattr__(name: str) -> object:
+    """Import provider-specific LLM helpers only when requested."""
+    if name not in _LAZY_EXPORTS:  # pragma: no cover - Python module protocol fallback
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module_name, attribute_name = _LAZY_EXPORTS[name]
+    return getattr(importlib.import_module(module_name), attribute_name)
 
 
 __all__ = [

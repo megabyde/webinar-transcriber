@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from webinar_transcriber.asr import WhisperCppTranscriber
-    from webinar_transcriber.llm import LLMProcessor
+    from webinar_transcriber.llm.contracts import LLMProcessor
     from webinar_transcriber.models import MediaAsset
     from webinar_transcriber.paths import RunLayout
 

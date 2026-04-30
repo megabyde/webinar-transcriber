@@ -1,18 +1,14 @@
-"""Shared contracts and response models for optional cloud LLM integrations."""
+"""Provider-neutral contracts for optional cloud LLM integrations."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol, TypeVar
-
-from pydantic import BaseModel, Field
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from webinar_transcriber.models import ReportDocument
-
-SchemaModelT = TypeVar("SchemaModelT", bound=BaseModel)
 
 
 class LLMConfigurationError(RuntimeError):
@@ -49,28 +45,6 @@ class SectionPolishOutputs:
 
     transcripts: dict[str, str]
     tldrs: dict[str, str]
-
-
-class SectionTextResponse(BaseModel):
-    """Structured LLM response for one polished section body."""
-
-    tldr: str = ""
-    transcript_text: str = ""
-
-
-class ReportSectionUpdate(BaseModel):
-    """Replacement content for one report section."""
-
-    id: str
-    title: str
-
-
-class ReportPolishResponse(BaseModel):
-    """Structured LLM response for report polishing."""
-
-    summary: list[str] = Field(default_factory=list)
-    action_items: list[str] = Field(default_factory=list)
-    section_updates: list[ReportSectionUpdate] = Field(default_factory=list)
 
 
 @dataclass(frozen=True)
