@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import av
@@ -23,15 +24,27 @@ if TYPE_CHECKING:
 
 
 MIN_SCENE_LENGTH_SEC = 2.0
-SCENE_SCAN_FPS = 2.0
-SCENE_SCORE_THRESHOLD = 0.006
+SCENE_SCAN_FPS = 0.5
+SCENE_SCORE_THRESHOLD = 0.05
+
+
+@dataclass(frozen=True)
+class SceneDetectionSettings:
+    """Policy settings for sampled scene-change detection."""
+
+    scan_fps: float = SCENE_SCAN_FPS
+    score_threshold: float = SCENE_SCORE_THRESHOLD
+    min_scene_length_sec: float = MIN_SCENE_LENGTH_SEC
+
+
+DEFAULT_SCENE_DETECTION_SETTINGS = SceneDetectionSettings()
 
 
 def detect_scenes(
     video_path: Path,
     *,
     duration_sec: float | None = None,
-    min_scene_length_sec: float = MIN_SCENE_LENGTH_SEC,
+    settings: SceneDetectionSettings = DEFAULT_SCENE_DETECTION_SETTINGS,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[Scene]:
     """Detect slide changes with PyAV's native scene filter.
@@ -41,8 +54,7 @@ def detect_scenes(
     """
     scene_starts, resolved_duration_sec = _select_scene_starts(
         video_path,
-        scene_score_threshold=SCENE_SCORE_THRESHOLD,
-        min_scene_length_sec=min_scene_length_sec,
+        settings=settings,
         progress_callback=progress_callback,
     )
     duration_sec = resolved_duration_sec if duration_sec is None else duration_sec
@@ -56,8 +68,7 @@ def detect_scenes(
 def _select_scene_starts(
     video_path: Path,
     *,
-    scene_score_threshold: float,
-    min_scene_length_sec: float,
+    settings: SceneDetectionSettings,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> tuple[list[float], float]:
     try:
@@ -67,9 +78,7 @@ def _select_scene_starts(
             video_stream = _required_video_stream(
                 input_container, error_message=f"No video stream found in {video_path}."
             )
-            scene_filter = _build_scene_filter_graph(
-                video_stream, scene_score_threshold=scene_score_threshold
-            )
+            scene_filter = _build_scene_filter_graph(video_stream, settings=settings)
             scene_starts = [0.0]
             processed_sample_count = 0
             reported_scene_count = 0
@@ -84,12 +93,13 @@ def _select_scene_starts(
                     current_time = _frame_time_sec(filtered_frame)
                     if current_time is None:
                         continue
-                    if (current_time - scene_starts[-1]) >= min_scene_length_sec:
+                    if (current_time - scene_starts[-1]) >= settings.min_scene_length_sec:
                         scene_starts.append(current_time)
                 if progress_callback is not None:
                     processed_sample_count, reported_scene_count = _report_scene_progress(
                         progress_callback,
                         decoded_frame,
+                        settings=settings,
                         processed_sample_count=processed_sample_count,
                         reported_scene_count=reported_scene_count,
                         scene_count=len(scene_starts),
@@ -100,6 +110,7 @@ def _select_scene_starts(
                 _report_final_scene_progress(
                     progress_callback,
                     duration_sec=duration_sec,
+                    settings=settings,
                     processed_sample_count=processed_sample_count,
                     reported_scene_count=reported_scene_count,
                     scene_count=len(scene_starts),
@@ -109,11 +120,13 @@ def _select_scene_starts(
         raise MediaProcessingError(f"Could not detect scenes in {video_path}: {error}") from error
 
 
-def _build_scene_filter_graph(video_stream: VideoStream, *, scene_score_threshold: float) -> Graph:
+def _build_scene_filter_graph(
+    video_stream: VideoStream, *, settings: SceneDetectionSettings
+) -> Graph:
     graph = Graph()
     source = graph.add_buffer(template=video_stream)
-    fps = graph.add("fps", fps=f"{SCENE_SCAN_FPS:g}")
-    select = graph.add("select", expr=f"gt(scene,{scene_score_threshold})")
+    fps = graph.add("fps", fps=f"{settings.scan_fps:g}")
+    select = graph.add("select", expr=f"gt(scene,{settings.score_threshold})")
     sink = graph.add("buffersink")
     source.link_to(fps)
     fps.link_to(select)
@@ -122,22 +135,27 @@ def _build_scene_filter_graph(video_stream: VideoStream, *, scene_score_threshol
     return graph
 
 
-def _sample_count_for_frame(frame: object, *, fallback: int) -> int:
+def _sample_count_for_frame(
+    frame: object, *, settings: SceneDetectionSettings, fallback: int
+) -> int:
     frame_time_sec = _frame_time_sec(frame)
     if frame_time_sec is None:
         return fallback
-    return max(1, int(frame_time_sec * SCENE_SCAN_FPS) + 1)
+    return max(1, int(frame_time_sec * settings.scan_fps) + 1)
 
 
 def _report_scene_progress(
     progress_callback: Callable[[int, int], None],
     frame: object,
     *,
+    settings: SceneDetectionSettings,
     processed_sample_count: int,
     reported_scene_count: int,
     scene_count: int,
 ) -> tuple[int, int]:
-    sample_count = _sample_count_for_frame(frame, fallback=processed_sample_count + 1)
+    sample_count = _sample_count_for_frame(
+        frame, settings=settings, fallback=processed_sample_count + 1
+    )
     if sample_count <= processed_sample_count:
         return processed_sample_count, reported_scene_count
     progress_callback(sample_count, scene_count)
@@ -148,19 +166,25 @@ def _report_final_scene_progress(
     progress_callback: Callable[[int, int], None],
     *,
     duration_sec: float,
+    settings: SceneDetectionSettings,
     processed_sample_count: int,
     reported_scene_count: int,
     scene_count: int,
 ) -> None:
-    final_sample_count = max(processed_sample_count, _estimated_sample_count(duration_sec))
+    final_sample_count = max(
+        processed_sample_count, estimated_scene_sample_count(duration_sec, settings=settings)
+    )
     if final_sample_count != processed_sample_count or reported_scene_count != scene_count:
         progress_callback(final_sample_count, scene_count)
 
 
-def _estimated_sample_count(duration_sec: float) -> int:
+def estimated_scene_sample_count(
+    duration_sec: float, *, settings: SceneDetectionSettings = DEFAULT_SCENE_DETECTION_SETTINGS
+) -> int:
+    """Return the number of scene-detection samples expected for a duration."""
     if duration_sec <= 0:
         return 1
-    return max(1, math.ceil(duration_sec * SCENE_SCAN_FPS))
+    return max(1, math.ceil(duration_sec * settings.scan_fps))
 
 
 def _frame_time_sec(frame: object) -> float | None:

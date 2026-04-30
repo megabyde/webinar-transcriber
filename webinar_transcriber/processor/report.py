@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import asdict, replace
 from typing import TYPE_CHECKING
 
@@ -154,4 +153,4 @@ def run_report_phase(
 
 
 def _estimated_scene_sample_count(media_asset: VideoAsset) -> int:
-    return max(1, math.ceil(media_asset.duration_sec * video_runtime.SCENE_SCAN_FPS))
+    return video_runtime.estimated_scene_sample_count(media_asset.duration_sec)
