@@ -143,6 +143,7 @@ def run_report_phase(
         export_runtime.write_docx_report(
             report, layout.docx_report_path, warning_callback=record_warning
         )
+        report = replace(report, warnings=list(ctx.warnings))
         export_runtime.write_json_report(report, layout.json_report_path)
         export_runtime.write_vtt_subtitles(normalized_transcription, layout.subtitle_vtt_path)
 

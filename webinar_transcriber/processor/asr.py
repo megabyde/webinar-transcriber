@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.models import InferenceWindow, TranscriptionResult
+from webinar_transcriber.models import AsrPipelineDiagnostics, InferenceWindow, TranscriptionResult
 from webinar_transcriber.normalized_audio import load_normalized_audio
 from webinar_transcriber.segmentation import detect_speech_regions, normalized_audio_duration
 from webinar_transcriber.transcript import reconcile_decoded_windows
@@ -19,7 +19,6 @@ from .support import (
     window_transcription_stage_detail,
     write_json,
 )
-from .types import AsrPipelineState
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -39,7 +38,7 @@ class AsrPipelineResult:
 
     transcription: TranscriptionResult
     normalized_transcription: TranscriptionResult
-    asr_pipeline: AsrPipelineState
+    asr_pipeline: AsrPipelineDiagnostics
 
 
 def run_asr_pipeline(
@@ -135,7 +134,7 @@ def run_asr_pipeline(
         normalized_transcription = normalize_transcription(transcription)
         st.detail = count_label(len(normalized_transcription.segments), "segment")
 
-    asr_pipeline = AsrPipelineState(
+    asr_pipeline = AsrPipelineDiagnostics(
         vad_enabled=vad.enabled,
         threads=transcriber.threads,
         normalized_audio_duration_sec=normalized_audio_duration_sec,

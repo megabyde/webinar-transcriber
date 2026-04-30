@@ -25,6 +25,7 @@ from webinar_transcriber.llm import (
     LLMSectionPolishResult,
 )
 from webinar_transcriber.models import (
+    AsrPipelineDiagnostics,
     AudioAsset,
     DecodedWindow,
     InferenceWindow,
@@ -36,8 +37,7 @@ from webinar_transcriber.models import (
     VideoAsset,
 )
 from webinar_transcriber.paths import RunLayout
-from webinar_transcriber.processor import ProcessArtifacts, process_input
-from webinar_transcriber.processor.__init__ import AsrPipelineState, RunContext
+from webinar_transcriber.processor import ProcessArtifacts, RunContext, process_input
 from webinar_transcriber.processor.llm import LLMRuntimeState, resolve_llm_processor
 from webinar_transcriber.processor.support import (
     asr_runtime_detail,
@@ -403,6 +403,42 @@ class TestProcessInput:
         assert artifacts.media_asset.path.endswith("sample-audio.mp3")
         assert artifacts.media_asset.duration_sec > 0
 
+    @pytest.mark.slow
+    def test_video_artifact_contract_with_real_media_pipeline(self, tmp_path: Path) -> None:
+        artifacts = process_input(
+            FIXTURE_DIR / "sample-video.mp4",
+            output_dir=tmp_path / "real-video-run",
+            transcriber=FakeTranscriber(
+                segments=[
+                    TranscriptSegment(
+                        id="segment-1",
+                        text="Opening slide.",
+                        start_sec=0.0,
+                        end_sec=0.8,
+                    ),
+                    TranscriptSegment(
+                        id="segment-2",
+                        text="Closing slide.",
+                        start_sec=0.8,
+                        end_sec=1.8,
+                    ),
+                ]
+            ),
+            vad=VadSettings(enabled=False),
+        )
+
+        assert artifacts.layout.metadata_path.exists()
+        assert artifacts.layout.scenes_path.exists()
+        assert artifacts.layout.frames_dir.exists()
+        assert artifacts.layout.markdown_report_path.exists()
+        assert artifacts.layout.docx_report_path.stat().st_size > 0
+        assert artifacts.layout.json_report_path.exists()
+        assert artifacts.layout.subtitle_vtt_path.exists()
+        assert artifacts.diagnostics.item_counts["scenes"] >= 1
+        assert artifacts.diagnostics.item_counts["frames"] >= 1
+        assert artifacts.report.sections
+        assert any(section.image_path for section in artifacts.report.sections)
+
     def test_does_not_close_caller_supplied_transcriber(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -637,12 +673,47 @@ class TestProcessInput:
         assert artifacts.report.warnings == ["Frame extraction failed"]
         assert artifacts.diagnostics.warnings == ["Frame extraction failed"]
 
+    def test_docx_export_warnings_reach_report_json_and_returned_artifacts(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        input_path = FIXTURE_DIR / "sample-video.mp4"
+        missing_image_path = tmp_path / "missing-frame.png"
+        install_pipeline_runtime(
+            monkeypatch, tmp_path, input_path=input_path, runtime=video_runtime()
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.video.detect_scenes",
+            lambda *_args, **_kwargs: [Scene(id="scene-1", start_sec=0.0, end_sec=1.8)],
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.video.extract_representative_frames",
+            lambda *_args, **_kwargs: [
+                SlideFrame(
+                    id="frame-1",
+                    scene_id="scene-1",
+                    image_path=str(missing_image_path),
+                    timestamp_sec=1.0,
+                )
+            ],
+        )
+
+        artifacts = process_input(
+            input_path,
+            output_dir=tmp_path / "docx-warning-run",
+            transcriber=FakeTranscriber(),
+        )
+
+        expected_warning = f"Section image does not exist: {missing_image_path}"
+        report_payload = read_json(artifacts.layout.json_report_path)
+        diagnostics_payload = read_json(artifacts.layout.diagnostics_path)
+        assert artifacts.report.warnings == [expected_warning]
+        assert report_payload["warnings"] == [expected_warning]
+        assert diagnostics_payload["warnings"] == [expected_warning]
+
 
 class TestProcessorSupport:
     def test_write_run_diagnostics_returns_none_without_layout(self) -> None:
-        ctx = RunContext(
-            reporter=BaseStageReporter(), asr_pipeline=AsrPipelineState(vad_enabled=True, threads=1)
-        )
+        ctx = RunContext(reporter=BaseStageReporter())
 
         diagnostics = write_run_diagnostics(
             ctx,
@@ -660,7 +731,7 @@ class TestProcessorSupport:
     ) -> None:
         ctx = RunContext(
             reporter=BaseStageReporter(),
-            asr_pipeline=AsrPipelineState(vad_enabled=True, threads=1),
+            asr_pipeline=AsrPipelineDiagnostics(vad_enabled=True, threads=1),
             layout=RunLayout(run_dir=tmp_path),
         )
 
@@ -694,9 +765,7 @@ class TestProcessorSupport:
 
     def test_stage_records_timing_on_failure_without_finish_event(self) -> None:
         reporter = RecordingReporter()
-        ctx = RunContext(
-            reporter=reporter, asr_pipeline=AsrPipelineState(vad_enabled=True, threads=1)
-        )
+        ctx = RunContext(reporter=reporter)
 
         with pytest.raises(RuntimeError, match="boom"), stage(ctx, "probe_media", "Probing media"):
             raise RuntimeError("boom")
