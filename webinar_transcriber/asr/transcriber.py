@@ -18,8 +18,10 @@ from webinar_transcriber.asr.carryover import build_prompt_carryover
 from webinar_transcriber.asr.config import (
     DEFAULT_WHISPER_CPP_MODEL_EXAMPLE,
     DEFAULT_WHISPER_CPP_MODEL_FILENAME,
+    DEFAULT_WHISPER_ENTROPY_THOLD,
+    DEFAULT_WHISPER_LOGPROB_THOLD,
+    DEFAULT_WHISPER_NO_SPEECH_THOLD,
     PromptCarryoverSettings,
-    WhisperDecodeSettings,
 )
 from webinar_transcriber.models import DecodedWindow, TranscriptSegment
 from webinar_transcriber.normalized_audio import sample_index_for_time
@@ -151,9 +153,7 @@ class WhisperCppTranscriber:
         self._model_name = model_name or DEFAULT_WHISPER_CPP_MODEL_FILENAME
         self._threads = max(1, threads)
         self._language = language.strip() if language else None
-        self._decode_settings = WhisperDecodeSettings(
-            carryover=carryover_settings or PromptCarryoverSettings()
-        )
+        self._carryover_settings = carryover_settings or PromptCarryoverSettings()
         self._log_path = log_path
         self._model: Model | None = None
 
@@ -203,9 +203,9 @@ class WhisperCppTranscriber:
             "print_progress": False,
             "no_context": True,
             "split_on_word": True,
-            "entropy_thold": self._decode_settings.entropy_thold,
-            "logprob_thold": self._decode_settings.logprob_thold,
-            "no_speech_thold": self._decode_settings.no_speech_thold,
+            "entropy_thold": DEFAULT_WHISPER_ENTROPY_THOLD,
+            "logprob_thold": DEFAULT_WHISPER_LOGPROB_THOLD,
+            "no_speech_thold": DEFAULT_WHISPER_NO_SPEECH_THOLD,
         }
         try:
             with _redirect_native_output(self._log_path), _disable_tqdm_progress():
@@ -247,7 +247,7 @@ class WhisperCppTranscriber:
             decoded_windows.append(replace(decoded_window, input_prompt=carryover_prompt))
             decoded_segment_count += len(decoded_window.segments)
             next_carryover = build_prompt_carryover(
-                decoded_window, settings=self._decode_settings.carryover
+                decoded_window, settings=self._carryover_settings
             )
             language_hint = forced_language or language_hint or decoded_window.language
             carryover_prompt = next_carryover

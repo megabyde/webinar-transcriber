@@ -27,13 +27,3 @@ class PromptCarryoverSettings:
     enabled: bool = True
     max_sentences: int = DEFAULT_CARRYOVER_MAX_SENTENCES
     max_tokens: int = DEFAULT_CARRYOVER_MAX_TOKENS
-
-
-@dataclass(frozen=True)
-class WhisperDecodeSettings:
-    """Decode-time inference settings kept above the low-level whisper.cpp wrapper."""
-
-    carryover: PromptCarryoverSettings = PromptCarryoverSettings()
-    entropy_thold: float = DEFAULT_WHISPER_ENTROPY_THOLD
-    logprob_thold: float = DEFAULT_WHISPER_LOGPROB_THOLD
-    no_speech_thold: float = DEFAULT_WHISPER_NO_SPEECH_THOLD

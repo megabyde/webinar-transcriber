@@ -21,7 +21,7 @@ from webinar_transcriber.segmentation import VadSettings
 from . import asr as processor_asr
 from .report import run_report_phase
 from .support import stage, write_json
-from .types import AsrPipelineState, ProcessArtifacts, RunContext, TranscriptionPhaseResult
+from .types import ProcessArtifacts, RunContext, TranscriptionPhaseResult
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -112,12 +112,7 @@ def process_input(
     """
     active_reporter = reporter or BaseStageReporter()
     asr_threads = asr_threads or default_asr_threads()
-    ctx = RunContext(
-        reporter=active_reporter,
-        asr_pipeline=AsrPipelineState(
-            vad_enabled=vad.enabled, threads=asr_threads, carryover_enabled=carryover.enabled
-        ),
-    )
+    ctx = RunContext(reporter=active_reporter)
 
     active_transcriber = transcriber or asr_runtime.WhisperCppTranscriber(
         model_name=asr_model, threads=asr_threads, language=language, carryover_settings=carryover
