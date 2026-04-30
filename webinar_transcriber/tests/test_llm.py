@@ -1,5 +1,6 @@
 """Tests for optional cloud LLM helpers."""
 
+import importlib
 import json
 from threading import Event
 from typing import cast
@@ -12,10 +13,12 @@ from webinar_transcriber.llm import (
     LLMConfigurationError,
     LLMProcessingError,
     LLMReportPolishPlan,
+    build_llm_processor_from_env,
+)
+from webinar_transcriber.llm.schemas import (
     ReportPolishResponse,
     ReportSectionUpdate,
     SectionTextResponse,
-    build_llm_processor_from_env,
 )
 from webinar_transcriber.llm.utils import (
     build_report_polish_payload,
@@ -33,10 +36,14 @@ LLM_EXTRA_INSTALL_RE = r'uv tool install --reinstall "\.\[llm\]"'
 
 
 def _fake_import_module(modules: dict[str, object]):
+    real_import_module = importlib.import_module
+
     def fake_import_module(name: str) -> object:
         try:
             return modules[name]
         except KeyError as error:
+            if name.startswith("webinar_transcriber."):
+                return real_import_module(name)
             raise ImportError(name) from error
 
     return fake_import_module

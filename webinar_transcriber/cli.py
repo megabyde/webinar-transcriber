@@ -12,7 +12,7 @@ from webinar_transcriber.asr import (
     PromptCarryoverSettings,
     default_asr_threads,
 )
-from webinar_transcriber.llm import LLMConfigurationError, LLMProcessingError
+from webinar_transcriber.llm.contracts import LLMConfigurationError, LLMProcessingError
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.processor import process_input

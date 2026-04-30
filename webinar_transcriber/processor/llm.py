@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.llm import (
+from webinar_transcriber.llm import build_llm_processor_from_env
+from webinar_transcriber.llm.contracts import (
     LLMConfigurationError,
     LLMProcessingError,
-    build_llm_processor_from_env,
 )
 
 from .support import (
@@ -22,23 +22,13 @@ from .support import (
 )
 
 if TYPE_CHECKING:
-    from webinar_transcriber.llm import LLMProcessor
+    from webinar_transcriber.llm.contracts import LLMProcessor
     from webinar_transcriber.models import ReportDocument
     from webinar_transcriber.reporter import BaseStageReporter
 
+    from .llm_types import LLMRuntimeState
     from .support import ProgressStageHandle
     from .types import RunContext
-
-
-@dataclass
-class LLMRuntimeState:
-    """Observed state for the optional LLM report stage."""
-
-    provider_name: str | None = None
-    model_name: str | None = None
-    report_status: str = "disabled"
-    report_latency_sec: float | None = None
-    report_usage: dict[str, int] | None = None
 
 
 def resolve_llm_processor(

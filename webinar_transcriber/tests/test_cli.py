@@ -10,7 +10,7 @@ from click.testing import CliRunner
 from webinar_transcriber import __version__
 from webinar_transcriber.asr import ASRProcessingError, PromptCarryoverSettings
 from webinar_transcriber.cli import main
-from webinar_transcriber.llm import LLMConfigurationError, LLMProcessingError
+from webinar_transcriber.llm.contracts import LLMConfigurationError, LLMProcessingError
 from webinar_transcriber.models import (
     Diagnostics,
     MediaType,
