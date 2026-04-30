@@ -68,11 +68,7 @@ def run_asr_pipeline(
         speech_regions, vad_warnings = detect_speech_regions(
             audio_samples,
             sample_rate,
-            enabled=vad.enabled,
-            threshold=vad.threshold,
-            min_speech_duration_ms=vad.min_speech_duration_ms,
-            min_silence_duration_ms=vad.min_silence_duration_ms,
-            speech_pad_ms=vad.speech_region_pad_ms,
+            settings=vad,
             progress_callback=None,
         )
         st.detail = count_label(len(speech_regions), "region")
