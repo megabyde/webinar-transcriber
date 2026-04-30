@@ -15,7 +15,6 @@ from webinar_transcriber.models import SpeechRegion
 from webinar_transcriber.normalized_audio import NORMALIZED_SAMPLE_RATE
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from types import ModuleType
 
     import numpy as np
@@ -45,7 +44,6 @@ def detect_speech_regions(
     sample_rate: int,
     *,
     settings: VadSettings = DEFAULT_VAD_SETTINGS,
-    progress_callback: Callable[[float, int], None] | None = None,
 ) -> tuple[list[SpeechRegion], list[str]]:
     """Return coarse Silero speech regions and any warnings emitted during detection."""
     duration_sec = len(samples) / float(sample_rate) if sample_rate > 0 else 0.0
@@ -62,7 +60,6 @@ def detect_speech_regions(
         min_speech_duration_ms=settings.min_speech_duration_ms,
         min_silence_duration_ms=settings.min_silence_duration_ms,
         speech_pad_ms=settings.speech_region_pad_ms,
-        progress_callback=progress_callback,
     )
     if timestamps is None:
         warning = "Silero VAD is unavailable; falling back to one full-audio speech region."
@@ -117,7 +114,6 @@ def _silero_speech_timestamps(
     min_speech_duration_ms: int,
     min_silence_duration_ms: int,
     speech_pad_ms: int,
-    progress_callback: Callable[[float, int], None] | None = None,
 ) -> list[dict[str, int]] | None:
     modules = _load_silero_modules()
     if modules is None:
@@ -128,7 +124,7 @@ def _silero_speech_timestamps(
         raise ValueError("Silero VAD expects normalized 16000 Hz audio.")
 
     speech_model = silero_vad.load_silero_vad()
-    timestamps = silero_vad.get_speech_timestamps(
+    return silero_vad.get_speech_timestamps(
         torch.from_numpy(samples),
         speech_model,
         threshold=threshold,
@@ -137,10 +133,6 @@ def _silero_speech_timestamps(
         min_silence_duration_ms=min_silence_duration_ms,
         speech_pad_ms=speech_pad_ms,
     )
-    if progress_callback is not None:
-        progress_callback(len(samples) / sample_rate, len(timestamps))
-
-    return timestamps
 
 
 def _load_silero_modules() -> tuple[ModuleType, ModuleType] | None:

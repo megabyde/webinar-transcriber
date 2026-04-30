@@ -69,7 +69,6 @@ def run_asr_pipeline(
             audio_samples,
             sample_rate,
             settings=vad,
-            progress_callback=None,
         )
         st.detail = count_label(len(speech_regions), "region")
     vad_region_count = len(speech_regions)
