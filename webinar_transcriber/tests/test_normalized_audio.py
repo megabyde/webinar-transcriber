@@ -20,6 +20,7 @@ from webinar_transcriber.normalized_audio import (
     transcode_audio_to_mp3,
 )
 from webinar_transcriber.segmentation import (
+    VadSettings,
     _normalize_regions,
     _silero_speech_timestamps,
     detect_speech_regions,
@@ -223,7 +224,7 @@ class TestNormalizedAudio:
         )
 
         samples = np.zeros(16_000, dtype=np.float32)
-        regions, warnings = detect_speech_regions(samples, 16_000, enabled=True)
+        regions, warnings = detect_speech_regions(samples, 16_000)
 
         assert len(regions) == 1
         assert regions[0].start_sec == 0.0
@@ -231,16 +232,14 @@ class TestNormalizedAudio:
         assert warnings
 
     def test_detect_speech_regions_returns_empty_for_zero_duration(self) -> None:
-        regions, warnings = detect_speech_regions(
-            np.zeros(0, dtype=np.float32), 16_000, enabled=True
-        )
+        regions, warnings = detect_speech_regions(np.zeros(0, dtype=np.float32), 16_000)
 
         assert regions == []
         assert warnings == []
 
     def test_detect_speech_regions_returns_full_audio_when_vad_disabled(self) -> None:
         regions, warnings = detect_speech_regions(
-            np.zeros(8_000, dtype=np.float32), 16_000, enabled=False
+            np.zeros(8_000, dtype=np.float32), 16_000, settings=VadSettings(enabled=False)
         )
 
         assert len(regions) == 1
@@ -253,9 +252,7 @@ class TestNormalizedAudio:
             lambda *_args, **_kwargs: [{"start": 10, "end": 10}],
         )
 
-        regions, warnings = detect_speech_regions(
-            np.zeros(16_000, dtype=np.float32), 16_000, enabled=True
-        )
+        regions, warnings = detect_speech_regions(np.zeros(16_000, dtype=np.float32), 16_000)
 
         assert regions == []
         assert warnings == []
