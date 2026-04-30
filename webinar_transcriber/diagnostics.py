@@ -10,7 +10,11 @@ from webinar_transcriber.asr import ASR_BACKEND_NAME
 from webinar_transcriber.models import AsrPipelineDiagnostics, Diagnostics
 
 if TYPE_CHECKING:
-    from webinar_transcriber.processor.types import RunContext
+    from webinar_transcriber.processor.types import (
+        ReportPhaseResult,
+        RunContext,
+        TranscriptionPhaseResult,
+    )
 
 
 def build_diagnostics(
@@ -18,6 +22,8 @@ def build_diagnostics(
     *,
     asr_model: str | None,
     llm_enabled: bool,
+    transcription_phase: TranscriptionPhaseResult | None = None,
+    report_phase: ReportPhaseResult | None = None,
     status: Literal["succeeded", "failed"] = "succeeded",
     failed_stage: str | None = None,
     error: str | None = None,
@@ -27,7 +33,11 @@ def build_diagnostics(
     Returns:
         Diagnostics: The final diagnostics payload.
     """
-    asr_pipeline = ctx.asr_pipeline or AsrPipelineDiagnostics(vad_enabled=False, threads=0)
+    asr_pipeline = (
+        transcription_phase.asr_pipeline
+        if transcription_phase is not None
+        else AsrPipelineDiagnostics(vad_enabled=False, threads=0)
+    )
     return Diagnostics(
         status=status,
         failed_stage=failed_stage,
@@ -41,15 +51,19 @@ def build_diagnostics(
         llm_report_usage=ctx.llm_runtime.report_usage or {},
         stage_durations_sec={key: round(value, 6) for key, value in ctx.stage_timings.items()},
         item_counts={
-            "transcript_segments": len(ctx.transcription.segments) if ctx.transcription else 0,
+            "transcript_segments": (
+                len(transcription_phase.transcription.segments) if transcription_phase else 0
+            ),
             "normalized_transcript_segments": (
-                len(ctx.normalized_transcription.segments) if ctx.normalized_transcription else 0
+                len(transcription_phase.normalized_transcription.segments)
+                if transcription_phase
+                else 0
             ),
             "vad_regions": asr_pipeline.vad_region_count,
             "windows": asr_pipeline.window_count,
-            "report_sections": len(ctx.report.sections) if ctx.report else 0,
-            "scenes": len(ctx.scenes),
-            "frames": len(ctx.slide_frames),
+            "report_sections": len(report_phase.report.sections) if report_phase else 0,
+            "scenes": len(report_phase.scenes) if report_phase else 0,
+            "frames": len(report_phase.slide_frames) if report_phase else 0,
         },
         asr_pipeline=replace(asr_pipeline),
         warnings=ctx.warnings,
@@ -62,6 +76,8 @@ def write_run_diagnostics(
     status: Literal["succeeded", "failed"],
     asr_model: str | None,
     llm_enabled: bool,
+    transcription_phase: TranscriptionPhaseResult | None = None,
+    report_phase: ReportPhaseResult | None = None,
     failed_stage: str | None = None,
     error: str | None = None,
     suppress_errors: bool = False,
@@ -74,6 +90,8 @@ def write_run_diagnostics(
         ctx,
         asr_model=asr_model,
         llm_enabled=llm_enabled,
+        transcription_phase=transcription_phase,
+        report_phase=report_phase,
         status=status,
         failed_stage=failed_stage,
         error=error,

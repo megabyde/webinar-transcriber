@@ -19,7 +19,13 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from webinar_transcriber.llm.contracts import LLMProcessor
-    from webinar_transcriber.models import MediaAsset, TranscriptionResult
+    from webinar_transcriber.models import (
+        AlignmentBlock,
+        MediaAsset,
+        Scene,
+        SlideFrame,
+        TranscriptionResult,
+    )
     from webinar_transcriber.paths import RunLayout
 
     from .types import RunContext
@@ -48,9 +54,9 @@ def run_report_phase(
         llm_runtime=ctx.llm_runtime,
     )
 
-    scenes = list(ctx.scenes)
-    slide_frames = list(ctx.slide_frames)
-    alignment_blocks = ctx.alignment_blocks
+    scenes: list[Scene] = []
+    slide_frames: list[SlideFrame] = []
+    alignment_blocks: list[AlignmentBlock] | None = None
     transcript_segments = normalized_transcription.segments
 
     def record_warning(message: str) -> None:
