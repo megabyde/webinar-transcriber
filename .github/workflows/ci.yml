@@ -37,7 +37,7 @@ jobs:
           name: coverage-xml
           path: coverage.xml
 
-  smoke-macos:
+  lint-test-macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
@@ -62,8 +62,8 @@ jobs:
       - name: Smoke whisper runtime
         run: |
           uv run python -c "from pywhispercpp.model import Model; assert Model.system_info().strip()"
-      - name: Run smoke tests
-        run: make test
+      - name: Run CI
+        run: make check
 
   test-llm-extra-linux:
     runs-on: ubuntu-latest
