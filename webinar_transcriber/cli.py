@@ -83,12 +83,7 @@ def main(
     kept_audio_format: str | None,
     llm: bool,
 ) -> None:
-    """Transcribe an audio or video input file.
-
-    Raises:
-        CLIError: If the input path is missing, invalid, or media setup fails.
-        click.exceptions.Exit: If the user interrupts the run.
-    """
+    """Transcribe an audio or video input file."""
     if not input_path.exists():
         raise CLIError(f"Input file does not exist: {input_path}")
 

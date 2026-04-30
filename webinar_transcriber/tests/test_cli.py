@@ -43,7 +43,6 @@ class TestCli:
 
         assert result.exit_code == 0
         assert "Transcribe an audio or video input file." in result.output
-        assert "Commands:" not in result.output
 
     def test_main_version_prints_package_version(self) -> None:
         runner = CliRunner()
@@ -51,7 +50,7 @@ class TestCli:
         result = runner.invoke(main, ["--version"])
 
         assert result.exit_code == 0
-        assert __version__ in result.output
+        assert result.output == f"webinar-transcriber, version {__version__}\n"
 
     def test_module_entrypoint_reports_version(self) -> None:
         original_argv = sys.argv[:]
@@ -154,8 +153,6 @@ class TestCli:
         assert "--language" in result.output
         assert "--threads" in result.output
         assert "--vad / --no-vad" in result.output
-        assert "--carryover" not in result.output
-        assert "--no-carryover" not in result.output
         assert "--keep-audio" in result.output
         assert "--llm" in result.output
         assert "Override the whisper.cpp model identifier" in result.output

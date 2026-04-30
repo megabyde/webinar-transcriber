@@ -33,7 +33,7 @@ The package intentionally avoids deep nesting.
 - `webinar_transcriber/media.py`: probing helpers and shared media error types
 - `webinar_transcriber/normalized_audio.py`: deterministic transcription-audio preparation
 - `webinar_transcriber/transcript/`: transcript normalization and window reconciliation
-- `webinar_transcriber/structure/`: report heuristics
+- `webinar_transcriber/structure/`: transcript-scene alignment and report heuristics
 - `webinar_transcriber/reporter.py`: reporter protocol and no-op implementation
 - `webinar_transcriber/ui.py`: Rich progress reporting
 - `webinar_transcriber/video/`: scene detection and frame extraction
