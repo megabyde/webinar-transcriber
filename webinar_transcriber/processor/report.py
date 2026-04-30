@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 import webinar_transcriber.export as export_runtime
 import webinar_transcriber.structure as structure_runtime
 import webinar_transcriber.video as video_runtime
-from webinar_transcriber.align import align_by_time
 from webinar_transcriber.models import VideoAsset
 
 from .llm import maybe_polish_report, resolve_llm_processor
@@ -90,7 +89,9 @@ def run_report_phase(
             )
             st.detail = count_label(len(slide_frames), "frame")
 
-        alignment_blocks = align_by_time(transcript_segments, scenes, slide_frames)
+        alignment_blocks = structure_runtime.align_by_time(
+            transcript_segments, scenes, slide_frames
+        )
 
     if alignment_blocks is not None:
         structure_item_count = len(alignment_blocks)
