@@ -15,19 +15,8 @@ jobs:
         include:
           - name: lint-test (ubuntu-latest)
             os: ubuntu-latest
-            sync_command: make sync
-            test_command: make check
-            smoke_runtime: true
           - name: lint-test (macos-latest)
             os: macos-latest
-            sync_command: make sync
-            test_command: make check
-            smoke_runtime: true
-          - name: test-llm-extra (ubuntu-latest)
-            os: ubuntu-latest
-            sync_command: uv sync --extra llm --group dev
-            test_command: uv run pytest --no-cov webinar_transcriber/tests/test_llm.py
-            smoke_runtime: false
     steps:
       - uses: actions/checkout@v6
         with:
@@ -44,14 +33,12 @@ jobs:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-py3.12-${{ hashFiles('uv.lock') }}
       - name: Sync dependencies
-        run: ${{ matrix.sync_command }}
+        run: uv sync --extra llm --group dev
       - name: Smoke CLI help
-        if: matrix.smoke_runtime
         run: |
           uv run webinar-transcriber --help
       - name: Smoke whisper runtime
-        if: matrix.smoke_runtime
         run: |
           uv run python -c "from pywhispercpp.model import Model; assert Model.system_info().strip()"
       - name: Run tests
-        run: ${{ matrix.test_command }}
+        run: make check
