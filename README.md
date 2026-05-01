@@ -28,37 +28,49 @@ pipeline.
 - CUDA source builds also require a C/C++ compiler, `cmake`, and a working CUDA toolkit (`nvcc` on
   `PATH`, `CUDA_HOME` set).
 
-### Quick Install (CPU Everywhere, Metal by Default on macOS)
+### Install The CLI From This Checkout
+
+From the repository root:
 
 ```bash
-uv tool install .
+make install
 ```
 
-This pulls the published `pywhispercpp` wheels from PyPI. On Linux and Windows, those wheels use the
-CPU backend. On macOS, the Apple Silicon wheels include Metal support. The default `large-v3` model
-is downloaded on first transcription run, not during `uv tool install .`. To verify the active
-backend after a run, inspect `diagnostics.json` → `asr_pipeline.system_info`. Native whisper.cpp
-initialization and teardown logs are written to `whisper-cpp.log` in the run directory.
+That installs the `webinar-transcriber` command as a uv tool from the local source tree. You do not
+need to activate a virtual environment to use the installed CLI. Re-run `make install` after pulling
+changes when you want the installed command to use the current checkout.
+
+```bash
+webinar-transcriber --help
+```
+
+Use the matching Make target for the install you need:
+
+- `make install`: standard local CLI install.
+- `make install-llm`: CLI plus optional OpenAI/Anthropic LLM dependencies.
+- `make install-cuda`: CLI with `pywhispercpp` rebuilt from source for NVIDIA.
+- `make uninstall`: remove the installed `webinar-transcriber` uv tool.
+
+The standard and LLM install targets pull the published `pywhispercpp` wheels from PyPI. On Linux
+and Windows, those wheels use the CPU backend. On macOS, the Apple Silicon wheels include Metal
+support. The default `large-v3` model is downloaded on first transcription run, not during
+installation. To verify the active backend after a run, inspect `diagnostics.json` →
+`asr_pipeline.system_info`. Native whisper.cpp initialization and teardown logs are written to
+`whisper-cpp.log` in the run directory.
+
+To inspect all available project commands:
+
+```bash
+make help
+```
 
 ### NVIDIA (CUDA on Linux or Windows)
 
-CUDA is the only supported path that builds `pywhispercpp` from source. From a repository checkout,
-rebuild only `pywhispercpp` with CUDA enabled:
+CUDA is the only supported path that builds `pywhispercpp` from source. Use the CUDA target that
+matches your workflow:
 
-```bash
-make sync-reinstall
-```
-
-For a tool install from this checkout, use the same uv build controls directly:
-
-```bash
-GGML_CUDA=1 uv tool install --reinstall . \
-    --reinstall-package pywhispercpp \
-    --no-binary-package pywhispercpp
-```
-
-For contributor/development workflows from a checkout, use `make sync` to create the project
-environment. `uv tool install .` is the user-facing CLI install path.
+- `make install-cuda` for the installed CLI tool
+- `make sync-cuda` for the checkout development environment
 
 All usage examples below assume `webinar-transcriber` is available on your `PATH`.
 
@@ -94,7 +106,7 @@ The base install does not include the optional provider SDKs. If you want to use
 the CLI from this checkout with the `llm` extra:
 
 ```bash
-uv tool install --reinstall ".[llm]"
+make install-llm
 ```
 
 LLM configuration comes only from environment variables.
@@ -103,17 +115,17 @@ LLM configuration comes only from environment variables.
 
 ```bash
 OPENAI_API_KEY=... \
-OPENAI_MODEL=gpt-5-mini \
-webinar-transcriber INPUT --llm
+    OPENAI_MODEL=gpt-5-mini \
+    webinar-transcriber INPUT --llm
 ```
 
 #### Anthropic
 
 ```bash
 LLM_PROVIDER=anthropic \
-ANTHROPIC_API_KEY=... \
-ANTHROPIC_MODEL=claude-sonnet-4-20250514 \
-webinar-transcriber INPUT --llm
+    ANTHROPIC_API_KEY=... \
+    ANTHROPIC_MODEL=claude-sonnet-4-20250514 \
+    webinar-transcriber INPUT --llm
 ```
 
 ### What You Get
@@ -202,18 +214,18 @@ Successful default runs write:
 ```text
 runs/<timestamp>_<basename>/
 ├─ asr/
-│  ├─ speech_regions.json
-│  └─ decoded_windows.json
-├─ metadata.json
-├─ transcript.json
-├─ transcription-audio.wav # optional via --keep-audio wav
-├─ transcription-audio.mp3 # optional via --keep-audio mp3
-├─ scenes.json             # video only
+│  ├─ decoded_windows.json
+│  └─ speech_regions.json
+├─ frames/                 # video only
 ├─ diagnostics.json
-├─ report.md
+├─ metadata.json
 ├─ report.docx
 ├─ report.json
-└─ frames/                 # video only
+├─ report.md
+├─ scenes.json             # video only
+├─ transcript.json
+├─ transcription-audio.mp3 # optional via --keep-audio mp3
+└─ transcription-audio.wav # optional via --keep-audio wav
 ```
 
 ## Development
@@ -221,21 +233,16 @@ runs/<timestamp>_<basename>/
 ### Local Setup
 
 1. Install Python 3.12 and `uv`.
-1. Install project and development dependencies:
+1. Sync the checkout environment you need:
 
-```bash
-make sync
-```
-
-To add optional LLM dependencies to a checkout environment, run:
-
-```bash
-uv sync --extra llm
-```
+- `make sync`: standard development and test dependencies.
+- `make sync-llm`: development dependencies plus optional LLM SDKs.
+- `make sync-cuda`: development environment with CUDA-built `pywhispercpp`.
 
 ### Running from a Checkout
 
-If you are developing inside the repository and do not want to install the CLI as a tool, use:
+If you are developing inside the repository and do not want to install the CLI as a tool, run it
+through the checkout environment:
 
 ```bash
 uv run webinar-transcriber --help

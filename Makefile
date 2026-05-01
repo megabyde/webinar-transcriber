@@ -15,9 +15,33 @@ help: ## Show this help message
 sync: ## Sync the development environment
 	uv sync
 
-.PHONY: sync-reinstall
-sync-reinstall: ## Rebuild pywhispercpp from source for CUDA
-	GGML_CUDA=1 uv sync --reinstall-package pywhispercpp --no-binary-package pywhispercpp
+.PHONY: sync-llm
+sync-llm: ## Sync the development environment with optional LLM dependencies
+	uv sync --extra llm
+
+.PHONY: sync-cuda
+sync-cuda: ## Sync the development environment and build pywhispercpp from source for CUDA
+	GGML_CUDA=1 uv sync \
+		--reinstall-package pywhispercpp \
+		--no-binary-package pywhispercpp
+
+.PHONY: install
+install: ## Install the CLI tool from this checkout
+	uv tool install --reinstall .
+
+.PHONY: install-llm
+install-llm: ## Install the CLI tool with optional LLM dependencies
+	uv tool install --reinstall '.[llm]'
+
+.PHONY: install-cuda
+install-cuda: ## Install the CLI tool and build pywhispercpp from source for CUDA
+	GGML_CUDA=1 uv tool install --reinstall . \
+		--reinstall-package pywhispercpp \
+		--no-binary-package pywhispercpp
+
+.PHONY: uninstall
+uninstall: ## Uninstall the CLI tool
+	uv tool uninstall webinar-transcriber
 
 .PHONY: format
 format: ## Format Markdown and Python sources
