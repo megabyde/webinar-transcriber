@@ -202,9 +202,11 @@ def _normalize_paragraph_blocks(text: str) -> str:
     Returns:
         str: The normalized paragraph text.
     """
-    paragraphs = [
-        re.sub(r"\s+", " ", p) for block in re.split(r"\n\s*\n+", text) if (p := block.strip())
-    ]
+    paragraphs = []
+    for block in re.split(r"\n\s*\n+", text):
+        paragraph = block.strip()
+        if paragraph:
+            paragraphs.append(re.sub(r"\s+", " ", paragraph))
     return "\n\n".join(paragraphs)
 
 

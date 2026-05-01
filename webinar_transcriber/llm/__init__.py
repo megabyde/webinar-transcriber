@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 import os
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from .contracts import (
     LLMConfigurationError,
@@ -18,16 +18,8 @@ from .prompts import ACTION_ITEM_LIMIT, REPORT_POLISH_TOTAL_CHAR_BUDGET, SECTION
 from .utils import required_provider_env
 
 if TYPE_CHECKING:
-    from .processor import InstructorClient, InstructorLLMProcessor
+    from .processor import InstructorLLMProcessor
     from .schemas import ReportPolishResponse, ReportSectionUpdate, SectionTextResponse
-
-    class _InstructorMode(Protocol):
-        TOOLS: object
-
-    class InstructorModule(Protocol):
-        Mode: _InstructorMode
-
-        def from_provider(self, provider_model: str, **kwargs: object) -> InstructorClient: ...
 
 
 def _required_llm_module(module_name: str, *, provider_label: str) -> object:
@@ -60,9 +52,7 @@ def build_llm_processor_from_env() -> LLMProcessor:
     provider = os.environ.get("LLM_PROVIDER", "openai").strip().casefold()
     match provider:
         case "openai":
-            instructor = cast(
-                "InstructorModule", _required_llm_module("instructor", provider_label="OpenAI")
-            )
+            instructor = cast("Any", _required_llm_module("instructor", provider_label="OpenAI"))
             _required_llm_module("openai", provider_label="OpenAI")
             api_key, model_name = required_provider_env(
                 api_key_env="OPENAI_API_KEY", model_env="OPENAI_MODEL"
@@ -77,9 +67,7 @@ def build_llm_processor_from_env() -> LLMProcessor:
                 model_name=model_name,
             )
         case "anthropic":
-            instructor = cast(
-                "InstructorModule", _required_llm_module("instructor", provider_label="Anthropic")
-            )
+            instructor = cast("Any", _required_llm_module("instructor", provider_label="Anthropic"))
             _required_llm_module("anthropic", provider_label="Anthropic")
             api_key, model_name = required_provider_env(
                 api_key_env="ANTHROPIC_API_KEY", model_env="ANTHROPIC_MODEL"

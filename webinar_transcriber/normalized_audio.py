@@ -56,7 +56,7 @@ def _transcode_audio_with_pyav(
     *,
     output_codec: str,
     resample_format: str,
-    failure_action: str,
+    output_error_message: str,
 ) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open_input_media_container(
@@ -67,7 +67,7 @@ def _transcode_audio_with_pyav(
         )
         with open_output_media_container(
             output_path,
-            error_message=f"Could not {failure_action} audio from {input_path}: {{error}}",
+            error_message=output_error_message,
         ) as output_container:
             output_stream = cast(
                 "AudioStream",
@@ -104,7 +104,7 @@ def extract_audio(input_path: Path, output_path: Path) -> Path:
         output_path,
         output_codec=NORMALIZED_AUDIO_CODEC,
         resample_format="s16",
-        failure_action="normalize",
+        output_error_message=f"Could not normalize audio from {input_path}: {{error}}",
     )
 
 
@@ -119,7 +119,7 @@ def transcode_audio_to_mp3(input_path: Path, output_path: Path) -> Path:
         output_path,
         output_codec="mp3",
         resample_format="fltp",
-        failure_action="transcode",
+        output_error_message=f"Could not transcode audio from {input_path}: {{error}}",
     )
 
 
