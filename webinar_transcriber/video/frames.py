@@ -41,6 +41,7 @@ def extract_representative_frames(
     """
     frames_dir.mkdir(parents=True, exist_ok=True)
     frames: list[SlideFrame] = []
+    unreported_scenes = list(scenes)
 
     try:
         with open_input_media_container(
@@ -67,8 +68,14 @@ def extract_representative_frames(
                         )
                     if progress_callback is not None:
                         progress_callback()
+                    unreported_scenes.pop(0)
                     continue
 
+                if failure_detail is not None and warning_callback is not None:
+                    warning_callback(
+                        f"Frame extraction used nearest decoded frame for {scene.id} at "
+                        f"{frame_timestamp_sec:.1f}s: {failure_detail}"
+                    )
                 _normalize_extracted_frame(output_path)
                 frames.append(
                     SlideFrame(
@@ -80,19 +87,33 @@ def extract_representative_frames(
                 )
                 if progress_callback is not None:
                     progress_callback()
+                unreported_scenes.pop(0)
     except (MediaProcessingError, OSError, av.FFmpegError) as error:
-        for scene in scenes:
-            frame_timestamp_sec = min(
-                scene.end_sec, scene.start_sec + REPRESENTATIVE_FRAME_OFFSET_SEC
-            )
-            if warning_callback is not None:
-                warning_callback(
-                    f"Frame extraction failed for {scene.id} at {frame_timestamp_sec:.1f}s: {error}"
-                )
-            if progress_callback is not None:
-                progress_callback()
+        _report_frame_extraction_failures(
+            unreported_scenes,
+            error,
+            progress_callback=progress_callback,
+            warning_callback=warning_callback,
+        )
 
     return frames
+
+
+def _report_frame_extraction_failures(
+    scenes: list[Scene],
+    error: Exception,
+    *,
+    progress_callback: Callable[[], None] | None,
+    warning_callback: Callable[[str], None] | None,
+) -> None:
+    for scene in scenes:
+        frame_timestamp_sec = min(scene.end_sec, scene.start_sec + REPRESENTATIVE_FRAME_OFFSET_SEC)
+        if warning_callback is not None:
+            warning_callback(
+                f"Frame extraction failed for {scene.id} at {frame_timestamp_sec:.1f}s: {error}"
+            )
+        if progress_callback is not None:
+            progress_callback()
 
 
 def _extract_frame_from_container(
@@ -104,14 +125,23 @@ def _extract_frame_from_container(
     try:
         input_container.seek(int(max(timestamp_sec, 0.0) * av.time_base), backward=True)
         frame = None
+        nearest_earlier_frame = None
         for decoded_frame in input_container.decode(video_stream):
             if decoded_frame.time is None:
                 continue
-            frame = decoded_frame
+            nearest_earlier_frame = decoded_frame
             if decoded_frame.time >= timestamp_sec:
+                frame = decoded_frame
                 break
         if frame is None:
-            return False, f"PyAV did not decode a frame at {timestamp_sec:.3f}s"
+            if nearest_earlier_frame is None:
+                return False, f"PyAV did not decode a frame at {timestamp_sec:.3f}s"
+            frame = nearest_earlier_frame
+            fallback_detail = (
+                f"PyAV decoded nearest frame before {timestamp_sec:.3f}s at {frame.time:.3f}s"
+            )
+        else:
+            fallback_detail = None
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         frame.to_image().convert("RGB").save(output_path)
@@ -120,7 +150,7 @@ def _extract_frame_from_container(
 
     if not output_path.exists():  # pragma: no cover - PyAV/save defensive boundary
         return False, f"PyAV did not write {output_path}"
-    return True, None
+    return True, fallback_detail
 
 
 def _normalize_extracted_frame(output_path: Path) -> None:
