@@ -10,9 +10,9 @@
 ## Overview
 
 `webinar-transcriber` is a local-first CLI for turning webinar recordings into transcripts,
-structured notes, subtitles, diagnostics, and machine-readable report artifacts. It handles both
-audio-only input and slide-based video, detects scenes for video runs, and keeps the core pipeline
-local with PyAV, Silero VAD, and `whisper.cpp`.
+structured notes, diagnostics, and machine-readable report artifacts. It handles both audio-only
+input and slide-based video, detects scenes for video runs, and keeps the core pipeline local with
+PyAV, Silero VAD, and `whisper.cpp`.
 
 The default flow is deterministic: normalize the media, detect speech regions, transcribe locally,
 reconcile overlapping windows, and build report sections with local heuristics. Optional
@@ -120,7 +120,7 @@ webinar-transcriber INPUT --llm
 
 Successful default runs write:
 
-- `metadata.json`, `transcript.json`, and `transcript.vtt`
+- `metadata.json` and `transcript.json`
 - `diagnostics.json` with stage timings, counts, warnings, ASR details, and optional LLM metadata
 - `report.md`, `report.docx`, and `report.json`
 - ASR planning and decode artifacts under `asr/`
@@ -146,9 +146,10 @@ only partial intermediate artifacts and no final report outputs.
 1. Transcribe the windows locally with `whisper.cpp`.
 1. Reconcile adjacent windows into one transcript.
 1. Detect scenes and extract representative frames for video input.
-1. Build report sections with local heuristics.
+1. Build report sections with local heuristics. For audio-only inputs, sectioning is best-effort and
+   uses speech gaps; LLM refinement is the preferred path for stronger headings and metadata.
 1. Optionally polish the report with an LLM, including summary bullets and action items.
-1. Write report, subtitle, diagnostic, and intermediate artifacts.
+1. Write report, diagnostic, and intermediate artifacts.
 
 ## Advanced Usage
 
@@ -205,7 +206,6 @@ runs/<timestamp>_<basename>/
 │  └─ decoded_windows.json
 ├─ metadata.json
 ├─ transcript.json
-├─ transcript.vtt
 ├─ transcription-audio.wav # optional via --keep-audio wav
 ├─ transcription-audio.mp3 # optional via --keep-audio mp3
 ├─ scenes.json             # video only

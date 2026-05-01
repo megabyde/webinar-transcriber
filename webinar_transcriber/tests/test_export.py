@@ -10,14 +10,7 @@ from webinar_transcriber.export.docx_report import _add_text_blocks, write_docx_
 from webinar_transcriber.export.formatting import format_timecode
 from webinar_transcriber.export.json_report import write_json_report
 from webinar_transcriber.export.markdown import write_markdown_report
-from webinar_transcriber.export.subtitles import write_vtt_subtitles
-from webinar_transcriber.models import (
-    MediaType,
-    ReportDocument,
-    ReportSection,
-    TranscriptionResult,
-    TranscriptSegment,
-)
+from webinar_transcriber.models import MediaType, ReportDocument, ReportSection
 
 EN_DASH = "\N{EN DASH}"
 
@@ -295,30 +288,3 @@ class TestJsonReport:
                 "image_path": None,
             }
         ]
-
-
-class TestSubtitles:
-    def test_write_vtt_subtitles_formats_cues(self, tmp_path: Path) -> None:
-        transcription = TranscriptionResult(
-            segments=[
-                TranscriptSegment(
-                    id="segment-1", text="First subtitle.", start_sec=0.0, end_sec=1.25
-                ),
-                TranscriptSegment(
-                    id="segment-2", text="Second subtitle.", start_sec=61.5, end_sec=62.75
-                ),
-            ]
-        )
-
-        output_path = tmp_path / "transcript.vtt"
-        write_vtt_subtitles(transcription, output_path)
-
-        expected_vtt = (
-            "WEBVTT\n\n"
-            "00:00:00.000 --> 00:00:01.250\n"
-            "First subtitle.\n\n"
-            "00:01:01.500 --> 00:01:02.750\n"
-            "Second subtitle.\n"
-        )
-
-        assert output_path.read_text(encoding="utf-8") == expected_vtt

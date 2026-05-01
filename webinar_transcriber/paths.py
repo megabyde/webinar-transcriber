@@ -34,11 +34,6 @@ class RunLayout:
         return self.run_dir / "transcript.json"
 
     @property
-    def subtitle_vtt_path(self) -> Path:
-        """Return the subtitle VTT artifact path."""
-        return self.run_dir / "transcript.vtt"
-
-    @property
     def scenes_path(self) -> Path:
         """Return the scene metadata artifact path."""
         return self.run_dir / "scenes.json"
