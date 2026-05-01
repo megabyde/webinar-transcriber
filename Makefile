@@ -45,5 +45,9 @@ check: lint test-all ## Run lint and the full test suite
 
 .PHONY: clean
 clean: ## Remove caches and build artifacts
-	rm -rf .coverage .mypy_cache .pytest_cache .ruff_cache .venv coverage.xml dist build
+	rm -rf .coverage .mypy_cache .pytest_cache .ruff_cache coverage.xml dist build
 	find webinar_transcriber -type d -name __pycache__ -prune -exec rm -rf {} +
+
+.PHONY: distclean
+distclean: clean ## Remove caches, build artifacts, and the local environment
+	rm -rf .venv

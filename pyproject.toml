@@ -69,7 +69,6 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-report=xml",
     "--durations=5",
-    "--durations-min=0",
 ]
 testpaths = ["webinar_transcriber"]
 markers = [
@@ -86,8 +85,6 @@ skip_covered = true
 fail_under = 100
 exclude_also = [
     "def __repr__",
-    "if self.debug:",
-    "if settings.DEBUG",
     "raise AssertionError",
     "raise NotImplementedError",
     "if 0:",
