@@ -12,7 +12,7 @@ from .config import (
     PromptCarryoverSettings,
     default_asr_threads,
 )
-from .transcriber import ASRProcessingError, WhisperCppTranscriber
+from .transcriber import ASRProcessingError, WhisperCppTranscriber, device_name_from_system_info
 
 __all__ = [
     "ASR_BACKEND_NAME",
@@ -25,4 +25,5 @@ __all__ = [
     "WhisperCppTranscriber",
     "build_prompt_carryover",
     "default_asr_threads",
+    "device_name_from_system_info",
 ]

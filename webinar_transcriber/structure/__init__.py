@@ -74,15 +74,15 @@ def build_report(
     """
     transcript_segments = transcription.segments
     if alignment_blocks is not None:
-        sections = _build_sections_from_blocks(
+        sections = build_sections_from_blocks(
             alignment_blocks,
             transcript_segments=transcript_segments,
             progress_callback=progress_callback,
         )
     else:
-        sections = _build_audio_sections(transcript_segments, progress_callback=progress_callback)
+        sections = build_audio_sections(transcript_segments, progress_callback=progress_callback)
     return ReportDocument(
-        title=_derive_title(media_asset.path),
+        title=derive_title(media_asset.path),
         source_file=media_asset.path,
         media_type=media_asset.media_type,
         detected_language=transcription.detected_language,
@@ -93,12 +93,13 @@ def build_report(
     )
 
 
-def _build_sections_from_blocks(
+def build_sections_from_blocks(
     blocks: list[AlignmentBlock],
     *,
     transcript_segments: list[TranscriptSegment],
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[ReportSection]:
+    """Build report sections from scene-aligned transcript blocks."""
     segment_by_id = {segment.id: segment for segment in transcript_segments}
     sections: list[ReportSection] = []
 
@@ -109,7 +110,7 @@ def _build_sections_from_blocks(
             if segment_id in segment_by_id and segment_by_id[segment_id].text.strip()
         ]
         sections.extend(
-            _sections_from_block(
+            sections_from_block(
                 block, block_segments=block_segments, next_section_index=len(sections) + 1
             )
         )
@@ -119,11 +120,12 @@ def _build_sections_from_blocks(
     return sections
 
 
-def _build_audio_sections(
+def build_audio_sections(
     segments: list[TranscriptSegment],
     *,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[ReportSection]:
+    """Build best-effort audio-only report sections from transcript timing gaps."""
     meaningful_segments = [seg for seg in segments if seg.text.strip()]
     if not meaningful_segments:
         return []
@@ -132,7 +134,7 @@ def _build_audio_sections(
     current_segments: list[TranscriptSegment] = []
 
     for index, segment in enumerate(meaningful_segments, start=1):
-        if _should_start_new_audio_section(current_segments, segment):
+        if should_start_new_audio_section(current_segments, segment):
             sections.append(_audio_section_from_segments(current_segments, len(sections) + 1))
             current_segments = []
         current_segments.append(segment)
@@ -145,9 +147,10 @@ def _build_audio_sections(
     return sections
 
 
-def _should_start_new_audio_section(
+def should_start_new_audio_section(
     current_segments: list[TranscriptSegment], next_segment: TranscriptSegment
 ) -> bool:
+    """Return whether a timing gap should start a new audio-only section."""
     if not current_segments:
         return False
 
@@ -159,13 +162,14 @@ def _should_start_new_audio_section(
 def _audio_section_from_segments(
     segments: list[TranscriptSegment], section_index: int
 ) -> ReportSection:
-    title = _first_words_title(segments, fallback=f"Section {section_index}")
+    title = first_words_title(segments, fallback=f"Section {section_index}")
     return _section_from_segments(segments, section_index=section_index, title=title)
 
 
-def _first_words_title(
+def first_words_title(
     segments: list[TranscriptSegment], *, fallback: str, word_limit: int = TITLE_WORD_LIMIT
 ) -> str:
+    """Return a section title from the first meaningful transcript words."""
     text = next((segment.text.strip() for segment in segments if segment.text.strip()), "")
     if not text:
         return fallback
@@ -191,13 +195,14 @@ def _section_from_segments(
     )
 
 
-def _sections_from_block(
+def sections_from_block(
     block: AlignmentBlock, *, block_segments: list[TranscriptSegment], next_section_index: int
 ) -> list[ReportSection]:
+    """Build one report section from one scene-alignment block."""
     if not block_segments:
         # Keep slide-backed sections even when no transcript segments aligned, so frame/title
         # context is preserved for scene-only blocks.
-        title = _title_from_text(block.transcript_text, fallback=f"Slide {next_section_index}")
+        title = title_from_text(block.transcript_text, fallback=f"Slide {next_section_index}")
         return [
             ReportSection(
                 id=f"section-{next_section_index}",
@@ -209,7 +214,7 @@ def _sections_from_block(
             )
         ]
 
-    title = _title_from_text(block.transcript_text, fallback=f"Slide {next_section_index}")
+    title = title_from_text(block.transcript_text, fallback=f"Slide {next_section_index}")
     return [
         _section_from_segments(
             block_segments, section_index=next_section_index, title=title, frame_id=block.frame_id
@@ -217,7 +222,8 @@ def _sections_from_block(
     ]
 
 
-def _title_from_text(text: str, *, fallback: str) -> str:
+def title_from_text(text: str, *, fallback: str) -> str:
+    """Return a bounded title from transcript text."""
     cleaned = text.strip().rstrip(".")
     if not cleaned:
         return fallback
@@ -226,9 +232,20 @@ def _title_from_text(text: str, *, fallback: str) -> str:
     return " ".join(words[:TITLE_WORD_LIMIT]) if len(words) > TITLE_WORD_LIMIT else cleaned
 
 
-def _derive_title(source_path: str) -> str:
+def derive_title(source_path: str) -> str:
+    """Return a report title derived from the source filename."""
     stem = Path(source_path).stem
     return stem.replace("-", " ").replace("_", " ").strip().title() or "Transcription Report"
 
 
-__all__ = ["align_by_time", "build_report"]
+__all__ = [
+    "align_by_time",
+    "build_audio_sections",
+    "build_report",
+    "build_sections_from_blocks",
+    "derive_title",
+    "first_words_title",
+    "sections_from_block",
+    "should_start_new_audio_section",
+    "title_from_text",
+]

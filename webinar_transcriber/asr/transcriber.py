@@ -167,7 +167,7 @@ class WhisperCppTranscriber:
         """Return the detected runtime backend name."""
         if (system_info := self.system_info) is None:
             return "auto"
-        return _device_name_from_system_info(system_info)
+        return device_name_from_system_info(system_info)
 
     @property
     def threads(self) -> int:
@@ -348,7 +348,8 @@ class WhisperCppTranscriber:
         )
 
 
-def _device_name_from_system_info(system_info: str) -> str:
+def device_name_from_system_info(system_info: str) -> str:
+    """Return a user-facing ASR device name from pywhispercpp system info."""
     match = GPU_BACKEND_PATTERN.search(system_info)
     if match is not None:
         backend_name = match.group(1).lower()

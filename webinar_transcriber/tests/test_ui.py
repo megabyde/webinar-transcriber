@@ -2,7 +2,7 @@
 
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 from unittest.mock import Mock
 
 import pytest
@@ -119,10 +119,17 @@ class TestRichStageReporter:
                 self.added_task = (label, total, fields)
                 return 7
 
+        fake_progresses: list[FakeProgress] = []
+
+        def fake_progress(*_args: object, **_kwargs: object) -> FakeProgress:
+            progress = FakeProgress()
+            fake_progresses.append(progress)
+            return progress
+
         def fake_column(*_args: object, **_kwargs: object) -> object:
             return object()
 
-        monkeypatch.setattr("webinar_transcriber.ui.Progress", FakeProgress)
+        monkeypatch.setattr("webinar_transcriber.ui.Progress", fake_progress)
         monkeypatch.setattr("webinar_transcriber.ui.SpinnerColumn", fake_column)
         monkeypatch.setattr("webinar_transcriber.ui.TextColumn", fake_column)
         monkeypatch.setattr("webinar_transcriber.ui.BarColumn", fake_column)
@@ -141,13 +148,9 @@ class TestRichStageReporter:
             detail="scene-1",
         )
 
-        assert reporter._active_stage_key == "extract_frames"
-        assert reporter._active_stage_label == "Extracting frames"
-        assert reporter._active_stage_started_at == 10.0
-        assert reporter._active_progress is not None
-        active_progress = cast("Any", reporter._active_progress)
-        assert active_progress.started
-        assert active_progress.added_task == (
+        progress = fake_progresses[0]
+        assert progress.started
+        assert progress.added_task == (
             "Extracting frames",
             1.0,
             {
@@ -160,7 +163,6 @@ class TestRichStageReporter:
                 "detail_text": "scene-1",
             },
         )
-        assert reporter._active_task_id == 7
 
     def test_progress_updates_compute_rate_and_preserve_detail_in_progress_adapter(
         self, monkeypatch: pytest.MonkeyPatch

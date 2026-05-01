@@ -6,7 +6,7 @@ from pathlib import Path
 from docx import Document
 from PIL import Image
 
-from webinar_transcriber.export.docx_report import _add_text_blocks, write_docx_report
+from webinar_transcriber.export.docx_report import write_docx_report
 from webinar_transcriber.export.formatting import format_timecode
 from webinar_transcriber.export.json_report import write_json_report
 from webinar_transcriber.export.markdown import write_markdown_report
@@ -162,12 +162,35 @@ class TestDocxReport:
         document = Document(str(output_path))
         assert len(document.inline_shapes) == 1
 
-    def test_add_text_blocks_skips_blank_paragraphs(self) -> None:
-        document = Document()
+    def test_blank_tldr_does_not_add_extra_body_paragraphs(self, tmp_path: Path) -> None:
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Section 1",
+                    start_sec=0.0,
+                    end_sec=5.0,
+                    tldr="  \n  ",
+                    transcript_text="Transcript body.",
+                )
+            ],
+        )
 
-        _add_text_blocks(document, "  \n  ")
+        output_path = tmp_path / "report.docx"
+        write_docx_report(report, output_path)
 
-        assert [paragraph.text for paragraph in document.paragraphs] == []
+        document = Document(str(output_path))
+        assert [paragraph.text for paragraph in document.paragraphs] == [
+            "Demo",
+            "Sections",
+            "Section 1 (00:00\N{EN DASH}00:05)",
+            "TL;DR / Cheat Sheet",
+            "Transcript",
+            "Transcript body.",
+        ]
 
 
 class TestMarkdownReport:
