@@ -73,7 +73,7 @@ def detect_speech_regions(
         for timestamp in timestamps
         if float(timestamp["end"]) > float(timestamp["start"])
     ]
-    return _normalize_regions(regions), []
+    return normalize_regions(regions), []
 
 
 def normalized_audio_duration(samples: np.ndarray, sample_rate: int) -> float:
@@ -83,7 +83,8 @@ def normalized_audio_duration(samples: np.ndarray, sample_rate: int) -> float:
     return len(samples) / float(sample_rate)
 
 
-def _normalize_regions(regions: list[SpeechRegion]) -> list[SpeechRegion]:
+def normalize_regions(regions: list[SpeechRegion]) -> list[SpeechRegion]:
+    """Return ordered, merged speech regions with empty ranges removed."""
     ordered_regions = sorted(regions, key=lambda region: (region.start_sec, region.end_sec))
     if not ordered_regions:
         return []

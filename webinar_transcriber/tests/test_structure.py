@@ -12,13 +12,13 @@ from webinar_transcriber.models import (
     VideoAsset,
 )
 from webinar_transcriber.structure import (
-    _build_audio_sections,
-    _derive_title,
-    _first_words_title,
-    _sections_from_block,
-    _should_start_new_audio_section,
     align_by_time,
+    build_audio_sections,
     build_report,
+    derive_title,
+    first_words_title,
+    sections_from_block,
+    should_start_new_audio_section,
 )
 
 
@@ -92,7 +92,7 @@ class TestAudioSectionBoundaries:
             end_sec=20.0 + gap_duration,
         )
 
-        assert _should_start_new_audio_section(current_segments, next_segment) == expected
+        assert should_start_new_audio_section(current_segments, next_segment) == expected
 
 
 class TestBuildReport:
@@ -232,7 +232,7 @@ class TestBuildReport:
 
 class TestAudioSectionHeuristics:
     def test_build_audio_sections_splits_when_gap_reaches_threshold(self) -> None:
-        sections = _build_audio_sections([
+        sections = build_audio_sections([
             TranscriptSegment(
                 id="segment-1", text="Long section opening.", start_sec=0.0, end_sec=140.0
             ),
@@ -265,7 +265,7 @@ class TestAudioSectionHeuristics:
             end_sec=30.0,
         )
 
-        assert not _should_start_new_audio_section(current_segments, next_segment)
+        assert not should_start_new_audio_section(current_segments, next_segment)
 
     def test_sections_from_block_uses_block_text_when_segment_ids_are_missing(self) -> None:
         block = AlignmentBlock(
@@ -278,7 +278,7 @@ class TestAudioSectionHeuristics:
             frame_id="frame-1",
         )
 
-        sections = _sections_from_block(block, block_segments=[], next_section_index=1)
+        sections = sections_from_block(block, block_segments=[], next_section_index=1)
 
         assert len(sections) == 1
         assert sections[0].title == "Fallback block text"
@@ -319,7 +319,7 @@ class TestAudioSectionHeuristics:
     def test_first_words_title(
         self, segments: list[TranscriptSegment], fallback: str, expected: str
     ) -> None:
-        assert _first_words_title(segments, fallback=fallback) == expected
+        assert first_words_title(segments, fallback=fallback) == expected
 
     def test_derive_title_formats_local_path_stem(self) -> None:
-        assert _derive_title("/recordings/weekly-sync.mp4") == "Weekly Sync"
+        assert derive_title("/recordings/weekly-sync.mp4") == "Weekly Sync"

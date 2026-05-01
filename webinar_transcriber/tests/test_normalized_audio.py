@@ -21,9 +21,9 @@ from webinar_transcriber.normalized_audio import (
 )
 from webinar_transcriber.segmentation import (
     VadSettings,
-    _normalize_regions,
     _silero_speech_timestamps,
     detect_speech_regions,
+    normalize_regions,
     normalized_audio_duration,
 )
 from webinar_transcriber.tests.conftest import FakeContextContainer
@@ -255,13 +255,13 @@ class TestNormalizedAudio:
         assert normalized_audio_duration(np.zeros(16, dtype=np.float32), 0) == 0.0
 
     def test_normalize_regions_handles_empty_and_overlap(self) -> None:
-        assert _normalize_regions([]) == []
-        normalized = _normalize_regions([
+        assert normalize_regions([]) == []
+        normalized = normalize_regions([
             SpeechRegion(start_sec=0.0, end_sec=1.0),
             SpeechRegion(start_sec=0.9, end_sec=2.0),
         ])
         assert [(region.start_sec, region.end_sec) for region in normalized] == [(0.0, 2.0)]
-        normalized = _normalize_regions([
+        normalized = normalize_regions([
             SpeechRegion(start_sec=0.0, end_sec=1.0),
             SpeechRegion(start_sec=1.5, end_sec=2.0),
         ])
@@ -271,7 +271,7 @@ class TestNormalizedAudio:
         ]
 
     def test_normalize_regions_keeps_disjoint_regions(self) -> None:
-        normalized = _normalize_regions([
+        normalized = normalize_regions([
             SpeechRegion(start_sec=0.0, end_sec=1.0),
             SpeechRegion(start_sec=1.5, end_sec=2.0),
         ])
@@ -282,7 +282,7 @@ class TestNormalizedAudio:
         ]
 
     def test_normalize_regions_drops_non_positive_duration_regions(self) -> None:
-        normalized = _normalize_regions([
+        normalized = normalize_regions([
             SpeechRegion(start_sec=1.0, end_sec=1.0),
             SpeechRegion(start_sec=2.0, end_sec=1.0),
             SpeechRegion(start_sec=3.0, end_sec=4.0),

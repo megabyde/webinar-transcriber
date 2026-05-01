@@ -235,11 +235,6 @@ convention = "google"
     # Temporary test paths under pytest-managed directories are expected
     "S108",
 ]
-# ASR tests exercise narrow failure paths on private transcriber helpers
-"webinar_transcriber/tests/test_asr.py" = ["SLF001"]
-# UI reporter tests inspect internal state transitions that are hard to assert publicly
-"webinar_transcriber/tests/test_ui.py" = ["SLF001"]
-
 [tool.pymarkdown.plugins.md013]
 line_length = 100
 code_block_line_length = 100

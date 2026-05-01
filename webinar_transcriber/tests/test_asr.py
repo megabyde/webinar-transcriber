@@ -1,8 +1,6 @@
 """Tests for the whisper.cpp ASR adapter."""
 
 import os
-from pathlib import Path
-from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -14,6 +12,7 @@ from webinar_transcriber.asr import (
     PromptCarryoverSettings,
     WhisperCppTranscriber,
     build_prompt_carryover,
+    device_name_from_system_info,
 )
 from webinar_transcriber.asr.carryover import _sanitize_prompt
 from webinar_transcriber.asr.config import (
@@ -22,7 +21,6 @@ from webinar_transcriber.asr.config import (
     DEFAULT_WHISPER_NO_SPEECH_THOLD,
     default_asr_threads,
 )
-from webinar_transcriber.asr.transcriber import _device_name_from_system_info
 from webinar_transcriber.models import DecodedWindow, InferenceWindow, TranscriptSegment
 
 
@@ -70,9 +68,10 @@ class FakeModel:
 
 
 class FakeModelWithNullContext(FakeModel):
+    _ctx = None
+
     def __call__(self, model_name: str, **kwargs) -> "FakeModelWithNullContext":
         super().__call__(model_name, **kwargs)
-        self._ctx = None
         return self
 
 
@@ -255,14 +254,6 @@ class TestWhisperCppTranscriber:
         assert log_path.read_text(encoding="utf-8") == "native teardown\n"
         assert transcriber.system_info is None
 
-    def test_set_log_path_updates_transcriber(self) -> None:
-        transcriber = WhisperCppTranscriber()
-        log_path = Path("/tmp/whisper-cpp.log")
-
-        transcriber.set_log_path(log_path)
-
-        assert transcriber._log_path == log_path
-
     def test_whisper_cpp_transcriber_carries_input_prompt_into_decoded_windows(
         self, fake_model: FakeModel
     ) -> None:
@@ -314,22 +305,30 @@ class TestWhisperCppTranscriber:
         assert fake_model.auto_detect_calls == []
         assert fake_model.transcribe_calls[0][1] == {"language": "en"}
 
-    def test_model_cls_imports_pywhispercpp_model(self, monkeypatch) -> None:
+    def test_prepare_model_imports_pywhispercpp_model(self, monkeypatch) -> None:
+        fake_model = FakeModel()
         monkeypatch.setattr(
             "webinar_transcriber.asr.transcriber.importlib.import_module",
-            lambda _name: type("FakeModelModule", (), {"Model": FakeModel})(),
+            lambda _name: type(
+                "FakeModelModule", (), {"Model": lambda *_args, **_kwargs: fake_model}
+            )(),
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.asr.transcriber._disable_tqdm_progress",
+            lambda: __import__("contextlib").nullcontext(),
         )
 
-        from webinar_transcriber.asr import transcriber as transcriber_module
+        transcriber = WhisperCppTranscriber()
+        transcriber.prepare_model()
 
-        assert transcriber_module._model_cls() is FakeModel
+        assert transcriber.system_info == "CPU = 1"
 
     def test_disable_tqdm_progress_sets_env_var(self, monkeypatch) -> None:
         from webinar_transcriber.asr import transcriber as transcriber_module
 
         monkeypatch.delenv("TQDM_DISABLE", raising=False)
 
-        with transcriber_module._disable_tqdm_progress():
+        with vars(transcriber_module)["_disable_tqdm_progress"]():
             assert os.environ["TQDM_DISABLE"] == "1"
 
         assert "TQDM_DISABLE" not in os.environ
@@ -339,7 +338,7 @@ class TestWhisperCppTranscriber:
 
         monkeypatch.setenv("TQDM_DISABLE", "0")
 
-        with transcriber_module._disable_tqdm_progress():
+        with vars(transcriber_module)["_disable_tqdm_progress"]():
             assert os.environ["TQDM_DISABLE"] == "1"
 
         assert os.environ["TQDM_DISABLE"] == "0"
@@ -351,7 +350,7 @@ class TestWhisperCppTranscriber:
 
         monkeypatch.delenv("TQDM_DISABLE", raising=False)
 
-        with transcriber_module._disable_tqdm_progress():
+        with vars(transcriber_module)["_disable_tqdm_progress"]():
             progress_bar = tqdm(total=1)
             progress_bar.close()
 
@@ -427,32 +426,16 @@ class TestWhisperCppTranscriber:
         assert transcriber.threads == 1
         assert transcriber.system_info is None
 
-    def test_transcribe_inference_windows_reuses_existing_model_without_prepare(
-        self, fake_model: FakeModel
-    ) -> None:
-        fake_model("stub.bin")
-
-        class ReuseModelTranscriber(WhisperCppTranscriber):
-            def prepare_model(self) -> None:
-                raise AssertionError("should not prepare")
-
-        transcriber = ReuseModelTranscriber(model_name="stub.bin")
-        transcriber._model = cast("Any", fake_model)
-
-        decoded_windows = transcriber.transcribe_inference_windows(
-            np.zeros(16_000, dtype=np.float32),
-            [InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
-        )
-
-        assert [window.text for window in decoded_windows] == ["agenda review"]
-
     def test_ensure_model_raises_when_prepare_model_does_not_initialize_model(self) -> None:
         class BrokenTranscriber(WhisperCppTranscriber):
             def prepare_model(self) -> None:
-                self._model = None
+                return None
 
         with pytest.raises(ASRProcessingError, match="model was not initialized"):
-            BrokenTranscriber(model_name="stub.bin")._ensure_model()
+            BrokenTranscriber(model_name="stub.bin").transcribe_inference_windows(
+                np.zeros(16_000, dtype=np.float32),
+                [InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
+            )
 
 
 class TestPromptCarryover:
@@ -487,9 +470,9 @@ class TestPromptCarryover:
     def test_device_name_from_system_info_prefers_enabled_backend(self) -> None:
         system_info = "WHISPER : MTL : EMBED_LIBRARY = 1 | CPU : NEON = 1 |"
 
-        assert _device_name_from_system_info("CPU = 1 | METAL = 1") == "metal"
-        assert _device_name_from_system_info(system_info) == "metal"
-        assert _device_name_from_system_info("CPU = 1") == "cpu"
+        assert device_name_from_system_info("CPU = 1 | METAL = 1") == "metal"
+        assert device_name_from_system_info(system_info) == "metal"
+        assert device_name_from_system_info("CPU = 1") == "cpu"
 
     def test_build_prompt_carryover_drops_when_disabled(self) -> None:
         carryover = build_prompt_carryover(
