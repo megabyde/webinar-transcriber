@@ -151,7 +151,6 @@ def run_report_phase(
         )
         report = replace(report, warnings=list(ctx.warnings))
         export_runtime.write_json_report(report, layout.json_report_path)
-        export_runtime.write_vtt_subtitles(normalized_transcription, layout.subtitle_vtt_path)
 
     return ReportPhaseResult(
         report=report, alignment_blocks=alignment_blocks, scenes=scenes, slide_frames=slide_frames

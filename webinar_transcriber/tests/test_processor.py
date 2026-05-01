@@ -155,7 +155,6 @@ class TestProcessInput:
 
         assert artifacts.layout.metadata_path.exists()
         assert artifacts.layout.transcript_path.exists()
-        assert artifacts.layout.subtitle_vtt_path.exists()
         assert artifacts.layout.markdown_report_path.exists()
         assert artifacts.layout.docx_report_path.stat().st_size > 0
         assert artifacts.layout.json_report_path.exists()
@@ -164,13 +163,10 @@ class TestProcessInput:
         assert not artifacts.layout.transcription_audio_path().exists()
 
         markdown = artifacts.layout.markdown_report_path.read_text(encoding="utf-8")
-        vtt = artifacts.layout.subtitle_vtt_path.read_text(encoding="utf-8")
         diagnostics_payload = read_json(artifacts.layout.diagnostics_path)
 
         assert "# Sample Audio" in markdown
         assert "Agenda review and project status update." in markdown
-        assert "WEBVTT" in vtt
-        assert "00:00:00.000 --> 00:00:03.000" in vtt
         assert diagnostics_payload["asr_backend"] == "whisper.cpp"
         assert diagnostics_payload["asr_model"] == "test-model"
         assert diagnostics_payload["item_counts"]["windows"] == 1
@@ -309,7 +305,6 @@ class TestProcessInput:
         assert artifacts.layout.markdown_report_path.exists()
         assert artifacts.layout.docx_report_path.stat().st_size > 0
         assert artifacts.layout.json_report_path.exists()
-        assert artifacts.layout.subtitle_vtt_path.exists()
         assert artifacts.diagnostics.item_counts["scenes"] >= 1
         assert artifacts.diagnostics.item_counts["frames"] >= 1
         assert artifacts.report.sections
