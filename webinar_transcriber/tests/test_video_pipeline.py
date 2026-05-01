@@ -198,6 +198,66 @@ class TestFrameExtraction:
             "Frame extraction failed for scene-1 at 1.0s: PyAV did not decode a frame at 1.000s"
         ]
 
+    def test_extract_representative_frames_warns_when_only_early_frames_decode(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        warnings: list[str] = []
+        container = FakeFrameContainer([[FakeFrame(0.9)]])
+
+        monkeypatch.setattr(
+            "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: container
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.video.frames._normalize_extracted_frame", lambda _p: None
+        )
+
+        frames = extract_representative_frames(
+            SAMPLE_VIDEO_PATH,
+            [_scene(1, 0.0, 2.0)],
+            tmp_path / "frames",
+            warning_callback=warnings.append,
+        )
+
+        assert [frame.scene_id for frame in frames] == ["scene-1"]
+        assert warnings == [
+            "Frame extraction used nearest decoded frame for scene-1 at 1.0s: "
+            "PyAV decoded nearest frame before 1.000s at 0.900s"
+        ]
+
+    def test_extract_representative_frames_reports_only_unprocessed_scenes_after_late_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        progress_ticks: list[int] = []
+        warnings: list[str] = []
+        scenes = [_scene(1, 0.0, 2.0), _scene(2, 2.0, 4.0)]
+        container = FakeFrameContainer([
+            [FakeFrame(1.0)],
+            [FakeFrame(3.0)],
+        ])
+
+        def normalize_or_fail(path: Path) -> None:
+            if path.name == "scene-2.png":
+                raise OSError("normalize failed")
+
+        monkeypatch.setattr(
+            "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: container
+        )
+        monkeypatch.setattr(
+            "webinar_transcriber.video.frames._normalize_extracted_frame", normalize_or_fail
+        )
+
+        frames = extract_representative_frames(
+            SAMPLE_VIDEO_PATH,
+            scenes,
+            tmp_path / "frames",
+            progress_callback=lambda: progress_ticks.append(1),
+            warning_callback=warnings.append,
+        )
+
+        assert [frame.scene_id for frame in frames] == ["scene-1"]
+        assert progress_ticks == [1, 1]
+        assert warnings == ["Frame extraction failed for scene-2 at 3.0s: normalize failed"]
+
     def test_extract_representative_frames_uses_first_stable_frame(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
