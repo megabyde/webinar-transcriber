@@ -11,6 +11,7 @@ import webinar_transcriber.media as media_runtime
 from webinar_transcriber.asr import PromptCarryoverSettings, default_asr_threads
 from webinar_transcriber.diagnostics import write_run_diagnostics
 from webinar_transcriber.normalized_audio import (
+    TranscriptionAudioFormat,
     prepared_transcription_audio,
     preserve_transcription_audio,
 )
@@ -49,7 +50,7 @@ def run_transcription_phase(
     carryover_enabled: bool,
     language: str | None,
     keep_audio: bool,
-    kept_audio_format: str,
+    kept_audio_format: TranscriptionAudioFormat,
     prepared_audio_factory: Callable[[Path], AbstractContextManager[Path]],
 ) -> TranscriptionPhaseResult:
     """Run the audio preparation and ASR half of the pipeline.
@@ -99,7 +100,7 @@ def process_input(
     carryover: PromptCarryoverSettings = DEFAULT_PROMPT_CARRYOVER_SETTINGS,
     asr_threads: int | None = None,
     keep_audio: bool = False,
-    kept_audio_format: str = "wav",
+    kept_audio_format: TranscriptionAudioFormat = "wav",
     enable_llm: bool = False,
     transcriber: WhisperCppTranscriber | None = None,
     llm_processor: LLMProcessor | None = None,

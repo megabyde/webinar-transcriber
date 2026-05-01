@@ -7,7 +7,7 @@ import wave
 from contextlib import contextmanager
 from pathlib import Path
 from shutil import copy2
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, assert_never, cast
 
 import av
 import numpy as np
@@ -30,6 +30,7 @@ NORMALIZED_SAMPLE_RATE = 16_000
 NORMALIZED_CHANNELS = 1
 NORMALIZED_SAMPLE_WIDTH_BYTES = 2
 NORMALIZED_AUDIO_CODEC = "pcm_s16le"
+TranscriptionAudioFormat = Literal["wav", "mp3"]
 
 
 def sample_index_for_time(time_sec: float) -> int:
@@ -132,15 +133,12 @@ def prepared_transcription_audio(input_path: Path) -> Iterator[Path]:
 
 
 def preserve_transcription_audio(
-    audio_path: Path, output_path: Path, *, audio_format: str = "wav"
+    audio_path: Path, output_path: Path, *, audio_format: TranscriptionAudioFormat = "wav"
 ) -> Path:
     """Persist prepared transcription audio as a run artifact.
 
     Returns:
         Path: The written artifact path.
-
-    Raises:
-        ValueError: If the requested audio format is unsupported.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if audio_format == "wav":
@@ -148,9 +146,7 @@ def preserve_transcription_audio(
         return output_path
     if audio_format == "mp3":
         return transcode_audio_to_mp3(audio_path, output_path)
-    raise ValueError(  # pragma: no cover - CLI validates the supported format choices
-        f"Unsupported transcription audio format: {audio_format}"
-    )
+    assert_never(audio_format)  # pragma: no cover - TranscriptionAudioFormat is exhaustive
 
 
 def load_normalized_audio(audio_path: Path) -> tuple[np.ndarray, int]:

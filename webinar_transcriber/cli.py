@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 import click
 
@@ -24,6 +25,9 @@ from webinar_transcriber.segmentation import (
     VadSettings,
 )
 from webinar_transcriber.ui import RichStageReporter
+
+if TYPE_CHECKING:
+    from webinar_transcriber.normalized_audio import TranscriptionAudioFormat
 
 
 class CLIError(click.ClickException):
@@ -91,6 +95,7 @@ def main(
         raise CLIError(f"Input path is not a file: {input_path}")
 
     reporter = RichStageReporter()
+    kept_format = cast("TranscriptionAudioFormat", kept_audio_format or "wav")
 
     try:
         process_input(
@@ -108,7 +113,7 @@ def main(
             carryover=PromptCarryoverSettings(),
             asr_threads=threads or default_asr_threads(),
             keep_audio=kept_audio_format is not None,
-            kept_audio_format=kept_audio_format or "wav",
+            kept_audio_format=kept_format,
             enable_llm=llm,
             reporter=reporter,
         )
