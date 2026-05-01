@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from math import floor
 
-EN_DASH = "\N{EN DASH}"
-
 
 def format_timecode(total_sec: float) -> str:
     """Format a section timestamp as MM:SS or HH:MM:SS.
@@ -28,4 +26,4 @@ def section_timecode(start_sec: float, end_sec: float) -> str:
     Returns:
         str: The formatted section range.
     """
-    return f"{format_timecode(start_sec)}{EN_DASH}{format_timecode(end_sec)}"
+    return f"{format_timecode(start_sec)}\N{EN DASH}{format_timecode(end_sec)}"

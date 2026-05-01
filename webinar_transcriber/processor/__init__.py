@@ -89,6 +89,14 @@ def run_transcription_phase(
     )
 
 
+def _transcriber_scope(
+    provided_transcriber: WhisperCppTranscriber | None, active_transcriber: WhisperCppTranscriber
+) -> AbstractContextManager[WhisperCppTranscriber]:
+    if provided_transcriber is None:
+        return active_transcriber
+    return nullcontext(active_transcriber)
+
+
 def process_input(
     input_path: Path,
     *,
@@ -117,10 +125,7 @@ def process_input(
     active_transcriber = transcriber or asr_runtime.WhisperCppTranscriber(
         model_name=asr_model, threads=asr_threads, language=language, carryover_settings=carryover
     )
-    transcriber_scope = (
-        active_transcriber if transcriber is None else nullcontext(active_transcriber)
-    )
-    with transcriber_scope as active_transcriber:
+    with _transcriber_scope(transcriber, active_transcriber) as active_transcriber:
         transcription_phase: TranscriptionPhaseResult | None = None
         report_phase: ReportPhaseResult | None = None
         ctx.reporter.begin_run(input_path)

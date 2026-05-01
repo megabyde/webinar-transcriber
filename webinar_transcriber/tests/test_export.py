@@ -19,8 +19,6 @@ from webinar_transcriber.models import (
     TranscriptSegment,
 )
 
-EN_DASH = "\N{EN DASH}"
-
 
 def _style_name(paragraph) -> str | None:
     style = paragraph.style
@@ -57,7 +55,7 @@ class TestDocxReport:
         document = Document(str(output_path))
         paragraph_texts = [paragraph.text for paragraph in document.paragraphs]
 
-        assert f"Section 1 (00:00{EN_DASH}00:05)" in paragraph_texts
+        assert "Section 1 (00:00\N{EN DASH}00:05)" in paragraph_texts
         assert "TL;DR / Cheat Sheet" in paragraph_texts
         assert "Transcript" in paragraph_texts
         assert "Краткое резюме раздела." in paragraph_texts
@@ -219,12 +217,12 @@ class TestMarkdownReport:
             "## Action Items\n\n"
             "- Follow up.\n\n"
             "## Sections\n\n"
-            f"### Section 1 (00:00{EN_DASH}00:05)\n\n"
+            "### Section 1 (00:00\N{EN DASH}00:05)\n\n"
             "**TL;DR / Cheat Sheet**\n\n"
             "Section recap.\n\n"
             "**Transcript**\n\n"
             "Paragraph one.\n\n"
-            f"### Section 2 (00:05{EN_DASH}00:10)\n\n"
+            "### Section 2 (00:05\N{EN DASH}00:10)\n\n"
             "![Section 2](frames/scene-2.png)\n\n"
             "Paragraph two.\n"
         )
@@ -252,7 +250,7 @@ class TestMarkdownReport:
 
         markdown = output_path.read_text(encoding="utf-8")
 
-        assert f"### Section 1 (01:01:01{EN_DASH}02:02:05)" in markdown
+        assert "### Section 1 (01:01:01\N{EN DASH}02:02:05)" in markdown
 
 
 class TestJsonReport:

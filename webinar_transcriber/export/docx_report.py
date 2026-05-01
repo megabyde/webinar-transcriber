@@ -55,7 +55,11 @@ def write_docx_report(
 
 
 def _split_paragraphs(text: str) -> list[str]:
-    paragraphs = [p for block in text.split("\n\n") if (p := block.strip())]
+    paragraphs = []
+    for block in text.split("\n\n"):
+        paragraph = block.strip()
+        if paragraph:
+            paragraphs.append(paragraph)
     return paragraphs or [text]
 
 
