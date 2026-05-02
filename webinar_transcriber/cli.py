@@ -48,7 +48,7 @@ class CLIError(click.ClickException):
     type=str,
     default=None,
     help="Override the whisper.cpp model identifier or local model path, for example "
-    "'large-v3' or 'models/whisper-cpp/ggml-large-v3.bin'.",
+    "'large-v3-turbo' or 'models/whisper-cpp/ggml-large-v3-turbo.bin'.",
 )
 @click.option(
     "--language",

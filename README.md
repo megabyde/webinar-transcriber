@@ -53,7 +53,7 @@ Use the matching Make target for the install you need:
 
 The standard and LLM install targets pull the published `pywhispercpp` wheels from PyPI. On Linux
 and Windows, those wheels use the CPU backend. On macOS, the Apple Silicon wheels include Metal
-support. The default `large-v3` model is downloaded on first transcription run, not during
+support. The default `large-v3-turbo` model is downloaded on first transcription run, not during
 installation. To verify the active backend after a run, inspect `diagnostics.json` →
 `asr_pipeline.system_info`. Native whisper.cpp initialization and teardown logs are written to
 `whisper-cpp.log` in the run directory.
@@ -170,16 +170,16 @@ only partial intermediate artifacts and no final report outputs.
 ### ASR Model
 
 `webinar-transcriber` uses `pywhispercpp` to resolve whisper.cpp models. By default, it uses the
-built-in `large-v3` model identifier for maximum transcription quality, which `pywhispercpp`
-downloads into its cache on first use. You can also pass a faster model identifier or a local GGML
-model path with `--asr-model`.
+built-in `large-v3-turbo` model identifier for fast, high-quality local transcription, which
+`pywhispercpp` downloads into its cache on first use. You can also pass another model identifier or
+a local GGML model path with `--asr-model`.
 
 For example:
 
 ```bash
-webinar-transcriber INPUT --asr-model large-v3
 webinar-transcriber INPUT --asr-model large-v3-turbo
-webinar-transcriber INPUT --asr-model models/whisper-cpp/ggml-large-v3.bin
+webinar-transcriber INPUT --asr-model large-v3
+webinar-transcriber INPUT --asr-model models/whisper-cpp/ggml-large-v3-turbo.bin
 ```
 
 To manage the file yourself, download it directly:
@@ -187,9 +187,11 @@ To manage the file yourself, download it directly:
 ```bash
 mkdir -p models/whisper-cpp
 curl -L \
-    -o models/whisper-cpp/ggml-large-v3.bin \
-    https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin
+    -o models/whisper-cpp/ggml-large-v3-turbo.bin \
+    https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin
 ```
+
+Use `--asr-model large-v3` when maximum transcription accuracy is more important than local runtime.
 
 ### Speech Detection
 
