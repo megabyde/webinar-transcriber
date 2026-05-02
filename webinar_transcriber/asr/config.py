@@ -6,8 +6,8 @@ import os
 from dataclasses import dataclass
 
 ASR_BACKEND_NAME = "whisper.cpp"
-DEFAULT_WHISPER_CPP_MODEL_FILENAME = "large-v3"
-DEFAULT_WHISPER_CPP_MODEL_EXAMPLE = "models/whisper-cpp/ggml-large-v3.bin"
+DEFAULT_WHISPER_CPP_MODEL_FILENAME = "large-v3-turbo"
+DEFAULT_WHISPER_CPP_MODEL_EXAMPLE = "models/whisper-cpp/ggml-large-v3-turbo.bin"
 DEFAULT_CARRYOVER_MAX_SENTENCES = 3
 DEFAULT_CARRYOVER_MAX_TOKENS = 96
 DEFAULT_WHISPER_ENTROPY_THOLD = 2.4

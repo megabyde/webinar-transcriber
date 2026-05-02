@@ -51,7 +51,7 @@ def _missing_model_error_message(model_path: Path) -> str:
 def _model_prepare_error_message(model_name: str) -> str:
     return (
         f"Could not prepare whisper.cpp model '{model_name}'. "
-        "pywhispercpp accepts model identifiers such as 'large-v3' or local ggml model "
+        "pywhispercpp accepts model identifiers such as 'large-v3-turbo' or local ggml model "
         f"paths such as {DEFAULT_WHISPER_CPP_MODEL_EXAMPLE}."
     )
 
