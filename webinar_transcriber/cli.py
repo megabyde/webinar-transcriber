@@ -70,11 +70,12 @@ class CLIError(click.ClickException):
 )
 @click.option(
     "--keep-audio",
-    "kept_audio_format",
     type=click.Choice(["wav", "mp3"], case_sensitive=False),
     default=None,
-    metavar="FORMAT",
-    help="Keep normalized transcription audio as FORMAT: wav or mp3.",
+    flag_value="mp3",
+    is_flag=False,
+    metavar="[FORMAT]",
+    help="Keep normalized transcription audio as FORMAT, defaulting to mp3.",
 )
 @click.option("--llm", is_flag=True, help="Enable optional provider-backed report enhancement.")
 def main(
@@ -84,7 +85,7 @@ def main(
     language: str | None,
     threads: int | None,
     vad: bool,
-    kept_audio_format: str | None,
+    keep_audio: str | None,
     llm: bool,
 ) -> None:
     """Transcribe an audio or video input file."""
@@ -95,7 +96,9 @@ def main(
         raise CLIError(f"Input path is not a file: {input_path}")
 
     reporter = RichStageReporter()
-    kept_format = cast("TranscriptionAudioFormat", kept_audio_format or "wav")
+    kept_format = cast(
+        "TranscriptionAudioFormat | None", keep_audio.lower() if keep_audio else None
+    )
 
     try:
         process_input(
@@ -112,8 +115,7 @@ def main(
             ),
             carryover=PromptCarryoverSettings(),
             asr_threads=threads or default_asr_threads(),
-            keep_audio=kept_audio_format is not None,
-            kept_audio_format=kept_format,
+            keep_audio=kept_format,
             enable_llm=llm,
             reporter=reporter,
         )

@@ -83,7 +83,8 @@ run directory under `runs/`. Use `--output-dir` to choose a specific location.
 
 ```bash
 webinar-transcriber INPUT
-webinar-transcriber INPUT --keep-audio mp3
+webinar-transcriber INPUT --keep-audio
+webinar-transcriber INPUT --keep-audio wav
 webinar-transcriber INPUT --output-dir runs/custom-demo
 ```
 
@@ -139,6 +140,7 @@ Successful default runs write:
 
 Depending on options and input type, successful default runs also write:
 
+- `transcription-audio.mp3` with `--keep-audio`
 - `transcription-audio.wav` or `transcription-audio.mp3` with `--keep-audio FORMAT`
 - `scenes.json` and `frames/` for video input
 
