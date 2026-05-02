@@ -89,8 +89,7 @@ class TestCli:
             vad=VadSettings(),
             carryover=PromptCarryoverSettings(),
             asr_threads=7,
-            keep_audio=False,
-            kept_audio_format="wav",
+            keep_audio=None,
             enable_llm=False,
             reporter=ANY,
         )
@@ -137,11 +136,25 @@ class TestCli:
             vad=VadSettings(enabled=False),
             carryover=PromptCarryoverSettings(),
             asr_threads=3,
-            keep_audio=True,
-            kept_audio_format="mp3",
+            keep_audio="mp3",
             enable_llm=True,
             reporter=ANY,
         )
+
+    def test_keep_audio_without_format_defaults_to_mp3(self, tmp_path) -> None:
+        runner = CliRunner()
+        input_path = tmp_path / "demo.mp4"
+        input_path.write_text("stub", encoding="utf-8")
+        run_dir = tmp_path / "run-dir"
+
+        with patch(
+            "webinar_transcriber.cli.process_input",
+            return_value=_process_artifacts(input_path, run_dir),
+        ) as process_input_mock:
+            result = runner.invoke(main, [str(input_path), "--keep-audio"])
+
+        assert result.exit_code == 0
+        assert process_input_mock.call_args.kwargs["keep_audio"] == "mp3"
 
     def test_help_describes_processing_options(self) -> None:
         runner = CliRunner()

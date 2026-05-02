@@ -250,8 +250,7 @@ class TestProcessInput:
             input_path,
             output_dir=tmp_path / "run",
             transcriber=FakeTranscriber(),
-            keep_audio=True,
-            kept_audio_format="wav",
+            keep_audio="wav",
         )
 
         kept_audio_path = artifacts.layout.transcription_audio_path()
@@ -264,8 +263,7 @@ class TestProcessInput:
             FIXTURE_DIR / "sample-audio.mp3",
             output_dir=tmp_path / "real-run",
             transcriber=FakeTranscriber(),
-            keep_audio=True,
-            kept_audio_format="wav",
+            keep_audio="wav",
             vad=VadSettings(enabled=False),
         )
 

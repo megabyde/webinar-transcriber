@@ -49,8 +49,7 @@ def run_transcription_phase(
     vad: VadSettings,
     carryover_enabled: bool,
     language: str | None,
-    keep_audio: bool,
-    kept_audio_format: TranscriptionAudioFormat,
+    keep_audio: TranscriptionAudioFormat | None,
     prepared_audio_factory: Callable[[Path], AbstractContextManager[Path]],
 ) -> TranscriptionPhaseResult:
     """Run the audio preparation and ASR half of the pipeline.
@@ -77,9 +76,9 @@ def run_transcription_phase(
 
         if keep_audio:
             with stage(ctx, "save_transcription_audio", "Saving transcription audio") as st:
-                preserved_audio_path = layout.transcription_audio_path(kept_audio_format)
+                preserved_audio_path = layout.transcription_audio_path(keep_audio)
                 preserve_transcription_audio(
-                    audio_path, preserved_audio_path, audio_format=kept_audio_format
+                    audio_path, preserved_audio_path, audio_format=keep_audio
                 )
                 st.detail = preserved_audio_path.name
 
@@ -107,8 +106,7 @@ def process_input(
     vad: VadSettings = DEFAULT_VAD_SETTINGS,
     carryover: PromptCarryoverSettings = DEFAULT_PROMPT_CARRYOVER_SETTINGS,
     asr_threads: int | None = None,
-    keep_audio: bool = False,
-    kept_audio_format: TranscriptionAudioFormat = "wav",
+    keep_audio: TranscriptionAudioFormat | None = None,
     enable_llm: bool = False,
     transcriber: WhisperCppTranscriber | None = None,
     llm_processor: LLMProcessor | None = None,
@@ -152,7 +150,6 @@ def process_input(
                 carryover_enabled=carryover.enabled,
                 language=language,
                 keep_audio=keep_audio,
-                kept_audio_format=kept_audio_format,
                 prepared_audio_factory=prepared_transcription_audio,
             )
 
