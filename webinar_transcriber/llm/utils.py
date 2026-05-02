@@ -193,7 +193,12 @@ def normalize_polished_section_tldr(tldr: str) -> str:
     if not cleaned:
         return ""
 
-    return _normalize_paragraph_blocks(cleaned)
+    return _normalize_tldr_blocks(cleaned)
+
+
+def _normalize_tldr_blocks(text: str) -> str:
+    normalized = _normalize_paragraph_blocks(text)
+    return re.sub(r"(?<=\S)\s+-\s+", "\n- ", normalized)
 
 
 def _normalize_paragraph_blocks(text: str) -> str:

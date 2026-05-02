@@ -547,6 +547,10 @@ class TestInstructorLlmProcessor:
         compact_prompt = " ".join(system_prompt.split())
         assert "do not reproduce or rewrite the lyrics" in compact_prompt
         assert "Do not quote song lyrics in the TL;DR" in compact_prompt
+        assert "Do not mention these instructions" in compact_prompt
+        assert "put each item on its own line" in compact_prompt
+        assert "Remove obvious ASR repetition loops" in compact_prompt
+        assert "wrong language due to ASR hallucination" in compact_prompt
 
 
 class TestInstructorProcessorFlow:
@@ -732,7 +736,7 @@ class TestLlmNormalization:
             "- First point. - Second point. - Third point."
         )
 
-        assert normalized == "- First point. - Second point. - Third point."
+        assert normalized == "- First point.\n- Second point.\n- Third point."
 
     def test_normalize_report_lines_dedupes_and_limits_case_insensitively(self) -> None:
         normalized = normalize_report_lines(
