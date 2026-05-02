@@ -18,6 +18,10 @@ README owns the user-facing install and development setup, including native depe
 standard verification commands. Keep AGENTS focused on contributor-specific guidance that README
 does not need.
 
+Keep README and Makefile setup targets in sync. If you add, rename, or remove a `make sync*` or
+`make install*` target, update README in the same change so local checkout setup remains
+discoverable.
+
 In sandboxed Codex runs, prefer `UV_CACHE_DIR=/tmp/uv-cache` for `uv` and `make` commands to avoid
 cache-permission failures.
 
