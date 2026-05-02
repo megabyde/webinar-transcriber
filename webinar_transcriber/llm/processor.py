@@ -20,6 +20,8 @@ from .prompts import (
     REPORT_POLISH_TOTAL_CHAR_BUDGET,
     SECTION_POLISH_MAX_WORKERS,
     SECTION_POLISH_SYSTEM_PROMPT,
+    SECTION_POLISH_TRANSCRIPT_LIMIT,
+    SECTION_TLDR_ONLY_SYSTEM_PROMPT,
     SUMMARY_ITEM_LIMIT,
 )
 from .schemas import ReportPolishResponse, SchemaModelT, SectionTextResponse
@@ -30,6 +32,7 @@ from .utils import (
     normalize_polished_section_tldr,
     normalize_report_lines,
     schema_label,
+    truncate_text,
     validated_section_titles,
 )
 
@@ -181,28 +184,47 @@ class InstructorLLMProcessor:
     def _polish_section_text(
         self, section: ReportSection
     ) -> tuple[str, str, dict[str, int], list[str]]:
+        transcript_text = section.transcript_text
+        oversized = len(transcript_text) > SECTION_POLISH_TRANSCRIPT_LIMIT
         payload = {
             "id": section.id,
             "title": section.title,
             "start_sec": section.start_sec,
             "end_sec": section.end_sec,
-            "transcript_text": section.transcript_text,
+            "transcript_text": (
+                truncate_text(transcript_text, SECTION_POLISH_TRANSCRIPT_LIMIT)
+                if oversized
+                else transcript_text
+            ),
         }
         parsed, usage = self._create_structured_response(
-            system_prompt=SECTION_POLISH_SYSTEM_PROMPT,
+            system_prompt=(
+                SECTION_TLDR_ONLY_SYSTEM_PROMPT if oversized else SECTION_POLISH_SYSTEM_PROMPT
+            ),
             user_payload=payload,
             response_model=SectionTextResponse,
             error_prefix=f"Section polishing failed for {section.id}",
         )
 
-        transcript_text = normalize_polished_section_text(
-            original_text=section.transcript_text,
-            polished_text=parsed.transcript_text,
-            section_id=section.id,
-        )
+        if oversized:
+            transcript_text = section.transcript_text
+            warnings = [
+                f"Section {section.id} is too long for transcript polishing; "
+                "kept original transcript text and polished TL;DR only."
+            ]
+        else:
+            transcript_text = normalize_polished_section_text(
+                original_text=section.transcript_text,
+                polished_text=parsed.transcript_text,
+                section_id=section.id,
+            )
+            warnings = []
         tldr = normalize_polished_section_tldr(parsed.tldr)
-        warnings: list[str] = []
-        if transcript_text == section.transcript_text and not parsed.transcript_text.strip():
+        if (
+            not oversized
+            and transcript_text == section.transcript_text
+            and not parsed.transcript_text.strip()
+        ):
             warnings.append(
                 f"Section polish response returned an empty transcript text for {section.id}; "
                 "kept original text."

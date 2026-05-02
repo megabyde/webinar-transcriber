@@ -7,6 +7,7 @@ REPORT_SECTION_EXCERPT_LIMIT = 1_200
 SUMMARY_ITEM_LIMIT = 5
 ACTION_ITEM_LIMIT = 7
 SECTION_POLISH_MAX_WORKERS = 6
+SECTION_POLISH_TRANSCRIPT_LIMIT = 12_000
 
 REPORT_POLISH_SYSTEM_PROMPT = """
 You are improving a structured report built from an automatic speech transcript.
@@ -40,4 +41,16 @@ when that is clearer and more compact. Capture the main claims, important exampl
 concrete mechanisms, and practical takeaways when they are present in the source. Prefer a format
 that is easy to scan quickly without turning into a wall of text. The cheat sheet should be easier
 to read than the transcript, but it must not add new facts.
+""".strip()
+
+SECTION_TLDR_ONLY_SYSTEM_PROMPT = """
+You are writing a factual cheat sheet for one section of an automatic speech transcript.
+
+Keep the original language. Do not translate. Preserve names, terminology, and meaning.
+Do not add new facts, interpretations, advice, or commentary.
+Return only a factual section cheat sheet / TL;DR. Usually write 3-6 short paragraphs, and you may
+use bullets or numbered items when that is clearer and more compact. Capture the main claims,
+important examples, caveats, concrete mechanisms, and practical takeaways when they are present in
+the source. Prefer a format that is easy to scan quickly without turning into a wall of text.
+Leave transcript_text empty.
 """.strip()

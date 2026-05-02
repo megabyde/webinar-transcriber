@@ -510,6 +510,47 @@ class TestInstructorLlmProcessor:
             "section-2": "section-2 transcript.",
         }
 
+    def test_polishes_only_tldr_for_oversized_section_text(self) -> None:
+        oversized_text = "Long transcript sentence. " * 600
+        fake_client = self.FakeClient([
+            (
+                SectionTextResponse(tldr="Long section recap.", transcript_text=""),
+                self.FakeCompletion({"input_tokens": 10, "output_tokens": 3, "total_tokens": 13}),
+            )
+        ])
+        processor = InstructorLLMProcessor(
+            client=fake_client, provider_name="openai", model_name="gpt-test"
+        )
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Long section",
+                    start_sec=0.0,
+                    end_sec=1200.0,
+                    transcript_text=oversized_text,
+                )
+            ],
+        )
+
+        result = processor.polish_report_sections_with_progress(report)
+
+        messages = cast("list[dict[str, object]]", fake_client.calls[0]["messages"])
+        payload = json.loads(cast("str", messages[1]["content"]))
+        system_prompt = cast("str", messages[0]["content"])
+        assert "Leave transcript_text empty." in system_prompt
+        assert len(cast("str", payload["transcript_text"])) < len(oversized_text)
+        assert result.section_transcripts == {"section-1": oversized_text}
+        assert result.section_tldrs == {"section-1": "Long section recap."}
+        assert result.usage == {"input_tokens": 10, "output_tokens": 3, "total_tokens": 13}
+        assert result.warnings == [
+            "Section section-1 is too long for transcript polishing; "
+            "kept original transcript text and polished TL;DR only."
+        ]
+
 
 class TestInstructorProcessorFlow:
     class ResponseClient:
