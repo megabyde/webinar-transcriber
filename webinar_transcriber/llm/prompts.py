@@ -29,6 +29,9 @@ Fix punctuation, capitalization, and obvious ASR mistakes.
 Preserve meaning, order, and level of detail.
 Apply only light rephrasing for readability.
 Do not add new facts, interpretations, advice, or commentary.
+If the transcript contains a played song, sung lyrics, or quoted song text, do not reproduce or
+rewrite the lyrics. Replace that span with a short factual marker such as "[music break]" or
+"A song plays during the break", then continue polishing the surrounding spoken transcript.
 Prefer normal sentence punctuation. Do not add stylistic ellipses unless the source
 clearly trails off.
 Split the text into natural paragraphs separated by blank lines, usually 3-6 sentences
@@ -39,5 +42,6 @@ one-line summary. Usually write 3-6 short paragraphs, and you may use bullets or
 when that is clearer and more compact. Capture the main claims, important examples, caveats,
 concrete mechanisms, and practical takeaways when they are present in the source. Prefer a format
 that is easy to scan quickly without turning into a wall of text. The cheat sheet should be easier
-to read than the transcript, but it must not add new facts.
+to read than the transcript, but it must not add new facts. Do not quote song lyrics in the TL;DR;
+mention only that there was a music break if relevant.
 """.strip()

@@ -510,6 +510,44 @@ class TestInstructorLlmProcessor:
             "section-2": "section-2 transcript.",
         }
 
+    def test_section_prompt_instructs_model_not_to_reproduce_song_lyrics(self) -> None:
+        fake_client = self.FakeClient([
+            (
+                SectionTextResponse(
+                    tldr="The speaker pauses for a music break.",
+                    transcript_text="The speaker pauses.\n\n[music break]\n\nThe session resumes.",
+                ),
+                self.FakeCompletion({"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}),
+            )
+        ])
+        processor = InstructorLLMProcessor(
+            client=fake_client, provider_name="openai", model_name="gpt-test"
+        )
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Break",
+                    start_sec=0.0,
+                    end_sec=10.0,
+                    transcript_text=(
+                        "The speaker pauses. La la la quoted song text. The session resumes."
+                    ),
+                )
+            ],
+        )
+
+        processor.polish_report_sections_with_progress(report)
+
+        messages = cast("list[dict[str, object]]", fake_client.calls[0]["messages"])
+        system_prompt = cast("str", messages[0]["content"])
+        compact_prompt = " ".join(system_prompt.split())
+        assert "do not reproduce or rewrite the lyrics" in compact_prompt
+        assert "Do not quote song lyrics in the TL;DR" in compact_prompt
+
 
 class TestInstructorProcessorFlow:
     class ResponseClient:
