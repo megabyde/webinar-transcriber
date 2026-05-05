@@ -198,7 +198,6 @@ class InstructorLLMProcessor:
         transcript_text = normalize_polished_section_text(
             original_text=section.transcript_text,
             polished_text=parsed.transcript_text,
-            section_id=section.id,
         )
         tldr = normalize_polished_section_tldr(parsed.tldr)
         warnings: list[str] = []

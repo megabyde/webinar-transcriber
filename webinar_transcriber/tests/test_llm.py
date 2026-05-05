@@ -679,7 +679,6 @@ class TestLlmNormalization:
         normalized = normalize_polished_section_text(
             original_text="Original sentence.",
             polished_text="  First   line \nwith spacing.\n\n  Second\tparagraph.  ",
-            section_id="section-1",
         )
 
         assert normalized == "First line with spacing.\n\nSecond paragraph."
@@ -690,7 +689,6 @@ class TestLlmNormalization:
         normalized = normalize_polished_section_text(
             original_text="Original sentence.",
             polished_text="Rewritten sentence...",
-            section_id="section-1",
         )
 
         assert normalized == "Rewritten sentence."
@@ -699,7 +697,6 @@ class TestLlmNormalization:
         normalized = normalize_polished_section_text(
             original_text="Original sentence...",
             polished_text="Rewritten sentence...",
-            section_id="section-1",
         )
 
         assert normalized == "Rewritten sentence..."
@@ -708,18 +705,18 @@ class TestLlmNormalization:
         self,
     ) -> None:
         normalized = normalize_polished_section_text(
-            original_text="Original sentence.", polished_text="   ", section_id="section-1"
+            original_text="Original sentence.", polished_text="   "
         )
 
         assert normalized == "Original sentence."
 
-    def test_normalize_polished_section_text_rejects_suspiciously_short_output(self) -> None:
-        with pytest.raises(LLMProcessingError, match="looked truncated for section-1"):
-            normalize_polished_section_text(
-                original_text="Long original text. " * 8,
-                polished_text="Too short.",
-                section_id="section-1",
-            )
+    def test_normalize_polished_section_text_accepts_concise_output(self) -> None:
+        normalized = normalize_polished_section_text(
+            original_text="Long original text. " * 8,
+            polished_text="Too short.",
+        )
+
+        assert normalized == "Too short."
 
     def test_normalize_polished_section_tldr_uses_same_paragraph_normalization(self) -> None:
         normalized = normalize_polished_section_tldr(

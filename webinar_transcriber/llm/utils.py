@@ -162,24 +162,15 @@ def normalize_polished_text(*, original_text: str, polished_text: str) -> str:
     return cleaned
 
 
-def normalize_polished_section_text(
-    *, original_text: str, polished_text: str, section_id: str
-) -> str:
-    """Normalize polished section text and reject suspiciously truncated output.
+def normalize_polished_section_text(*, original_text: str, polished_text: str) -> str:
+    """Normalize polished section text.
 
     Returns:
         str: The accepted polished section text, or the original text when empty.
-
-    Raises:
-        LLMProcessingError: If the polished section text looks implausibly truncated.
     """
     cleaned = normalize_polished_text(original_text=original_text, polished_text=polished_text)
     if not cleaned:
         return original_text
-    if len(cleaned) < 20 and len(original_text.strip()) > 100:
-        raise LLMProcessingError(
-            f"Section polish response looked truncated for {section_id}; kept original text."
-        )
     return cleaned
 
 
