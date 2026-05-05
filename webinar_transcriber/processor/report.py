@@ -45,7 +45,7 @@ def run_report_phase(
     Returns:
         ReportPhaseResult: The report artifacts and optional video alignment data.
     """
-    llm_enhancer, ctx.llm_runtime = resolve_llm_processor(
+    llm_enhancer = resolve_llm_processor(
         enable_llm=enable_llm,
         llm_processor=llm_processor,
         reporter=ctx.reporter,
@@ -63,7 +63,7 @@ def run_report_phase(
         ctx.reporter.warn(message)
 
     if isinstance(media_asset, VideoAsset):
-        detect_scene_total = _estimated_scene_sample_count(media_asset)
+        detect_scene_total = video_runtime.estimated_scene_sample_count(media_asset.duration_sec)
         with progress_stage(
             ctx,
             "detect_scenes",
@@ -135,7 +135,7 @@ def run_report_phase(
             sections.append(replace(section, image_path=frame.image_path) if frame else section)
         report = replace(report, sections=sections)
 
-    report, ctx.llm_runtime = maybe_polish_report(
+    report = maybe_polish_report(
         report,
         llm_processor=llm_enhancer,
         ctx=ctx,
@@ -155,7 +155,3 @@ def run_report_phase(
     return ReportPhaseResult(
         report=report, alignment_blocks=alignment_blocks, scenes=scenes, slide_frames=slide_frames
     )
-
-
-def _estimated_scene_sample_count(media_asset: VideoAsset) -> int:
-    return video_runtime.estimated_scene_sample_count(media_asset.duration_sec)

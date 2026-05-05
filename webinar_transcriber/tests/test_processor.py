@@ -355,6 +355,26 @@ class TestProcessInput:
 
         assert transcriber.close_calls == 1
 
+    def test_passes_threads_to_owned_transcriber(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        input_path = FIXTURE_DIR / "sample-audio.mp3"
+        install_pipeline_runtime(
+            monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime()
+        )
+        transcriber = FakeTranscriber()
+        transcriber_kwargs: dict[str, object] = {}
+
+        def transcriber_factory(*_args: object, **kwargs: object) -> FakeTranscriber:
+            transcriber_kwargs.update(kwargs)
+            return transcriber
+
+        monkeypatch.setattr("webinar_transcriber.asr.WhisperCppTranscriber", transcriber_factory)
+
+        process_input(input_path, output_dir=tmp_path / "run", asr_threads=3)
+
+        assert transcriber_kwargs["threads"] == 3
+
     def test_persists_intermediate_artifacts_on_failure(self, tmp_path: Path) -> None:
         class OneWindowTranscriber(FakeTranscriber):
             def transcribe_inference_windows(
@@ -671,12 +691,13 @@ class TestProcessorSupport:
             "LLMProcessor", SimpleNamespace(provider_name="openai", model_name="gpt-test")
         )
 
-        resolved_processor, runtime = resolve_llm_processor(
+        runtime = LLMRuntimeState()
+        resolved_processor = resolve_llm_processor(
             enable_llm=True,
             llm_processor=fake_processor,
             reporter=reporter,
             warnings=warnings,
-            llm_runtime=LLMRuntimeState(),
+            llm_runtime=runtime,
         )
 
         assert resolved_processor is fake_processor
@@ -690,12 +711,13 @@ class TestProcessorSupport:
             "webinar_transcriber.processor.llm.build_llm_processor_from_env", lambda: env_processor
         )
 
-        resolved_processor, runtime = resolve_llm_processor(
+        runtime = LLMRuntimeState()
+        resolved_processor = resolve_llm_processor(
             enable_llm=True,
             llm_processor=None,
             reporter=reporter,
             warnings=warnings,
-            llm_runtime=LLMRuntimeState(),
+            llm_runtime=runtime,
         )
 
         assert resolved_processor is env_processor
@@ -707,12 +729,13 @@ class TestProcessorSupport:
             lambda: (_ for _ in ()).throw(LLMConfigurationError("missing env")),
         )
 
-        resolved_processor, runtime = resolve_llm_processor(
+        runtime = LLMRuntimeState()
+        resolved_processor = resolve_llm_processor(
             enable_llm=True,
             llm_processor=None,
             reporter=reporter,
             warnings=warnings,
-            llm_runtime=LLMRuntimeState(),
+            llm_runtime=runtime,
         )
 
         assert resolved_processor is None
