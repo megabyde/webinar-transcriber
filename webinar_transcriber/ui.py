@@ -67,9 +67,7 @@ class RichStageReporter(BaseStageReporter):
         *,
         total: float,
         count_label: str | None = None,
-        count_multiplier: float = 1.0,
         rate_label: str | None = None,
-        rate_multiplier: float = 1.0,
         detail: str | None = None,
     ) -> None:
         """Start a determinate progress display for a stage."""
@@ -96,15 +94,12 @@ class RichStageReporter(BaseStageReporter):
             label,
             total=max(total, 1.0),
             count_label=count_label,
-            count_multiplier=count_multiplier,
             count_text=_count_text(
                 completed=0.0,
                 total=max(total, 1.0),
                 count_label=count_label,
-                count_multiplier=count_multiplier,
             ),
             rate_label=rate_label,
-            rate_multiplier=rate_multiplier,
             rate_text="",
             detail_text=detail or "",
         )
@@ -127,13 +122,11 @@ class RichStageReporter(BaseStageReporter):
                 completed=task.completed,
                 total=task.total,
                 count_label=task.fields.get("count_label"),
-                count_multiplier=float(task.fields.get("count_multiplier", 1.0)),
             ),
             rate_text=_rate_text(
                 completed=task.completed,
                 elapsed_sec=perf_counter() - (self._active_stage_started_at or 0.0),
                 rate_label=task.fields.get("rate_label"),
-                rate_multiplier=float(task.fields.get("rate_multiplier", 1.0)),
             ),
         )
 
@@ -208,26 +201,22 @@ class RichStageReporter(BaseStageReporter):
         self._active_stage_started_at = None
 
 
-def _count_text(
-    *, completed: float, total: float | None, count_label: object, count_multiplier: float
-) -> str:
+def _count_text(*, completed: float, total: float | None, count_label: object) -> str:
     if total is None or not count_label:
         return ""
 
-    completed_count = int(completed * count_multiplier)
-    total_count = int(total * count_multiplier)
+    completed_count = int(completed)
+    total_count = int(total)
     sep = "" if count_label in {"s", "ms", "%"} else " "
     return f"{completed_count}/{total_count}{sep}{count_label}"
 
 
-def _rate_text(
-    *, completed: float, elapsed_sec: float, rate_label: object, rate_multiplier: float
-) -> str:
+def _rate_text(*, completed: float, elapsed_sec: float, rate_label: object) -> str:
     if not rate_label or completed <= 0:
         return ""
     if elapsed_sec <= 0:
         return ""
 
-    rate = completed * rate_multiplier / elapsed_sec
+    rate = completed / elapsed_sec
     display_rate = f"{rate:.0f}" if rate >= 100 else f"{rate:.1f}"
     return f"{display_rate} {rate_label}"

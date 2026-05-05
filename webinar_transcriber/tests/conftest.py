@@ -99,12 +99,10 @@ class RecordingReporter(BaseStageReporter):
         *,
         total: float,
         count_label: str | None = None,
-        count_multiplier: float = 1.0,
         rate_label: str | None = None,
-        rate_multiplier: float = 1.0,
         detail: str | None = None,
     ) -> None:
-        del count_label, count_multiplier, rate_label, rate_multiplier
+        del count_label, rate_label
         self.started.append((stage_key, label))
         self.progress.append(("start", stage_key, total, detail))
 

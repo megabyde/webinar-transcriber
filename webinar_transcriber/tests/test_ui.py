@@ -17,38 +17,28 @@ if TYPE_CHECKING:
 
 class TestFormatHelpers:
     def test_count_text_renders_frame_counter(self) -> None:
-        count_text = _count_text(
-            completed=74.0, total=100.0, count_label="frames", count_multiplier=100.0
-        )
+        count_text = _count_text(completed=74.0, total=100.0, count_label="frames")
 
-        assert count_text == "7400/10000 frames"
+        assert count_text == "74/100 frames"
 
     def test_count_text_renders_compact_seconds_suffix(self) -> None:
-        count_text = _count_text(completed=74.0, total=100.0, count_label="s", count_multiplier=1.0)
+        count_text = _count_text(completed=74.0, total=100.0, count_label="s")
 
         assert count_text == "74/100s"
 
     def test_rate_text_renders_frames_per_second(self) -> None:
-        rate_text = _rate_text(
-            completed=74.0, elapsed_sec=1.0, rate_label="frames/s", rate_multiplier=100.0
-        )
+        rate_text = _rate_text(completed=74.0, elapsed_sec=1.0, rate_label="frames/s")
 
-        assert rate_text == "7400 frames/s"
+        assert rate_text == "74.0 frames/s"
 
     def test_rate_text_hides_empty_values(self) -> None:
-        rate_text = _rate_text(
-            completed=0.0, elapsed_sec=1.0, rate_label="frames/s", rate_multiplier=100.0
-        )
+        rate_text = _rate_text(completed=0.0, elapsed_sec=1.0, rate_label="frames/s")
 
         assert rate_text == ""
 
     def test_count_and_rate_helpers_hide_empty_values(self) -> None:
-        formatted_count = _count_text(
-            completed=3.0, total=None, count_label="frames", count_multiplier=1.0
-        )
-        rate_text = _rate_text(
-            completed=3.0, elapsed_sec=0.0, rate_label="frames/s", rate_multiplier=1.0
-        )
+        formatted_count = _count_text(completed=3.0, total=None, count_label="frames")
+        rate_text = _rate_text(completed=3.0, elapsed_sec=0.0, rate_label="frames/s")
 
         assert formatted_count == ""
         assert rate_text == ""
@@ -155,10 +145,8 @@ class TestRichStageReporter:
             1.0,
             {
                 "count_label": "frames",
-                "count_multiplier": 1.0,
                 "count_text": "0/1 frames",
                 "rate_label": "frames/s",
-                "rate_multiplier": 1.0,
                 "rate_text": "",
                 "detail_text": "scene-1",
             },
