@@ -206,8 +206,8 @@ prompt carryover, and an automatically selected thread count.
 - `--language CODE`: force a Whisper language code such as `en` or `ru`.
 - `--threads N`: set the CPU worker count passed to `whisper.cpp`. GPU-enabled builds can offload
   supported model work to the GPU, but `whisper.cpp` still uses CPU threads for non-offloaded work,
-  scheduling, and language detection. By default, the transcriber uses the host CPU count; lower
-  this when you need to leave CPU capacity for other work.
+  scheduling, and language detection. By default, the transcriber uses the host CPU count capped at
+  8 threads; lower this when you need to leave CPU capacity for other work.
 
 ## Reference
 
