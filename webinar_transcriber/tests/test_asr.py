@@ -14,7 +14,6 @@ from webinar_transcriber.asr import (
     build_prompt_carryover,
     device_name_from_system_info,
 )
-from webinar_transcriber.asr.carryover import _sanitize_prompt
 from webinar_transcriber.asr.config import (
     DEFAULT_WHISPER_ENTROPY_THOLD,
     DEFAULT_WHISPER_LOGPROB_THOLD,
@@ -439,7 +438,7 @@ class TestWhisperCppTranscriber:
 
 
 class TestPromptCarryover:
-    def test_build_prompt_carryover_uses_last_sentences_and_token_budget(self) -> None:
+    def test_build_prompt_carryover_uses_tail_token_budget(self) -> None:
         carryover = build_prompt_carryover(
             DecodedWindow(
                 window=InferenceWindow(
@@ -448,7 +447,7 @@ class TestPromptCarryover:
                 text="First sentence. Second sentence. Third sentence here.",
                 segments=[],
             ),
-            settings=PromptCarryoverSettings(max_sentences=2, max_tokens=4),
+            settings=PromptCarryoverSettings(max_tokens=4),
         )
 
         assert carryover == "sentence. Third sentence here."
@@ -459,7 +458,7 @@ class TestPromptCarryover:
                 window=InferenceWindow(
                     window_id="window-2", region_index=0, start_sec=18.5, end_sec=35.0
                 ),
-                text="",
+                text=" \n\t ",
                 segments=[],
             ),
             settings=PromptCarryoverSettings(),
@@ -487,7 +486,3 @@ class TestPromptCarryover:
         )
 
         assert carryover is None
-
-    def test_sanitize_prompt_drops_missing_prompts(self) -> None:
-        assert _sanitize_prompt(None, max_tokens=8) == ""
-        assert _sanitize_prompt("   ", max_tokens=8) == ""
