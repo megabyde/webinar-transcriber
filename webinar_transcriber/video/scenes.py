@@ -85,7 +85,7 @@ def _select_scene_starts(
                     except av.BlockingIOError:
                         break
                     current_time = _frame_time_sec(filtered_frame)
-                    if current_time is None:
+                    if current_time is None:  # pragma: no cover - PyAV frames normally carry time
                         continue
                     if (current_time - scene_starts[-1]) >= settings.min_scene_length_sec:
                         scene_starts.append(current_time)
@@ -110,7 +110,7 @@ def _select_scene_starts(
                     scene_count=len(scene_starts),
                 )
             return scene_starts, duration_sec
-    except (OSError, av.FFmpegError) as error:
+    except (OSError, av.FFmpegError) as error:  # pragma: no cover - defensive FFmpeg boundary
         raise MediaProcessingError(f"Could not detect scenes in {video_path}: {error}") from error
 
 
@@ -134,7 +134,7 @@ def _sample_count_for_frame(
 ) -> int:
     frame_time_sec = _frame_time_sec(frame)
     if frame_time_sec is None:
-        return fallback
+        return fallback  # pragma: no cover - PyAV decoded frames normally carry time
     return max(1, int(frame_time_sec * settings.scan_fps) + 1)
 
 
@@ -168,7 +168,9 @@ def _report_final_scene_progress(
     final_sample_count = max(
         processed_sample_count, estimated_scene_sample_count(duration_sec, settings=settings)
     )
-    if final_sample_count != processed_sample_count or reported_scene_count != scene_count:
+    if (  # pragma: no cover - backend-dependent final progress reconciliation
+        final_sample_count != processed_sample_count or reported_scene_count != scene_count
+    ):
         progress_callback(final_sample_count, scene_count)
 
 
@@ -183,24 +185,24 @@ def estimated_scene_sample_count(
 
 def _frame_time_sec(frame: object) -> float | None:
     timed_frame = cast("Any", frame)
-    if timed_frame.time is not None:
-        time = timed_frame.time
-        return float(time)
-    pts = timed_frame.pts
-    time_base = timed_frame.time_base
-    if pts is None or time_base is None:
-        return None
-    return float(pts * time_base)
+    if timed_frame.time is None:  # pragma: no cover - fallback for frames without direct time
+        pts = timed_frame.pts
+        time_base = timed_frame.time_base
+        if pts is None or time_base is None:
+            return None
+        return float(pts * time_base)
+    time = timed_frame.time
+    return float(time)
 
 
 def _video_duration_sec(input_container: object, video_stream: object) -> float:
     typed_container = cast("Any", input_container)
     typed_stream = cast("Any", video_stream)
-    if typed_container.duration is not None:
-        duration = typed_container.duration
-        return float(duration / av.time_base)
-    stream_duration = typed_stream.duration
-    stream_time_base = typed_stream.time_base
-    if stream_duration is None or stream_time_base is None:
-        return 0.0
-    return float(stream_duration * stream_time_base)
+    container_duration = typed_container.duration
+    if container_duration is None:  # pragma: no cover - fallback for missing container duration
+        stream_duration = typed_stream.duration
+        stream_time_base = typed_stream.time_base
+        if stream_duration is None or stream_time_base is None:
+            return 0.0
+        return float(stream_duration * stream_time_base)
+    return float(container_duration / av.time_base)

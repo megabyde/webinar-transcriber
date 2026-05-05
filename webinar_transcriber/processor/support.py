@@ -97,9 +97,7 @@ def progress_stage(
     *,
     total: float,
     count_label: str | None = None,
-    count_multiplier: float = 1.0,
     rate_label: str | None = None,
-    rate_multiplier: float = 1.0,
     detail: str | None = None,
 ) -> Iterator[ProgressStageHandle]:
     """Record one determinate stage's timing and progress through a context manager."""
@@ -112,9 +110,7 @@ def progress_stage(
         label,
         total=total,
         count_label=count_label,
-        count_multiplier=count_multiplier,
         rate_label=rate_label,
-        rate_multiplier=rate_multiplier,
         detail=detail,
     )
     try:

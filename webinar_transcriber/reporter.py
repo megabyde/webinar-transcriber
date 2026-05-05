@@ -26,9 +26,7 @@ class BaseStageReporter:
         *,
         total: float,
         count_label: str | None = None,
-        count_multiplier: float = 1.0,
         rate_label: str | None = None,
-        rate_multiplier: float = 1.0,
         detail: str | None = None,
     ) -> None:
         """Ignore a determinate stage-start event."""

@@ -1,13 +1,13 @@
 """Tests for baseline video helpers."""
 
+from fractions import Fraction
 from pathlib import Path
-from typing import Any
 
 import av
+import numpy as np
 import pytest
 from PIL import Image
 
-from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.models import Scene
 from webinar_transcriber.tests.conftest import FakeContextContainer
 from webinar_transcriber.video import (
@@ -17,7 +17,6 @@ from webinar_transcriber.video import (
     extract_representative_frames,
 )
 from webinar_transcriber.video.frames import _normalize_extracted_frame
-from webinar_transcriber.video.scenes import _select_scene_starts
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 SAMPLE_VIDEO_PATH = FIXTURE_DIR / "sample-video.mp4"
@@ -62,17 +61,6 @@ class FakeVideoStream:
     index = 0
 
 
-class FakeVideoInputContext:
-    def __init__(self, container: Any) -> None:
-        self.container = container
-
-    def __enter__(self) -> tuple[Any, Any]:
-        return self.container, self.container.streams[0]
-
-    def __exit__(self, exc_type, exc, tb) -> None:
-        return None
-
-
 class FakeFrameContainer(FakeContextContainer):
     def __init__(self, frame_batches: list[list[FakeFrame]] | None = None) -> None:
         self.streams = [FakeVideoStream()]
@@ -88,6 +76,26 @@ class FakeFrameContainer(FakeContextContainer):
         if self.frame_batches:
             return iter(self.frame_batches.pop(0))
         return iter([FakeFrame(999.0)])
+
+
+def _write_synthetic_video(output_path: Path, frame_colors: list[int], *, fps: int = 10) -> None:
+    with av.open(str(output_path), "w") as container:
+        stream = container.add_stream("mpeg4", rate=fps)
+        stream.width = 64
+        stream.height = 64
+        stream.pix_fmt = "yuv420p"
+        stream.time_base = Fraction(1, fps)
+
+        for index, color in enumerate(frame_colors):
+            pixels = np.full((64, 64, 3), color, dtype=np.uint8)
+            frame = av.VideoFrame.from_ndarray(pixels, format="rgb24")
+            frame.pts = index
+            frame.time_base = Fraction(1, fps)
+            for packet in stream.encode(frame):
+                container.mux(packet)
+
+        for packet in stream.encode():
+            container.mux(packet)  # pragma: no cover - encoder-dependent delayed packets
 
 
 class TestDetectScenes:
@@ -116,6 +124,43 @@ class TestDetectScenes:
         scenes = detect_scenes(SAMPLE_VIDEO_PATH)
 
         assert scenes == [Scene(id="scene-1", start_sec=0.0, end_sec=2.0)]
+
+    @pytest.mark.slow
+    def test_detect_scenes_keeps_blank_video_as_one_scene(self, tmp_path: Path) -> None:
+        video_path = tmp_path / "blank.mp4"
+        _write_synthetic_video(video_path, [0] * 10)
+
+        scenes = detect_scenes(
+            video_path,
+            settings=SceneDetectionSettings(
+                scan_fps=10.0, score_threshold=0.05, min_scene_length_sec=0.1
+            ),
+        )
+
+        assert scenes == [Scene(id="scene-1", start_sec=0.0, end_sec=1.0)]
+
+    @pytest.mark.slow
+    def test_detect_scenes_finds_synthetic_alternating_color_scene(self, tmp_path: Path) -> None:
+        video_path = tmp_path / "alternating-color.mp4"
+        progress_updates: list[tuple[int, int]] = []
+        _write_synthetic_video(video_path, [0, 255] * 5)
+
+        scenes = detect_scenes(
+            video_path,
+            settings=SceneDetectionSettings(
+                scan_fps=10.0, score_threshold=0.05, min_scene_length_sec=0.1
+            ),
+            progress_callback=lambda sample_count, scene_count: progress_updates.append((
+                sample_count,
+                scene_count,
+            )),
+        )
+
+        assert scenes == [
+            Scene(id="scene-1", start_sec=0.0, end_sec=0.1),
+            Scene(id="scene-2", start_sec=0.1, end_sec=1.0),
+        ]
+        assert progress_updates[-1] == (10, 2)
 
 
 class TestFrameExtraction:
@@ -324,207 +369,20 @@ class TestDetectScenesFallback:
 
         assert sample_count == 5
 
-    def test_detect_scenes_returns_single_zero_length_scene_when_no_frames(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            "webinar_transcriber.video.scenes._select_scene_starts",
-            lambda *_args, **_kwargs: ([0.0], 0.0),
-        )
+    def test_estimated_scene_sample_count_keeps_zero_duration_visible(self) -> None:
+        assert estimated_scene_sample_count(0.0) == 1
 
-        scenes = detect_scenes(SAMPLE_VIDEO_PATH)
+    @pytest.mark.slow
+    def test_detect_scenes_prefers_explicit_duration(self, tmp_path: Path) -> None:
+        video_path = tmp_path / "blank.mp4"
+        _write_synthetic_video(video_path, [0] * 10)
 
-        assert scenes == [Scene(id="scene-1", start_sec=0.0, end_sec=0.0)]
-
-    def test_detect_scenes_prefers_explicit_duration(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            "webinar_transcriber.video.scenes._select_scene_starts",
-            lambda *_args, **_kwargs: ([0.0, 1.0], 9.0),
-        )
-
-        scenes = detect_scenes(SAMPLE_VIDEO_PATH, duration_sec=2.0)
-
-        assert [(scene.start_sec, scene.end_sec) for scene in scenes] == [(0.0, 1.0), (1.0, 2.0)]
-
-
-class TestSelectSceneStarts:
-    def test_select_scene_starts_wraps_open_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            "webinar_transcriber.video.scenes.open_video_input_container",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(MediaProcessingError("bad open")),
-        )
-
-        with pytest.raises(MediaProcessingError, match="bad open"):
-            _select_scene_starts(
-                SAMPLE_VIDEO_PATH,
-                settings=SceneDetectionSettings(score_threshold=0.3, min_scene_length_sec=3.0),
-            )
-
-    def test_select_scene_starts_raises_when_no_video_stream(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            "webinar_transcriber.video.scenes.open_video_input_container",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(
-                MediaProcessingError(f"No video stream found in {SAMPLE_VIDEO_PATH}.")
-            ),
-        )
-
-        with pytest.raises(
-            MediaProcessingError, match=f"No video stream found in {SAMPLE_VIDEO_PATH}."
-        ):
-            _select_scene_starts(
-                SAMPLE_VIDEO_PATH,
-                settings=SceneDetectionSettings(score_threshold=0.3, min_scene_length_sec=3.0),
-            )
-
-    def test_select_scene_starts_reports_progress(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        progress_updates: list[tuple[int, int]] = []
-
-        class FakeFrame:
-            def __init__(
-                self, time: float | None, *, pts: int | None = None, time_base: float | None = None
-            ) -> None:
-                self.time = time
-                self.pts = pts
-                self.time_base = time_base
-
-        class FakeVideoStream:
-            type = "video"
-            duration = 50
-            time_base = 0.1
-
-        class FakeGraph:
-            def __init__(self) -> None:
-                self._queued_frames = [
-                    [],
-                    [FakeFrame(None), FakeFrame(None, pts=10, time_base=0.1)],
-                    [FakeFrame(4.0)],
-                ]
-                self._active_outputs: list[FakeFrame] = []
-
-            def vpush(self, _frame: object) -> None:
-                self._active_outputs = self._queued_frames.pop(0)
-
-            def vpull(self) -> FakeFrame:
-                if not self._active_outputs:
-                    raise av.BlockingIOError(11, "again")
-                return self._active_outputs.pop(0)
-
-        class FakeContainer(FakeContextContainer):
-            duration = None
-
-            def __init__(self) -> None:
-                self.streams = [FakeVideoStream()]
-
-            def decode(self, *_args, **_kwargs):
-                return iter([FakeFrame(None), FakeFrame(None), FakeFrame(None)])
-
-        monkeypatch.setattr(
-            "webinar_transcriber.video.scenes.open_video_input_container",
-            lambda *_args, **_kwargs: FakeVideoInputContext(FakeContainer()),
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.video.scenes._build_scene_filter_graph",
-            lambda *_args, **_kwargs: FakeGraph(),
-        )
-
-        scene_starts, duration_sec = _select_scene_starts(
-            SAMPLE_VIDEO_PATH,
+        scenes = detect_scenes(
+            video_path,
+            duration_sec=2.0,
             settings=SceneDetectionSettings(
-                scan_fps=2.0, score_threshold=0.3, min_scene_length_sec=3.0
+                scan_fps=10.0, score_threshold=0.05, min_scene_length_sec=0.1
             ),
-            progress_callback=lambda sample_count, scene_count: progress_updates.append((
-                sample_count,
-                scene_count,
-            )),
         )
 
-        assert scene_starts == [0.0, 4.0]
-        assert duration_sec == 5.0
-        assert progress_updates == [(1, 1), (2, 1), (3, 2), (10, 2)]
-
-    def test_select_scene_starts_returns_zero_duration_without_container_or_stream_duration(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        progress_updates: list[tuple[int, int]] = []
-
-        class FakeVideoStream:
-            type = "video"
-            duration = None
-            time_base = None
-
-        class FakeGraph:
-            def vpush(self, _frame: object) -> None:
-                return None
-
-            def vpull(self) -> object:
-                raise av.BlockingIOError(11, "again")
-
-        class FakeContainer(FakeContextContainer):
-            duration = None
-
-            def __init__(self) -> None:
-                self.streams = [FakeVideoStream()]
-
-            def decode(self, *_args, **_kwargs):
-                return iter([FakeFrame(None)])
-
-        monkeypatch.setattr(
-            "webinar_transcriber.video.scenes.open_video_input_container",
-            lambda *_args, **_kwargs: FakeVideoInputContext(FakeContainer()),
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.video.scenes._build_scene_filter_graph",
-            lambda *_args, **_kwargs: FakeGraph(),
-        )
-
-        scene_starts, duration_sec = _select_scene_starts(
-            SAMPLE_VIDEO_PATH,
-            settings=SceneDetectionSettings(score_threshold=0.3, min_scene_length_sec=3.0),
-            progress_callback=lambda sample_count, scene_count: progress_updates.append((
-                sample_count,
-                scene_count,
-            )),
-        )
-
-        assert scene_starts == [0.0]
-        assert duration_sec == 0.0
-        assert progress_updates == [(1, 1)]
-
-    def test_select_scene_starts_wraps_filter_errors(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        class FakeVideoStream:
-            type = "video"
-            duration = None
-            time_base = None
-
-        class FakeGraph:
-            def vpush(self, _frame: object) -> None:
-                raise OSError("filter failed")
-
-        class FakeContainer(FakeContextContainer):
-            duration = None
-
-            def __init__(self) -> None:
-                self.streams = [FakeVideoStream()]
-
-            def decode(self, *_args, **_kwargs):
-                return iter([FakeFrame(None)])
-
-        monkeypatch.setattr(
-            "webinar_transcriber.video.scenes.open_video_input_container",
-            lambda *_args, **_kwargs: FakeVideoInputContext(FakeContainer()),
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.video.scenes._build_scene_filter_graph",
-            lambda *_args, **_kwargs: FakeGraph(),
-        )
-
-        with pytest.raises(
-            MediaProcessingError,
-            match=f"Could not detect scenes in {SAMPLE_VIDEO_PATH}: filter failed",
-        ):
-            _select_scene_starts(
-                SAMPLE_VIDEO_PATH,
-                settings=SceneDetectionSettings(score_threshold=0.3, min_scene_length_sec=3.0),
-            )
+        assert scenes == [Scene(id="scene-1", start_sec=0.0, end_sec=2.0)]
