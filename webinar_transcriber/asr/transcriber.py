@@ -67,6 +67,9 @@ def _looks_like_model_path(model_name: str) -> bool:
 
 @contextmanager
 def _disable_tqdm_progress() -> Iterator[None]:
+    """Suppress pywhispercpp download progress while constructing a model."""
+    # pywhispercpp does not expose a per-call progress flag for model downloads;
+    # tqdm reads TQDM_DISABLE when the progress bar is created.
     previous = os.environ.get("TQDM_DISABLE")
     os.environ["TQDM_DISABLE"] = "1"
     try:
@@ -260,6 +263,9 @@ class WhisperCppTranscriber:
         if self._model is None:
             return
         with _redirect_native_output(self._log_path):
+            # pywhispercpp exposes native cleanup through Model.__del__ rather than a
+            # public close/free method. Dropping the adapter's reference runs that
+            # destructor immediately on CPython unless another reference is held.
             self._model = None
 
     def __exit__(
