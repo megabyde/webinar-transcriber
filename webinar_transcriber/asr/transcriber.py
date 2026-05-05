@@ -21,6 +21,7 @@ from webinar_transcriber.asr.config import (
     DEFAULT_WHISPER_ENTROPY_THOLD,
     DEFAULT_WHISPER_LOGPROB_THOLD,
     DEFAULT_WHISPER_NO_SPEECH_THOLD,
+    DEFAULT_WHISPER_TEMPERATURE_INC,
     PromptCarryoverSettings,
 )
 from webinar_transcriber.models import DecodedWindow, TranscriptSegment
@@ -205,10 +206,11 @@ class WhisperCppTranscriber:
             "print_realtime": False,
             "print_progress": False,
             "no_context": True,
-            "split_on_word": True,
+            "split_on_word": False,
             "entropy_thold": DEFAULT_WHISPER_ENTROPY_THOLD,
             "logprob_thold": DEFAULT_WHISPER_LOGPROB_THOLD,
             "no_speech_thold": DEFAULT_WHISPER_NO_SPEECH_THOLD,
+            "temperature_inc": DEFAULT_WHISPER_TEMPERATURE_INC,
         }
         try:
             with _redirect_native_output(self._log_path), _disable_tqdm_progress():
