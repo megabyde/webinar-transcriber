@@ -138,9 +138,7 @@ class InstructorLLMProcessor:
         if not report.sections:
             return SectionPolishOutputs(transcripts={}, tldrs={})
 
-        section_results: list[tuple[str, str, str, dict[str, int], list[str]] | None] = [
-            None
-        ] * len(report.sections)
+        section_results: dict[int, tuple[str, str, str, dict[str, int], list[str]]] = {}
 
         with ThreadPoolExecutor(max_workers=plan.worker_count) as executor:
             futures = {
@@ -154,9 +152,8 @@ class InstructorLLMProcessor:
 
         polished_transcripts: dict[str, str] = {}
         polished_tldrs: dict[str, str] = {}
-        for result in section_results:
-            if result is None:  # pragma: no cover - all submitted futures completed
-                continue
+        for index in range(len(report.sections)):
+            result = section_results[index]
             section_id, transcript_text, tldr, usage, section_warnings = result
             polished_transcripts[section_id] = transcript_text
             if tldr:

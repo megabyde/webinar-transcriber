@@ -3,6 +3,7 @@
 import importlib
 import json
 from threading import Event
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -171,7 +172,7 @@ class TestBuildLlmProcessorFromEnv:
 class TestInstructorLlmProcessor:
     class FakeCompletion:
         def __init__(self, usage) -> None:
-            self.usage = usage
+            self.usage = SimpleNamespace(**usage)
 
     class FakeClient:
         def __init__(self, responses) -> None:
@@ -779,17 +780,8 @@ class TestLlmNormalization:
         with pytest.raises(LLMProcessingError, match="empty section title"):
             validated_section_titles(report, [ReportSectionUpdate(id="section-1", title="   ")])
 
-    def test_extract_usage_supports_dict_and_object_shapes(self) -> None:
+    def test_extract_usage_supports_sdk_object_shape(self) -> None:
         assert extract_usage(type("Response", (), {})()) == {}
-        assert extract_usage({"usage": "ignored"}) == {}
-        assert extract_usage(
-            type("Response", (), {"usage": {"input_tokens": 2, "other": 1}})()
-        ) == {"input_tokens": 2}
-        assert extract_usage({"usage": {"input_tokens": 2, "output_tokens": 3}}) == {
-            "input_tokens": 2,
-            "output_tokens": 3,
-            "total_tokens": 5,
-        }
 
         usage_obj = type("Usage", (), {"input_tokens": 3, "output_tokens": 4})()
         response_obj = type("Response", (), {"usage": usage_obj})()
