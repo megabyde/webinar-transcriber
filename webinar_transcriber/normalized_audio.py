@@ -14,8 +14,7 @@ import numpy as np
 
 from webinar_transcriber.media import (
     MediaProcessingError,
-    _required_audio_stream,
-    open_input_media_container,
+    open_audio_input_container,
     open_output_media_container,
 )
 
@@ -56,37 +55,28 @@ def _transcode_audio_with_pyav(
     *,
     output_codec: str,
     resample_format: str,
-    output_error_message: str,
 ) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open_input_media_container(
-        input_path, error_message="Could not open {path}: {error}"
-    ) as input_container:
-        input_stream = _required_audio_stream(
-            input_container, error_message=f"No audio stream found in {input_path}."
+    with (
+        open_audio_input_container(input_path) as (input_container, input_stream),
+        open_output_media_container(output_path) as output_container,
+    ):
+        output_stream = cast(
+            "AudioStream",
+            output_container.add_stream(output_codec, rate=NORMALIZED_SAMPLE_RATE),
         )
-        with open_output_media_container(
-            output_path,
-            error_message=output_error_message,
-        ) as output_container:
-            output_stream = cast(
-                "AudioStream",
-                output_container.add_stream(output_codec, rate=NORMALIZED_SAMPLE_RATE),
-            )
-            output_stream.layout = "mono"
-            resampler = av.AudioResampler(
-                format=resample_format, layout="mono", rate=NORMALIZED_SAMPLE_RATE
-            )
+        output_stream.layout = "mono"
+        resampler = av.AudioResampler(
+            format=resample_format, layout="mono", rate=NORMALIZED_SAMPLE_RATE
+        )
 
-            for decoded_frame in input_container.decode(input_stream):
-                _mux_audio_frames(
-                    output_container, output_stream, resampler.resample(decoded_frame)
-                )
+        for decoded_frame in input_container.decode(input_stream):
+            _mux_audio_frames(output_container, output_stream, resampler.resample(decoded_frame))
 
-            _mux_audio_frames(output_container, output_stream, resampler.resample(None))
+        _mux_audio_frames(output_container, output_stream, resampler.resample(None))
 
-            for packet in output_stream.encode(None):
-                output_container.mux(packet)
+        for packet in output_stream.encode(None):
+            output_container.mux(packet)
 
     if not output_path.exists():  # pragma: no cover - PyAV defensive postcondition
         raise MediaProcessingError(f"PyAV did not write {output_path}.")
@@ -104,7 +94,6 @@ def extract_audio(input_path: Path, output_path: Path) -> Path:
         output_path,
         output_codec=NORMALIZED_AUDIO_CODEC,
         resample_format="s16",
-        output_error_message=f"Could not normalize audio from {input_path}: {{error}}",
     )
 
 
@@ -119,7 +108,6 @@ def transcode_audio_to_mp3(input_path: Path, output_path: Path) -> Path:
         output_path,
         output_codec="mp3",
         resample_format="fltp",
-        output_error_message=f"Could not transcode audio from {input_path}: {{error}}",
     )
 
 

@@ -122,7 +122,7 @@ def run_asr_pipeline(
             elapsed_sec=st.elapsed_sec(),
         )
 
-    transcription, reconciliation_stats = reconcile_decoded_windows(decoded_windows)
+    transcription = reconcile_decoded_windows(decoded_windows)
 
     with stage(ctx, "normalize_transcript", "Normalizing transcript") as st:
         write_json(layout.transcript_path, asdict(transcription))
@@ -137,7 +137,6 @@ def run_asr_pipeline(
         carryover_enabled=carryover_enabled,
         window_count=window_count,
         average_window_duration_sec=average_window_duration_sec,
-        reconciliation_boundary_fixes=reconciliation_stats.boundary_fixes,
         system_info=transcriber.system_info,
     )
     return AsrPipelineResult(

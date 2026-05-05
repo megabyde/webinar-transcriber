@@ -9,6 +9,7 @@ from webinar_transcriber.media import (
     _pyav_stream_has_attached_picture,
     _stream_duration_sec,
     open_output_media_container,
+    open_video_input_container,
     probe_media,
 )
 from webinar_transcriber.models import AudioAsset, VideoAsset
@@ -84,7 +85,21 @@ class TestOpenOutputMediaContainer:
             lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("bad open")),
         )
 
-        with pytest.raises(MediaProcessingError, match="wrapped bad open"):
-            open_output_media_container(
-                tmp_path / "out.wav", error_message="wrapped {error}"
-            ).__enter__()
+        with pytest.raises(
+            MediaProcessingError, match=r"Could not open .* for writing with PyAV: bad open"
+        ):
+            open_output_media_container(tmp_path / "out.wav").__enter__()
+
+
+class TestOpenVideoInputContainer:
+    def test_requires_video_stream(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        class FakeContainer(FakeContextContainer):
+            def __init__(self) -> None:
+                self.streams = [type("AudioStream", (), {"type": "audio"})()]
+
+        monkeypatch.setattr(
+            "webinar_transcriber.media.av.open", lambda *_args, **_kwargs: FakeContainer()
+        )
+
+        with pytest.raises(MediaProcessingError, match="No video stream found"):
+            open_video_input_container(FIXTURE_DIR / "sample-audio.mp3").__enter__()

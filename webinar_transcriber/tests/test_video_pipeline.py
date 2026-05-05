@@ -1,7 +1,7 @@
 """Tests for baseline video helpers."""
 
 from pathlib import Path
-from typing import cast
+from typing import Any
 
 import av
 import pytest
@@ -60,6 +60,17 @@ class FakeFrame:
 class FakeVideoStream:
     type = "video"
     index = 0
+
+
+class FakeVideoInputContext:
+    def __init__(self, container: Any) -> None:
+        self.container = container
+
+    def __enter__(self) -> tuple[Any, Any]:
+        return self.container, self.container.streams[0]
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        return None
 
 
 class FakeFrameContainer(FakeContextContainer):
@@ -298,9 +309,10 @@ class TestFrameExtraction:
 
         assert frames == []
         assert progress_ticks == [1, 1]
+        open_error = f"Could not open {SAMPLE_VIDEO_PATH} with PyAV: bad open"
         assert warnings == [
-            "Frame extraction failed for scene-1 at 1.0s: bad open",
-            "Frame extraction failed for scene-2 at 3.0s: bad open",
+            f"Frame extraction failed for scene-1 at 1.0s: {open_error}",
+            f"Frame extraction failed for scene-2 at 3.0s: {open_error}",
         ]
 
 
@@ -338,7 +350,7 @@ class TestDetectScenesFallback:
 class TestSelectSceneStarts:
     def test_select_scene_starts_wraps_open_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "webinar_transcriber.video.scenes.open_input_media_container",
+            "webinar_transcriber.video.scenes.open_video_input_container",
             lambda *_args, **_kwargs: (_ for _ in ()).throw(MediaProcessingError("bad open")),
         )
 
@@ -351,13 +363,11 @@ class TestSelectSceneStarts:
     def test_select_scene_starts_raises_when_no_video_stream(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        class FakeContainer(FakeContextContainer):
-            def __init__(self) -> None:
-                self.streams = [cast("object", type("AudioStream", (), {"type": "audio"})())]
-
         monkeypatch.setattr(
-            "webinar_transcriber.video.scenes.open_input_media_container",
-            lambda *_args, **_kwargs: FakeContainer(),
+            "webinar_transcriber.video.scenes.open_video_input_container",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                MediaProcessingError(f"No video stream found in {SAMPLE_VIDEO_PATH}.")
+            ),
         )
 
         with pytest.raises(
@@ -411,8 +421,8 @@ class TestSelectSceneStarts:
                 return iter([FakeFrame(None), FakeFrame(None), FakeFrame(None)])
 
         monkeypatch.setattr(
-            "webinar_transcriber.video.scenes.open_input_media_container",
-            lambda *_args, **_kwargs: FakeContainer(),
+            "webinar_transcriber.video.scenes.open_video_input_container",
+            lambda *_args, **_kwargs: FakeVideoInputContext(FakeContainer()),
         )
         monkeypatch.setattr(
             "webinar_transcriber.video.scenes._build_scene_filter_graph",
@@ -461,8 +471,8 @@ class TestSelectSceneStarts:
                 return iter([FakeFrame(None)])
 
         monkeypatch.setattr(
-            "webinar_transcriber.video.scenes.open_input_media_container",
-            lambda *_args, **_kwargs: FakeContainer(),
+            "webinar_transcriber.video.scenes.open_video_input_container",
+            lambda *_args, **_kwargs: FakeVideoInputContext(FakeContainer()),
         )
         monkeypatch.setattr(
             "webinar_transcriber.video.scenes._build_scene_filter_graph",
@@ -502,8 +512,8 @@ class TestSelectSceneStarts:
                 return iter([FakeFrame(None)])
 
         monkeypatch.setattr(
-            "webinar_transcriber.video.scenes.open_input_media_container",
-            lambda *_args, **_kwargs: FakeContainer(),
+            "webinar_transcriber.video.scenes.open_video_input_container",
+            lambda *_args, **_kwargs: FakeVideoInputContext(FakeContainer()),
         )
         monkeypatch.setattr(
             "webinar_transcriber.video.scenes._build_scene_filter_graph",

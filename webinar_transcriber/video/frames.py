@@ -9,8 +9,7 @@ from PIL import Image, ImageOps
 
 from webinar_transcriber.media import (
     MediaProcessingError,
-    _required_video_stream,
-    open_input_media_container,
+    open_video_input_container,
 )
 from webinar_transcriber.models import SlideFrame
 
@@ -44,14 +43,7 @@ def extract_representative_frames(
     unreported_scenes = list(scenes)
 
     try:
-        with open_input_media_container(
-            video_path,
-            error_message="{error}",
-        ) as input_container:
-            video_stream = _required_video_stream(
-                input_container,
-                error_message=f"No video stream found in {video_path}",
-            )
+        with open_video_input_container(video_path) as (input_container, video_stream):
             for index, scene in enumerate(scenes, start=1):
                 frame_timestamp_sec = min(
                     scene.end_sec, scene.start_sec + REPRESENTATIVE_FRAME_OFFSET_SEC
