@@ -16,7 +16,6 @@ from webinar_transcriber.video import (
     estimated_scene_sample_count,
     extract_representative_frames,
 )
-from webinar_transcriber.video.frames import _normalize_extracted_frame
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 SAMPLE_VIDEO_PATH = FIXTURE_DIR / "sample-video.mp4"
@@ -29,6 +28,15 @@ def _scene(index: int, start_sec: float, end_sec: float) -> Scene:
 class FakeImage:
     def __init__(self, *, save_output: bool = True) -> None:
         self.save_output = save_output
+
+    def load(self) -> None:
+        return None
+
+    def getexif(self) -> dict[int, int]:
+        return {}
+
+    def copy(self) -> "FakeImage":
+        return self
 
     def convert(self, _mode: str) -> "FakeImage":
         return self
@@ -46,13 +54,17 @@ class FakeFrame:
         pts: int | None = None,
         time_base: float | None = None,
         save_output: bool = True,
+        image: Image.Image | None = None,
     ) -> None:
         self.time = time
         self.pts = pts
         self.time_base = time_base
         self.save_output = save_output
+        self.image = image
 
-    def to_image(self) -> FakeImage:
+    def to_image(self) -> Image.Image | FakeImage:
+        if self.image is not None:
+            return self.image
         return FakeImage(save_output=self.save_output)
 
 
@@ -192,9 +204,6 @@ class TestFrameExtraction:
             return container
 
         monkeypatch.setattr("webinar_transcriber.video.frames.av.open", fake_open)
-        monkeypatch.setattr(
-            "webinar_transcriber.video.frames._normalize_extracted_frame", lambda _p: None
-        )
 
         frames = extract_representative_frames(
             SAMPLE_VIDEO_PATH,
@@ -209,16 +218,24 @@ class TestFrameExtraction:
         assert open_calls == [SAMPLE_VIDEO_PATH]
         assert container.decode_calls == len(scenes)
 
-    def test_normalize_extracted_frame_applies_exif_orientation(self, tmp_path) -> None:
-        image_path = tmp_path / "rotated.jpg"
+    def test_extract_representative_frames_applies_exif_orientation(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         image = Image.new("RGB", (4, 2), color="white")
         exif = Image.Exif()
         exif[274] = 6
-        image.save(image_path, exif=exif)
+        image.info["exif"] = exif.tobytes()
+        container = FakeFrameContainer([[FakeFrame(1.0, image=image)]])
 
-        _normalize_extracted_frame(image_path)
+        monkeypatch.setattr(
+            "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: container
+        )
 
-        with Image.open(image_path) as normalized_image:
+        frames = extract_representative_frames(
+            SAMPLE_VIDEO_PATH, [_scene(1, 0.0, 2.0)], tmp_path / "frames"
+        )
+
+        with Image.open(frames[0].image_path) as normalized_image:
             assert normalized_image.size == (2, 4)
             assert normalized_image.getexif().get(274) is None
 
@@ -235,9 +252,6 @@ class TestFrameExtraction:
 
         monkeypatch.setattr(
             "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: container
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.video.frames._normalize_extracted_frame", lambda _p: None
         )
 
         frames = extract_representative_frames(
@@ -263,9 +277,6 @@ class TestFrameExtraction:
         monkeypatch.setattr(
             "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: container
         )
-        monkeypatch.setattr(
-            "webinar_transcriber.video.frames._normalize_extracted_frame", lambda _p: None
-        )
 
         frames = extract_representative_frames(
             SAMPLE_VIDEO_PATH,
@@ -280,7 +291,7 @@ class TestFrameExtraction:
             "PyAV decoded nearest frame before 1.000s at 0.900s"
         ]
 
-    def test_extract_representative_frames_reports_only_unprocessed_scenes_after_late_error(
+    def test_extract_representative_frames_reports_only_unprocessed_scenes_after_late_save_error(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         progress_ticks: list[int] = []
@@ -288,18 +299,11 @@ class TestFrameExtraction:
         scenes = [_scene(1, 0.0, 2.0), _scene(2, 2.0, 4.0)]
         container = FakeFrameContainer([
             [FakeFrame(1.0)],
-            [FakeFrame(3.0)],
+            [FakeFrame(3.0, save_output=False)],
         ])
-
-        def normalize_or_fail(path: Path) -> None:
-            if path.name == "scene-2.png":
-                raise OSError("normalize failed")
 
         monkeypatch.setattr(
             "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: container
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.video.frames._normalize_extracted_frame", normalize_or_fail
         )
 
         frames = extract_representative_frames(
@@ -312,7 +316,10 @@ class TestFrameExtraction:
 
         assert [frame.scene_id for frame in frames] == ["scene-1"]
         assert progress_ticks == [1, 1]
-        assert warnings == ["Frame extraction failed for scene-2 at 3.0s: normalize failed"]
+        assert warnings == [
+            f"Frame extraction failed for scene-2 at 3.0s: PyAV did not write "
+            f"{tmp_path / 'frames' / 'scene-2.png'}"
+        ]
 
     def test_extract_representative_frames_uses_first_stable_frame(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -321,9 +328,6 @@ class TestFrameExtraction:
 
         monkeypatch.setattr(
             "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: container
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.video.frames._normalize_extracted_frame", lambda _p: None
         )
 
         frames = extract_representative_frames(
