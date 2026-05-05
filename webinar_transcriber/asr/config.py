@@ -8,7 +8,7 @@ from dataclasses import dataclass
 ASR_BACKEND_NAME = "whisper.cpp"
 DEFAULT_WHISPER_CPP_MODEL_FILENAME = "large-v3-turbo"
 DEFAULT_WHISPER_CPP_MODEL_EXAMPLE = "models/whisper-cpp/ggml-large-v3-turbo.bin"
-DEFAULT_CARRYOVER_MAX_TOKENS = 96
+DEFAULT_CARRYOVER_MAX_CHARS = 60
 DEFAULT_WHISPER_ENTROPY_THOLD = 2.4
 DEFAULT_WHISPER_LOGPROB_THOLD = -1.0
 DEFAULT_WHISPER_NO_SPEECH_THOLD = 0.6
@@ -26,4 +26,4 @@ class PromptCarryoverSettings:
     """Configuration for bounded prompt carryover between adjacent windows."""
 
     enabled: bool = True
-    max_tokens: int = DEFAULT_CARRYOVER_MAX_TOKENS
+    max_chars: int = DEFAULT_CARRYOVER_MAX_CHARS

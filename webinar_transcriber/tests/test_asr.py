@@ -448,7 +448,7 @@ class TestWhisperCppTranscriber:
 
 
 class TestPromptCarryover:
-    def test_build_prompt_carryover_uses_tail_token_budget(self) -> None:
+    def test_build_prompt_carryover_prefers_complete_tail_sentence(self) -> None:
         carryover = build_prompt_carryover(
             DecodedWindow(
                 window=InferenceWindow(
@@ -457,10 +457,38 @@ class TestPromptCarryover:
                 text="First sentence. Second sentence. Third sentence here.",
                 segments=[],
             ),
-            settings=PromptCarryoverSettings(max_tokens=4),
+            settings=PromptCarryoverSettings(max_chars=30),
         )
 
-        assert carryover == "sentence. Third sentence here."
+        assert carryover == "Third sentence here."
+
+    def test_build_prompt_carryover_handles_unspaced_sentence_punctuation(self) -> None:
+        carryover = build_prompt_carryover(
+            DecodedWindow(
+                window=InferenceWindow(
+                    window_id="window-2", region_index=0, start_sec=18.5, end_sec=35.0
+                ),
+                text=("first\N{IDEOGRAPHIC FULL STOP}second\N{IDEOGRAPHIC FULL STOP}third"),
+                segments=[],
+            ),
+            settings=PromptCarryoverSettings(max_chars=7),
+        )
+
+        assert carryover == "third"
+
+    def test_build_prompt_carryover_keeps_suffix_without_sentence_boundary(self) -> None:
+        carryover = build_prompt_carryover(
+            DecodedWindow(
+                window=InferenceWindow(
+                    window_id="window-2", region_index=0, start_sec=18.5, end_sec=35.0
+                ),
+                text="long unpunctuated carryover",
+                segments=[],
+            ),
+            settings=PromptCarryoverSettings(max_chars=9),
+        )
+
+        assert carryover == "carryover"
 
     def test_build_prompt_carryover_drops_empty_windows(self) -> None:
         carryover = build_prompt_carryover(
