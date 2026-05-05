@@ -18,6 +18,7 @@ from webinar_transcriber.asr.config import (
     DEFAULT_WHISPER_ENTROPY_THOLD,
     DEFAULT_WHISPER_LOGPROB_THOLD,
     DEFAULT_WHISPER_NO_SPEECH_THOLD,
+    DEFAULT_WHISPER_TEMPERATURE_INC,
     default_asr_threads,
 )
 from webinar_transcriber.models import DecodedWindow, InferenceWindow, TranscriptSegment
@@ -163,10 +164,11 @@ class TestWhisperCppTranscriber:
         assert kwargs["print_realtime"] is False
         assert kwargs["print_progress"] is False
         assert kwargs["no_context"] is True
-        assert kwargs["split_on_word"] is True
+        assert kwargs["split_on_word"] is False
         assert kwargs["entropy_thold"] == DEFAULT_WHISPER_ENTROPY_THOLD
         assert kwargs["logprob_thold"] == DEFAULT_WHISPER_LOGPROB_THOLD
         assert kwargs["no_speech_thold"] == DEFAULT_WHISPER_NO_SPEECH_THOLD
+        assert kwargs["temperature_inc"] == DEFAULT_WHISPER_TEMPERATURE_INC
 
     def test_prepare_model_redirects_native_output_to_log(
         self, monkeypatch, tmp_path, capfd
