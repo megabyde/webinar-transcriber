@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Mapping
 from typing import TYPE_CHECKING, cast
 
 from .contracts import (
@@ -14,7 +13,7 @@ from .contracts import (
 from .prompts import REPORT_SECTION_EXCERPT_LIMIT
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from webinar_transcriber.llm.schemas import ReportSectionUpdate
     from webinar_transcriber.models import ReportDocument
@@ -213,20 +212,13 @@ def extract_usage(response: object) -> dict[str, int]:
     Returns:
         dict[str, int]: The extracted token counts.
     """
-    if isinstance(response, Mapping):
-        usage = cast("Mapping[str, object]", response).get("usage")
-    else:
-        usage = getattr(response, "usage", None)
+    usage = getattr(response, "usage", None)
     if usage is None:
         return {}
 
     extracted: dict[str, int] = {}
     for field_name in ("input_tokens", "output_tokens", "total_tokens"):
-        field_value = (
-            cast("Mapping[str, object]", usage).get(field_name)
-            if isinstance(usage, Mapping)
-            else getattr(usage, field_name, None)
-        )
+        field_value = getattr(usage, field_name, None)
         if isinstance(field_value, int):
             extracted[field_name] = field_value
     if (

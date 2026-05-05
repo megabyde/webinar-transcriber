@@ -18,10 +18,6 @@ from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.processor import process_input
 from webinar_transcriber.segmentation import (
-    DEFAULT_MIN_SILENCE_DURATION_MS,
-    DEFAULT_MIN_SPEECH_DURATION_MS,
-    DEFAULT_SPEECH_REGION_PAD_MS,
-    DEFAULT_VAD_THRESHOLD,
     VadSettings,
 )
 from webinar_transcriber.ui import RichStageReporter
@@ -106,13 +102,7 @@ def main(
             output_dir=output_dir,
             asr_model=asr_model,
             language=language,
-            vad=VadSettings(
-                enabled=vad,
-                threshold=DEFAULT_VAD_THRESHOLD,
-                min_speech_duration_ms=DEFAULT_MIN_SPEECH_DURATION_MS,
-                min_silence_duration_ms=DEFAULT_MIN_SILENCE_DURATION_MS,
-                speech_region_pad_ms=DEFAULT_SPEECH_REGION_PAD_MS,
-            ),
+            vad=VadSettings(enabled=vad),
             carryover=PromptCarryoverSettings(),
             asr_threads=threads or default_asr_threads(),
             keep_audio=kept_format,
