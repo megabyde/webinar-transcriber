@@ -143,7 +143,7 @@ class WhisperCppTranscriber:
         self,
         model_name: str | None = None,
         *,
-        threads: int = 4,
+        threads: int | None = None,
         language: str | None = None,
         carryover_settings: PromptCarryoverSettings | None = None,
         log_path: Path | None = None,
@@ -151,7 +151,7 @@ class WhisperCppTranscriber:
         """Initialize the whisper.cpp transcriber wrapper."""
         self._requested_model_name = model_name
         self._model_name = model_name or DEFAULT_WHISPER_CPP_MODEL_FILENAME
-        self._threads = max(1, threads)
+        self._threads = max(1, 4 if threads is None else threads)
         self._language = language.strip() if language else None
         self._carryover_settings = carryover_settings or PromptCarryoverSettings()
         self._log_path = log_path

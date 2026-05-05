@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from contextlib import ExitStack, nullcontext
+from contextlib import ExitStack
 from dataclasses import asdict
 from typing import TYPE_CHECKING
 
 import webinar_transcriber.asr as asr_runtime
 import webinar_transcriber.media as media_runtime
-from webinar_transcriber.asr import PromptCarryoverSettings, default_asr_threads
+from webinar_transcriber.asr import PromptCarryoverSettings
 from webinar_transcriber.diagnostics import write_run_diagnostics
 from webinar_transcriber.normalized_audio import (
     TranscriptionAudioFormat,
@@ -89,14 +89,6 @@ def run_transcription_phase(
     )
 
 
-def _transcriber_scope(
-    provided_transcriber: WhisperCppTranscriber | None, active_transcriber: WhisperCppTranscriber
-) -> AbstractContextManager[WhisperCppTranscriber]:
-    if provided_transcriber is None:
-        return active_transcriber
-    return nullcontext(active_transcriber)
-
-
 def process_input(
     input_path: Path,
     *,
@@ -118,13 +110,21 @@ def process_input(
         ProcessArtifacts: The completed processing artifacts.
     """
     active_reporter = reporter or BaseStageReporter()
-    asr_threads = asr_threads or default_asr_threads()
     ctx = RunContext(reporter=active_reporter)
 
-    active_transcriber = transcriber or asr_runtime.WhisperCppTranscriber(
-        model_name=asr_model, threads=asr_threads, language=language, carryover_settings=carryover
-    )
-    with _transcriber_scope(transcriber, active_transcriber) as active_transcriber:
+    with ExitStack() as transcriber_scope:
+        if transcriber is None:
+            active_transcriber = transcriber_scope.enter_context(
+                asr_runtime.WhisperCppTranscriber(
+                    model_name=asr_model,
+                    threads=asr_threads,
+                    language=language,
+                    carryover_settings=carryover,
+                )
+            )
+        else:
+            active_transcriber = transcriber
+
         transcription_phase: TranscriptionPhaseResult | None = None
         report_phase: ReportPhaseResult | None = None
         ctx.reporter.begin_run(input_path)

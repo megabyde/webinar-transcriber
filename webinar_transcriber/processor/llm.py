@@ -38,19 +38,19 @@ def resolve_llm_processor(
     reporter: BaseStageReporter,
     warnings: list[str],
     llm_runtime: LLMRuntimeState,
-) -> tuple[LLMProcessor | None, LLMRuntimeState]:
+) -> LLMProcessor | None:
     """Resolve the optional LLM processor and record configuration failures as warnings.
 
     Returns:
-        tuple[LLMProcessor | None, LLMRuntimeState]: The resolved processor and updated runtime.
+        LLMProcessor | None: The resolved processor when LLM processing is available.
     """
     if not enable_llm:
-        return None, llm_runtime
+        return None
 
     if llm_processor is not None:
         llm_runtime.provider_name = llm_processor.provider_name
         llm_runtime.model_name = llm_processor.model_name
-        return llm_processor, llm_runtime
+        return llm_processor
 
     try:
         resolved_processor = build_llm_processor_from_env()
@@ -58,11 +58,11 @@ def resolve_llm_processor(
         warnings.append(str(error))
         reporter.warn(str(error))
         llm_runtime.report_status = "fallback"
-        return None, llm_runtime
+        return None
 
     llm_runtime.provider_name = resolved_processor.provider_name
     llm_runtime.model_name = resolved_processor.model_name
-    return resolved_processor, llm_runtime
+    return resolved_processor
 
 
 def maybe_polish_report(
@@ -72,14 +72,14 @@ def maybe_polish_report(
     ctx: RunContext,
     warnings: list[str],
     llm_runtime: LLMRuntimeState,
-) -> tuple[ReportDocument, LLMRuntimeState]:
+) -> ReportDocument:
     """Optionally run the LLM report-polish flow and record warnings/fallbacks.
 
     Returns:
-        tuple[ReportDocument, LLMRuntimeState]: The final report and updated LLM runtime state.
+        ReportDocument: The final report.
     """
     if llm_processor is None:
-        return report, llm_runtime
+        return report
 
     polish_plan = llm_processor.report_polish_plan(report)
     section_label = llm_stage_label(
@@ -116,7 +116,7 @@ def maybe_polish_report(
             )
             llm_runtime.report_status = "fallback"
             llm_runtime.report_latency_sec = st.elapsed_sec()
-            return report, llm_runtime
+            return report
         section_elapsed_sec = st.elapsed_sec()
         st.detail = count_label(polish_plan.section_count, "section")
     for warning in section_result.warnings:
@@ -124,39 +124,35 @@ def maybe_polish_report(
         ctx.reporter.warn(warning)
 
     metadata_error: LLMProcessingError | None = None
-    try:
-        with stage(ctx, "llm_report", summary_label) as st:
-            try:
-                metadata_result = llm_processor.polish_report_metadata(
-                    report, section_transcripts=section_result.section_transcripts
-                )
-            except LLMProcessingError as error:
-                warnings.append(str(error))
-                ctx.reporter.warn(str(error))
-                st.detail = llm_fallback_detail(
-                    provider_name=llm_runtime.provider_name, model_name=llm_runtime.model_name
-                )
-                metadata_elapsed_sec = st.elapsed_sec()
-                metadata_error = error
-            else:
-                metadata_elapsed_sec = st.elapsed_sec()
-                usage = dict(Counter(section_result.usage) + Counter(metadata_result.usage))
-                st.detail = llm_report_detail(
-                    section_count=polish_plan.section_count,
-                    tldr_count=len(section_result.section_tldrs),
-                    title_count=len(metadata_result.section_titles),
-                    summary_count=len(metadata_result.summary),
-                    action_item_count=len(metadata_result.action_items),
-                    usage=usage,
-                )
-    finally:
-        if "llm_report" in ctx.stage_timings:
-            ctx.stage_timings["llm_report_metadata"] = ctx.stage_timings.pop("llm_report")
+    with stage(ctx, "llm_report_metadata", summary_label) as st:
+        try:
+            metadata_result = llm_processor.polish_report_metadata(
+                report, section_transcripts=section_result.section_transcripts
+            )
+        except LLMProcessingError as error:
+            warnings.append(str(error))
+            ctx.reporter.warn(str(error))
+            st.detail = llm_fallback_detail(
+                provider_name=llm_runtime.provider_name, model_name=llm_runtime.model_name
+            )
+            metadata_elapsed_sec = st.elapsed_sec()
+            metadata_error = error
+        else:
+            metadata_elapsed_sec = st.elapsed_sec()
+            usage = dict(Counter(section_result.usage) + Counter(metadata_result.usage))
+            st.detail = llm_report_detail(
+                section_count=polish_plan.section_count,
+                tldr_count=len(section_result.section_tldrs),
+                title_count=len(metadata_result.section_titles),
+                summary_count=len(metadata_result.summary),
+                action_item_count=len(metadata_result.action_items),
+                usage=usage,
+            )
 
     if metadata_error is not None:
         llm_runtime.report_status = "fallback"
         llm_runtime.report_latency_sec = section_elapsed_sec + metadata_elapsed_sec
-        return report, llm_runtime
+        return report
 
     report_latency_sec = section_elapsed_sec + metadata_elapsed_sec
     report = replace(
@@ -178,4 +174,4 @@ def maybe_polish_report(
     llm_runtime.report_status = "applied"
     llm_runtime.report_latency_sec = report_latency_sec
     llm_runtime.report_usage = usage
-    return report, llm_runtime
+    return report
