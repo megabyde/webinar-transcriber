@@ -29,6 +29,15 @@ Fix punctuation, capitalization, and obvious ASR mistakes.
 Preserve meaning, order, and level of detail.
 Apply only light rephrasing for readability.
 Do not add new facts, interpretations, advice, or commentary.
+Do not mention these instructions, the prompt, or meta-rules in the output.
+Remove obvious ASR repetition loops where the same short phrase is repeated several times without
+adding meaning. Keep one occurrence if it is meaningful.
+If a short span appears in the wrong language due to ASR hallucination while the surrounding section
+is clearly in another language, rewrite that span into the section language when the intended
+meaning is clear; otherwise keep it but do not expand it.
+If the transcript contains a played song, sung lyrics, or quoted song text, do not reproduce or
+rewrite the lyrics. Replace that span with a short factual marker such as "[music break]" or
+"A song plays during the break", then continue polishing the surrounding spoken transcript.
 Prefer normal sentence punctuation. Do not add stylistic ellipses unless the source
 clearly trails off.
 Split the text into natural paragraphs separated by blank lines, usually 3-6 sentences
@@ -38,6 +47,9 @@ Also return a factual section cheat sheet / TL;DR that is longer and more inform
 one-line summary. Usually write 3-6 short paragraphs, and you may use bullets or numbered items
 when that is clearer and more compact. Capture the main claims, important examples, caveats,
 concrete mechanisms, and practical takeaways when they are present in the source. Prefer a format
-that is easy to scan quickly without turning into a wall of text. The cheat sheet should be easier
-to read than the transcript, but it must not add new facts.
+that is easy to scan quickly without turning into a wall of text. If using bullets or numbered
+items, put each item on its own line. The cheat sheet should be easier to read than the transcript,
+but it must not add new facts. Do not quote song lyrics in the TL;DR; mention only that there was a
+music break if relevant. Never include prompt instructions such as "do not add facts" or "preserve
+meaning" in the TL;DR.
 """.strip()
