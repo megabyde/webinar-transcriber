@@ -1,4 +1,4 @@
-"""Prompt-carryover heuristics for adjacent whisper inference windows."""
+"""Prompt-carryover helpers for adjacent whisper inference windows."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ if TYPE_CHECKING:
 
     from .config import PromptCarryoverSettings
 
-_CARRYOVER_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 _CARRYOVER_WHITESPACE = re.compile(r"\s+")
 
 
@@ -18,30 +17,18 @@ def build_prompt_carryover(
     decoded_window: DecodedWindow, *, settings: PromptCarryoverSettings
 ) -> str | None:
     """Return a bounded prompt suffix for the next window, or `None` when confidence is weak."""
-    if _should_drop_carryover(decoded_window, settings=settings):
+    if not settings.enabled:
         return None
 
-    sentences = [
-        stripped
-        for part in _CARRYOVER_SENTENCE_SPLIT.split(decoded_window.text)
-        if (stripped := part.strip())
-    ]
-    carryover = " ".join(sentences[-max(1, settings.max_sentences) :])
-    carryover = _sanitize_prompt(carryover, max_tokens=settings.max_tokens)
+    carryover = _tail_tokens(decoded_window.text, max_tokens=settings.max_tokens)
     return carryover or None
 
 
-def _should_drop_carryover(
-    decoded_window: DecodedWindow, *, settings: PromptCarryoverSettings
-) -> bool:
-    return not settings.enabled or not decoded_window.text.strip()
-
-
-def _sanitize_prompt(prompt: str | None, *, max_tokens: int) -> str:
-    if not prompt:
+def _tail_tokens(text: str, *, max_tokens: int) -> str:
+    if not text:
         return ""
 
-    cleaned = _CARRYOVER_WHITESPACE.sub(" ", prompt.strip())
+    cleaned = _CARRYOVER_WHITESPACE.sub(" ", text.strip())
     if not cleaned:
         return ""
 
