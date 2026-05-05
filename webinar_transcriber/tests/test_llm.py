@@ -675,13 +675,13 @@ class TestInstructorProcessorFlow:
 
 
 class TestLlmNormalization:
-    def test_normalize_polished_section_text_collapses_paragraph_whitespace(self) -> None:
+    def test_normalize_polished_section_text_preserves_single_line_breaks(self) -> None:
         normalized = normalize_polished_section_text(
             original_text="Original sentence.",
             polished_text="  First   line \nwith spacing.\n\n  Second\tparagraph.  ",
         )
 
-        assert normalized == "First line with spacing.\n\nSecond paragraph."
+        assert normalized == "First line\nwith spacing.\n\nSecond paragraph."
 
     def test_normalize_polished_section_text_rewrites_trailing_ellipsis_when_source_is_final(
         self,
@@ -718,22 +718,22 @@ class TestLlmNormalization:
 
         assert normalized == "Too short."
 
-    def test_normalize_polished_section_tldr_uses_same_paragraph_normalization(self) -> None:
+    def test_normalize_polished_section_tldr_preserves_single_line_breaks(self) -> None:
         normalized = normalize_polished_section_tldr(
             "  Bullet one \nspans whitespace.\n\n  Bullet two stays.  "
         )
 
-        assert normalized == "Bullet one spans whitespace.\n\nBullet two stays."
+        assert normalized == "Bullet one\nspans whitespace.\n\nBullet two stays."
 
     def test_normalize_polished_section_tldr_returns_blank_for_blank_input(self) -> None:
         assert normalize_polished_section_tldr("   ") == ""
 
     def test_normalize_polished_section_tldr_collapses_inline_bullet_spacing(self) -> None:
         normalized = normalize_polished_section_tldr(
-            "- First point. - Second point. - Third point."
+            "Main points: - First point. - Second point. 1. Third point."
         )
 
-        assert normalized == "- First point.\n- Second point.\n- Third point."
+        assert normalized == "Main points:\n- First point.\n- Second point.\n1. Third point."
 
     def test_normalize_report_lines_dedupes_and_limits_case_insensitively(self) -> None:
         normalized = normalize_report_lines(

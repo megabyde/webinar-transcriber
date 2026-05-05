@@ -84,7 +84,7 @@ class TestDocxReport:
         assert ("Second point.", "List Number") in paragraph_data
         assert ("Third point.", "List Number") in paragraph_data
 
-    def test_formats_multiline_and_blank_tldr_blocks(self, tmp_path: Path) -> None:
+    def test_formats_canonical_tldr_lines(self, tmp_path: Path) -> None:
         report = ReportDocument(
             title="Demo",
             source_file="demo.wav",
@@ -95,7 +95,7 @@ class TestDocxReport:
                     title="Section 1",
                     start_sec=0.0,
                     end_sec=5.0,
-                    tldr="\n\n- Bullet point.\ncontinued\n\n\n",
+                    tldr="\n\nHeading line\n- Bullet point.\n1. Numbered point\n\n\n",
                     transcript_text="Transcript body.",
                 )
             ],
@@ -109,7 +109,9 @@ class TestDocxReport:
             (paragraph.text, _style_name(paragraph)) for paragraph in document.paragraphs
         ]
 
-        assert ("Bullet point.\ncontinued", "List Bullet") in paragraph_data
+        assert ("Heading line", "Normal") in paragraph_data
+        assert ("Bullet point.", "List Bullet") in paragraph_data
+        assert ("Numbered point", "List Number") in paragraph_data
         assert ("Transcript", "Normal") in paragraph_data
 
     def test_skips_missing_section_image(self, tmp_path: Path) -> None:
