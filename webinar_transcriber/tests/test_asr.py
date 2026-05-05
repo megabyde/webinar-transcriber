@@ -15,6 +15,7 @@ from webinar_transcriber.asr import (
     device_name_from_system_info,
 )
 from webinar_transcriber.asr.config import (
+    DEFAULT_MAX_ASR_THREADS,
     DEFAULT_WHISPER_ENTROPY_THOLD,
     DEFAULT_WHISPER_LOGPROB_THOLD,
     DEFAULT_WHISPER_NO_SPEECH_THOLD,
@@ -410,9 +411,16 @@ class TestWhisperCppTranscriber:
             )
 
     def test_default_asr_threads_uses_cpu_count(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr("webinar_transcriber.asr.config.os.cpu_count", lambda: 8)
+        monkeypatch.setattr("webinar_transcriber.asr.config.os.cpu_count", lambda: 6)
 
-        assert default_asr_threads() == 8
+        assert default_asr_threads() == 6
+
+    def test_default_asr_threads_caps_high_core_count(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("webinar_transcriber.asr.config.os.cpu_count", lambda: 32)
+
+        assert default_asr_threads() == DEFAULT_MAX_ASR_THREADS
 
     def test_default_asr_threads_falls_back_to_positive_default(
         self, monkeypatch: pytest.MonkeyPatch
