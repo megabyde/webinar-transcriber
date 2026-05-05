@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.models import AsrPipelineDiagnostics, InferenceWindow, TranscriptionResult
+from webinar_transcriber.models import (
+    AsrPipelineDiagnostics,
+    InferenceWindow,
+    SpeechRegion,
+    TranscriptionResult,
+)
 from webinar_transcriber.normalized_audio import load_normalized_audio
 from webinar_transcriber.segmentation import detect_speech_regions, normalized_audio_duration
 from webinar_transcriber.transcript import reconcile_decoded_windows
@@ -30,6 +35,9 @@ if TYPE_CHECKING:
 
     from .support import ProgressStageHandle
     from .types import RunContext
+
+MAX_INFERENCE_WINDOW_SEC = 28.0
+INFERENCE_WINDOW_OVERLAP_SEC = 2.0
 
 
 @dataclass(frozen=True)
@@ -80,16 +88,7 @@ def run_asr_pipeline(
         {"speech_regions": [asdict(region) for region in speech_regions]},
     )
 
-    windows = [
-        InferenceWindow(
-            window_id=f"window-{i + 1}",
-            region_index=i,
-            start_sec=region.start_sec,
-            end_sec=region.end_sec,
-        )
-        for i, region in enumerate(speech_regions)
-        if region.end_sec > region.start_sec
-    ]
+    windows = plan_inference_windows(speech_regions)
     window_count = len(windows)
     average_window_duration_sec = (
         sum(w.end_sec - w.start_sec for w in windows) / len(windows) if windows else None
@@ -144,3 +143,40 @@ def run_asr_pipeline(
         normalized_transcription=normalized_transcription,
         asr_pipeline=asr_pipeline,
     )
+
+
+def plan_inference_windows(
+    speech_regions: list[SpeechRegion],
+    *,
+    max_window_sec: float = MAX_INFERENCE_WINDOW_SEC,
+    overlap_sec: float = INFERENCE_WINDOW_OVERLAP_SEC,
+) -> list[InferenceWindow]:
+    """Plan bounded Whisper inference windows from speech regions.
+
+    Returns:
+        list[InferenceWindow]: Ordered windows with overlap inside long regions.
+    """
+    windows: list[InferenceWindow] = []
+    safe_max_window_sec = max(max_window_sec, 0.1)
+    safe_overlap_sec = min(max(overlap_sec, 0.0), safe_max_window_sec / 2.0)
+
+    for region_index, region in enumerate(speech_regions):
+        if region.end_sec <= region.start_sec:
+            continue
+
+        window_start_sec = region.start_sec
+        while window_start_sec < region.end_sec:
+            window_end_sec = min(region.end_sec, window_start_sec + safe_max_window_sec)
+            windows.append(
+                InferenceWindow(
+                    window_id=f"window-{len(windows) + 1}",
+                    region_index=region_index,
+                    start_sec=window_start_sec,
+                    end_sec=window_end_sec,
+                )
+            )
+            if window_end_sec >= region.end_sec:
+                break
+            window_start_sec = max(window_start_sec, window_end_sec - safe_overlap_sec)
+
+    return windows

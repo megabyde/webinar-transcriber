@@ -33,6 +33,7 @@ from webinar_transcriber.models import (
 )
 from webinar_transcriber.paths import RunLayout
 from webinar_transcriber.processor import ProcessArtifacts, RunContext, process_input
+from webinar_transcriber.processor.asr import plan_inference_windows
 from webinar_transcriber.processor.llm import resolve_llm_processor
 from webinar_transcriber.processor.llm_types import LLMRuntimeState
 from webinar_transcriber.processor.support import (
@@ -207,6 +208,46 @@ class TestProcessInput:
         assert artifacts.diagnostics.item_counts["windows"] == 2
         assert artifacts.diagnostics.asr_pipeline is not None
         assert artifacts.diagnostics.asr_pipeline.average_window_duration_sec == pytest.approx(1.05)
+
+    def test_splits_long_speech_region_into_overlapping_inference_windows(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        input_path = FIXTURE_DIR / "sample-audio.mp3"
+        transcriber = FakeTranscriber()
+        install_pipeline_runtime(
+            monkeypatch,
+            tmp_path,
+            input_path=input_path,
+            runtime=audio_runtime(
+                duration_sec=65.0,
+                speech_regions=[SpeechRegion(start_sec=0.0, end_sec=65.0)],
+            ),
+        )
+
+        artifacts = process_input(
+            input_path, output_dir=tmp_path / "long-window-run", transcriber=transcriber
+        )
+
+        assert transcriber.windows_seen == [
+            InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=28.0),
+            InferenceWindow(window_id="window-2", region_index=0, start_sec=26.0, end_sec=54.0),
+            InferenceWindow(window_id="window-3", region_index=0, start_sec=52.0, end_sec=65.0),
+        ]
+        assert artifacts.diagnostics.item_counts["vad_regions"] == 1
+        assert artifacts.diagnostics.item_counts["windows"] == 3
+        assert artifacts.diagnostics.asr_pipeline is not None
+        assert artifacts.diagnostics.asr_pipeline.average_window_duration_sec == pytest.approx(23.0)
+
+    def test_inference_window_planning_skips_empty_regions(self) -> None:
+        windows = plan_inference_windows([
+            SpeechRegion(start_sec=1.0, end_sec=1.0),
+            SpeechRegion(start_sec=2.0, end_sec=1.5),
+            SpeechRegion(start_sec=3.0, end_sec=4.0),
+        ])
+
+        assert windows == [
+            InferenceWindow(window_id="window-1", region_index=2, start_sec=3.0, end_sec=4.0)
+        ]
 
     def test_normalizes_transcript_before_report_generation(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
