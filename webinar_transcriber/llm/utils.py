@@ -189,7 +189,7 @@ def normalize_polished_section_tldr(tldr: str) -> str:
 
 def _normalize_tldr_blocks(text: str) -> str:
     normalized = _normalize_paragraph_blocks(text)
-    return re.sub(r"(?<=\S)\s+-\s+", "\n- ", normalized)
+    return re.sub(r"(?<=\S)[ \t]+(?=(?:[-*]|\d+[.)])\s+)", "\n", normalized)
 
 
 def _normalize_paragraph_blocks(text: str) -> str:
@@ -200,9 +200,10 @@ def _normalize_paragraph_blocks(text: str) -> str:
     """
     paragraphs = []
     for block in re.split(r"\n\s*\n+", text):
-        paragraph = block.strip()
+        lines = [re.sub(r"[ \t]+", " ", line.strip()) for line in block.strip().splitlines()]
+        paragraph = "\n".join(line for line in lines if line)
         if paragraph:
-            paragraphs.append(re.sub(r"\s+", " ", paragraph))
+            paragraphs.append(paragraph)
     return "\n\n".join(paragraphs)
 
 

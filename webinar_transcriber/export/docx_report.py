@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from docx import Document
 from docx.shared import Inches
@@ -111,28 +111,17 @@ def _add_text_blocks(document: DocxDocument, text: str) -> None:
         lines = [line.strip() for line in paragraph_text.splitlines() if line.strip()]
         if not lines:
             continue
-        if _all_list_items(lines):
-            for line in lines:
-                body, style = cast("tuple[str, str]", _list_item_parts(line))
-                document.add_paragraph(body, style=style)
-            continue
-        body, style = _list_item_parts(paragraph_text)
-        if body is not None and style is not None:
-            document.add_paragraph(body, style=style)
-            continue
-        document.add_paragraph(paragraph_text)
-
-
-def _all_list_items(lines: list[str]) -> bool:
-    return all(_list_item_parts(line)[0] is not None for line in lines)
+        for line in lines:
+            body, style = _list_item_parts(line)
+            document.add_paragraph(body or line, style=style)
 
 
 def _list_item_parts(text: str) -> tuple[str | None, str | None]:
-    bullet_match = re.match(r"^[-*]\s+(.*)$", text, flags=re.DOTALL)
+    bullet_match = re.match(r"^[-*]\s+(.*)$", text)
     if bullet_match is not None:
         return bullet_match.group(1), "List Bullet"
 
-    number_match = re.match(r"^\d+[.)]\s+(.*)$", text, flags=re.DOTALL)
+    number_match = re.match(r"^\d+[.)]\s+(.*)$", text)
     if number_match is not None:
         return number_match.group(1), "List Number"
 
