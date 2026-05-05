@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import av
-from PIL import Image, ImageOps
+from PIL import ImageOps
 
 from webinar_transcriber.media import (
     MediaProcessingError,
@@ -68,7 +68,6 @@ def extract_representative_frames(
                         f"Frame extraction used nearest decoded frame for {scene.id} at "
                         f"{frame_timestamp_sec:.1f}s: {failure_detail}"
                     )
-                _normalize_extracted_frame(output_path)
                 frames.append(
                     SlideFrame(
                         id=f"frame-{index}",
@@ -136,16 +135,10 @@ def _extract_frame_from_container(
             fallback_detail = None
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        frame.to_image().convert("RGB").save(output_path)
+        ImageOps.exif_transpose(frame.to_image()).convert("RGB").save(output_path)
     except (OSError, av.FFmpegError) as error:  # pragma: no cover - PyAV/save defensive boundary
         return False, str(error)
 
     if not output_path.exists():  # pragma: no cover - PyAV/save defensive boundary
         return False, f"PyAV did not write {output_path}"
     return True, fallback_detail
-
-
-def _normalize_extracted_frame(output_path: Path) -> None:
-    with Image.open(output_path) as image:
-        normalized_image = ImageOps.exif_transpose(image).convert("RGB")
-        normalized_image.save(output_path)
