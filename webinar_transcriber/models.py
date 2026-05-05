@@ -173,7 +173,6 @@ class AsrPipelineDiagnostics:
     carryover_enabled: bool = False
     window_count: int = 0
     average_window_duration_sec: float | None = None
-    reconciliation_boundary_fixes: int = 0
     system_info: str | None = None
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from typing import TYPE_CHECKING, Literal
 
 from webinar_transcriber.asr import ASR_BACKEND_NAME
@@ -65,7 +65,7 @@ def build_diagnostics(
             "scenes": len(report_phase.scenes) if report_phase else 0,
             "frames": len(report_phase.slide_frames) if report_phase else 0,
         },
-        asr_pipeline=replace(asr_pipeline),
+        asr_pipeline=asr_pipeline,
         warnings=ctx.warnings,
     )
 

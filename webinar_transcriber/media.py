@@ -47,23 +47,47 @@ def _required_video_stream(input_container: InputContainer, *, error_message: st
 
 
 @contextmanager
-def open_input_media_container(path: Path, *, error_message: str) -> Iterator[InputContainer]:
+def open_input_media_container(path: Path) -> Iterator[InputContainer]:
     """Open a PyAV input container and normalize open-time failures."""
     try:
-        with av.open(str(path), mode="r") as container:
-            yield container
+        input_container = av.open(str(path), mode="r")
     except (FileNotFoundError, OSError, av.FFmpegError) as error:
-        raise MediaProcessingError(error_message.format(path=path, error=error)) from error
+        raise MediaProcessingError(f"Could not open {path} with PyAV: {error}") from error
+    with input_container as container:
+        yield container
 
 
 @contextmanager
-def open_output_media_container(path: Path, *, error_message: str) -> Iterator[OutputContainer]:
+def open_audio_input_container(path: Path) -> Iterator[tuple[InputContainer, AudioStream]]:
+    """Open a PyAV input container and yield its required audio stream."""
+    with open_input_media_container(path) as container:
+        yield (
+            container,
+            _required_audio_stream(container, error_message=f"No audio stream found in {path}."),
+        )
+
+
+@contextmanager
+def open_video_input_container(path: Path) -> Iterator[tuple[InputContainer, VideoStream]]:
+    """Open a PyAV input container and yield its required video stream."""
+    with open_input_media_container(path) as container:
+        yield (
+            container,
+            _required_video_stream(container, error_message=f"No video stream found in {path}."),
+        )
+
+
+@contextmanager
+def open_output_media_container(path: Path) -> Iterator[OutputContainer]:
     """Open a PyAV output container and normalize open-time failures."""
     try:
-        with av.open(str(path), mode="w") as container:
-            yield container
+        output_container = av.open(str(path), mode="w")
     except (FileNotFoundError, OSError, av.FFmpegError) as error:
-        raise MediaProcessingError(error_message.format(path=path, error=error)) from error
+        raise MediaProcessingError(
+            f"Could not open {path} for writing with PyAV: {error}"
+        ) from error
+    with output_container as container:
+        yield container
 
 
 def _pyav_stream_has_attached_picture(stream: object) -> bool:
@@ -87,9 +111,7 @@ def probe_media(input_path: Path) -> MediaAsset:
     Raises:
         MediaProcessingError: If the input contains no usable audio or video streams.
     """
-    with open_input_media_container(
-        input_path, error_message="Could not open {path} with PyAV: {error}"
-    ) as input_container:
+    with open_input_media_container(input_path) as input_container:
         streams = list(input_container.streams)
         audio_stream = _first_audio_stream(input_container)
         video_stream = next(
