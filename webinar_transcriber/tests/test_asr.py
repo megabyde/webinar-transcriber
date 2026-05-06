@@ -295,6 +295,44 @@ class TestWhisperCppTranscriber:
             "language": "ru",
         }
 
+    def test_transcribe_inference_windows_does_not_reuse_language_across_speech_regions(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class SequencedLanguageModel(FakeModel):
+            def __init__(self) -> None:
+                super().__init__()
+                self.detected_languages = ["ru", "en"]
+                self.returned_segments = [[], [], [], []]
+
+            def auto_detect_language(
+                self, audio_samples: np.ndarray, *, n_threads: int
+            ) -> tuple[tuple[str, float], dict[str, float]]:
+                self.auto_detect_calls.append((audio_samples.copy(), n_threads))
+                detected_language = self.detected_languages.pop(0)
+                return ((detected_language, 0.99), {detected_language: 0.99})
+
+        fake_model = SequencedLanguageModel()
+        install_fake_pywhispercpp(monkeypatch, model=fake_model)
+
+        decoded_windows = WhisperCppTranscriber(
+            carryover_settings=PromptCarryoverSettings(enabled=False)
+        ).transcribe_inference_windows(
+            np.zeros(80_000, dtype=np.float32),
+            [
+                InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
+                InferenceWindow(window_id="window-2", region_index=0, start_sec=1.0, end_sec=2.0),
+                InferenceWindow(window_id="window-3", region_index=1, start_sec=3.0, end_sec=4.0),
+                InferenceWindow(window_id="window-4", region_index=1, start_sec=4.0, end_sec=5.0),
+            ],
+        )
+
+        assert [window.language for window in decoded_windows] == ["ru", "ru", "en", "en"]
+        assert len(fake_model.auto_detect_calls) == 2
+        assert fake_model.transcribe_calls[0][1] == {}
+        assert fake_model.transcribe_calls[1][1] == {"language": "ru"}
+        assert fake_model.transcribe_calls[2][1] == {}
+        assert fake_model.transcribe_calls[3][1] == {"language": "en"}
+
     def test_transcribe_inference_windows_uses_forced_language(self, fake_model: FakeModel) -> None:
         fake_model.detected_language = "ru"
 
