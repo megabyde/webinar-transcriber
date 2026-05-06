@@ -39,6 +39,7 @@ class FakeModel:
         self.auto_detect_calls: list[tuple[np.ndarray, int]] = []
         self.system_info_value = "CPU = 1"
         self.detected_language = "en"
+        self.detected_languages: list[str] = []
         self.returned_segments = [[FakeSegment(0, 100, "agenda review")]]
         self.init_error: Exception | None = None
         self.transcribe_error: Exception | None = None
@@ -65,7 +66,13 @@ class FakeModel:
         self, audio_samples: np.ndarray, *, n_threads: int
     ) -> tuple[tuple[str, float], dict[str, float]]:
         self.auto_detect_calls.append((audio_samples.copy(), n_threads))
-        return ((self.detected_language, 0.99), {self.detected_language: 0.99})
+        call_index = len(self.auto_detect_calls) - 1
+        language = (
+            self.detected_languages[call_index]
+            if call_index < len(self.detected_languages)
+            else self.detected_language
+        )
+        return ((language, 0.99), {language: 0.99})
 
 
 class FakeModelWithNullContext(FakeModel):
@@ -284,16 +291,41 @@ class TestWhisperCppTranscriber:
         assert [w.input_prompt for w in decoded_windows] == [None, "agenda review"]
         assert progress_updates == [1.0, 2.0]
         assert transcriber.device_name == "cuda"
-        assert len(fake_model.auto_detect_calls) == 1
+        assert len(fake_model.auto_detect_calls) == 2
         np.testing.assert_array_equal(
             fake_model.auto_detect_calls[0][0], np.zeros(16_000, dtype=np.float32)
         )
         assert fake_model.auto_detect_calls[0][1] == 6
+        np.testing.assert_array_equal(
+            fake_model.auto_detect_calls[1][0], np.zeros(16_000, dtype=np.float32)
+        )
+        assert fake_model.auto_detect_calls[1][1] == 6
         assert fake_model.transcribe_calls[0][1] == {}
         assert fake_model.transcribe_calls[1][1] == {
             "initial_prompt": "agenda review",
-            "language": "ru",
         }
+
+    def test_transcribe_inference_windows_redetects_language_when_not_forced(
+        self, fake_model: FakeModel
+    ) -> None:
+        fake_model.detected_languages = ["en", "es"]
+        fake_model.returned_segments = [
+            [FakeSegment(0, 100, "agenda review")],
+            [FakeSegment(0, 100, "resumen")],
+        ]
+
+        decoded_windows = WhisperCppTranscriber().transcribe_inference_windows(
+            np.zeros(32_000, dtype=np.float32),
+            [
+                InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
+                InferenceWindow(window_id="window-2", region_index=1, start_sec=1.0, end_sec=2.0),
+            ],
+        )
+
+        assert [window.language for window in decoded_windows] == ["en", "es"]
+        assert len(fake_model.auto_detect_calls) == 2
+        assert fake_model.transcribe_calls[0][1] == {}
+        assert fake_model.transcribe_calls[1][1] == {"initial_prompt": "agenda review"}
 
     def test_transcribe_inference_windows_uses_forced_language(self, fake_model: FakeModel) -> None:
         fake_model.detected_language = "ru"
