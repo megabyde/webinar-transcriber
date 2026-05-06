@@ -95,3 +95,23 @@ class TestNormalizeTranscription:
             "x" * MAX_SEGMENT_CHARS,
             "tail",
         ]
+
+    def test_splits_after_non_ascii_sentence_terminator(self) -> None:
+        transcription = TranscriptionResult(
+            segments=[
+                TranscriptSegment(
+                    id="segment-1",
+                    text="Opening thought\N{IDEOGRAPHIC FULL STOP}",
+                    start_sec=0.0,
+                    end_sec=3.0,
+                ),
+                TranscriptSegment(id="segment-2", text="Next topic", start_sec=3.0, end_sec=5.0),
+            ]
+        )
+
+        normalized = normalize_transcription(transcription)
+
+        assert [segment.text for segment in normalized.segments] == [
+            "Opening thought\N{IDEOGRAPHIC FULL STOP}",
+            "Next topic",
+        ]

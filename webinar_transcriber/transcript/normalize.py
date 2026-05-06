@@ -5,13 +5,14 @@ from __future__ import annotations
 import re
 
 from webinar_transcriber.models import TranscriptionResult, TranscriptSegment
+from webinar_transcriber.text import SENTENCE_TERMINATORS
 
 MERGE_GAP_SEC = 0.6
 TARGET_SEGMENT_DURATION_SEC = 4.0
 MIN_SEGMENT_DURATION_SEC = 2.5
 MAX_SEGMENT_DURATION_SEC = 10.0
 MAX_SEGMENT_CHARS = 420
-STRONG_SENTENCE_END_RE = re.compile(r"[.!?]$")
+STRONG_SENTENCE_END_RE = re.compile(f"[{re.escape(SENTENCE_TERMINATORS)}]$")
 
 
 def normalize_transcription(transcription: TranscriptionResult) -> TranscriptionResult:
