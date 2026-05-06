@@ -5,19 +5,14 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from webinar_transcriber.text import SENTENCE_TERMINATORS
+
 if TYPE_CHECKING:
     from webinar_transcriber.models import DecodedWindow
 
     from .config import PromptCarryoverSettings
 
 _CARRYOVER_WHITESPACE = re.compile(r"\s+")
-_SENTENCE_TERMINATORS = (
-    ".!?"
-    "\N{IDEOGRAPHIC FULL STOP}"
-    "\N{FULLWIDTH EXCLAMATION MARK}"
-    "\N{FULLWIDTH QUESTION MARK}"
-    "\N{HORIZONTAL ELLIPSIS}"
-)
 
 
 def build_prompt_carryover(
@@ -46,8 +41,8 @@ def _tail_text(text: str, *, max_chars: int) -> str:
 
 def _drop_partial_leading_sentence(text: str) -> str:
     for index, char in enumerate(text[:-1]):
-        if char in _SENTENCE_TERMINATORS:
+        if char in SENTENCE_TERMINATORS:
             trimmed = text[index + 1 :].strip()
             if trimmed:
                 return trimmed
-    return text.lstrip(f" {_SENTENCE_TERMINATORS}")
+    return text.lstrip(f" {SENTENCE_TERMINATORS}")
