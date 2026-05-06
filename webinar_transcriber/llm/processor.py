@@ -7,6 +7,8 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Protocol
 
+from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
+
 from .contracts import (
     LLMProcessingError,
     LLMReportMetadataResult,
@@ -32,6 +34,8 @@ from .utils import (
     schema_label,
     validated_section_titles,
 )
+
+LLM_RATE_LIMIT_RETRY_ATTEMPTS = 3
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -221,7 +225,12 @@ class InstructorLLMProcessor:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
                 ],
-                max_retries=1,
+                max_retries=Retrying(
+                    retry=retry_if_exception(_is_transient_provider_error),
+                    stop=stop_after_attempt(LLM_RATE_LIMIT_RETRY_ATTEMPTS),
+                    wait=wait_exponential(multiplier=1),
+                    reraise=True,
+                ),
                 **self._request_kwargs,
             )
         except Exception as error:  # pragma: no cover - backend-specific SDK errors
@@ -232,3 +241,11 @@ class InstructorLLMProcessor:
                 f"{schema_label(response_model)} response did not match the schema."
             )
         return parsed, extract_usage(completion)
+
+
+def _is_transient_provider_error(error: BaseException) -> bool:
+    response = getattr(error, "response", None)
+    status_code = getattr(error, "status_code", None) or getattr(response, "status_code", None)
+    if not isinstance(status_code, int):  # pragma: no cover - provider SDK shape fallback
+        return False
+    return status_code in {408, 429} or 500 <= status_code < 600
