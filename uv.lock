@@ -2193,6 +2193,7 @@ dependencies = [
 [package.optional-dependencies]
 llm = [
     { name = "instructor", extra = ["anthropic"] },
+    { name = "tenacity" },
 ]
 
 [package.dev-dependencies]
@@ -2218,6 +2219,7 @@ requires-dist = [
     { name = "pywhispercpp", specifier = ">=1.4.1,<2.0.0" },
     { name = "rich", specifier = ">=14.3.3,<15.0.0" },
     { name = "silero-vad", specifier = ">=6.2.1,<7.0.0" },
+    { name = "tenacity", marker = "extra == 'llm'", specifier = ">=9.1.4,<10.0.0" },
 ]
 provides-extras = ["llm"]
 

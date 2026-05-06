@@ -8,6 +8,7 @@ from typing import cast
 
 import pytest
 from pydantic import BaseModel
+from tenacity import Retrying
 
 from webinar_transcriber.llm import (
     InstructorLLMProcessor,
@@ -186,6 +187,36 @@ class TestInstructorLlmProcessor:
                 raise response
             return response
 
+    class RetryingFakeClient(FakeClient):
+        def __init__(self, responses) -> None:
+            super().__init__(responses)
+            self.attempt_count = 0
+            self.retry_delays: list[float] = []
+
+        def create_with_completion(self, **kwargs):
+            self.calls.append(kwargs)
+            max_retries = kwargs["max_retries"]
+            assert isinstance(max_retries, Retrying)
+            max_retries = max_retries.copy(sleep=self.retry_delays.append)
+            for attempt in max_retries:
+                with attempt:
+                    self.attempt_count += 1
+                    response = self._responses.pop(0)
+                    if isinstance(response, Exception):
+                        raise response
+                    return response
+            raise AssertionError("retry loop did not return a response")
+
+    class ProviderStatusError(Exception):
+        def __init__(self, status_code: int) -> None:
+            super().__init__(f"provider status {status_code}")
+            self.status_code = status_code
+
+    class ResponseProviderStatusError(Exception):
+        def __init__(self, status_code: int) -> None:
+            super().__init__(f"provider status {status_code}")
+            self.response = SimpleNamespace(status_code=status_code, headers={})
+
     def test_polishes_report(self) -> None:
         fake_client = self.FakeClient([
             (
@@ -243,7 +274,7 @@ class TestInstructorLlmProcessor:
         assert metadata_result.usage == {"input_tokens": 12, "output_tokens": 8, "total_tokens": 20}
         assert report.sections[0].transcript_text == "Agenda review and project status update."
         assert len(fake_client.calls) == 2
-        assert fake_client.calls[0]["max_retries"] == 1
+        assert isinstance(fake_client.calls[0]["max_retries"], Retrying)
         assert fake_client.calls[0]["timeout"] == 120
         assert fake_client.calls[0]["response_model"] is SectionTextResponse
         assert fake_client.calls[1]["response_model"] is ReportPolishResponse
@@ -438,12 +469,65 @@ class TestInstructorLlmProcessor:
 
         assert len(fake_client.calls) == 1
         assert fake_client.calls[0]["response_model"] is ReportPolishResponse
-        assert fake_client.calls[0]["max_retries"] == 1
+        assert isinstance(fake_client.calls[0]["max_retries"], Retrying)
         assert fake_client.calls[0]["timeout"] == 120
         assert fake_client.calls[0]["max_tokens"] == 4096
         messages = cast("list[dict[str, object]]", fake_client.calls[0]["messages"])
         assert messages[0]["role"] == "system"
         assert messages[1]["role"] == "user"
+
+    def test_retries_section_transient_provider_error_with_backoff(self) -> None:
+        fake_client = self.RetryingFakeClient([
+            self.ProviderStatusError(429),
+            (
+                SectionTextResponse(tldr="Agenda recap.", transcript_text="Agenda review."),
+                self.FakeCompletion({"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}),
+            ),
+        ])
+        processor = InstructorLLMProcessor(
+            client=fake_client,
+            provider_name="openai",
+            model_name="gpt-test",
+        )
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Agenda",
+                    start_sec=0.0,
+                    end_sec=10.0,
+                    transcript_text="Agenda review.",
+                )
+            ],
+        )
+
+        result = processor.polish_report_sections_with_progress(report)
+
+        assert fake_client.retry_delays == [1.0]
+        assert len(fake_client.calls) == 1
+        assert fake_client.attempt_count == 2
+        assert result.section_transcripts == {"section-1": "Agenda review."}
+        assert result.warnings == []
+
+    def test_does_not_retry_non_transient_provider_error(self) -> None:
+        fake_client = self.RetryingFakeClient([self.ResponseProviderStatusError(400)])
+        processor = InstructorLLMProcessor(
+            client=fake_client,
+            provider_name="openai",
+            model_name="gpt-test",
+        )
+        report = ReportDocument(title="Demo", source_file="demo.wav", media_type=MediaType.AUDIO)
+
+        with pytest.raises(
+            LLMProcessingError, match="Report polishing failed: provider status 400"
+        ):
+            processor.polish_report_metadata(report, section_transcripts={})
+
+        assert fake_client.retry_delays == []
+        assert fake_client.attempt_count == 1
 
     def test_reports_section_progress_in_completion_order_but_preserves_output_order(
         self,
