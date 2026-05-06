@@ -244,8 +244,11 @@ class WhisperCppTranscriber:
         carryover_prompt: str | None = None
         decoded_windows: list[DecodedWindow] = []
         decoded_segment_count = 0
+        previous_region_index: int | None = None
 
         for window in ordered_windows:
+            if forced_language is None and previous_region_index != window.region_index:
+                language_hint = None
             decoded_window = self._transcribe_window(
                 model, audio_samples, window, prompt=carryover_prompt, language_hint=language_hint
             )
@@ -254,7 +257,9 @@ class WhisperCppTranscriber:
             next_carryover = build_prompt_carryover(
                 decoded_window, settings=self._carryover_settings
             )
-            language_hint = forced_language or language_hint or decoded_window.language
+            if forced_language is None:
+                language_hint = decoded_window.language
+            previous_region_index = window.region_index
             carryover_prompt = next_carryover
             if progress_callback is not None:
                 progress_callback(window.end_sec, decoded_segment_count)
