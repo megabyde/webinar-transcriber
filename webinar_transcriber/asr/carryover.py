@@ -11,6 +11,13 @@ if TYPE_CHECKING:
     from .config import PromptCarryoverSettings
 
 _CARRYOVER_WHITESPACE = re.compile(r"\s+")
+_SENTENCE_TERMINATORS = (
+    ".!?"
+    "\N{IDEOGRAPHIC FULL STOP}"
+    "\N{FULLWIDTH EXCLAMATION MARK}"
+    "\N{FULLWIDTH QUESTION MARK}"
+    "\N{HORIZONTAL ELLIPSIS}"
+)
 
 
 def build_prompt_carryover(
@@ -20,19 +27,27 @@ def build_prompt_carryover(
     if not settings.enabled:
         return None
 
-    carryover = _tail_tokens(decoded_window.text, max_tokens=settings.max_tokens)
+    carryover = _tail_text(decoded_window.text, max_chars=settings.max_chars)
     return carryover or None
 
 
-def _tail_tokens(text: str, *, max_tokens: int) -> str:
+def _tail_text(text: str, *, max_chars: int) -> str:
     if not text:
         return ""
 
     cleaned = _CARRYOVER_WHITESPACE.sub(" ", text.strip())
-    if not cleaned:
+    if not cleaned or max_chars <= 0:
         return ""
+    if len(cleaned) <= max_chars:
+        return cleaned
 
-    tokens = cleaned.split(" ")
-    token_limit = min(len(tokens), max(0, max_tokens))
-    tokens = tokens[-token_limit:] if token_limit else []
-    return " ".join(tokens)
+    return _drop_partial_leading_sentence(cleaned[-max_chars:])
+
+
+def _drop_partial_leading_sentence(text: str) -> str:
+    for index, char in enumerate(text[:-1]):
+        if char in _SENTENCE_TERMINATORS:
+            trimmed = text[index + 1 :].strip()
+            if trimmed:
+                return trimmed
+    return text.lstrip(f" {_SENTENCE_TERMINATORS}")
