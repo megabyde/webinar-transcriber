@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Protocol
-
-from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
 
 from .contracts import (
     LLMProcessingError,
@@ -225,12 +224,7 @@ class InstructorLLMProcessor:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
                 ],
-                max_retries=Retrying(
-                    retry=retry_if_exception(_is_transient_provider_error),
-                    stop=stop_after_attempt(LLM_RATE_LIMIT_RETRY_ATTEMPTS),
-                    wait=wait_exponential(multiplier=1),
-                    reraise=True,
-                ),
+                max_retries=_structured_response_retries(),
                 **self._request_kwargs,
             )
         except Exception as error:  # pragma: no cover - backend-specific SDK errors
@@ -241,6 +235,19 @@ class InstructorLLMProcessor:
                 f"{schema_label(response_model)} response did not match the schema."
             )
         return parsed, extract_usage(completion)
+
+
+def _structured_response_retries() -> object:  # pragma: no cover - optional llm extra wrapper
+    try:
+        tenacity = importlib.import_module("tenacity")
+    except ImportError:
+        return 1
+    return tenacity.Retrying(
+        retry=tenacity.retry_if_exception(_is_transient_provider_error),
+        stop=tenacity.stop_after_attempt(LLM_RATE_LIMIT_RETRY_ATTEMPTS),
+        wait=tenacity.wait_exponential(multiplier=1),
+        reraise=True,
+    )
 
 
 def _is_transient_provider_error(error: BaseException) -> bool:

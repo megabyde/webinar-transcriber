@@ -8,7 +8,6 @@ from typing import cast
 
 import pytest
 from pydantic import BaseModel
-from tenacity import Retrying
 
 from webinar_transcriber.llm import (
     InstructorLLMProcessor,
@@ -17,6 +16,7 @@ from webinar_transcriber.llm import (
     LLMReportPolishPlan,
     build_llm_processor_from_env,
 )
+from webinar_transcriber.llm import processor as llm_processor
 from webinar_transcriber.llm.schemas import (
     ReportPolishResponse,
     ReportSectionUpdate,
@@ -187,6 +187,19 @@ class TestInstructorLlmProcessor:
                 raise response
             return response
 
+    class FakeRetryPolicy:
+        def __init__(self, *, delays: list[float]) -> None:
+            self._delays = delays
+            self._attempt_index = 0
+
+        def next_delay_for(self, error: BaseException) -> float | None:
+            transient_error = llm_processor._is_transient_provider_error  # noqa: SLF001
+            if not transient_error(error) or self._attempt_index >= len(self._delays):
+                return None
+            delay = self._delays[self._attempt_index]
+            self._attempt_index += 1
+            return delay
+
     class RetryingFakeClient(FakeClient):
         def __init__(self, responses) -> None:
             super().__init__(responses)
@@ -196,16 +209,16 @@ class TestInstructorLlmProcessor:
         def create_with_completion(self, **kwargs):
             self.calls.append(kwargs)
             max_retries = kwargs["max_retries"]
-            assert isinstance(max_retries, Retrying)
-            max_retries = max_retries.copy(sleep=self.retry_delays.append)
-            for attempt in max_retries:
-                with attempt:
-                    self.attempt_count += 1
-                    response = self._responses.pop(0)
-                    if isinstance(response, Exception):
-                        raise response
+            assert isinstance(max_retries, TestInstructorLlmProcessor.FakeRetryPolicy)
+            while True:
+                self.attempt_count += 1
+                response = self._responses.pop(0)
+                if not isinstance(response, Exception):
                     return response
-            raise AssertionError("retry loop did not return a response")
+                delay = max_retries.next_delay_for(response)
+                if delay is None:
+                    raise response
+                self.retry_delays.append(delay)
 
     class ProviderStatusError(Exception):
         def __init__(self, status_code: int) -> None:
@@ -274,7 +287,7 @@ class TestInstructorLlmProcessor:
         assert metadata_result.usage == {"input_tokens": 12, "output_tokens": 8, "total_tokens": 20}
         assert report.sections[0].transcript_text == "Agenda review and project status update."
         assert len(fake_client.calls) == 2
-        assert isinstance(fake_client.calls[0]["max_retries"], Retrying)
+        assert "max_retries" in fake_client.calls[0]
         assert fake_client.calls[0]["timeout"] == 120
         assert fake_client.calls[0]["response_model"] is SectionTextResponse
         assert fake_client.calls[1]["response_model"] is ReportPolishResponse
@@ -469,14 +482,18 @@ class TestInstructorLlmProcessor:
 
         assert len(fake_client.calls) == 1
         assert fake_client.calls[0]["response_model"] is ReportPolishResponse
-        assert isinstance(fake_client.calls[0]["max_retries"], Retrying)
+        assert "max_retries" in fake_client.calls[0]
         assert fake_client.calls[0]["timeout"] == 120
         assert fake_client.calls[0]["max_tokens"] == 4096
         messages = cast("list[dict[str, object]]", fake_client.calls[0]["messages"])
         assert messages[0]["role"] == "system"
         assert messages[1]["role"] == "user"
 
-    def test_retries_section_transient_provider_error_with_backoff(self) -> None:
+    def test_retries_section_transient_provider_error_with_backoff(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            "webinar_transcriber.llm.processor._structured_response_retries",
+            lambda: self.FakeRetryPolicy(delays=[1.0, 2.0]),
+        )
         fake_client = self.RetryingFakeClient([
             self.ProviderStatusError(429),
             (
@@ -512,7 +529,11 @@ class TestInstructorLlmProcessor:
         assert result.section_transcripts == {"section-1": "Agenda review."}
         assert result.warnings == []
 
-    def test_does_not_retry_non_transient_provider_error(self) -> None:
+    def test_does_not_retry_non_transient_provider_error(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            "webinar_transcriber.llm.processor._structured_response_retries",
+            lambda: self.FakeRetryPolicy(delays=[1.0, 2.0]),
+        )
         fake_client = self.RetryingFakeClient([self.ResponseProviderStatusError(400)])
         processor = InstructorLLMProcessor(
             client=fake_client,

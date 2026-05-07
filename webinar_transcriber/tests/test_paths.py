@@ -27,6 +27,22 @@ class TestRunLayout:
         assert layout.transcription_audio_path("mp3").name == "transcription-audio.mp3"
         assert layout.frames_dir.name == "frames"
 
+    def test_build_run_layout_preserves_unicode_slug_text(self, tmp_path) -> None:
+        input_path = tmp_path / "Вебинар-2026-итоги.mp4"
+        input_path.write_text("demo", encoding="utf-8")
+
+        layout = build_run_layout(input_path=input_path, now=datetime(2026, 3, 18, 20, 30, 45))
+
+        assert layout.run_dir.name == "20260318-203045-000000_вебинар-2026-итоги"
+
+    def test_build_run_layout_falls_back_when_slug_has_no_words(self, tmp_path) -> None:
+        input_path = tmp_path / "!!!.mp4"
+        input_path.write_text("demo", encoding="utf-8")
+
+        layout = build_run_layout(input_path=input_path, now=datetime(2026, 3, 18, 20, 30, 45))
+
+        assert layout.run_dir.name == "20260318-203045-000000_input"
+
     def test_build_run_layout_rejects_existing_output_directory(self, tmp_path) -> None:
         existing_dir = tmp_path / "existing-run"
         existing_dir.mkdir()
