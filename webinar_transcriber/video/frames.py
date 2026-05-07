@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import av
-from PIL import ImageOps
 
 from webinar_transcriber.media import (
     MediaProcessingError,
@@ -135,7 +134,7 @@ def _extract_frame_from_container(
             fallback_detail = None
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        ImageOps.exif_transpose(frame.to_image()).convert("RGB").save(output_path)
+        frame.to_image().convert("RGB").save(output_path)
     except (OSError, av.FFmpegError) as error:  # pragma: no cover - PyAV/save defensive boundary
         return False, str(error)
 

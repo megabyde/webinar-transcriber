@@ -29,15 +29,6 @@ class FakeImage:
     def __init__(self, *, save_output: bool = True) -> None:
         self.save_output = save_output
 
-    def load(self) -> None:
-        return None
-
-    def getexif(self) -> dict[int, int]:
-        return {}
-
-    def copy(self) -> "FakeImage":
-        return self
-
     def convert(self, _mode: str) -> "FakeImage":
         return self
 
@@ -54,17 +45,13 @@ class FakeFrame:
         pts: int | None = None,
         time_base: float | None = None,
         save_output: bool = True,
-        image: Image.Image | None = None,
     ) -> None:
         self.time = time
         self.pts = pts
         self.time_base = time_base
         self.save_output = save_output
-        self.image = image
 
-    def to_image(self) -> Image.Image | FakeImage:
-        if self.image is not None:
-            return self.image
+    def to_image(self) -> FakeImage:
         return FakeImage(save_output=self.save_output)
 
 
@@ -217,27 +204,6 @@ class TestFrameExtraction:
         assert len(progress_ticks) == len(scenes)
         assert open_calls == [SAMPLE_VIDEO_PATH]
         assert container.decode_calls == len(scenes)
-
-    def test_extract_representative_frames_applies_exif_orientation(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        image = Image.new("RGB", (4, 2), color="white")
-        exif = Image.Exif()
-        exif[274] = 6
-        image.info["exif"] = exif.tobytes()
-        container = FakeFrameContainer([[FakeFrame(1.0, image=image)]])
-
-        monkeypatch.setattr(
-            "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: container
-        )
-
-        frames = extract_representative_frames(
-            SAMPLE_VIDEO_PATH, [_scene(1, 0.0, 2.0)], tmp_path / "frames"
-        )
-
-        with Image.open(frames[0].image_path) as normalized_image:
-            assert normalized_image.size == (2, 4)
-            assert normalized_image.getexif().get(274) is None
 
     def test_extract_representative_frames_skips_failed_scene_but_still_reports_progress(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
