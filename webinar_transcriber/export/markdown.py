@@ -41,8 +41,8 @@ def write_markdown_report(report: ReportDocument, output_path: Path) -> Path:
         lines.extend([f"### {title} ({timecode})", ""])
         if section.image_path:
             lines.extend([f"![{section.title}]({section.image_path})", ""])
-        if section.tldr:
-            lines.extend(["**TL;DR / Cheat Sheet**", "", section.tldr, "", "**Transcript**", ""])
+        if section.tldr and (tldr := section.tldr.strip()):
+            lines.extend(["**TL;DR / Cheat Sheet**", "", tldr, "", "**Transcript**", ""])
         lines.extend([section.transcript_text, ""])
 
     output_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")

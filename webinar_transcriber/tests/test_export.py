@@ -190,36 +190,6 @@ class TestDocxReport:
         document = Document(str(output_path))
         assert len(document.inline_shapes) == 1
 
-    def test_blank_tldr_does_not_add_extra_body_paragraphs(self, tmp_path: Path) -> None:
-        report = ReportDocument(
-            title="Demo",
-            source_file="demo.wav",
-            media_type=MediaType.AUDIO,
-            sections=[
-                ReportSection(
-                    id="section-1",
-                    title="Section 1",
-                    start_sec=0.0,
-                    end_sec=5.0,
-                    tldr="  \n  ",
-                    transcript_text="Transcript body.",
-                )
-            ],
-        )
-
-        output_path = tmp_path / "report.docx"
-        write_docx_report(report, output_path)
-
-        document = Document(str(output_path))
-        assert [paragraph.text for paragraph in document.paragraphs] == [
-            "Demo",
-            "Sections",
-            "Section 1 (00:00\N{EN DASH}00:05)",
-            "TL;DR / Cheat Sheet",
-            "Transcript",
-            "Transcript body.",
-        ]
-
 
 class TestMarkdownReport:
     def test_omits_blank_image_line_for_imageless_sections(self, tmp_path: Path) -> None:

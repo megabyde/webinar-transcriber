@@ -110,12 +110,12 @@ def _add_section_image(
 
 
 def _add_section_tldr(document: DocxDocument, tldr: str | None) -> None:
-    if not tldr:
+    if not tldr or not (text := tldr.strip()):
         return
 
     tldr_label = document.add_paragraph()
     tldr_label.add_run("TL;DR / Cheat Sheet").bold = True
-    _add_text_blocks(document, tldr)
+    _add_text_blocks(document, text)
     transcript_label = document.add_paragraph()
     transcript_label.add_run("Transcript").bold = True
 
@@ -123,8 +123,6 @@ def _add_section_tldr(document: DocxDocument, tldr: str | None) -> None:
 def _add_text_blocks(document: DocxDocument, text: str) -> None:
     for paragraph_text in _split_paragraphs(text):
         lines = [line.strip() for line in paragraph_text.splitlines() if line.strip()]
-        if not lines:
-            continue
         for line in lines:
             body, style = _list_item_parts(line)
             document.add_paragraph(body or line, style=style)
