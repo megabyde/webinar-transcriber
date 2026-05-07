@@ -193,8 +193,6 @@ select = [
     # Ruff-specific rules
     "RUF",
 ]
-# `subprocess` and partial executable-path rules are too noisy for this CLI-heavy
-# codebase; command safety is reviewed at each call site instead.
 ignore = [
     # Public CLI/protocol/orchestration APIs intentionally take structured inputs
     "PLR0913",
@@ -202,10 +200,6 @@ ignore = [
     "PLR0915",
     # This codebase uses many domain-specific thresholds and fixture literals
     "PLR2004",
-    # `subprocess` call sites are reviewed directly in this CLI-heavy codebase
-    "S603",
-    # Partial executable-path checks are too noisy for these media-tool invocations
-    "S607",
 ]
 
 [tool.ruff.lint.pydocstyle]

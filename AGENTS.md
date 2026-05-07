@@ -53,7 +53,8 @@ The package intentionally avoids deep nesting.
 
 ## Testing Notes
 
-- Keep tests colocated with the package hierarchy.
+- Keep tests under `webinar_transcriber/tests/`, mirroring the package hierarchy in filenames and
+  grouping where it helps scanability.
 - Prefer tiny deterministic fixtures committed to the repo.
 - Prefer `pytest` `monkeypatch` for simple state replacement and `unittest.mock.patch` when a test
   needs mock semantics such as `side_effect`, `return_value`, or call assertions.

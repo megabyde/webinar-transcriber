@@ -1,6 +1,5 @@
 """Tests for optional cloud LLM helpers."""
 
-import importlib
 import json
 from threading import Event
 from types import SimpleNamespace
@@ -38,14 +37,10 @@ LLM_EXTRA_INSTALL_RE = r'uv tool install --reinstall "\.\[llm\]"'
 
 
 def _fake_import_module(modules: dict[str, object]):
-    real_import_module = importlib.import_module
-
     def fake_import_module(name: str) -> object:
         try:
             return modules[name]
         except KeyError as error:
-            if name.startswith("webinar_transcriber."):
-                return real_import_module(name)
             raise ImportError(name) from error
 
     return fake_import_module

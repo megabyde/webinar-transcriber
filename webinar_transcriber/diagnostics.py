@@ -10,11 +10,15 @@ from webinar_transcriber.asr import ASR_BACKEND_NAME
 from webinar_transcriber.models import AsrPipelineDiagnostics, Diagnostics
 
 if TYPE_CHECKING:
-    from webinar_transcriber.processor.types import (
-        ReportPhaseResult,
-        RunContext,
-        TranscriptionPhaseResult,
+    from collections.abc import Sequence
+
+    from webinar_transcriber.models import (
+        ReportDocument,
+        Scene,
+        SlideFrame,
+        TranscriptionResult,
     )
+    from webinar_transcriber.processor.types import RunContext
 
 
 def build_diagnostics(
@@ -22,8 +26,12 @@ def build_diagnostics(
     *,
     asr_model: str | None,
     llm_enabled: bool,
-    transcription_phase: TranscriptionPhaseResult | None = None,
-    report_phase: ReportPhaseResult | None = None,
+    transcription: TranscriptionResult | None = None,
+    normalized_transcription: TranscriptionResult | None = None,
+    asr_pipeline: AsrPipelineDiagnostics | None = None,
+    report: ReportDocument | None = None,
+    scenes: Sequence[Scene] = (),
+    slide_frames: Sequence[SlideFrame] = (),
     status: Literal["succeeded", "failed"] = "succeeded",
     failed_stage: str | None = None,
     error: str | None = None,
@@ -33,11 +41,7 @@ def build_diagnostics(
     Returns:
         Diagnostics: The final diagnostics payload.
     """
-    asr_pipeline = (
-        transcription_phase.asr_pipeline
-        if transcription_phase is not None
-        else AsrPipelineDiagnostics(vad_enabled=False, threads=0)
-    )
+    asr_pipeline = asr_pipeline or AsrPipelineDiagnostics(vad_enabled=False, threads=0)
     return Diagnostics(
         status=status,
         failed_stage=failed_stage,
@@ -51,19 +55,15 @@ def build_diagnostics(
         llm_report_usage=ctx.llm_runtime.report_usage or {},
         stage_durations_sec={key: round(value, 6) for key, value in ctx.stage_timings.items()},
         item_counts={
-            "transcript_segments": (
-                len(transcription_phase.transcription.segments) if transcription_phase else 0
-            ),
+            "transcript_segments": len(transcription.segments) if transcription else 0,
             "normalized_transcript_segments": (
-                len(transcription_phase.normalized_transcription.segments)
-                if transcription_phase
-                else 0
+                len(normalized_transcription.segments) if normalized_transcription else 0
             ),
             "vad_regions": asr_pipeline.vad_region_count,
             "windows": asr_pipeline.window_count,
-            "report_sections": len(report_phase.report.sections) if report_phase else 0,
-            "scenes": len(report_phase.scenes) if report_phase else 0,
-            "frames": len(report_phase.slide_frames) if report_phase else 0,
+            "report_sections": len(report.sections) if report else 0,
+            "scenes": len(scenes),
+            "frames": len(slide_frames),
         },
         asr_pipeline=asr_pipeline,
         warnings=ctx.warnings,
@@ -76,8 +76,12 @@ def write_run_diagnostics(
     status: Literal["succeeded", "failed"],
     asr_model: str | None,
     llm_enabled: bool,
-    transcription_phase: TranscriptionPhaseResult | None = None,
-    report_phase: ReportPhaseResult | None = None,
+    transcription: TranscriptionResult | None = None,
+    normalized_transcription: TranscriptionResult | None = None,
+    asr_pipeline: AsrPipelineDiagnostics | None = None,
+    report: ReportDocument | None = None,
+    scenes: Sequence[Scene] = (),
+    slide_frames: Sequence[SlideFrame] = (),
     failed_stage: str | None = None,
     error: str | None = None,
     suppress_errors: bool = False,
@@ -90,8 +94,12 @@ def write_run_diagnostics(
         ctx,
         asr_model=asr_model,
         llm_enabled=llm_enabled,
-        transcription_phase=transcription_phase,
-        report_phase=report_phase,
+        transcription=transcription,
+        normalized_transcription=normalized_transcription,
+        asr_pipeline=asr_pipeline,
+        report=report,
+        scenes=scenes,
+        slide_frames=slide_frames,
         status=status,
         failed_stage=failed_stage,
         error=error,

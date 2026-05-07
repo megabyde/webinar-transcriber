@@ -114,7 +114,7 @@ def run_asr_pipeline(
             layout.decoded_windows_path,
             {"decoded_windows": [asdict(window) for window in decoded_windows]},
         )
-        st.finish_progress(media_asset.duration_sec)
+        st.advance_to(media_asset.duration_sec)
         st.detail = window_transcription_stage_detail(
             window_count=len(windows),
             total_duration_sec=media_asset.duration_sec,
