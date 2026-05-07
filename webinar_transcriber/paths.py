@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,7 +14,17 @@ class OutputDirectoryExistsError(FileExistsError):
 
 
 def _slugify_stem(path: Path) -> str:
-    stem = re.sub(r"[^a-zA-Z0-9]+", "-", path.stem).strip("-").lower()
+    stem = (
+        re
+        .sub(
+            r"[^\w]+",
+            "-",
+            unicodedata.normalize("NFKC", path.stem),
+            flags=re.UNICODE,
+        )
+        .strip("_-")
+        .lower()
+    )
     return stem or "input"
 
 
