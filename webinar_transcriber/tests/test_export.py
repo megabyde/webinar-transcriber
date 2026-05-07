@@ -164,6 +164,32 @@ class TestDocxReport:
         document = Document(str(output_path))
         assert len(document.inline_shapes) == 1
 
+    def test_embeds_relative_section_image_from_report_directory(self, tmp_path: Path) -> None:
+        frames_dir = tmp_path / "frames"
+        frames_dir.mkdir()
+        Image.new("RGB", (8, 8), color="white").save(frames_dir / "scene-1.png")
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.mp4",
+            media_type=MediaType.VIDEO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Section 1",
+                    start_sec=0.0,
+                    end_sec=5.0,
+                    transcript_text="Paragraph",
+                    image_path="frames/scene-1.png",
+                )
+            ],
+        )
+
+        output_path = tmp_path / "report.docx"
+        write_docx_report(report, output_path)
+
+        document = Document(str(output_path))
+        assert len(document.inline_shapes) == 1
+
     def test_blank_tldr_does_not_add_extra_body_paragraphs(self, tmp_path: Path) -> None:
         report = ReportDocument(
             title="Demo",

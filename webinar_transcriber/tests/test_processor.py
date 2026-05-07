@@ -503,6 +503,8 @@ class TestProcessInput:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         input_path = FIXTURE_DIR / "sample-video.mp4"
+        run_dir = tmp_path / "video-run"
+        frames_dir = run_dir / "frames"
         scenes = [
             Scene(id="scene-1", start_sec=0.0, end_sec=0.9),
             Scene(id="scene-2", start_sec=0.9, end_sec=1.8),
@@ -511,18 +513,16 @@ class TestProcessInput:
             SlideFrame(
                 id="frame-1",
                 scene_id="scene-1",
-                image_path=str(tmp_path / "frame-1.png"),
+                image_path=str(frames_dir / "scene-1.png"),
                 timestamp_sec=0.5,
             ),
             SlideFrame(
                 id="frame-2",
                 scene_id="scene-2",
-                image_path=str(tmp_path / "frame-2.png"),
+                image_path=str(frames_dir / "scene-2.png"),
                 timestamp_sec=1.4,
             ),
         ]
-        for frame in frames:
-            Image.new("RGB", (8, 8), color="white").save(frame.image_path)
         install_pipeline_runtime(
             monkeypatch, tmp_path, input_path=input_path, runtime=video_runtime()
         )
@@ -536,6 +536,9 @@ class TestProcessInput:
         def fake_extract_frames(*_args, progress_callback=None, warning_callback=None, **_kwargs):
             assert progress_callback is not None
             assert warning_callback is not None
+            frames_dir.mkdir(parents=True)
+            for frame in frames:
+                Image.new("RGB", (8, 8), color="white").save(frame.image_path)
             progress_callback()
             progress_callback()
             return frames
@@ -547,7 +550,7 @@ class TestProcessInput:
 
         artifacts = process_input(
             input_path,
-            output_dir=tmp_path / "video-run",
+            output_dir=run_dir,
             transcriber=FakeTranscriber(
                 segments=[
                     TranscriptSegment(
@@ -569,8 +572,8 @@ class TestProcessInput:
         ]
         assert artifacts.diagnostics.item_counts["scenes"] == 2
         assert artifacts.diagnostics.item_counts["frames"] == 2
-        assert artifacts.report.sections[0].image_path == frames[0].image_path
-        assert report_payload["sections"][0]["image_path"] == frames[0].image_path
+        assert artifacts.report.sections[0].image_path == "frames/scene-1.png"
+        assert report_payload["sections"][0]["image_path"] == "frames/scene-1.png"
 
     def test_frame_extraction_warnings_reach_report_and_diagnostics(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

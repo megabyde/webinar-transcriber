@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, replace
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import webinar_transcriber.export as export_runtime
@@ -15,8 +16,6 @@ from .support import count_label, progress_stage, stage, write_json
 from .types import ReportPhaseResult
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from webinar_transcriber.llm.contracts import LLMProcessor
     from webinar_transcriber.models import (
         AlignmentBlock,
@@ -132,7 +131,11 @@ def run_report_phase(
         for section in report.sections:
             frame_id = section.frame_id
             frame = frame_by_id.get(frame_id) if frame_id else None
-            sections.append(replace(section, image_path=frame.image_path) if frame else section)
+            sections.append(
+                replace(section, image_path=_report_image_path(frame, layout.run_dir))
+                if frame
+                else section
+            )
         report = replace(report, sections=sections)
 
     report = maybe_polish_report(
@@ -155,3 +158,14 @@ def run_report_phase(
     return ReportPhaseResult(
         report=report, alignment_blocks=alignment_blocks, scenes=scenes, slide_frames=slide_frames
     )
+
+
+def _report_image_path(frame: SlideFrame, run_dir: Path) -> str:
+    image_path = Path(frame.image_path)
+    try:
+        return image_path.relative_to(run_dir).as_posix()
+    except ValueError:
+        try:
+            return image_path.resolve().relative_to(run_dir.resolve()).as_posix()
+        except ValueError:
+            return frame.image_path
