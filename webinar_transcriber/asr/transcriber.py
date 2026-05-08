@@ -7,7 +7,7 @@ import io
 import os
 import re
 import sys
-from contextlib import contextmanager, redirect_stderr, redirect_stdout, suppress
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self, cast
@@ -320,11 +320,23 @@ class WhisperCppTranscriber:
         if window_samples.size == 0:
             return DecodedWindow(window=window, language=language_hint)
 
+        detected_language = language_hint
+        if detected_language is None:
+            try:
+                # pywhispercpp returns (("ru", 0.99), {"ru": 0.99, ...}).
+                detected_language = model.auto_detect_language(
+                    window_samples, n_threads=self._threads
+                )[0][0]
+            except (RuntimeError, ValueError, IndexError) as error:  # pragma: no cover
+                raise ASRProcessingError(
+                    f"whisper.cpp language detection failed for {window.window_id}."
+                ) from error
+
         transcribe_kwargs: dict[str, str] = {}
         if prompt is not None:
             transcribe_kwargs["initial_prompt"] = prompt
-        if language_hint is not None:
-            transcribe_kwargs["language"] = language_hint
+        if detected_language is not None:
+            transcribe_kwargs["language"] = detected_language
         try:
             raw_segments: list[Any] = cast("Any", model).transcribe(
                 window_samples, **transcribe_kwargs
@@ -333,13 +345,6 @@ class WhisperCppTranscriber:
             raise ASRProcessingError(
                 f"whisper.cpp inference failed for {window.window_id}."
             ) from error
-
-        detected_language = language_hint
-        if detected_language is None:
-            with suppress(Exception):
-                detected_language = model.auto_detect_language(
-                    window_samples, n_threads=self._threads
-                )[0][0]
 
         segments: list[TranscriptSegment] = []
         for segment_index, raw_segment in enumerate(raw_segments):
