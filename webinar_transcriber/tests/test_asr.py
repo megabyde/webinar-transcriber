@@ -289,7 +289,7 @@ class TestWhisperCppTranscriber:
             fake_model.auto_detect_calls[0][0], np.zeros(16_000, dtype=np.float32)
         )
         assert fake_model.auto_detect_calls[0][1] == 6
-        assert fake_model.transcribe_calls[0][1] == {}
+        assert fake_model.transcribe_calls[0][1] == {"language": "ru"}
         assert fake_model.transcribe_calls[1][1] == {
             "initial_prompt": "agenda review",
             "language": "ru",
@@ -328,9 +328,9 @@ class TestWhisperCppTranscriber:
 
         assert [window.language for window in decoded_windows] == ["ru", "ru", "en", "en"]
         assert len(fake_model.auto_detect_calls) == 2
-        assert fake_model.transcribe_calls[0][1] == {}
+        assert fake_model.transcribe_calls[0][1] == {"language": "ru"}
         assert fake_model.transcribe_calls[1][1] == {"language": "ru"}
-        assert fake_model.transcribe_calls[2][1] == {}
+        assert fake_model.transcribe_calls[2][1] == {"language": "en"}
         assert fake_model.transcribe_calls[3][1] == {"language": "en"}
 
     def test_transcribe_inference_windows_uses_forced_language(self, fake_model: FakeModel) -> None:
