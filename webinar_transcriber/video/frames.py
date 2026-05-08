@@ -39,7 +39,7 @@ def extract_representative_frames(
     """
     frames_dir.mkdir(parents=True, exist_ok=True)
     frames: list[SlideFrame] = []
-    unreported_scenes = list(scenes)
+    processed_scene_count = 0
 
     try:
         with open_video_input_container(video_path) as (input_container, video_stream):
@@ -59,7 +59,7 @@ def extract_representative_frames(
                         )
                     if progress_callback is not None:
                         progress_callback()
-                    unreported_scenes.pop(0)
+                    processed_scene_count = index
                     continue
 
                 if failure_detail is not None and warning_callback is not None:
@@ -77,10 +77,10 @@ def extract_representative_frames(
                 )
                 if progress_callback is not None:
                     progress_callback()
-                unreported_scenes.pop(0)
+                processed_scene_count = index
     except (MediaProcessingError, OSError, av.FFmpegError) as error:
         _report_frame_extraction_failures(
-            unreported_scenes,
+            scenes[processed_scene_count:],
             error,
             progress_callback=progress_callback,
             warning_callback=warning_callback,

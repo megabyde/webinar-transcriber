@@ -61,7 +61,7 @@ def run_transcription_phase(
     with ExitStack() as audio_scope:
         with stage(ctx, "prepare_transcription_audio", "Preparing audio") as st:
             audio_path = audio_scope.enter_context(prepared_transcription_audio(input_path))
-            st.detail = str(audio_path.name)
+            st.set_detail(str(audio_path.name))
 
         asr_result = run_asr_pipeline(
             audio_path=audio_path,
@@ -81,7 +81,7 @@ def run_transcription_phase(
                 preserve_transcription_audio(
                     audio_path, preserved_audio_path, audio_format=keep_audio
                 )
-                st.detail = preserved_audio_path.name
+                st.set_detail(preserved_audio_path.name)
 
     return asr_result.transcription, asr_result.normalized_transcription, asr_result.asr_pipeline
 
@@ -133,13 +133,13 @@ def process_input(
             with stage(ctx, "prepare_run_dir", "Preparing run directory") as st:
                 layout = create_run_layout(input_path=input_path, output_dir=output_dir)
                 ctx.layout = layout
-                st.detail = str(layout.run_dir)
+                st.set_detail(str(layout.run_dir))
             active_transcriber.set_log_path(layout.run_dir / "whisper-cpp.log")
 
             with stage(ctx, "probe_media", "Probing media") as st:
                 media_asset = probe_media(input_path)
                 write_json(layout.metadata_path, {"media": asdict(media_asset)})
-                st.detail = f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s"
+                st.set_detail(f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s")
 
             transcription, normalized_transcription, asr_pipeline = run_transcription_phase(
                 input_path=input_path,

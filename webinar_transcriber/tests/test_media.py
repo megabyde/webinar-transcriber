@@ -1,6 +1,7 @@
 """Tests for media probing helpers."""
 
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -50,7 +51,7 @@ class TestProbeMedia:
     def test_wraps_open_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             "webinar_transcriber.media.av.open",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("bad open")),
+            Mock(side_effect=OSError("bad open")),
         )
 
         with pytest.raises(MediaProcessingError, match=r"Could not open .* with PyAV: bad open"):
@@ -82,7 +83,7 @@ class TestOpenOutputMediaContainer:
     def test_wraps_open_error(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.setattr(
             "webinar_transcriber.media.av.open",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("bad open")),
+            Mock(side_effect=OSError("bad open")),
         )
 
         with pytest.raises(

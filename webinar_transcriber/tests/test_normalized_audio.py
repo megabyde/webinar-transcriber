@@ -3,7 +3,7 @@
 import wave
 from pathlib import Path
 from typing import Self, cast
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import av
 import numpy as np
@@ -168,7 +168,7 @@ class TestNormalizedAudio:
     ) -> None:
         monkeypatch.setattr(
             "webinar_transcriber.normalized_audio.av.open",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("bad open")),
+            Mock(side_effect=OSError("bad open")),
         )
 
         with pytest.raises(MediaProcessingError, match=r"Could not open .*bad open"):
@@ -194,7 +194,7 @@ class TestNormalizedAudio:
     ) -> None:
         monkeypatch.setattr(
             "webinar_transcriber.normalized_audio.av.open",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("bad open")),
+            Mock(side_effect=OSError("bad open")),
         )
 
         with pytest.raises(MediaProcessingError, match=r"Could not open .*bad open"):

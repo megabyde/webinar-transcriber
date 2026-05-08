@@ -2,6 +2,7 @@
 
 from fractions import Fraction
 from pathlib import Path
+from unittest.mock import Mock
 
 import av
 import numpy as np
@@ -311,7 +312,7 @@ class TestFrameExtraction:
         scenes = [_scene(1, 0.0, 2.0), _scene(2, 2.0, 4.0)]
         monkeypatch.setattr(
             "webinar_transcriber.video.frames.av.open",
-            lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("bad open")),
+            Mock(side_effect=OSError("bad open")),
         )
 
         frames = extract_representative_frames(

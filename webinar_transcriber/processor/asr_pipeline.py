@@ -68,7 +68,7 @@ def run_asr_pipeline(
     """
     with stage(ctx, "prepare_asr", "Preparing ASR model") as st:
         transcriber.prepare_model()
-        st.detail = asr_runtime_detail(transcriber)
+        st.set_detail(asr_runtime_detail(transcriber))
 
     audio_samples, sample_rate = load_normalized_audio(audio_path)
     normalized_audio_duration_sec = normalized_audio_duration(audio_samples, sample_rate)
@@ -78,7 +78,7 @@ def run_asr_pipeline(
             sample_rate,
             settings=vad,
         )
-        st.detail = count_label(len(speech_regions), "region")
+        st.set_detail(count_label(len(speech_regions), "region"))
     vad_region_count = len(speech_regions)
     for warning in vad_warnings:
         warnings.append(warning)
@@ -115,10 +115,12 @@ def run_asr_pipeline(
             {"decoded_windows": [asdict(window) for window in decoded_windows]},
         )
         st.advance_to(media_asset.duration_sec)
-        st.detail = window_transcription_stage_detail(
-            window_count=len(windows),
-            total_duration_sec=media_asset.duration_sec,
-            elapsed_sec=st.elapsed_sec(),
+        st.set_detail(
+            window_transcription_stage_detail(
+                window_count=len(windows),
+                total_duration_sec=media_asset.duration_sec,
+                elapsed_sec=st.elapsed_sec(),
+            )
         )
 
     transcription = reconcile_decoded_windows(decoded_windows)
@@ -126,7 +128,7 @@ def run_asr_pipeline(
     with stage(ctx, "normalize_transcript", "Normalizing transcript") as st:
         write_json(layout.transcript_path, asdict(transcription))
         normalized_transcription = normalize_transcription(transcription)
-        st.detail = count_label(len(normalized_transcription.segments), "segment")
+        st.set_detail(count_label(len(normalized_transcription.segments), "segment"))
 
     asr_pipeline = AsrPipelineDiagnostics(
         vad_enabled=vad.enabled,

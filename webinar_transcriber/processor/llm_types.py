@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 
 @dataclass
@@ -11,6 +12,6 @@ class LLMRuntimeState:
 
     provider_name: str | None = None
     model_name: str | None = None
-    report_status: str = "disabled"
+    report_status: Literal["disabled", "applied", "fallback"] = "disabled"
     report_latency_sec: float | None = None
     report_usage: dict[str, int] | None = None

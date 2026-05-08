@@ -91,7 +91,7 @@ def run_report_phase(
                 progress_callback=st.advance,
                 warning_callback=record_warning,
             )
-            st.detail = count_label(len(slide_frames), "frame")
+            st.set_detail(count_label(len(slide_frames), "frame"))
 
         alignment_blocks = structure_runtime.align_by_time(
             transcript_segments, scenes, slide_frames

@@ -32,20 +32,6 @@ def _first_video_stream(input_container: InputContainer) -> VideoStream | None:
     return cast("VideoStream | None", stream)
 
 
-def _required_audio_stream(input_container: InputContainer, *, error_message: str) -> AudioStream:
-    stream = _first_audio_stream(input_container)
-    if stream is None:
-        raise MediaProcessingError(error_message)
-    return stream
-
-
-def _required_video_stream(input_container: InputContainer, *, error_message: str) -> VideoStream:
-    stream = _first_video_stream(input_container)
-    if stream is None:
-        raise MediaProcessingError(error_message)
-    return stream
-
-
 @contextmanager
 def open_input_media_container(path: Path) -> Iterator[InputContainer]:
     """Open a PyAV input container and normalize open-time failures."""
@@ -61,20 +47,20 @@ def open_input_media_container(path: Path) -> Iterator[InputContainer]:
 def open_audio_input_container(path: Path) -> Iterator[tuple[InputContainer, AudioStream]]:
     """Open a PyAV input container and yield its required audio stream."""
     with open_input_media_container(path) as container:
-        yield (
-            container,
-            _required_audio_stream(container, error_message=f"No audio stream found in {path}."),
-        )
+        stream = _first_audio_stream(container)
+        if stream is None:
+            raise MediaProcessingError(f"No audio stream found in {path}.")
+        yield container, stream
 
 
 @contextmanager
 def open_video_input_container(path: Path) -> Iterator[tuple[InputContainer, VideoStream]]:
     """Open a PyAV input container and yield its required video stream."""
     with open_input_media_container(path) as container:
-        yield (
-            container,
-            _required_video_stream(container, error_message=f"No video stream found in {path}."),
-        )
+        stream = _first_video_stream(container)
+        if stream is None:
+            raise MediaProcessingError(f"No video stream found in {path}.")
+        yield container, stream
 
 
 @contextmanager
