@@ -111,14 +111,16 @@ def maybe_polish_report(
         except LLMProcessingError as error:
             warnings.append(str(error))
             ctx.reporter.warn(str(error))
-            st.detail = llm_fallback_detail(
-                provider_name=llm_runtime.provider_name, model_name=llm_runtime.model_name
+            st.set_detail(
+                llm_fallback_detail(
+                    provider_name=llm_runtime.provider_name, model_name=llm_runtime.model_name
+                )
             )
             llm_runtime.report_status = "fallback"
             llm_runtime.report_latency_sec = st.elapsed_sec()
             return report
         section_elapsed_sec = st.elapsed_sec()
-        st.detail = count_label(polish_plan.section_count, "section")
+        st.set_detail(count_label(polish_plan.section_count, "section"))
     for warning in section_result.warnings:
         warnings.append(warning)
         ctx.reporter.warn(warning)
@@ -132,21 +134,25 @@ def maybe_polish_report(
         except LLMProcessingError as error:
             warnings.append(str(error))
             ctx.reporter.warn(str(error))
-            st.detail = llm_fallback_detail(
-                provider_name=llm_runtime.provider_name, model_name=llm_runtime.model_name
+            st.set_detail(
+                llm_fallback_detail(
+                    provider_name=llm_runtime.provider_name, model_name=llm_runtime.model_name
+                )
             )
             metadata_elapsed_sec = st.elapsed_sec()
             metadata_error = error
         else:
             metadata_elapsed_sec = st.elapsed_sec()
             usage = dict(Counter(section_result.usage) + Counter(metadata_result.usage))
-            st.detail = llm_report_detail(
-                section_count=polish_plan.section_count,
-                tldr_count=len(section_result.section_tldrs),
-                title_count=len(metadata_result.section_titles),
-                summary_count=len(metadata_result.summary),
-                action_item_count=len(metadata_result.action_items),
-                usage=usage,
+            st.set_detail(
+                llm_report_detail(
+                    section_count=polish_plan.section_count,
+                    tldr_count=len(section_result.section_tldrs),
+                    title_count=len(metadata_result.section_titles),
+                    summary_count=len(metadata_result.summary),
+                    action_item_count=len(metadata_result.action_items),
+                    usage=usage,
+                )
             )
 
     if metadata_error is not None:

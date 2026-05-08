@@ -31,6 +31,10 @@ class StageHandle:
         """Return the current elapsed stage time in seconds."""
         return perf_counter() - self.start_sec
 
+    def set_detail(self, detail: str) -> None:
+        """Set the final status detail reported when the stage finishes."""
+        self.detail = detail
+
 
 @dataclass
 class ProgressStageHandle(StageHandle):
@@ -46,7 +50,7 @@ class ProgressStageHandle(StageHandle):
         self.reporter.progress_advanced(self.key, advance=advance, detail=detail)
         self.completed += advance
         if detail is not None:
-            self.detail = detail
+            self.set_detail(detail)
 
     def advance_to(self, completed: float, *, detail: str | None = None) -> None:
         """Advance stage progress up to one cumulative completed value."""

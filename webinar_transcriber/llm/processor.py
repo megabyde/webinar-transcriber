@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import importlib
 import json
-from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Protocol
 
@@ -161,7 +160,8 @@ class InstructorLLMProcessor:
             polished_transcripts[section_id] = transcript_text
             if tldr:
                 polished_tldrs[section_id] = tldr
-            usage_totals.update(Counter(usage_totals) + Counter(usage))
+            for key, value in usage.items():
+                usage_totals[key] = usage_totals.get(key, 0) + value
             warnings.extend(section_warnings)
 
         return SectionPolishOutputs(transcripts=polished_transcripts, tldrs=polished_tldrs)
