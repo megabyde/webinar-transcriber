@@ -82,10 +82,8 @@ def stage(
         ctx.reporter.stage_started(key, label)
     try:
         yield handle
-    except Exception:
+    finally:
         ctx.stage_timings[key] = handle.elapsed_sec()
-        raise
-    ctx.stage_timings[key] = handle.elapsed_sec()
     ctx.reporter.stage_finished(key, label, detail=handle.detail)
 
 
@@ -115,10 +113,8 @@ def progress_stage(
     )
     try:
         yield handle
-    except Exception:
+    finally:
         ctx.stage_timings[key] = handle.elapsed_sec()
-        raise
-    ctx.stage_timings[key] = handle.elapsed_sec()
     ctx.reporter.stage_finished(key, label, detail=handle.detail)
 
 

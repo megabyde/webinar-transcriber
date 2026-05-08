@@ -187,7 +187,7 @@ class Diagnostics:
     asr_model: str | None = None
     llm_enabled: bool = False
     llm_model: str | None = None
-    llm_report_status: str = "disabled"
+    llm_report_status: Literal["disabled", "applied", "fallback"] = "disabled"
     llm_report_latency_sec: float | None = None
     llm_report_usage: dict[str, int] = dataclass_field(default_factory=dict)
     stage_durations_sec: dict[str, float] = dataclass_field(default_factory=dict)

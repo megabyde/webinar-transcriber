@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
@@ -389,7 +389,7 @@ class TestProcessInput:
         )
         monkeypatch.setattr(
             "webinar_transcriber.processor.run_asr_pipeline",
-            lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("asr failed")),
+            Mock(side_effect=RuntimeError("asr failed")),
         )
 
         with pytest.raises(RuntimeError, match="asr failed"):
@@ -690,6 +690,9 @@ class TestProcessorSupport:
 
         assert diagnostics is not None
         assert diagnostics.error == "boom"
+        assert diagnostics.asr_pipeline is None
+        assert diagnostics.item_counts["vad_regions"] == 0
+        assert diagnostics.item_counts["windows"] == 0
         with pytest.raises(OSError, match="readonly"):
             write_run_diagnostics(
                 ctx,
@@ -773,7 +776,7 @@ class TestProcessorSupport:
 
         monkeypatch.setattr(
             "webinar_transcriber.processor.llm.build_llm_processor_from_env",
-            lambda: (_ for _ in ()).throw(LLMConfigurationError("missing env")),
+            Mock(side_effect=LLMConfigurationError("missing env")),
         )
 
         runtime = LLMRuntimeState()
@@ -970,7 +973,7 @@ class TestProcessInputLlm:
         reporter = RecordingReporter()
         monkeypatch.setattr(
             "webinar_transcriber.processor.llm.build_llm_processor_from_env",
-            lambda: (_ for _ in ()).throw(LLMConfigurationError("missing llm config")),
+            Mock(side_effect=LLMConfigurationError("missing llm config")),
         )
 
         artifacts = process_input(

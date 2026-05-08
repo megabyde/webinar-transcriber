@@ -41,7 +41,8 @@ def build_diagnostics(
     Returns:
         Diagnostics: The final diagnostics payload.
     """
-    asr_pipeline = asr_pipeline or AsrPipelineDiagnostics(vad_enabled=False, threads=0)
+    vad_region_count = asr_pipeline.vad_region_count if asr_pipeline is not None else 0
+    window_count = asr_pipeline.window_count if asr_pipeline is not None else 0
     return Diagnostics(
         status=status,
         failed_stage=failed_stage,
@@ -59,8 +60,8 @@ def build_diagnostics(
             "normalized_transcript_segments": (
                 len(normalized_transcription.segments) if normalized_transcription else 0
             ),
-            "vad_regions": asr_pipeline.vad_region_count,
-            "windows": asr_pipeline.window_count,
+            "vad_regions": vad_region_count,
+            "windows": window_count,
             "report_sections": len(report.sections) if report else 0,
             "scenes": len(scenes),
             "frames": len(slide_frames),
