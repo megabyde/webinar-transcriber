@@ -6,10 +6,9 @@ from contextlib import ExitStack
 from dataclasses import asdict
 from typing import TYPE_CHECKING
 
-import webinar_transcriber.asr as asr_runtime
-import webinar_transcriber.media as media_runtime
-from webinar_transcriber.asr import PromptCarryoverSettings
+from webinar_transcriber.asr import PromptCarryoverSettings, WhisperCppTranscriber
 from webinar_transcriber.diagnostics import write_run_diagnostics
+from webinar_transcriber.media import probe_media
 from webinar_transcriber.normalized_audio import (
     TranscriptionAudioFormat,
     prepared_transcription_audio,
@@ -19,7 +18,7 @@ from webinar_transcriber.paths import create_run_layout
 from webinar_transcriber.reporter import BaseStageReporter
 from webinar_transcriber.segmentation import DEFAULT_VAD_SETTINGS, VadSettings
 
-from . import asr as processor_asr
+from .asr_pipeline import run_asr_pipeline
 from .report import run_report_phase
 from .support import stage, write_json
 from .types import ProcessArtifacts, RunContext
@@ -27,7 +26,6 @@ from .types import ProcessArtifacts, RunContext
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from webinar_transcriber.asr import WhisperCppTranscriber
     from webinar_transcriber.llm.contracts import LLMProcessor
     from webinar_transcriber.models import (
         AsrPipelineDiagnostics,
@@ -65,7 +63,7 @@ def run_transcription_phase(
             audio_path = audio_scope.enter_context(prepared_transcription_audio(input_path))
             st.detail = str(audio_path.name)
 
-        asr_result = processor_asr.run_asr_pipeline(
+        asr_result = run_asr_pipeline(
             audio_path=audio_path,
             media_asset=media_asset,
             transcriber=transcriber,
@@ -114,7 +112,7 @@ def process_input(
     with ExitStack() as transcriber_scope:
         if transcriber is None:
             active_transcriber = transcriber_scope.enter_context(
-                asr_runtime.WhisperCppTranscriber(
+                WhisperCppTranscriber(
                     model_name=asr_model,
                     threads=asr_threads,
                     language=language,
@@ -139,7 +137,7 @@ def process_input(
             active_transcriber.set_log_path(layout.run_dir / "whisper-cpp.log")
 
             with stage(ctx, "probe_media", "Probing media") as st:
-                media_asset = media_runtime.probe_media(input_path)
+                media_asset = probe_media(input_path)
                 write_json(layout.metadata_path, {"media": asdict(media_asset)})
                 st.detail = f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s"
 

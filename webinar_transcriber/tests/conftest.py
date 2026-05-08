@@ -205,15 +205,16 @@ def install_pipeline_runtime(
         fake_prepared_transcription_audio,
     )
     monkeypatch.setattr(
-        "webinar_transcriber.processor.media_runtime.probe_media",
+        "webinar_transcriber.processor.probe_media",
         lambda _input_path: runtime.media_asset,
     )
     monkeypatch.setattr(
-        "webinar_transcriber.processor.asr.load_normalized_audio",
+        "webinar_transcriber.processor.asr_pipeline.load_normalized_audio",
         lambda _path: (runtime.audio_samples, runtime.sample_rate),
     )
     monkeypatch.setattr(
-        "webinar_transcriber.processor.asr.detect_speech_regions", fake_detect_speech_regions
+        "webinar_transcriber.processor.asr_pipeline.detect_speech_regions",
+        fake_detect_speech_regions,
     )
 
 

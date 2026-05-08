@@ -33,7 +33,7 @@ from webinar_transcriber.models import (
 )
 from webinar_transcriber.paths import RunLayout
 from webinar_transcriber.processor import ProcessArtifacts, RunContext, process_input
-from webinar_transcriber.processor.asr import plan_inference_windows
+from webinar_transcriber.processor.asr_pipeline import plan_inference_windows
 from webinar_transcriber.processor.llm import resolve_llm_processor
 from webinar_transcriber.processor.llm_types import LLMRuntimeState
 from webinar_transcriber.processor.support import (
@@ -384,10 +384,11 @@ class TestProcessInput:
 
         transcriber = CloseTrackingTranscriber()
         monkeypatch.setattr(
-            "webinar_transcriber.asr.WhisperCppTranscriber", lambda *args, **kwargs: transcriber
+            "webinar_transcriber.processor.WhisperCppTranscriber",
+            lambda *args, **kwargs: transcriber,
         )
         monkeypatch.setattr(
-            "webinar_transcriber.processor.processor_asr.run_asr_pipeline",
+            "webinar_transcriber.processor.run_asr_pipeline",
             lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("asr failed")),
         )
 
@@ -410,7 +411,9 @@ class TestProcessInput:
             transcriber_kwargs.update(kwargs)
             return transcriber
 
-        monkeypatch.setattr("webinar_transcriber.asr.WhisperCppTranscriber", transcriber_factory)
+        monkeypatch.setattr(
+            "webinar_transcriber.processor.WhisperCppTranscriber", transcriber_factory
+        )
 
         process_input(input_path, output_dir=tmp_path / "run", asr_threads=3)
 
@@ -449,11 +452,11 @@ class TestProcessInput:
         with (
             patch("webinar_transcriber.structure.build_report", side_effect=RuntimeError("boom")),
             patch(
-                "webinar_transcriber.processor.asr.load_normalized_audio",
+                "webinar_transcriber.processor.asr_pipeline.load_normalized_audio",
                 return_value=(np.zeros(16_000, dtype=np.float32), 16_000),
             ),
             patch(
-                "webinar_transcriber.processor.asr.detect_speech_regions",
+                "webinar_transcriber.processor.asr_pipeline.detect_speech_regions",
                 return_value=([SpeechRegion(start_sec=0.0, end_sec=3.0)], []),
             ),
             pytest.raises(RuntimeError, match="boom"),
