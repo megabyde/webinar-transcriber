@@ -32,14 +32,6 @@ def _required_llm_module(module_name: str, *, provider_label: str) -> object:
         ) from error
 
 
-def _instructor_llm_processor_cls() -> type[InstructorLLMProcessor]:
-    processor_module = importlib.import_module("webinar_transcriber.llm.processor")
-    return cast(
-        "type[InstructorLLMProcessor]",
-        processor_module.InstructorLLMProcessor,
-    )
-
-
 def build_llm_processor_from_env() -> LLMProcessor:
     """Build a configured LLM processor from environment variables.
 
@@ -49,6 +41,8 @@ def build_llm_processor_from_env() -> LLMProcessor:
     Raises:
         LLMConfigurationError: If the provider selection or required environment is invalid.
     """
+    from .processor import InstructorLLMProcessor  # noqa: PLC0415
+
     provider = os.environ.get("LLM_PROVIDER", "openai").strip().casefold()
     match provider:
         case "openai":
@@ -58,8 +52,7 @@ def build_llm_processor_from_env() -> LLMProcessor:
                 api_key_env="OPENAI_API_KEY", model_env="OPENAI_MODEL"
             )
 
-            processor_cls = _instructor_llm_processor_cls()
-            return processor_cls(
+            return InstructorLLMProcessor(
                 client=instructor.from_provider(
                     f"openai/{model_name}", api_key=api_key, mode=instructor.Mode.TOOLS
                 ),
@@ -73,8 +66,7 @@ def build_llm_processor_from_env() -> LLMProcessor:
                 api_key_env="ANTHROPIC_API_KEY", model_env="ANTHROPIC_MODEL"
             )
 
-            processor_cls = _instructor_llm_processor_cls()
-            return processor_cls(
+            return InstructorLLMProcessor(
                 client=instructor.from_provider(
                     f"anthropic/{model_name}", api_key=api_key, mode=instructor.Mode.TOOLS
                 ),

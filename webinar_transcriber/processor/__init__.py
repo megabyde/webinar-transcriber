@@ -17,25 +17,29 @@ from webinar_transcriber.normalized_audio import (
 )
 from webinar_transcriber.paths import create_run_layout
 from webinar_transcriber.reporter import BaseStageReporter
-from webinar_transcriber.segmentation import VadSettings
+from webinar_transcriber.segmentation import DEFAULT_VAD_SETTINGS, VadSettings
 
 from . import asr as processor_asr
 from .report import run_report_phase
 from .support import stage, write_json
-from .types import ProcessArtifacts, ReportPhaseResult, RunContext, TranscriptionPhaseResult
+from .types import ProcessArtifacts, RunContext
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-    from contextlib import AbstractContextManager
     from pathlib import Path
 
     from webinar_transcriber.asr import WhisperCppTranscriber
     from webinar_transcriber.llm.contracts import LLMProcessor
-    from webinar_transcriber.models import MediaAsset
+    from webinar_transcriber.models import (
+        AsrPipelineDiagnostics,
+        MediaAsset,
+        ReportDocument,
+        Scene,
+        SlideFrame,
+        TranscriptionResult,
+    )
     from webinar_transcriber.paths import RunLayout
 
 
-DEFAULT_VAD_SETTINGS = VadSettings()
 DEFAULT_PROMPT_CARRYOVER_SETTINGS = PromptCarryoverSettings()
 
 
@@ -50,16 +54,15 @@ def run_transcription_phase(
     carryover_enabled: bool,
     language: str | None,
     keep_audio: TranscriptionAudioFormat | None,
-    prepared_audio_factory: Callable[[Path], AbstractContextManager[Path]],
-) -> TranscriptionPhaseResult:
+) -> tuple[TranscriptionResult, TranscriptionResult, AsrPipelineDiagnostics]:
     """Run the audio preparation and ASR half of the pipeline.
 
     Returns:
-        TranscriptionPhaseResult: The transcription artifacts and ASR diagnostics.
+        tuple: The transcription artifacts and ASR diagnostics.
     """
     with ExitStack() as audio_scope:
         with stage(ctx, "prepare_transcription_audio", "Preparing audio") as st:
-            audio_path = audio_scope.enter_context(prepared_audio_factory(input_path))
+            audio_path = audio_scope.enter_context(prepared_transcription_audio(input_path))
             st.detail = str(audio_path.name)
 
         asr_result = processor_asr.run_asr_pipeline(
@@ -82,11 +85,7 @@ def run_transcription_phase(
                 )
                 st.detail = preserved_audio_path.name
 
-    return TranscriptionPhaseResult(
-        transcription=asr_result.transcription,
-        normalized_transcription=asr_result.normalized_transcription,
-        asr_pipeline=asr_result.asr_pipeline,
-    )
+    return asr_result.transcription, asr_result.normalized_transcription, asr_result.asr_pipeline
 
 
 def process_input(
@@ -125,8 +124,12 @@ def process_input(
         else:
             active_transcriber = transcriber
 
-        transcription_phase: TranscriptionPhaseResult | None = None
-        report_phase: ReportPhaseResult | None = None
+        transcription: TranscriptionResult | None = None
+        normalized_transcription: TranscriptionResult | None = None
+        asr_pipeline: AsrPipelineDiagnostics | None = None
+        report: ReportDocument | None = None
+        scenes: list[Scene] = []
+        slide_frames: list[SlideFrame] = []
         ctx.reporter.begin_run(input_path)
         try:
             with stage(ctx, "prepare_run_dir", "Preparing run directory") as st:
@@ -140,7 +143,7 @@ def process_input(
                 write_json(layout.metadata_path, {"media": asdict(media_asset)})
                 st.detail = f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s"
 
-            transcription_phase = run_transcription_phase(
+            transcription, normalized_transcription, asr_pipeline = run_transcription_phase(
                 input_path=input_path,
                 media_asset=media_asset,
                 transcriber=active_transcriber,
@@ -150,14 +153,13 @@ def process_input(
                 carryover_enabled=carryover.enabled,
                 language=language,
                 keep_audio=keep_audio,
-                prepared_audio_factory=prepared_transcription_audio,
             )
 
-            report_phase = run_report_phase(
+            report, scenes, slide_frames = run_report_phase(
                 input_path=input_path,
                 layout=layout,
                 media_asset=media_asset,
-                normalized_transcription=transcription_phase.normalized_transcription,
+                normalized_transcription=normalized_transcription,
                 enable_llm=enable_llm,
                 llm_processor=llm_processor,
                 ctx=ctx,
@@ -168,8 +170,12 @@ def process_input(
                 status="succeeded",
                 asr_model=active_transcriber.model_name,
                 llm_enabled=enable_llm,
-                transcription_phase=transcription_phase,
-                report_phase=report_phase,
+                transcription=transcription,
+                normalized_transcription=normalized_transcription,
+                asr_pipeline=asr_pipeline,
+                report=report,
+                scenes=scenes,
+                slide_frames=slide_frames,
             )
             if diagnostics is None:  # pragma: no cover - run layout always exists on success
                 raise RuntimeError(
@@ -179,8 +185,8 @@ def process_input(
             artifacts = ProcessArtifacts(
                 layout=layout,
                 media_asset=media_asset,
-                transcription=transcription_phase.transcription,
-                report=report_phase.report,
+                transcription=transcription,
+                report=report,
                 diagnostics=diagnostics,
             )
             ctx.reporter.complete_run(artifacts)
@@ -193,8 +199,12 @@ def process_input(
                 error=str(ex),
                 asr_model=active_transcriber.model_name,
                 llm_enabled=enable_llm,
-                transcription_phase=transcription_phase,
-                report_phase=report_phase,
+                transcription=transcription,
+                normalized_transcription=normalized_transcription,
+                asr_pipeline=asr_pipeline,
+                report=report,
+                scenes=scenes,
+                slide_frames=slide_frames,
                 suppress_errors=True,
             )
             raise

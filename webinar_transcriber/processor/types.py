@@ -9,13 +9,9 @@ from .llm_types import LLMRuntimeState
 
 if TYPE_CHECKING:
     from webinar_transcriber.models import (
-        AlignmentBlock,
-        AsrPipelineDiagnostics,
         Diagnostics,
         MediaAsset,
         ReportDocument,
-        Scene,
-        SlideFrame,
         TranscriptionResult,
     )
     from webinar_transcriber.paths import RunLayout
@@ -43,22 +39,3 @@ class RunContext:
     current_stage: str | None = None
     layout: RunLayout | None = None
     llm_runtime: LLMRuntimeState = field(default_factory=LLMRuntimeState)
-
-
-@dataclass(frozen=True)
-class TranscriptionPhaseResult:
-    """Artifacts produced by the transcription half of the pipeline."""
-
-    transcription: TranscriptionResult
-    normalized_transcription: TranscriptionResult
-    asr_pipeline: AsrPipelineDiagnostics
-
-
-@dataclass(frozen=True)
-class ReportPhaseResult:
-    """Artifacts produced by the report half of the pipeline."""
-
-    report: ReportDocument
-    alignment_blocks: list[AlignmentBlock] | None
-    scenes: list[Scene]
-    slide_frames: list[SlideFrame]

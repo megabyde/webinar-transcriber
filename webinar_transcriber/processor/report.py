@@ -13,13 +13,13 @@ from webinar_transcriber.models import VideoAsset
 
 from .llm import maybe_polish_report, resolve_llm_processor
 from .support import count_label, progress_stage, stage, write_json
-from .types import ReportPhaseResult
 
 if TYPE_CHECKING:
     from webinar_transcriber.llm.contracts import LLMProcessor
     from webinar_transcriber.models import (
         AlignmentBlock,
         MediaAsset,
+        ReportDocument,
         Scene,
         SlideFrame,
         TranscriptionResult,
@@ -38,11 +38,11 @@ def run_report_phase(
     enable_llm: bool,
     llm_processor: LLMProcessor | None,
     ctx: RunContext,
-) -> ReportPhaseResult:
+) -> tuple[ReportDocument, list[Scene], list[SlideFrame]]:
     """Run the video, structure, optional LLM, and export half of the pipeline.
 
     Returns:
-        ReportPhaseResult: The report artifacts and optional video alignment data.
+        tuple: The report artifact and video diagnostics inputs.
     """
     llm_enhancer = resolve_llm_processor(
         enable_llm=enable_llm,
@@ -78,7 +78,7 @@ def run_report_phase(
                     float(sample_count), detail=count_label(scene_count, "scene")
                 ),
             )
-            st.finish_progress(float(detect_scene_total), detail=count_label(len(scenes), "scene"))
+            st.advance_to(float(detect_scene_total), detail=count_label(len(scenes), "scene"))
         write_json(layout.scenes_path, {"scenes": [asdict(scene) for scene in scenes]})
 
         with progress_stage(
@@ -121,9 +121,7 @@ def run_report_phase(
                 float(completed_count), detail=count_label(section_count, "section")
             ),
         )
-        st.finish_progress(
-            float(structure_total), detail=count_label(len(report.sections), "section")
-        )
+        st.advance_to(float(structure_total), detail=count_label(len(report.sections), "section"))
 
     if slide_frames:
         frame_by_id = {frame.id: frame for frame in slide_frames}
@@ -155,9 +153,7 @@ def run_report_phase(
         report = replace(report, warnings=list(ctx.warnings))
         export_runtime.write_json_report(report, layout.json_report_path)
 
-    return ReportPhaseResult(
-        report=report, alignment_blocks=alignment_blocks, scenes=scenes, slide_frames=slide_frames
-    )
+    return report, scenes, slide_frames
 
 
 def _report_image_path(frame: SlideFrame, run_dir: Path) -> str:

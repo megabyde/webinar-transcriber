@@ -52,10 +52,6 @@ class ProgressStageHandle(StageHandle):
         """Advance stage progress up to one cumulative completed value."""
         self.advance(max(0.0, completed - self.completed), detail=detail)
 
-    def finish_progress(self, total: float, *, detail: str | None = None) -> None:
-        """Advance stage progress through one final total."""
-        self.advance_to(total, detail=detail)
-
 
 def count_label(count: int, singular: str, *, plural: str | None = None) -> str:
     """Return one compact count label with naive English pluralization."""
