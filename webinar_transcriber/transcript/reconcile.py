@@ -25,7 +25,7 @@ def reconcile_decoded_windows(
             item.window.start_sec,
             item.window.end_sec,
             item.window.region_index,
-            _window_id_sort_value(item.window.window_id),
+            item.window.id,
         ),
     )
     detected_language = next(
@@ -66,13 +66,6 @@ def reconcile_decoded_windows(
         covered_until_sec = max(covered_until_sec, decoded_window.window.end_sec)
 
     return TranscriptionResult(detected_language=detected_language, segments=reconciled_segments)
-
-
-def _window_id_sort_value(window_id: str) -> tuple[str, int]:
-    prefix, sep, suffix = window_id.rpartition("-")
-    if sep and suffix.isdecimal():
-        return prefix, int(suffix)
-    return window_id, -1
 
 
 def _recent_transcript_text(segments: list[TranscriptSegment]) -> str:

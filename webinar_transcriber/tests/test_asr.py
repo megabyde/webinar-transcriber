@@ -271,8 +271,8 @@ class TestWhisperCppTranscriber:
         decoded_windows = transcriber.transcribe_inference_windows(
             np.zeros(32_000, dtype=np.float32),
             [
-                InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
-                InferenceWindow(window_id="window-2", region_index=0, start_sec=1.0, end_sec=2.0),
+                InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
+                InferenceWindow(id="window-2", region_index=0, start_sec=1.0, end_sec=2.0),
             ],
             progress_callback=lambda completed_sec, _segment_count: progress_updates.append(
                 completed_sec
@@ -319,10 +319,10 @@ class TestWhisperCppTranscriber:
         ).transcribe_inference_windows(
             np.zeros(80_000, dtype=np.float32),
             [
-                InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
-                InferenceWindow(window_id="window-2", region_index=0, start_sec=1.0, end_sec=2.0),
-                InferenceWindow(window_id="window-3", region_index=1, start_sec=3.0, end_sec=4.0),
-                InferenceWindow(window_id="window-4", region_index=1, start_sec=4.0, end_sec=5.0),
+                InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
+                InferenceWindow(id="window-2", region_index=0, start_sec=1.0, end_sec=2.0),
+                InferenceWindow(id="window-3", region_index=1, start_sec=3.0, end_sec=4.0),
+                InferenceWindow(id="window-4", region_index=1, start_sec=4.0, end_sec=5.0),
             ],
         )
 
@@ -338,7 +338,7 @@ class TestWhisperCppTranscriber:
 
         decoded_windows = WhisperCppTranscriber(language="en").transcribe_inference_windows(
             np.zeros(16_000, dtype=np.float32),
-            [InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
+            [InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
         )
 
         assert [window.language for window in decoded_windows] == ["en"]
@@ -404,7 +404,7 @@ class TestWhisperCppTranscriber:
 
         decoded_window = transcriber.transcribe_inference_windows(
             np.zeros(32_000, dtype=np.float32),
-            [InferenceWindow(window_id="window-1", region_index=0, start_sec=1.0, end_sec=2.0)],
+            [InferenceWindow(id="window-1", region_index=0, start_sec=1.0, end_sec=2.0)],
         )[0]
 
         assert decoded_window.segments == [
@@ -420,7 +420,7 @@ class TestWhisperCppTranscriber:
 
         decoded_window = transcriber.transcribe_inference_windows(
             np.zeros(1, dtype=np.float32),
-            [InferenceWindow(window_id="window-1", region_index=0, start_sec=1.0, end_sec=2.0)],
+            [InferenceWindow(id="window-1", region_index=0, start_sec=1.0, end_sec=2.0)],
         )[0]
 
         assert decoded_window.segments == []
@@ -433,7 +433,7 @@ class TestWhisperCppTranscriber:
 
         decoded_window = WhisperCppTranscriber().transcribe_inference_windows(
             np.zeros(16_000, dtype=np.float32),
-            [InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
+            [InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
         )[0]
 
         assert decoded_window.text == ""
@@ -445,7 +445,7 @@ class TestWhisperCppTranscriber:
         with pytest.raises(ASRProcessingError, match=r"whisper\.cpp inference failed for window-1"):
             WhisperCppTranscriber().transcribe_inference_windows(
                 np.zeros(16_000, dtype=np.float32),
-                [InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
+                [InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
             )
 
     def test_default_asr_threads_uses_cpu_count(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -481,7 +481,7 @@ class TestWhisperCppTranscriber:
         with pytest.raises(ASRProcessingError, match="model was not initialized"):
             BrokenTranscriber(model_name="stub.bin").transcribe_inference_windows(
                 np.zeros(16_000, dtype=np.float32),
-                [InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
+                [InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
             )
 
 
@@ -489,9 +489,7 @@ class TestPromptCarryover:
     def test_build_prompt_carryover_prefers_complete_tail_sentence(self) -> None:
         carryover = build_prompt_carryover(
             DecodedWindow(
-                window=InferenceWindow(
-                    window_id="window-2", region_index=0, start_sec=18.5, end_sec=35.0
-                ),
+                window=InferenceWindow(id="window-2", region_index=0, start_sec=18.5, end_sec=35.0),
                 text="First sentence. Second sentence. Third sentence here.",
                 segments=[],
             ),
@@ -503,9 +501,7 @@ class TestPromptCarryover:
     def test_build_prompt_carryover_handles_unspaced_sentence_punctuation(self) -> None:
         carryover = build_prompt_carryover(
             DecodedWindow(
-                window=InferenceWindow(
-                    window_id="window-2", region_index=0, start_sec=18.5, end_sec=35.0
-                ),
+                window=InferenceWindow(id="window-2", region_index=0, start_sec=18.5, end_sec=35.0),
                 text=("first\N{IDEOGRAPHIC FULL STOP}second\N{IDEOGRAPHIC FULL STOP}third"),
                 segments=[],
             ),
@@ -517,9 +513,7 @@ class TestPromptCarryover:
     def test_build_prompt_carryover_keeps_suffix_without_sentence_boundary(self) -> None:
         carryover = build_prompt_carryover(
             DecodedWindow(
-                window=InferenceWindow(
-                    window_id="window-2", region_index=0, start_sec=18.5, end_sec=35.0
-                ),
+                window=InferenceWindow(id="window-2", region_index=0, start_sec=18.5, end_sec=35.0),
                 text="long unpunctuated carryover",
                 segments=[],
             ),
@@ -531,9 +525,7 @@ class TestPromptCarryover:
     def test_build_prompt_carryover_drops_empty_windows(self) -> None:
         carryover = build_prompt_carryover(
             DecodedWindow(
-                window=InferenceWindow(
-                    window_id="window-2", region_index=0, start_sec=18.5, end_sec=35.0
-                ),
+                window=InferenceWindow(id="window-2", region_index=0, start_sec=18.5, end_sec=35.0),
                 text=" \n\t ",
                 segments=[],
             ),
@@ -552,9 +544,7 @@ class TestPromptCarryover:
     def test_build_prompt_carryover_drops_when_disabled(self) -> None:
         carryover = build_prompt_carryover(
             DecodedWindow(
-                window=InferenceWindow(
-                    window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.0
-                ),
+                window=InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
                 text="Carry this.",
                 segments=[],
             ),

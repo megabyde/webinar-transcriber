@@ -142,8 +142,8 @@ def validated_section_titles(
     return polished_titles
 
 
-def normalize_polished_text(*, original_text: str, polished_text: str) -> str:
-    """Normalize multi-paragraph LLM text while preserving trailing-finality semantics.
+def normalize_polished_text(*, polished_text: str) -> str:
+    """Normalize multi-paragraph LLM text.
 
     Returns:
         str: The normalized polished text.
@@ -153,12 +153,7 @@ def normalize_polished_text(*, original_text: str, polished_text: str) -> str:
         return ""
 
     cleaned = _normalize_paragraph_blocks(cleaned)
-    cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
-
-    if not re.search(r"(?:\.{3}|…)\s*$", original_text.strip()):
-        cleaned = re.sub(r"(?:\s*)(?:\.{3}|…)+\s*$", ".", cleaned)
-
-    return cleaned
+    return re.sub(r"[ \t]+\n", "\n", cleaned)
 
 
 def normalize_polished_section_text(*, original_text: str, polished_text: str) -> str:
@@ -167,7 +162,7 @@ def normalize_polished_section_text(*, original_text: str, polished_text: str) -
     Returns:
         str: The accepted polished section text, or the original text when empty.
     """
-    cleaned = normalize_polished_text(original_text=original_text, polished_text=polished_text)
+    cleaned = normalize_polished_text(polished_text=polished_text)
     if not cleaned:
         return original_text
     return cleaned

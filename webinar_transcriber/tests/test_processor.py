@@ -197,12 +197,12 @@ class TestProcessInput:
 
         decoded_windows_payload = read_json(artifacts.layout.decoded_windows_path)
         assert [window["window"] for window in decoded_windows_payload["decoded_windows"]] == [
-            {"window_id": "window-1", "region_index": 0, "start_sec": 0.0, "end_sec": 1.2},
-            {"window_id": "window-2", "region_index": 1, "start_sec": 2.1, "end_sec": 3.0},
+            {"id": "window-1", "region_index": 0, "start_sec": 0.0, "end_sec": 1.2},
+            {"id": "window-2", "region_index": 1, "start_sec": 2.1, "end_sec": 3.0},
         ]
         assert transcriber.windows_seen == [
-            InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.2),
-            InferenceWindow(window_id="window-2", region_index=1, start_sec=2.1, end_sec=3.0),
+            InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.2),
+            InferenceWindow(id="window-2", region_index=1, start_sec=2.1, end_sec=3.0),
         ]
         assert artifacts.diagnostics.item_counts["vad_regions"] == 2
         assert artifacts.diagnostics.item_counts["windows"] == 2
@@ -229,9 +229,9 @@ class TestProcessInput:
         )
 
         assert transcriber.windows_seen == [
-            InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=28.0),
-            InferenceWindow(window_id="window-2", region_index=0, start_sec=26.0, end_sec=54.0),
-            InferenceWindow(window_id="window-3", region_index=0, start_sec=52.0, end_sec=65.0),
+            InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=28.0),
+            InferenceWindow(id="window-2", region_index=0, start_sec=26.0, end_sec=54.0),
+            InferenceWindow(id="window-3", region_index=0, start_sec=52.0, end_sec=65.0),
         ]
         assert artifacts.diagnostics.item_counts["vad_regions"] == 1
         assert artifacts.diagnostics.item_counts["windows"] == 3
@@ -246,7 +246,7 @@ class TestProcessInput:
         ])
 
         assert windows == [
-            InferenceWindow(window_id="window-1", region_index=2, start_sec=3.0, end_sec=4.0)
+            InferenceWindow(id="window-1", region_index=2, start_sec=3.0, end_sec=4.0)
         ]
 
     def test_normalizes_transcript_before_report_generation(
