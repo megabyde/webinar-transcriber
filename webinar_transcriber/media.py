@@ -76,7 +76,7 @@ def open_output_media_container(path: Path) -> Iterator[OutputContainer]:
         yield container
 
 
-def _pyav_stream_has_attached_picture(stream: object) -> bool:
+def _pyav_stream_has_attached_picture(stream: object) -> bool:  # pragma: no cover
     typed_stream = cast("Any", stream)
     return bool(typed_stream.disposition & typed_stream.disposition.attached_pic)
 

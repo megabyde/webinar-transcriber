@@ -169,9 +169,9 @@ class FakeTranscriber(WhisperCppTranscriber):
         del audio_samples
         self.language_hints.append(language)
         self.windows_seen = list(windows)
-        assert progress_callback is not None
-        for window in windows:
-            progress_callback(window.end_sec, len(self._segments))
+        if progress_callback is not None:
+            for window in windows:
+                progress_callback(window.end_sec, len(self._segments))
         return [
             DecodedWindow(
                 window=window,
