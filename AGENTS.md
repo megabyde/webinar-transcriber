@@ -31,17 +31,24 @@ The package intentionally avoids deep nesting.
 
 - `webinar_transcriber/cli.py`: Click CLI entrypoints
 - `webinar_transcriber/processor/`: high-level orchestration and processor support helpers
+- `webinar_transcriber/processor/asr_pipeline.py`: ASR pipeline orchestration and inference-window
+  planning
+- `webinar_transcriber/processor/llm_types.py`: optional LLM runtime state shared by processor
+  helpers
 - `webinar_transcriber/asr/`: ASR backend selection, carryover policy, and the `pywhispercpp`
   wrapper
 - `webinar_transcriber/llm/`: optional cloud LLM integrations
 - `webinar_transcriber/media.py`: probing helpers and shared media error types
 - `webinar_transcriber/normalized_audio.py`: deterministic transcription-audio preparation
+- `webinar_transcriber/segmentation.py`: speech-region detection and normalized-audio duration
+  helpers
 - `webinar_transcriber/transcript/`: transcript normalization and window reconciliation
 - `webinar_transcriber/structure.py`: transcript-scene alignment and report heuristics
 - `webinar_transcriber/reporter.py`: reporter protocol and no-op implementation
 - `webinar_transcriber/ui.py`: Rich progress reporting
 - `webinar_transcriber/video/`: scene detection and frame extraction
 - `webinar_transcriber/export/`: Markdown, DOCX, and JSON writers
+- `webinar_transcriber/tests/`: flat test suite with tiny committed fixtures under `fixtures/`
 
 ## Runtime Contracts
 

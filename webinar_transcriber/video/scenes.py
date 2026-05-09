@@ -58,10 +58,14 @@ def detect_scenes(
     )
     duration_sec = resolved_duration_sec if duration_sec is None else duration_sec
     scene_bounds = list(zip(scene_starts, [*scene_starts[1:], duration_sec], strict=False))
-    return [
-        Scene(id=f"scene-{index}", start_sec=float(start), end_sec=float(end))
-        for index, (start, end) in enumerate(scene_bounds, start=1)
-    ]
+    final_end_sec = float(duration_sec)
+    scenes: list[Scene] = []
+    for index, (start, end) in enumerate(scene_bounds, start=1):
+        start_sec = float(start)
+        end_sec = min(float(end), final_end_sec)
+        if end_sec > start_sec:
+            scenes.append(Scene(id=f"scene-{index}", start_sec=start_sec, end_sec=end_sec))
+    return scenes
 
 
 def _select_scene_starts(

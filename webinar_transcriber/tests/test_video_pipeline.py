@@ -343,6 +343,27 @@ class TestDetectScenesFallback:
     def test_estimated_scene_sample_count_keeps_zero_duration_visible(self) -> None:
         assert estimated_scene_sample_count(0.0) == 1
 
+    def test_detect_scenes_drops_zero_duration_scene(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "webinar_transcriber.video.scenes._select_scene_starts",
+            lambda *_args, **_kwargs: ([0.0], 0.0),
+        )
+
+        assert detect_scenes(SAMPLE_VIDEO_PATH) == []
+
+    def test_detect_scenes_clamps_scene_bounds_to_duration(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "webinar_transcriber.video.scenes._select_scene_starts",
+            lambda *_args, **_kwargs: ([0.0, 1.0, 3.0], 2.0),
+        )
+
+        assert detect_scenes(SAMPLE_VIDEO_PATH) == [
+            Scene(id="scene-1", start_sec=0.0, end_sec=1.0),
+            Scene(id="scene-2", start_sec=1.0, end_sec=2.0),
+        ]
+
     @pytest.mark.slow
     def test_detect_scenes_prefers_explicit_duration(self, tmp_path: Path) -> None:
         video_path = tmp_path / "blank.mp4"

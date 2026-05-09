@@ -859,6 +859,47 @@ class TestProcessInputLlm:
         assert diagnostics_payload["llm_report_usage"] == EXPECTED_LLM_USAGE
         assert diagnostics_payload["warnings"] == [EXPECTED_LLM_WARNING]
 
+    def test_preserves_zero_valued_llm_usage_keys(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        input_path = FIXTURE_DIR / "sample-audio.mp3"
+        install_pipeline_runtime(
+            monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime()
+        )
+        expected_usage = {
+            "input_tokens": 0,
+            "cached_tokens": 0,
+            "total_tokens": 0,
+            "output_tokens": 0,
+        }
+
+        artifacts = process_input(
+            input_path,
+            output_dir=tmp_path / "llm-zero-usage-run",
+            transcriber=FakeTranscriber(),
+            enable_llm=True,
+            llm_processor=cast(
+                "LLMProcessor",
+                ConfigurableLLMProcessor(
+                    section_result=LLMSectionPolishResult(
+                        section_tldrs={},
+                        section_transcripts={},
+                        usage={"input_tokens": 0, "cached_tokens": 0, "total_tokens": 0},
+                    ),
+                    metadata_result=LLMReportMetadataResult(
+                        summary=[],
+                        action_items=[],
+                        section_titles={},
+                        usage={"output_tokens": 0, "total_tokens": 0},
+                    ),
+                ),
+            ),
+        )
+
+        assert artifacts.diagnostics.llm_report_usage == expected_usage
+        diagnostics_payload = read_json(artifacts.layout.diagnostics_path)
+        assert diagnostics_payload["llm_report_usage"] == expected_usage
+
     def test_reports_all_sections_in_llm_progress(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

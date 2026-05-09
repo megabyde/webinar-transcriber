@@ -1,5 +1,6 @@
 """Tests for media probing helpers."""
 
+from fractions import Fraction
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -33,6 +34,107 @@ class TestProbeMedia:
         assert asset.fps is not None
         assert asset.width is not None
         assert asset.height is not None
+
+    def test_uses_audio_stream_duration_when_container_duration_is_absent(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class FakeCodecContext:
+            sample_rate = 44_100
+            channels = 2
+
+        class FakeAudioStream:
+            type = "audio"
+            duration = 300
+            time_base = Fraction(1, 100)
+            codec_context = FakeCodecContext()
+
+        class FakeContainer(FakeContextContainer):
+            def __init__(self) -> None:
+                self.streams = [FakeAudioStream()]
+                self.duration = None
+
+        monkeypatch.setattr(
+            "webinar_transcriber.media.av.open", lambda *_args, **_kwargs: FakeContainer()
+        )
+
+        asset = probe_media(FIXTURE_DIR / "sample-audio.mp3")
+
+        assert isinstance(asset, AudioAsset)
+        assert asset.duration_sec == 3.0
+        assert asset.sample_rate == 44_100
+        assert asset.channels == 2
+
+    def test_uses_video_stream_duration_when_container_and_audio_duration_are_absent(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class FakeDisposition:
+            attached_pic = 1
+
+            def __and__(self, _other: object) -> int:
+                return 0
+
+        class FakeCodecContext:
+            width = 640
+            height = 360
+
+        class FakeVideoStream:
+            type = "video"
+            duration = 125
+            time_base = Fraction(1, 25)
+            disposition = FakeDisposition()
+            average_rate = Fraction(25, 1)
+            codec_context = FakeCodecContext()
+
+        class FakeContainer(FakeContextContainer):
+            def __init__(self) -> None:
+                self.streams = [FakeVideoStream()]
+                self.duration = None
+
+        monkeypatch.setattr(
+            "webinar_transcriber.media.av.open", lambda *_args, **_kwargs: FakeContainer()
+        )
+
+        asset = probe_media(FIXTURE_DIR / "sample-video.mp4")
+
+        assert isinstance(asset, VideoAsset)
+        assert asset.duration_sec == 5.0
+        assert asset.sample_rate is None
+        assert asset.channels is None
+
+    def test_uses_zero_duration_when_container_and_stream_durations_are_absent(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class FakeDisposition:
+            attached_pic = 1
+
+            def __and__(self, _other: object) -> int:
+                return 0
+
+        class FakeCodecContext:
+            width = 640
+            height = 360
+
+        class FakeVideoStream:
+            type = "video"
+            duration = None
+            time_base = None
+            disposition = FakeDisposition()
+            average_rate = Fraction(25, 1)
+            codec_context = FakeCodecContext()
+
+        class FakeContainer(FakeContextContainer):
+            def __init__(self) -> None:
+                self.streams = [FakeVideoStream()]
+                self.duration = None
+
+        monkeypatch.setattr(
+            "webinar_transcriber.media.av.open", lambda *_args, **_kwargs: FakeContainer()
+        )
+
+        asset = probe_media(FIXTURE_DIR / "sample-video.mp4")
+
+        assert isinstance(asset, VideoAsset)
+        assert asset.duration_sec == 0.0
 
     def test_raises_when_pyav_reports_no_streams(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class FakeContainer(FakeContextContainer):
