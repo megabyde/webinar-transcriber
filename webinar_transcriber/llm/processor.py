@@ -142,15 +142,23 @@ class InstructorLLMProcessor:
 
         section_results: dict[int, tuple[str, str, str, dict[str, int], list[str]]] = {}
 
-        with ThreadPoolExecutor(max_workers=plan.worker_count) as executor:
-            futures = {
-                executor.submit(self._polish_section, section): index
-                for index, section in enumerate(report.sections)
-            }
+        executor = ThreadPoolExecutor(max_workers=plan.worker_count)
+        futures = {
+            executor.submit(self._polish_section, section): index
+            for index, section in enumerate(report.sections)
+        }
+        try:
             for future in as_completed(futures):
                 section_results[futures[future]] = future.result()
                 if progress_callback is not None:
                     progress_callback(1)
+        except BaseException:  # pragma: no cover - cancellation/interrupt propagation
+            for future in futures:
+                future.cancel()
+            executor.shutdown(wait=False, cancel_futures=True)
+            raise
+        else:
+            executor.shutdown(wait=True)
 
         polished_transcripts: dict[str, str] = {}
         polished_tldrs: dict[str, str] = {}
