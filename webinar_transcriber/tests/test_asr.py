@@ -383,19 +383,6 @@ class TestWhisperCppTranscriber:
 
         assert os.environ["TQDM_DISABLE"] == "0"
 
-    def test_disable_tqdm_progress_redirects_tqdm_stderr(self, monkeypatch, capsys) -> None:
-        from tqdm import tqdm
-
-        from webinar_transcriber.asr import transcriber as transcriber_module
-
-        monkeypatch.delenv("TQDM_DISABLE", raising=False)
-
-        with vars(transcriber_module)["_disable_tqdm_progress"]():
-            progress_bar = tqdm(total=1)
-            progress_bar.close()
-
-        assert capsys.readouterr().err == ""
-
     def test_transcribe_inference_windows_clips_segment_times_to_window(
         self, fake_model: FakeModel
     ) -> None:

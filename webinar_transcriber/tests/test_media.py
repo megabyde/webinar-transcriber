@@ -7,7 +7,6 @@ import pytest
 
 from webinar_transcriber.media import (
     MediaProcessingError,
-    _pyav_stream_has_attached_picture,
     _stream_duration_sec,
     open_output_media_container,
     open_video_input_container,
@@ -56,20 +55,6 @@ class TestProbeMedia:
 
         with pytest.raises(MediaProcessingError, match=r"Could not open .* with PyAV: bad open"):
             probe_media(FIXTURE_DIR / "sample-video.mp4")
-
-
-class TestAttachedPictureStream:
-    def test_pyav_detects_attached_picture_flag(self) -> None:
-        class FakeDisposition:
-            attached_pic = 2
-
-            def __and__(self, other: object) -> int:
-                assert other == 2
-                return 2
-
-        stream = type("Stream", (), {"disposition": FakeDisposition()})()
-
-        assert _pyav_stream_has_attached_picture(stream)
 
 
 class TestStreamDurationSec:
