@@ -46,18 +46,33 @@ MediaAsset = AudioAsset | VideoAsset
 
 
 @dataclass(slots=True, frozen=True)
-class TranscriptSegment:
-    """Segment-level transcript block."""
+class TimelineItem:
+    """Timeline-bounded model with a stable identifier."""
 
     id: str
-    text: str
     start_sec: float
     end_sec: float
 
     @property
     def midpoint(self) -> float:
-        """Return the midpoint of the segment on the transcript timeline."""
+        """Return the midpoint on the timeline."""
         return (self.start_sec + self.end_sec) / 2.0
+
+    @property
+    def duration_sec(self) -> float:
+        """Return the non-negative duration of the item."""
+        return max(0.0, self.end_sec - self.start_sec)
+
+    def gap_before(self, other: TimelineItem) -> float:
+        """Return the non-negative gap before another timeline item."""
+        return max(0.0, other.start_sec - self.end_sec)
+
+
+@dataclass(slots=True, frozen=True)
+class TranscriptSegment(TimelineItem):
+    """Segment-level transcript block."""
+
+    text: str
 
 
 @dataclass(slots=True, frozen=True)
@@ -77,13 +92,10 @@ class SpeechRegion:
 
 
 @dataclass(slots=True, frozen=True)
-class InferenceWindow:
+class InferenceWindow(TimelineItem):
     """Window planned for one whisper.cpp inference call."""
 
-    window_id: str
     region_index: int
-    start_sec: float
-    end_sec: float
 
 
 @dataclass(slots=True, frozen=True)
@@ -98,17 +110,8 @@ class DecodedWindow:
 
 
 @dataclass(slots=True, frozen=True)
-class Scene:
+class Scene(TimelineItem):
     """Time-bounded scene for video processing."""
-
-    id: str
-    start_sec: float
-    end_sec: float
-
-    @property
-    def midpoint(self) -> float:
-        """Return the midpoint of the scene on the media timeline."""
-        return (self.start_sec + self.end_sec) / 2.0
 
 
 @dataclass(slots=True, frozen=True)
@@ -122,12 +125,9 @@ class SlideFrame:
 
 
 @dataclass(slots=True, frozen=True)
-class AlignmentBlock:
+class AlignmentBlock(TimelineItem):
     """Alignment between transcript content and media sections."""
 
-    id: str
-    start_sec: float
-    end_sec: float
     transcript_text: str
     transcript_segment_ids: list[str] = dataclass_field(default_factory=list)
     scene_id: str | None = None
@@ -135,13 +135,10 @@ class AlignmentBlock:
 
 
 @dataclass(slots=True, frozen=True)
-class ReportSection:
+class ReportSection(TimelineItem):
     """Renderable section of the final report."""
 
-    id: str
     title: str
-    start_sec: float
-    end_sec: float
     transcript_text: str
     tldr: str | None = None
     frame_id: str | None = None

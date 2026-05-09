@@ -36,8 +36,9 @@ class TestCoreModels:
         assert asset.channels == 2
 
     def test_transcript_segment_accepts_timing_fields(self) -> None:
-        segment = TranscriptSegment(id="seg-1", text="hello world", start_sec=0.0, end_sec=1.2)
+        segment = TranscriptSegment("seg-1", 0.0, 1.2, "hello world")
 
+        assert segment.id == "seg-1"
         assert segment.start_sec == 0.0
         assert segment.end_sec == 1.2
         assert segment.text == "hello world"
@@ -46,6 +47,10 @@ class TestCoreModels:
         segment = TranscriptSegment(id="seg-1", text="hello world", start_sec=1.0, end_sec=2.2)
 
         assert segment.midpoint == 1.6
+        assert segment.duration_sec == pytest.approx(1.2)
+        assert segment.gap_before(TranscriptSegment("seg-2", 3.0, 4.0, "next")) == pytest.approx(
+            0.8
+        )
 
     def test_report_document_defaults_optional_collections(self) -> None:
         report = ReportDocument(
@@ -86,7 +91,7 @@ class TestCoreModels:
 
     def test_asr_pipeline_support_models_accept_expected_fields(self) -> None:
         speech_region = SpeechRegion(start_sec=0.0, end_sec=1.5)
-        window = InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=1.5)
+        window = InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.5)
         decoded_window = DecodedWindow(
             window=window,
             input_prompt="hello",
@@ -103,23 +108,23 @@ class TestCoreModels:
         )
 
         assert speech_region.end_sec == 1.5
-        assert decoded_window.window.window_id == "window-1"
+        assert decoded_window.window.id == "window-1"
         assert decoded_window.input_prompt == "hello"
         assert diagnostics.carryover_enabled
         assert diagnostics.window_count == 4
 
     def test_inference_window_is_ordered_by_timeline(self) -> None:
         windows = [
-            InferenceWindow(window_id="window-3", region_index=1, start_sec=10.0, end_sec=12.0),
-            InferenceWindow(window_id="window-2", region_index=0, start_sec=0.0, end_sec=8.0),
-            InferenceWindow(window_id="window-1", region_index=0, start_sec=0.0, end_sec=6.0),
+            InferenceWindow(id="window-3", region_index=1, start_sec=10.0, end_sec=12.0),
+            InferenceWindow(id="window-2", region_index=0, start_sec=0.0, end_sec=8.0),
+            InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=6.0),
         ]
 
         window_ids = [
-            window.window_id
+            window.id
             for window in sorted(
                 windows,
-                key=lambda item: (item.start_sec, item.end_sec, item.region_index, item.window_id),
+                key=lambda item: (item.start_sec, item.end_sec, item.region_index, item.id),
             )
         ]
 

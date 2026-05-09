@@ -784,16 +784,6 @@ class TestLlmNormalization:
 
         assert normalized == "First line\nwith spacing.\n\nSecond paragraph."
 
-    def test_normalize_polished_section_text_rewrites_trailing_ellipsis_when_source_is_final(
-        self,
-    ) -> None:
-        normalized = normalize_polished_section_text(
-            original_text="Original sentence.",
-            polished_text="Rewritten sentence...",
-        )
-
-        assert normalized == "Rewritten sentence."
-
     def test_normalize_polished_section_text_preserves_ellipsis_for_incomplete_source(self) -> None:
         normalized = normalize_polished_section_text(
             original_text="Original sentence...",

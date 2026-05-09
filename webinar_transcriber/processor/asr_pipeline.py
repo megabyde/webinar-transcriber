@@ -171,7 +171,7 @@ def plan_inference_windows(
             window_end_sec = min(region.end_sec, window_start_sec + safe_max_window_sec)
             windows.append(
                 InferenceWindow(
-                    window_id=f"window-{len(windows) + 1}",
+                    id=f"window-{len(windows) + 1}",
                     region_index=region_index,
                     start_sec=window_start_sec,
                     end_sec=window_end_sec,

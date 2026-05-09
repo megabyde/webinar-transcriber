@@ -237,7 +237,7 @@ class WhisperCppTranscriber:
         model = self._ensure_model()
         ordered_windows = sorted(
             windows,
-            key=lambda item: (item.start_sec, item.end_sec, item.region_index, item.window_id),
+            key=lambda item: (item.start_sec, item.end_sec, item.region_index, item.id),
         )
         forced_language = language.strip() if language else self._language
         language_hint: str | None = forced_language
@@ -329,7 +329,7 @@ class WhisperCppTranscriber:
                 )[0][0]
             except (RuntimeError, ValueError, IndexError) as error:  # pragma: no cover
                 raise ASRProcessingError(
-                    f"whisper.cpp language detection failed for {window.window_id}."
+                    f"whisper.cpp language detection failed for {window.id}."
                 ) from error
 
         transcribe_kwargs: dict[str, str] = {}
@@ -342,9 +342,7 @@ class WhisperCppTranscriber:
                 window_samples, **transcribe_kwargs
             )
         except Exception as error:
-            raise ASRProcessingError(
-                f"whisper.cpp inference failed for {window.window_id}."
-            ) from error
+            raise ASRProcessingError(f"whisper.cpp inference failed for {window.id}.") from error
 
         segments: list[TranscriptSegment] = []
         for segment_index, raw_segment in enumerate(raw_segments):
@@ -352,7 +350,7 @@ class WhisperCppTranscriber:
             seg_end = window.start_sec + (float(raw_segment.t1) / _WHISPER_TICKS_PER_SECOND)
             segments.append(
                 TranscriptSegment(
-                    id=f"{window.window_id}-segment-{segment_index + 1}",
+                    id=f"{window.id}-segment-{segment_index + 1}",
                     text=str(raw_segment.text).strip(),
                     start_sec=max(window.start_sec, seg_start),
                     end_sec=min(window.end_sec, max(seg_start, seg_end)),
