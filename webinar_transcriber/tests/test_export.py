@@ -243,6 +243,32 @@ class TestMarkdownReport:
 
         assert output_path.read_text(encoding="utf-8") == expected_markdown
 
+    def test_escapes_image_paths_that_need_markdown_destination_quoting(
+        self, tmp_path: Path
+    ) -> None:
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.mp4",
+            media_type=MediaType.VIDEO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Section 1",
+                    start_sec=0.0,
+                    end_sec=5.0,
+                    transcript_text="Paragraph one.",
+                    image_path="frames/slides (final)] 01.png",
+                )
+            ],
+        )
+
+        output_path = tmp_path / "report.md"
+        write_markdown_report(report, output_path)
+
+        assert "![Section 1](<frames/slides%20%28final%29%5D%2001.png>)" in output_path.read_text(
+            encoding="utf-8"
+        )
+
     def test_uses_hour_format_for_long_sections(self, tmp_path: Path) -> None:
         report = ReportDocument(
             title="Demo",

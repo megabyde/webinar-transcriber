@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from urllib.parse import quote
 
 from webinar_transcriber.export.formatting import section_timecode
 
@@ -40,10 +41,19 @@ def write_markdown_report(report: ReportDocument, output_path: Path) -> Path:
         timecode = section_timecode(section.start_sec, section.end_sec)
         lines.extend([f"### {title} ({timecode})", ""])
         if section.image_path:
-            lines.extend([f"![{section.title}]({section.image_path})", ""])
+            lines.extend([
+                f"![{section.title}]({_markdown_image_destination(section.image_path)})",
+                "",
+            ])
         if section.tldr and (tldr := section.tldr.strip()):
             lines.extend(["**TL;DR / Cheat Sheet**", "", tldr, "", "**Transcript**", ""])
         lines.extend([section.transcript_text, ""])
 
     output_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
     return output_path
+
+
+def _markdown_image_destination(path: str) -> str:
+    if any(char.isspace() or char in "()[]<>" for char in path):
+        return f"<{quote(path, safe='/:._-')}>"
+    return path

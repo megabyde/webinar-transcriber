@@ -112,11 +112,17 @@ def probe_media(input_path: Path) -> MediaAsset:
         if audio_stream is None and video_stream is None:
             raise MediaProcessingError(f"No audio or video stream found in {input_path}.")
 
-        audio_duration = _stream_duration_sec(audio_stream) if audio_stream is not None else None
         container_duration = input_container.duration
-        duration_sec = audio_duration or 0.0
+        audio_duration = _stream_duration_sec(audio_stream) if audio_stream is not None else None
+        video_duration = _stream_duration_sec(video_stream) if video_stream is not None else None
         if container_duration is not None:
             duration_sec = float(container_duration / av.time_base)
+        elif audio_duration is not None:
+            duration_sec = audio_duration
+        elif video_duration is not None:
+            duration_sec = video_duration
+        else:
+            duration_sec = 0.0
 
         parsed_sample_rate = None
         parsed_channels = None
