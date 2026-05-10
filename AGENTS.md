@@ -22,6 +22,9 @@ Keep README and Makefile setup targets in sync. If you add, rename, or remove a 
 `make install*` target, update README in the same change so local checkout setup remains
 discoverable.
 
+GitHub Actions intentionally runs the equivalent `uv` commands directly instead of `make` so the
+same validation works on Linux, macOS, and Windows runners.
+
 In sandboxed Codex runs, prefer `UV_CACHE_DIR=/tmp/uv-cache` for `uv` and `make` commands to avoid
 cache-permission failures.
 
