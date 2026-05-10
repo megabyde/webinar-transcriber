@@ -97,14 +97,19 @@ class FakeSherpaModule(ModuleType):
         self.valid = valid
         self.runtime_error = runtime_error
         self.cluster_counts: list[int] = []
+        self.thread_counts: list[int] = []
 
     def OfflineSpeakerSegmentationPyannoteModelConfig(self, *, model: str):  # noqa: N802
         return SimpleNamespace(model=model)
 
-    def OfflineSpeakerSegmentationModelConfig(self, *, pyannote):  # noqa: N802
+    def OfflineSpeakerSegmentationModelConfig(  # noqa: N802
+        self, *, pyannote, num_threads: int = 1
+    ):
+        self.thread_counts.append(num_threads)
         return SimpleNamespace(pyannote=pyannote)
 
-    def SpeakerEmbeddingExtractorConfig(self, *, model: str):  # noqa: N802
+    def SpeakerEmbeddingExtractorConfig(self, *, model: str, num_threads: int = 1):  # noqa: N802
+        self.thread_counts.append(num_threads)
         return SimpleNamespace(model=model)
 
     def FastClusteringConfig(self, *, num_clusters: int, threshold: float):  # noqa: N802
@@ -211,17 +216,17 @@ class TestSherpaOnnxDiarizer:
         diarizer = sherpa_runtime.SherpaOnnxDiarizer()
 
         with pytest.raises(DiarizationProcessingError, match="16000 Hz"):
-            diarizer.diarize(np.zeros(16, dtype=np.float32), 8_000, max_speakers=2)
+            diarizer.diarize(np.zeros(16, dtype=np.float32), 8_000, speaker_count=2)
 
     def test_errors_when_sherpa_is_unavailable(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sherpa_runtime, "_load_sherpa_onnx", lambda: None)
 
         with pytest.raises(DiarizationProcessingError, match="sherpa-onnx is unavailable"):
             sherpa_runtime.SherpaOnnxDiarizer().diarize(
-                np.zeros(16, dtype=np.float32), 16_000, max_speakers=2
+                np.zeros(16, dtype=np.float32), 16_000, speaker_count=2
             )
 
-    def test_runs_auto_then_exact_cap_and_normalizes_labels(
+    def test_runs_auto_clustering_once_and_normalizes_labels(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         fake_sherpa = FakeSherpaModule(
@@ -229,11 +234,6 @@ class TestSherpaOnnxDiarizer:
                 [
                     FakeSherpaItem(0.0, 1.0, 9),
                     FakeSherpaItem(1.0, 2.0, 8),
-                    FakeSherpaItem(2.0, 3.0, 7),
-                ],
-                [
-                    FakeSherpaItem(1.0, 2.0, 8),
-                    FakeSherpaItem(0.0, 1.0, 9),
                     FakeSherpaItem(2.0, 2.0, 9),
                 ],
             ]
@@ -249,19 +249,50 @@ class TestSherpaOnnxDiarizer:
         )
         progress: list[tuple[int, int]] = []
 
-        turns = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path).diarize(
+        turns = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path, threads=3).diarize(
             np.zeros(16, dtype=np.float32),
             16_000,
-            max_speakers=2,
+            speaker_count=None,
             progress_callback=lambda processed, total: progress.append((processed, total)),
         )
 
-        assert fake_sherpa.cluster_counts == [-1, 2]
+        assert fake_sherpa.cluster_counts == [-1]
+        assert fake_sherpa.thread_counts == [3, 3]
         assert turns == [
             SpeakerTurn(start_sec=0.0, end_sec=1.0, speaker="S1"),
             SpeakerTurn(start_sec=1.0, end_sec=2.0, speaker="S2"),
         ]
-        assert progress == [(1, 2), (2, 2), (1, 2), (2, 2)]
+        assert progress == [(1, 2), (2, 2)]
+
+    def test_uses_known_speaker_count_as_exact_cluster_count(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        fake_sherpa = FakeSherpaModule(
+            results=[
+                [
+                    FakeSherpaItem(0.0, 1.0, 9),
+                    FakeSherpaItem(1.0, 2.0, 8),
+                ],
+            ]
+        )
+        monkeypatch.setattr(sherpa_runtime, "_load_sherpa_onnx", lambda: fake_sherpa)
+        monkeypatch.setattr(
+            sherpa_runtime,
+            "ensure_default_models",
+            lambda _cache_dir: sherpa_runtime.DiarizationModelPaths(
+                segmentation_model=tmp_path / "seg.onnx",
+                embedding_model=tmp_path / "emb.onnx",
+            ),
+        )
+
+        turns = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path).diarize(
+            np.zeros(16, dtype=np.float32),
+            16_000,
+            speaker_count=2,
+        )
+
+        assert fake_sherpa.cluster_counts == [2]
+        assert [turn.speaker for turn in turns] == ["S1", "S2"]
 
     def test_exposes_model_name_and_system_info(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sherpa_runtime.metadata, "version", lambda _name: "1.2.3")
@@ -271,33 +302,44 @@ class TestSherpaOnnxDiarizer:
         assert diarizer.model_name == sherpa_runtime.DEFAULT_DIARIZATION_MODEL
         assert diarizer.system_info == "sherpa-onnx 1.2.3"
 
-    def test_run_diarization_rejects_invalid_config(self, tmp_path: Path) -> None:
+    def test_prepare_rejects_invalid_config(self, tmp_path: Path) -> None:
         diarizer = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path)
 
         with pytest.raises(DiarizationProcessingError, match="configuration is invalid"):
-            diarizer._run_diarization(  # noqa: SLF001
+            diarizer._build_diarizer(  # noqa: SLF001
                 FakeSherpaModule(valid=False),
-                np.zeros(16, dtype=np.float32),
                 paths=sherpa_runtime.DiarizationModelPaths(
                     segmentation_model=tmp_path / "seg.onnx",
                     embedding_model=tmp_path / "emb.onnx",
                 ),
                 num_clusters=-1,
-                progress_callback=None,
             )
 
-    def test_run_diarization_wraps_runtime_error(self, tmp_path: Path) -> None:
+    def test_prepare_wraps_native_constructor_error(self, tmp_path: Path) -> None:
+        class BrokenConstructorSherpa(FakeSherpaModule):
+            def OfflineSpeakerDiarization(self, _config):  # noqa: N802
+                raise RuntimeError("native constructor failure")
+
         diarizer = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path)
+
+        with pytest.raises(DiarizationProcessingError, match="native constructor failure"):
+            diarizer._build_diarizer(  # noqa: SLF001
+                BrokenConstructorSherpa(),
+                paths=sherpa_runtime.DiarizationModelPaths(
+                    segmentation_model=tmp_path / "seg.onnx",
+                    embedding_model=tmp_path / "emb.onnx",
+                ),
+                num_clusters=-1,
+            )
+
+    def test_run_diarization_wraps_runtime_error(self) -> None:
+        diarizer = sherpa_runtime.SherpaOnnxDiarizer()
+        fake_sherpa = FakeSherpaModule(runtime_error=RuntimeError("native failure"))
 
         with pytest.raises(DiarizationProcessingError, match="native failure"):
             diarizer._run_diarization(  # noqa: SLF001
-                FakeSherpaModule(runtime_error=RuntimeError("native failure")),
+                fake_sherpa.OfflineSpeakerDiarization(None),
                 np.zeros(16, dtype=np.float32),
-                paths=sherpa_runtime.DiarizationModelPaths(
-                    segmentation_model=tmp_path / "seg.onnx",
-                    embedding_model=tmp_path / "emb.onnx",
-                ),
-                num_clusters=-1,
                 progress_callback=None,
             )
 

@@ -142,13 +142,14 @@ Pass `--diarize` to label transcript segments with anonymous local speaker IDs:
 
 ```bash
 webinar-transcriber INPUT --diarize
-webinar-transcriber INPUT --diarize --diarize-max-speakers 4
+webinar-transcriber INPUT --diarize --diarize-speakers 4
 ```
 
 Diarization runs entirely locally through `sherpa-onnx`; it does not use an API key. The first
 diarized run downloads the segmentation and speaker-embedding models into
 `~/.cache/webinar-transcriber/diarization`. Set `WEBINAR_DIARIZATION_CACHE_DIR` to use another cache
-path or to point at preloaded model files.
+path or to point at preloaded model files. Omit `--diarize-speakers` to let sherpa estimate the
+speaker count; provide it only when the exact number of speakers is known.
 
 When enabled, reports prefix transcript paragraphs with stable labels such as `S1` and `S2`, ordered
 by first appearance. The JSON artifacts include a `speaker` field on transcript segments and a

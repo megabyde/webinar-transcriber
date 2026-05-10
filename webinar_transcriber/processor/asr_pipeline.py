@@ -25,6 +25,7 @@ from .support import (
     asr_runtime_detail,
     count_label,
     progress_stage,
+    realtime_factor_detail,
     stage,
     window_transcription_stage_detail,
     write_json,
@@ -44,6 +45,10 @@ if TYPE_CHECKING:
 
 MAX_INFERENCE_WINDOW_SEC = 28.0
 INFERENCE_WINDOW_OVERLAP_SEC = 2.0
+# sherpa-onnx reports progress only after its full-audio segmentation pass.
+DIARIZATION_SEGMENTATION_PROGRESS_PERCENT = 35.0
+DIARIZATION_EMBEDDING_PROGRESS_PERCENT = 60.0
+DIARIZATION_INITIAL_PROGRESS_PERCENT = 1.0
 
 
 @dataclass(frozen=True)
@@ -68,7 +73,7 @@ def run_asr_pipeline(
     carryover_enabled: bool,
     language: str | None,
     diarize: bool,
-    diarize_max_speakers: int,
+    diarize_speakers: int | None,
     diarizer: Diarizer | None = None,
 ) -> AsrPipelineResult:
     """Run the deterministic local ASR pipeline and persist intermediate artifacts.
@@ -101,9 +106,19 @@ def run_asr_pipeline(
             audio_samples,
             sample_rate,
             settings=vad,
+            threads=transcriber.threads,
             progress_callback=on_vad_progress,
         )
-        vad_detail = count_label(len(speech_regions), "region")
+        windows = plan_inference_windows(speech_regions)
+        vad_detail_parts = [
+            count_label(len(speech_regions), "region"),
+            count_label(len(windows), "window"),
+        ]
+        if rtf := realtime_factor_detail(
+            total_duration_sec=normalized_audio_duration_sec, elapsed_sec=st.elapsed_sec()
+        ):
+            vad_detail_parts.append(rtf)
+        vad_detail = " | ".join(vad_detail_parts)
         st.advance_to(vad_total_sec, detail=vad_detail)
         st.set_detail(vad_detail)
     vad_region_count = len(speech_regions)
@@ -115,7 +130,6 @@ def run_asr_pipeline(
         {"speech_regions": [asdict(region) for region in speech_regions]},
     )
 
-    windows = plan_inference_windows(speech_regions)
     window_count = len(windows)
     average_window_duration_sec = (
         sum(w.end_sec - w.start_sec for w in windows) / len(windows) if windows else None
@@ -158,16 +172,20 @@ def run_asr_pipeline(
 
     diarization: DiarizationDiagnostics | None = None
     if diarize:
-        active_diarizer = diarizer or SherpaOnnxDiarizer()
-        diarization_total_sec = max(normalized_audio_duration_sec, 1.0)
+        active_diarizer = diarizer or SherpaOnnxDiarizer(threads=transcriber.threads)
+        if isinstance(active_diarizer, SherpaOnnxDiarizer):
+            with stage(ctx, "prepare_diarization", "Preparing diarization model") as st:
+                active_diarizer.prepare(speaker_count=diarize_speakers)
+                st.set_detail(active_diarizer.model_name)
         with progress_stage(
             ctx,
             "diarize",
             "Diarizing speakers",
-            total=diarization_total_sec,
-            count_label="s",
-            detail="0 turns",
+            total=100.0,
+            count_label="%",
+            detail="analyzing audio",
         ) as st:
+            st.advance_to(DIARIZATION_INITIAL_PROGRESS_PERCENT, detail="analyzing audio")
 
             def on_diarization_progress(
                 processed_chunks: int,
@@ -176,15 +194,20 @@ def run_asr_pipeline(
             ) -> None:
                 if total_chunks <= 0:
                     return
-                completed_sec = (
-                    diarization_total_sec * min(processed_chunks, total_chunks) / total_chunks
+                embedding_progress = (
+                    DIARIZATION_EMBEDDING_PROGRESS_PERCENT
+                    * min(processed_chunks, total_chunks)
+                    / total_chunks
                 )
-                handle.advance_to(completed_sec)
+                handle.advance_to(
+                    DIARIZATION_SEGMENTATION_PROGRESS_PERCENT + embedding_progress,
+                    detail="embedding speakers",
+                )
 
             speaker_turns = active_diarizer.diarize(
                 audio_samples,
                 sample_rate,
-                max_speakers=diarize_max_speakers,
+                speaker_count=diarize_speakers,
                 progress_callback=on_diarization_progress,
             )
             transcription = TranscriptionResult(
@@ -210,7 +233,12 @@ def run_asr_pipeline(
                 count_label(speaker_count, "speaker"),
                 count_label(turn_count, "turn"),
             ])
-            st.advance_to(diarization_total_sec, detail=detail)
+            if rtf := realtime_factor_detail(
+                total_duration_sec=normalized_audio_duration_sec,
+                elapsed_sec=st.elapsed_sec(),
+            ):
+                detail = f"{detail} | {rtf}"
+            st.advance_to(100.0, detail=detail)
             st.set_detail(detail)
             diarization = DiarizationDiagnostics(
                 enabled=True,

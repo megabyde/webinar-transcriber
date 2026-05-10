@@ -19,7 +19,7 @@ from webinar_transcriber.media import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Callable, Iterable, Iterator
 
     from av.audio.frame import AudioFrame
     from av.audio.stream import AudioStream
@@ -55,6 +55,7 @@ def _transcode_audio_with_pyav(
     *,
     output_codec: str,
     resample_format: str,
+    progress_callback: Callable[[float], None] | None = None,
 ) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with (
@@ -71,6 +72,8 @@ def _transcode_audio_with_pyav(
         )
 
         for decoded_frame in input_container.decode(input_stream):
+            if progress_callback is not None and decoded_frame.time is not None:
+                progress_callback(float(decoded_frame.time))
             _mux_audio_frames(output_container, output_stream, resampler.resample(decoded_frame))
 
         _mux_audio_frames(output_container, output_stream, resampler.resample(None))
@@ -83,7 +86,12 @@ def _transcode_audio_with_pyav(
     return output_path
 
 
-def extract_audio(input_path: Path, output_path: Path) -> Path:
+def extract_audio(
+    input_path: Path,
+    output_path: Path,
+    *,
+    progress_callback: Callable[[float], None] | None = None,
+) -> Path:
     """Convert the input media into a mono 16 kHz WAV file.
 
     Returns:
@@ -94,10 +102,16 @@ def extract_audio(input_path: Path, output_path: Path) -> Path:
         output_path,
         output_codec=NORMALIZED_AUDIO_CODEC,
         resample_format="s16",
+        progress_callback=progress_callback,
     )
 
 
-def transcode_audio_to_mp3(input_path: Path, output_path: Path) -> Path:
+def transcode_audio_to_mp3(
+    input_path: Path,
+    output_path: Path,
+    *,
+    progress_callback: Callable[[float], None] | None = None,
+) -> Path:
     """Convert normalized transcription audio into an MP3 artifact.
 
     Returns:
@@ -108,20 +122,27 @@ def transcode_audio_to_mp3(input_path: Path, output_path: Path) -> Path:
         output_path,
         output_codec="mp3",
         resample_format="fltp",
+        progress_callback=progress_callback,
     )
 
 
 @contextmanager
-def prepared_transcription_audio(input_path: Path) -> Iterator[Path]:
+def prepared_transcription_audio(
+    input_path: Path, *, progress_callback: Callable[[float], None] | None = None
+) -> Iterator[Path]:
     """Yield a normalized mono 16 kHz WAV file for transcription."""
     with tempfile.TemporaryDirectory(prefix="webinar-transcriber-audio-") as temp_dir:
         audio_path = Path(temp_dir) / f"{input_path.stem}.wav"
-        extract_audio(input_path, audio_path)
+        extract_audio(input_path, audio_path, progress_callback=progress_callback)
         yield audio_path
 
 
 def preserve_transcription_audio(
-    audio_path: Path, output_path: Path, *, audio_format: TranscriptionAudioFormat = "wav"
+    audio_path: Path,
+    output_path: Path,
+    *,
+    audio_format: TranscriptionAudioFormat = "wav",
+    progress_callback: Callable[[float], None] | None = None,
 ) -> Path:
     """Persist prepared transcription audio as a run artifact.
 
@@ -133,7 +154,7 @@ def preserve_transcription_audio(
         copy2(audio_path, output_path)
         return output_path
     if audio_format == "mp3":
-        return transcode_audio_to_mp3(audio_path, output_path)
+        return transcode_audio_to_mp3(audio_path, output_path, progress_callback=progress_callback)
     assert_never(audio_format)  # pragma: no cover - TranscriptionAudioFormat is exhaustive
 
 

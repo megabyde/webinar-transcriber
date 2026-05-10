@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import groupby
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -200,10 +201,10 @@ def sections_from_block(
     block: AlignmentBlock, *, block_segments: list[TranscriptSegment], next_section_index: int
 ) -> list[ReportSection]:
     """Build one report section from one scene-alignment block."""
+    title = title_from_text(block.transcript_text, fallback=f"Slide {next_section_index}")
     if not block_segments:
         # Keep slide-backed sections even when no transcript segments aligned, so frame/title
         # context is preserved for scene-only blocks.
-        title = title_from_text(block.transcript_text, fallback=f"Slide {next_section_index}")
         return [
             ReportSection(
                 id=f"section-{next_section_index}",
@@ -216,7 +217,6 @@ def sections_from_block(
             )
         ]
 
-    title = title_from_text(block.transcript_text, fallback=f"Slide {next_section_index}")
     return [
         _section_from_segments(
             block_segments, section_index=next_section_index, title=title, frame_id=block.frame_id
@@ -245,19 +245,11 @@ def _transcript_text_from_segments(segments: list[TranscriptSegment]) -> str:
     if not any(segment.speaker for segment in meaningful_segments):
         return "\n\n".join(segment.text.strip() for segment in meaningful_segments)
 
-    paragraphs: list[str] = []
-    current_speaker: str | None = None
-    current_text: list[str] = []
-    for segment in meaningful_segments:
-        if segment.speaker != current_speaker:
-            if current_text:
-                paragraphs.append(_speaker_paragraph(current_speaker, current_text))
-            current_speaker = segment.speaker
-            current_text = []
-        current_text.append(segment.text.strip())
-    if current_text:
-        paragraphs.append(_speaker_paragraph(current_speaker, current_text))
-    return "\n\n".join(paragraphs)
+    grouped_segments = groupby(meaningful_segments, key=lambda segment: segment.speaker)
+    return "\n\n".join(
+        _speaker_paragraph(speaker, [segment.text.strip() for segment in speaker_segments])
+        for speaker, speaker_segments in grouped_segments
+    )
 
 
 def _speaker_paragraph(speaker: str | None, texts: list[str]) -> str:

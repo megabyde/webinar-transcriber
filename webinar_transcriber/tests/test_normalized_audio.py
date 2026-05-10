@@ -133,7 +133,10 @@ class TestNormalizedAudio:
             expected_output = tmp_path / "transcription-audio.mp3"
             calls: list[tuple[Path, Path]] = []
 
-            def fake_transcode(input_path: Path, output_path: Path) -> Path:
+            def fake_transcode(
+                input_path: Path, output_path: Path, *, progress_callback=None
+            ) -> Path:
+                del progress_callback
                 calls.append((input_path, output_path))
                 output_path.write_text("mp3", encoding="utf-8")
                 return output_path
@@ -338,6 +341,7 @@ class TestNormalizedAudio:
             min_speech_duration_ms=10,
             min_silence_duration_ms=600,
             speech_pad_ms=200,
+            threads=3,
             progress_callback=lambda sec, count: progress_updates.append((sec, count)),
         )
 
@@ -347,6 +351,7 @@ class TestNormalizedAudio:
         assert detector.config.silero_vad.min_speech_duration == 0.01
         assert detector.config.silero_vad.min_silence_duration == 0.6
         assert detector.config.sample_rate == 16_000
+        assert detector.config.num_threads == 3
         assert detector.buffer_size_in_seconds == SHERPA_VAD_BUFFER_SIZE_SEC
         assert [len(samples) for samples in detector.accepted_waveforms] == [512, 512, 512, 64]
         assert detector.flushed

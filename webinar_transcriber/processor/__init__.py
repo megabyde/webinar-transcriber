@@ -6,9 +6,13 @@ from contextlib import ExitStack
 from dataclasses import asdict
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.asr import PromptCarryoverSettings, WhisperCppTranscriber
+from webinar_transcriber.asr import (
+    PromptCarryoverSettings,
+    WhisperCppTranscriber,
+    default_asr_threads,
+)
 from webinar_transcriber.diagnostics import write_run_diagnostics
-from webinar_transcriber.diarization import DEFAULT_MAX_SPEAKERS
+from webinar_transcriber.llm import ensure_llm_extra_available
 from webinar_transcriber.media import probe_media
 from webinar_transcriber.normalized_audio import (
     TranscriptionAudioFormat,
@@ -21,7 +25,7 @@ from webinar_transcriber.segmentation import DEFAULT_VAD_SETTINGS, VadSettings
 
 from .asr_pipeline import run_asr_pipeline
 from .report import run_report_phase
-from .support import stage, write_json
+from .support import progress_stage, stage, write_json
 from .types import ProcessArtifacts, RunContext
 
 if TYPE_CHECKING:
@@ -56,7 +60,7 @@ def run_transcription_phase(
     language: str | None,
     keep_audio: TranscriptionAudioFormat | None,
     diarize: bool,
-    diarize_max_speakers: int,
+    diarize_speakers: int | None,
     diarizer: Diarizer | None,
 ) -> tuple[
     TranscriptionResult,
@@ -70,8 +74,23 @@ def run_transcription_phase(
         tuple: The transcription artifacts and ASR diagnostics.
     """
     with ExitStack() as audio_scope:
-        with stage(ctx, "prepare_transcription_audio", "Preparing audio") as st:
-            audio_path = audio_scope.enter_context(prepared_transcription_audio(input_path))
+        transcription_audio_total = max(media_asset.duration_sec, 1.0)
+        with progress_stage(
+            ctx,
+            "prepare_transcription_audio",
+            "Preparing audio",
+            total=transcription_audio_total,
+            count_label="s",
+        ) as st:
+            audio_path = audio_scope.enter_context(
+                prepared_transcription_audio(
+                    input_path,
+                    progress_callback=lambda completed_sec: st.advance_to(
+                        min(completed_sec, transcription_audio_total)
+                    ),
+                )
+            )
+            st.advance_to(transcription_audio_total, detail=audio_path.name)
             st.set_detail(str(audio_path.name))
 
         asr_result = run_asr_pipeline(
@@ -85,16 +104,28 @@ def run_transcription_phase(
             carryover_enabled=carryover_enabled,
             language=language,
             diarize=diarize,
-            diarize_max_speakers=diarize_max_speakers,
+            diarize_speakers=diarize_speakers,
             diarizer=diarizer,
         )
 
         if keep_audio:
-            with stage(ctx, "save_transcription_audio", "Saving transcription audio") as st:
+            with progress_stage(
+                ctx,
+                "save_transcription_audio",
+                "Saving transcription audio",
+                total=transcription_audio_total,
+                count_label="s",
+            ) as st:
                 preserved_audio_path = layout.transcription_audio_path(keep_audio)
                 preserve_transcription_audio(
-                    audio_path, preserved_audio_path, audio_format=keep_audio
+                    audio_path,
+                    preserved_audio_path,
+                    audio_format=keep_audio,
+                    progress_callback=lambda completed_sec: st.advance_to(
+                        min(completed_sec, transcription_audio_total)
+                    ),
                 )
+                st.advance_to(transcription_audio_total, detail=preserved_audio_path.name)
                 st.set_detail(preserved_audio_path.name)
 
     return (
@@ -113,11 +144,12 @@ def process_input(
     language: str | None = None,
     vad: VadSettings = DEFAULT_VAD_SETTINGS,
     carryover: PromptCarryoverSettings = DEFAULT_PROMPT_CARRYOVER_SETTINGS,
-    asr_threads: int | None = None,
+    threads: int = default_asr_threads(),
+    llm_section_max_workers: int | None = None,
     keep_audio: TranscriptionAudioFormat | None = None,
     enable_llm: bool = False,
     diarize: bool = False,
-    diarize_max_speakers: int = DEFAULT_MAX_SPEAKERS,
+    diarize_speakers: int | None = None,
     transcriber: WhisperCppTranscriber | None = None,
     diarizer: Diarizer | None = None,
     llm_processor: LLMProcessor | None = None,
@@ -130,13 +162,15 @@ def process_input(
     """
     active_reporter = reporter or BaseStageReporter()
     ctx = RunContext(reporter=active_reporter)
+    if enable_llm and llm_processor is None:
+        ensure_llm_extra_available()
 
     with ExitStack() as transcriber_scope:
         if transcriber is None:
             active_transcriber = transcriber_scope.enter_context(
                 WhisperCppTranscriber(
                     model_name=asr_model,
-                    threads=asr_threads,
+                    threads=threads,
                     language=language,
                     carryover_settings=carryover,
                 )
@@ -180,7 +214,7 @@ def process_input(
                 language=language,
                 keep_audio=keep_audio,
                 diarize=diarize,
-                diarize_max_speakers=diarize_max_speakers,
+                diarize_speakers=diarize_speakers,
                 diarizer=diarizer,
             )
 
@@ -191,6 +225,7 @@ def process_input(
                 normalized_transcription=normalized_transcription,
                 enable_llm=enable_llm,
                 llm_processor=llm_processor,
+                llm_section_max_workers=llm_section_max_workers,
                 ctx=ctx,
             )
 

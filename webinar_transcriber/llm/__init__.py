@@ -32,7 +32,21 @@ def _required_llm_module(module_name: str, *, provider_label: str) -> object:
         ) from error
 
 
-def build_llm_processor_from_env() -> LLMProcessor:
+def ensure_llm_extra_available() -> None:
+    """Raise when the configured provider cannot load the optional LLM dependencies."""
+    provider = os.environ.get("LLM_PROVIDER", "openai").strip().casefold()
+    match provider:
+        case "openai":
+            _required_llm_module("instructor", provider_label="OpenAI")
+            _required_llm_module("openai", provider_label="OpenAI")
+        case "anthropic":
+            _required_llm_module("instructor", provider_label="Anthropic")
+            _required_llm_module("anthropic", provider_label="Anthropic")
+        case _:
+            return
+
+
+def build_llm_processor_from_env(*, section_max_workers: int | None = None) -> LLMProcessor:
     """Build a configured LLM processor from environment variables.
 
     Returns:
@@ -58,6 +72,7 @@ def build_llm_processor_from_env() -> LLMProcessor:
                 ),
                 provider_name="openai",
                 model_name=model_name,
+                section_max_workers=section_max_workers or SECTION_POLISH_MAX_WORKERS,
             )
         case "anthropic":
             instructor = cast("Any", _required_llm_module("instructor", provider_label="Anthropic"))
@@ -73,6 +88,7 @@ def build_llm_processor_from_env() -> LLMProcessor:
                 provider_name="anthropic",
                 model_name=model_name,
                 request_kwargs={"max_tokens": 4096},
+                section_max_workers=section_max_workers or SECTION_POLISH_MAX_WORKERS,
             )
         case _:
             raise LLMConfigurationError(
@@ -111,4 +127,5 @@ __all__ = [
     "ReportSectionUpdate",
     "SectionTextResponse",
     "build_llm_processor_from_env",
+    "ensure_llm_extra_available",
 ]

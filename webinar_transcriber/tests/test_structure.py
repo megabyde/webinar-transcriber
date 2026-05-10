@@ -229,6 +229,41 @@ class TestBuildReport:
 
         assert report.sections == []
 
+    def test_groups_adjacent_speaker_segments_into_paragraphs(self) -> None:
+        report = build_report(
+            AudioAsset(path="demo.wav", duration_sec=30.0),
+            TranscriptionResult(
+                segments=[
+                    TranscriptSegment(
+                        id="segment-1",
+                        text="Agenda review.",
+                        start_sec=0.0,
+                        end_sec=2.0,
+                        speaker="S1",
+                    ),
+                    TranscriptSegment(
+                        id="segment-2",
+                        text="Project status.",
+                        start_sec=2.0,
+                        end_sec=4.0,
+                        speaker="S1",
+                    ),
+                    TranscriptSegment(
+                        id="segment-3",
+                        text="Next steps.",
+                        start_sec=4.0,
+                        end_sec=6.0,
+                        speaker="S2",
+                    ),
+                ]
+            ),
+        )
+
+        assert report.sections[0].transcript_text == (
+            "**S1:** Agenda review. Project status.\n\n**S2:** Next steps."
+        )
+        assert report.sections[0].speakers == ["S1", "S2"]
+
 
 class TestAudioSectionHeuristics:
     def test_build_audio_sections_splits_when_gap_reaches_threshold(self) -> None:

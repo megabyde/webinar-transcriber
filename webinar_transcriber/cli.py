@@ -13,7 +13,7 @@ from webinar_transcriber.asr import (
     PromptCarryoverSettings,
     default_asr_threads,
 )
-from webinar_transcriber.diarization import DEFAULT_MAX_SPEAKERS, DiarizationProcessingError
+from webinar_transcriber.diarization import DiarizationProcessingError
 from webinar_transcriber.llm.contracts import LLMConfigurationError, LLMProcessingError
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
@@ -29,6 +29,10 @@ if TYPE_CHECKING:
 
 class CLIError(click.ClickException):
     """CLI error for actionable user-facing failures."""
+
+
+def _resolve_threads(_ctx: click.Context, _param: click.Parameter, value: int | None) -> int:
+    return value or default_asr_threads()
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -57,7 +61,9 @@ class CLIError(click.ClickException):
     "--threads",
     type=click.IntRange(min=1),
     default=None,
-    help="Number of ASR threads. Defaults to the host CPU count.",
+    callback=_resolve_threads,
+    show_default="host CPU count, capped at 8",
+    help="Number of local audio-processing threads. Defaults to the host CPU count, capped at 8.",
 )
 @click.option(
     "--vad/--no-vad",
@@ -82,23 +88,23 @@ class CLIError(click.ClickException):
     help="Enable local speaker diarization.",
 )
 @click.option(
-    "--diarize-max-speakers",
+    "--diarize-speakers",
     type=click.IntRange(min=1, max=20),
-    default=DEFAULT_MAX_SPEAKERS,
-    show_default=True,
-    help="Maximum number of anonymous speakers to emit when diarization is enabled.",
+    default=None,
+    metavar="COUNT",
+    help="Known exact speaker count to use for diarization. Omit for auto-clustering.",
 )
 def main(
     input_path: Path,
     output_dir: Path | None,
     asr_model: str | None,
     language: str | None,
-    threads: int | None,
+    threads: int,
     vad: bool,
     keep_audio: str | None,
     llm: bool,
     diarize: bool,
-    diarize_max_speakers: int,
+    diarize_speakers: int | None,
 ) -> None:
     """Transcribe an audio or video input file."""
     if not input_path.exists():
@@ -120,11 +126,12 @@ def main(
             language=language,
             vad=VadSettings(enabled=vad),
             carryover=PromptCarryoverSettings(),
-            asr_threads=threads or default_asr_threads(),
+            threads=threads,
+            llm_section_max_workers=threads,
             keep_audio=kept_format,
             enable_llm=llm,
             diarize=diarize,
-            diarize_max_speakers=diarize_max_speakers,
+            diarize_speakers=diarize_speakers,
             reporter=reporter,
         )
     except KeyboardInterrupt:

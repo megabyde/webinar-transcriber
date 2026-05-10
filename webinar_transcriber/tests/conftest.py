@@ -47,6 +47,7 @@ class FakeSherpaVadModelConfig:
     def __init__(self, *, window_size: int) -> None:
         self.silero_vad = FakeSherpaSileroVadConfig(window_size=window_size)
         self.sample_rate = 16_000
+        self.num_threads = 1
 
 
 class FakeSherpaVoiceActivityDetector:
@@ -236,7 +237,9 @@ def install_pipeline_runtime(
     audio_path = tmp_path / f"{input_path.stem}.wav"
 
     @contextmanager
-    def fake_prepared_transcription_audio(_input_path: Path):
+    def fake_prepared_transcription_audio(_input_path: Path, *, progress_callback=None):
+        if progress_callback is not None:
+            progress_callback(runtime.media_asset.duration_sec)
         audio_path.write_bytes(b"RIFFstub")
         try:
             yield audio_path

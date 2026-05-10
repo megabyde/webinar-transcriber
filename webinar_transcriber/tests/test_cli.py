@@ -88,11 +88,12 @@ class TestCli:
             language=None,
             vad=VadSettings(),
             carryover=PromptCarryoverSettings(),
-            asr_threads=7,
+            threads=7,
+            llm_section_max_workers=7,
             keep_audio=None,
             enable_llm=False,
             diarize=False,
-            diarize_max_speakers=6,
+            diarize_speakers=None,
             reporter=ANY,
         )
         assert process_input_mock.call_args.kwargs["reporter"].__class__.__name__ == (
@@ -127,7 +128,7 @@ class TestCli:
                     "mp3",
                     "--llm",
                     "--diarize",
-                    "--diarize-max-speakers",
+                    "--diarize-speakers",
                     "4",
                 ],
             )
@@ -140,11 +141,12 @@ class TestCli:
             language="en",
             vad=VadSettings(enabled=False),
             carryover=PromptCarryoverSettings(),
-            asr_threads=3,
+            threads=3,
+            llm_section_max_workers=3,
             keep_audio="mp3",
             enable_llm=True,
             diarize=True,
-            diarize_max_speakers=4,
+            diarize_speakers=4,
             reporter=ANY,
         )
 
@@ -176,7 +178,7 @@ class TestCli:
         assert "--keep-audio" in result.output
         assert "--llm" in result.output
         assert "--diarize / --no-diarize" in result.output
-        assert "--diarize-max-speakers" in result.output
+        assert "--diarize-speakers" in result.output
         assert "Override the whisper.cpp model identifier" in result.output
         assert "model path" in result.output
         assert "provider-backed report" in result.output
