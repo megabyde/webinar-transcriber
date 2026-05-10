@@ -174,6 +174,9 @@ class TestProcessInput:
         assert diagnostics_payload["item_counts"]["report_sections"] == 1
         assert artifacts.diagnostics.asr_pipeline is not None
         assert artifacts.diagnostics.asr_pipeline.system_info == "CPU = 1"
+        assert ("start", "vad", 1.0, "0 regions") in reporter.progress
+        assert ("advance", "vad", 1.0, "1 region") in reporter.progress
+        assert ("vad", "1 region") in reporter.finished
 
     def test_uses_vad_regions_as_decode_windows(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

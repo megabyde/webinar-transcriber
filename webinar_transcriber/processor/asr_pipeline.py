@@ -72,13 +72,30 @@ def run_asr_pipeline(
 
     audio_samples, sample_rate = load_normalized_audio(audio_path)
     normalized_audio_duration_sec = normalized_audio_duration(audio_samples, sample_rate)
-    with stage(ctx, "vad", "Detecting speech regions") as st:
+    vad_total_sec = max(normalized_audio_duration_sec, 1.0)
+    with progress_stage(
+        ctx,
+        "vad",
+        "Detecting speech regions",
+        total=vad_total_sec,
+        count_label="s",
+        detail="0 regions",
+    ) as st:
+
+        def on_vad_progress(
+            completed_sec: float, region_count: int, handle: ProgressStageHandle = st
+        ) -> None:
+            handle.advance_to(completed_sec, detail=count_label(region_count, "region"))
+
         speech_regions, vad_warnings = detect_speech_regions(
             audio_samples,
             sample_rate,
             settings=vad,
+            progress_callback=on_vad_progress,
         )
-        st.set_detail(count_label(len(speech_regions), "region"))
+        vad_detail = count_label(len(speech_regions), "region")
+        st.advance_to(vad_total_sec, detail=vad_detail)
+        st.set_detail(vad_detail)
     vad_region_count = len(speech_regions)
     for warning in vad_warnings:
         warnings.append(warning)

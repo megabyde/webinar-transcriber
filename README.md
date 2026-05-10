@@ -12,7 +12,7 @@
 `webinar-transcriber` is a local-first CLI for turning webinar recordings into transcripts,
 structured notes, diagnostics, and machine-readable report artifacts. It handles both audio-only
 input and slide-based video, detects scenes for video runs, and keeps the core pipeline local with
-PyAV, Silero VAD, and `whisper.cpp`.
+PyAV, Silero VAD through `sherpa-onnx`, and `whisper.cpp`.
 
 The default flow is deterministic: normalize the media, detect speech regions, transcribe locally,
 reconcile overlapping windows, and build report sections with local heuristics. Optional
@@ -53,10 +53,11 @@ Use the matching Make target for the install you need:
 
 The standard and LLM install targets pull the published `pywhispercpp` wheels from PyPI. On Linux
 and Windows, those wheels use the CPU backend. On macOS, the Apple Silicon wheels include Metal
-support. The default `large-v3-turbo` model is downloaded on first transcription run, not during
-installation. To verify the active backend after a run, inspect `diagnostics.json` →
-`asr_pipeline.system_info`. Native whisper.cpp initialization and teardown logs are written to
-`whisper-cpp.log` in the run directory.
+support. Speech-region detection uses the bundled Silero ONNX model through `sherpa-onnx`, so the
+base install does not pull PyTorch or another large deep-learning framework. The default
+`large-v3-turbo` model is downloaded on first transcription run, not during installation. To verify
+the active backend after a run, inspect `diagnostics.json` → `asr_pipeline.system_info`. Native
+whisper.cpp initialization and teardown logs are written to `whisper-cpp.log` in the run directory.
 
 To inspect all available project commands:
 
@@ -155,7 +156,7 @@ only partial intermediate artifacts and no final report outputs.
 1. Prepare the local `whisper.cpp` runtime. This loads the selected model identifier or GGML model
    path, resolves the execution backend, and records runtime details for diagnostics and CLI
    progress reporting.
-1. Detect speech regions with Silero VAD.
+1. Detect speech regions with the bundled Silero VAD ONNX model.
 1. Create ASR windows from the detected speech regions.
 1. Transcribe the windows locally with `whisper.cpp`.
 1. Reconcile adjacent windows into one transcript.
@@ -195,8 +196,10 @@ Use `--asr-model large-v3` when maximum transcription accuracy is more important
 
 ### Speech Detection
 
-Silero VAD is enabled by default and uses the project's selected speech-region defaults. Pass
-`--no-vad` only when you need to transcribe the full audio without speech-region planning.
+Silero VAD is enabled by default and uses the project's selected speech-region defaults. The model
+runs locally through `sherpa-onnx` and is bundled with the package, so speech detection does not
+need a first-run model download. Pass `--no-vad` only when you need to transcribe the full audio
+without speech-region planning.
 
 ### ASR Controls
 

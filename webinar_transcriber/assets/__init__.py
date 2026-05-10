@@ -1,0 +1,1 @@
+"""Packaged runtime model assets."""
