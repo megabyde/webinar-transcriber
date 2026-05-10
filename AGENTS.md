@@ -37,6 +37,7 @@ The package intentionally avoids deep nesting.
   helpers
 - `webinar_transcriber/asr/`: ASR backend selection, carryover policy, and the `pywhispercpp`
   wrapper
+- `webinar_transcriber/diarization/`: optional local speaker diarization through `sherpa-onnx`
 - `webinar_transcriber/llm/`: optional cloud LLM integrations
 - `webinar_transcriber/media.py`: probing helpers and shared media error types
 - `webinar_transcriber/normalized_audio.py`: deterministic transcription-audio preparation
@@ -53,6 +54,7 @@ The package intentionally avoids deep nesting.
 ## Runtime Contracts
 
 - Successful default CLI runs write the report artifact set described in `README.md`.
+- `--diarize` runs locally and adds `diarization.json` plus speaker fields on transcript segments.
 - Successful runs write `diagnostics.json`; failed runs also write it once the run directory exists,
   though early failures can still leave only partial intermediate artifacts and no final report
   outputs.
@@ -89,6 +91,9 @@ The package intentionally avoids deep nesting.
   contract rather than silently resample.
 - The Silero VAD ONNX model is vendored under `webinar_transcriber/assets/` so default speech-region
   detection does not require PyTorch or a first-run network download.
+- Speaker diarization uses `sherpa-onnx` with downloaded ONNX models cached under
+  `WEBINAR_DIARIZATION_CACHE_DIR` or `~/.cache/webinar-transcriber/diarization`; keep those model
+  artifacts out of the wheel.
 
 ## Style Notes
 

@@ -19,6 +19,25 @@ def write_json_report(report: ReportDocument, output_path: Path) -> Path:
         Path: The written JSON artifact path.
     """
     output_path.write_text(
-        json.dumps(asdict(report), indent=2, ensure_ascii=False), encoding="utf-8"
+        json.dumps(_compact_speaker_fields(asdict(report)), indent=2, ensure_ascii=False),
+        encoding="utf-8",
     )
     return output_path
+
+
+def _compact_speaker_fields(value: object) -> object:
+    if isinstance(value, list):
+        return [_compact_speaker_fields(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+
+    compacted: dict[str, object] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            continue
+        if key == "speaker" and item is None:
+            continue
+        if key == "speakers" and item == []:
+            continue
+        compacted[key] = _compact_speaker_fields(item)
+    return compacted

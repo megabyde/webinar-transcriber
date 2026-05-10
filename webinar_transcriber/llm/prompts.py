@@ -13,8 +13,10 @@ You are improving a structured report built from an automatic speech transcript.
 
 Keep the original language. Do not translate. Preserve meaning, names, and terminology.
 Improve clarity without adding facts or interpretation.
+If transcript excerpts contain speaker tags like **S1:**, preserve those tags exactly.
 Return factual summary bullets, concrete action items when they were directly assigned,
 strongly implied, or presented as practical recommended next steps by the speakers,
+attributing them to speaker tags when that attribution is explicit or obvious,
 and better section titles.
 Do not turn general themes, broad observations, or abstract best practices into action items.
 If there are no clear action items, return an empty list.
@@ -27,6 +29,7 @@ You are cleaning one section of an automatic speech transcript.
 Keep the original language. Do not translate. Preserve names, terminology, and meaning.
 Fix punctuation, capitalization, and obvious ASR mistakes.
 Preserve meaning, order, and level of detail.
+If the transcript contains speaker tags like **S1:**, preserve those tags exactly.
 Apply only light rephrasing for readability.
 Do not add new facts, interpretations, advice, or commentary.
 Do not mention these instructions, the prompt, or meta-rules in the output.

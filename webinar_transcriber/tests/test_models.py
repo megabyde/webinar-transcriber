@@ -42,6 +42,7 @@ class TestCoreModels:
         assert segment.start_sec == 0.0
         assert segment.end_sec == 1.2
         assert segment.text == "hello world"
+        assert segment.speaker is None
 
     def test_transcript_segment_exposes_midpoint(self) -> None:
         segment = TranscriptSegment(id="seg-1", text="hello world", start_sec=1.0, end_sec=2.2)
@@ -72,6 +73,7 @@ class TestCoreModels:
         assert report.action_items == []
         assert report.sections[0].title == "Overview"
         assert report.sections[0].tldr is None
+        assert report.sections[0].speakers == []
 
     def test_scene_exposes_midpoint(self) -> None:
         scene = Scene(id="scene-1", start_sec=2.0, end_sec=5.0)
@@ -81,12 +83,13 @@ class TestCoreModels:
     def test_diagnostics_defaults_empty_maps(self) -> None:
         diagnostics = Diagnostics()
 
-        assert not diagnostics.llm_enabled
-        assert diagnostics.llm_report_status == "disabled"
-        assert diagnostics.llm_report_usage == {}
+        assert not diagnostics.llm.enabled
+        assert diagnostics.llm.report_status == "disabled"
+        assert diagnostics.llm.report_usage == {}
         assert diagnostics.stage_durations_sec == {}
         assert diagnostics.item_counts == {}
         assert diagnostics.asr_pipeline is None
+        assert diagnostics.diarization is None
         assert diagnostics.warnings == []
 
     def test_asr_pipeline_support_models_accept_expected_fields(self) -> None:
@@ -99,6 +102,8 @@ class TestCoreModels:
             segments=[TranscriptSegment(id="segment-1", text="hello", start_sec=0.0, end_sec=1.0)],
         )
         diagnostics = AsrPipelineDiagnostics(
+            backend="whisper.cpp",
+            model="test-model",
             normalized_audio_duration_sec=120.0,
             vad_enabled=True,
             threads=4,
@@ -110,6 +115,8 @@ class TestCoreModels:
         assert speech_region.end_sec == 1.5
         assert decoded_window.window.id == "window-1"
         assert decoded_window.input_prompt == "hello"
+        assert diagnostics.backend == "whisper.cpp"
+        assert diagnostics.model == "test-model"
         assert diagnostics.carryover_enabled
         assert diagnostics.window_count == 4
 

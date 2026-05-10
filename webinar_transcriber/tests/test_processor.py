@@ -28,6 +28,7 @@ from webinar_transcriber.models import (
     ReportDocument,
     Scene,
     SlideFrame,
+    SpeakerTurn,
     SpeechRegion,
     TranscriptSegment,
 )
@@ -125,6 +126,31 @@ class ConfigurableLLMProcessor:
         return self._metadata_result(report, section_transcripts)
 
 
+class FakeDiarizer:
+    model_name = "fake-diarizer"
+    system_info = "fake sherpa"
+
+    def __init__(self, turns: list[SpeakerTurn]) -> None:
+        self.turns = turns
+        self.calls: list[tuple[int, int]] = []
+
+    def diarize(
+        self,
+        samples: np.ndarray,
+        sample_rate: int,
+        *,
+        max_speakers: int,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> list[SpeakerTurn]:
+        self.calls.append((len(samples), max_speakers))
+        if progress_callback is not None:
+            progress_callback(1, 0)
+            progress_callback(1, 2)
+            progress_callback(2, 2)
+        assert sample_rate == 16_000
+        return self.turns
+
+
 class TestProcessInput:
     def test_processes_audio_into_reports_and_diagnostics(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -168,15 +194,67 @@ class TestProcessInput:
 
         assert "# Sample Audio" in markdown
         assert "Agenda review and project status update." in markdown
-        assert diagnostics_payload["asr_backend"] == "whisper.cpp"
-        assert diagnostics_payload["asr_model"] == "test-model"
+        assert diagnostics_payload["asr_pipeline"]["backend"] == "whisper.cpp"
+        assert diagnostics_payload["asr_pipeline"]["model"] == "test-model"
         assert diagnostics_payload["item_counts"]["windows"] == 1
         assert diagnostics_payload["item_counts"]["report_sections"] == 1
         assert artifacts.diagnostics.asr_pipeline is not None
         assert artifacts.diagnostics.asr_pipeline.system_info == "CPU = 1"
+        assert artifacts.diagnostics.diarization is None
+        assert not artifacts.layout.diarization_path.exists()
         assert ("start", "vad", 1.0, "0 regions") in reporter.progress
         assert ("advance", "vad", 1.0, "1 region") in reporter.progress
         assert ("vad", "1 region") in reporter.finished
+
+    def test_diarizes_transcript_and_report_when_enabled(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        input_path = FIXTURE_DIR / "sample-audio.mp3"
+        transcriber = FakeTranscriber()
+        reporter = RecordingReporter()
+        diarizer = FakeDiarizer([
+            SpeakerTurn(start_sec=0.0, end_sec=3.2, speaker="S1"),
+            SpeakerTurn(start_sec=3.2, end_sec=6.0, speaker="S2"),
+        ])
+        install_pipeline_runtime(
+            monkeypatch,
+            tmp_path,
+            input_path=input_path,
+            runtime=audio_runtime(duration_sec=6.0),
+        )
+
+        artifacts = process_input(
+            input_path,
+            output_dir=tmp_path / "diarized-run",
+            transcriber=transcriber,
+            diarize=True,
+            diarize_max_speakers=4,
+            diarizer=diarizer,
+            reporter=reporter,
+        )
+
+        transcript_payload = read_json(artifacts.layout.transcript_path)
+        report_payload = read_json(artifacts.layout.json_report_path)
+        diarization_payload = read_json(artifacts.layout.diarization_path)
+
+        assert diarizer.calls == [(16_000, 4)]
+        assert [segment["speaker"] for segment in transcript_payload["segments"]] == ["S1", "S2"]
+        assert diarization_payload["speaker_turns"] == [
+            {"start_sec": 0.0, "end_sec": 3.2, "speaker": "S1"},
+            {"start_sec": 3.2, "end_sec": 6.0, "speaker": "S2"},
+        ]
+        assert (
+            "**S1:** Agenda review and project status update."
+            in artifacts.report.sections[0].transcript_text
+        )
+        markdown = artifacts.layout.markdown_report_path.read_text(encoding="utf-8")
+        assert "**S2:** Next step please send the draft by Friday." in markdown
+        assert report_payload["sections"][0]["speakers"] == ["S1", "S2"]
+        assert artifacts.diagnostics.diarization is not None
+        assert artifacts.diagnostics.diarization.speaker_count == 2
+        assert artifacts.diagnostics.diarization.turn_count == 2
+        assert ("start", "diarize", 1.0, "0 turns") in reporter.progress
+        assert ("diarize", "2 speakers | 2 turns") in reporter.finished
 
     def test_uses_vad_regions_as_decode_windows(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -661,7 +739,6 @@ class TestProcessorSupport:
             status="failed",
             failed_stage="prepare_run_dir",
             error="boom",
-            asr_model="test-model",
             llm_enabled=False,
         )
 
@@ -686,7 +763,6 @@ class TestProcessorSupport:
             status="failed",
             failed_stage="prepare_run_dir",
             error="boom",
-            asr_model="test-model",
             llm_enabled=False,
             suppress_errors=True,
         )
@@ -702,7 +778,6 @@ class TestProcessorSupport:
                 status="failed",
                 failed_stage="prepare_run_dir",
                 error="boom",
-                asr_model="test-model",
                 llm_enabled=False,
             )
 
@@ -851,15 +926,15 @@ class TestProcessInputLlm:
         assert artifacts.report.sections[0].transcript_text == EXPECTED_LLM_SECTION_TEXT
         assert artifacts.report.warnings == [EXPECTED_LLM_WARNING]
         assert reporter.warnings == [EXPECTED_LLM_WARNING]
-        assert artifacts.diagnostics.llm_enabled
-        assert artifacts.diagnostics.llm_model == "test-llm-model"
-        assert artifacts.diagnostics.llm_report_status == "applied"
-        assert artifacts.diagnostics.llm_report_usage == EXPECTED_LLM_USAGE
+        assert artifacts.diagnostics.llm.enabled
+        assert artifacts.diagnostics.llm.model == "test-llm-model"
+        assert artifacts.diagnostics.llm.report_status == "applied"
+        assert artifacts.diagnostics.llm.report_usage == EXPECTED_LLM_USAGE
         assert "llm_report_sections" in artifacts.diagnostics.stage_durations_sec
         assert "llm_report_metadata" in artifacts.diagnostics.stage_durations_sec
 
         diagnostics_payload = read_json(artifacts.layout.diagnostics_path)
-        assert diagnostics_payload["llm_report_usage"] == EXPECTED_LLM_USAGE
+        assert diagnostics_payload["llm"]["report_usage"] == EXPECTED_LLM_USAGE
         assert diagnostics_payload["warnings"] == [EXPECTED_LLM_WARNING]
 
     def test_preserves_zero_valued_llm_usage_keys(
@@ -899,9 +974,9 @@ class TestProcessInputLlm:
             ),
         )
 
-        assert artifacts.diagnostics.llm_report_usage == expected_usage
+        assert artifacts.diagnostics.llm.report_usage == expected_usage
         diagnostics_payload = read_json(artifacts.layout.diagnostics_path)
-        assert diagnostics_payload["llm_report_usage"] == expected_usage
+        assert diagnostics_payload["llm"]["report_usage"] == expected_usage
 
     def test_reports_all_sections_in_llm_progress(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -996,7 +1071,7 @@ class TestProcessInputLlm:
 
         assert len(artifacts.report.sections) == 2
         assert artifacts.report.sections[0].title == "Renamed first section"
-        assert artifacts.diagnostics.llm_report_usage == {"total_tokens": 5}
+        assert artifacts.diagnostics.llm.report_usage == {"total_tokens": 5}
         assert ("start", "llm_report_sections", 2.0, None) in reporter.progress
         assert [
             event
@@ -1030,9 +1105,9 @@ class TestProcessInputLlm:
 
         assert reporter.warnings == ["missing llm config"]
         assert artifacts.report.warnings == ["missing llm config"]
-        assert artifacts.diagnostics.llm_enabled
-        assert artifacts.diagnostics.llm_report_status == "fallback"
-        assert artifacts.diagnostics.llm_model is None
+        assert artifacts.diagnostics.llm.enabled
+        assert artifacts.diagnostics.llm.report_status == "fallback"
+        assert artifacts.diagnostics.llm.model is None
 
     def test_falls_back_when_section_polish_fails(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1061,7 +1136,7 @@ class TestProcessInputLlm:
         )
 
         assert reporter.warnings == ["section polish failed"]
-        assert artifacts.diagnostics.llm_report_status == "fallback"
+        assert artifacts.diagnostics.llm.report_status == "fallback"
         assert artifacts.report.summary == []
         assert artifacts.report.action_items == []
 
@@ -1099,7 +1174,7 @@ class TestProcessInputLlm:
         )
 
         assert reporter.warnings == ["metadata failed"]
-        assert artifacts.diagnostics.llm_report_status == "fallback"
-        assert artifacts.diagnostics.llm_report_usage == {}
+        assert artifacts.diagnostics.llm.report_status == "fallback"
+        assert artifacts.diagnostics.llm.report_usage == {}
         assert "llm_report_sections" in artifacts.diagnostics.stage_durations_sec
         assert "llm_report_metadata" in artifacts.diagnostics.stage_durations_sec
