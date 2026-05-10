@@ -40,6 +40,12 @@ That installs the `webinar-transcriber` command as a uv tool from the local sour
 need to activate a virtual environment to use the installed CLI. Re-run `make install` after pulling
 changes when you want the installed command to use the current checkout.
 
+On Windows, or anywhere without `make`, use uv directly:
+
+```bash
+uv tool install --reinstall .
+```
+
 ```bash
 webinar-transcriber --help
 ```
@@ -267,6 +273,13 @@ runs/<timestamp>_<basename>/
 - `make sync-llm`: development dependencies plus optional LLM SDKs.
 - `make sync-cuda`: development environment with CUDA-built `pywhispercpp`.
 
+On Windows, use uv directly:
+
+```powershell
+uv sync
+uv sync --extra llm
+```
+
 ### Running from a Checkout
 
 If you are developing inside the repository and do not want to install the CLI as a tool, run it
@@ -295,6 +308,17 @@ committed:
 make format
 make lint
 make check
+```
+
+On Windows, run the same checks through uv:
+
+```powershell
+uv run mdformat --check AGENTS.md LICENSE-3RDPARTY.md README.md
+uv run pymarkdown scan AGENTS.md LICENSE-3RDPARTY.md README.md
+uv run ruff format --check .
+uv run ruff check .
+uv run ty check webinar_transcriber
+uv run pytest
 ```
 
 For quick local iteration, `make test` skips tests marked `slow`. Use `make check` to run the full
