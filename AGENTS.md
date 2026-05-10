@@ -85,8 +85,10 @@ The package intentionally avoids deep nesting.
 
 - When an earlier pipeline stage already guarantees an invariant, prefer enforcing that invariant
   directly instead of carrying defensive conversion logic downstream. For example, transcription
-  audio is normalized to `16000 Hz`, so the Silero integration should assert that contract rather
-  than silently resample.
+  audio is normalized to `16000 Hz`, so the `sherpa-onnx` Silero VAD integration should assert that
+  contract rather than silently resample.
+- The Silero VAD ONNX model is vendored under `webinar_transcriber/assets/` so default speech-region
+  detection does not require PyTorch or a first-run network download.
 
 ## Style Notes
 

@@ -1,5 +1,6 @@
 """Shared test helpers for webinar_transcriber/tests."""
 
+import importlib
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -22,12 +23,7 @@ from webinar_transcriber.processor import ProcessArtifacts
 from webinar_transcriber.reporter import BaseStageReporter
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
-
-
-class FakeTorch:
-    @staticmethod
-    def from_numpy(arr):
-        return arr
+ORIGINAL_IMPORT_MODULE = importlib.import_module
 
 
 class FakeContextContainer:
@@ -38,34 +34,84 @@ class FakeContextContainer:
         return None
 
 
-@pytest.fixture
-def fake_silero_import_module() -> Callable[..., Callable[[str], object]]:
-    def build(
+class FakeSherpaSileroVadConfig:
+    def __init__(self, *, window_size: int) -> None:
+        self.model = ""
+        self.threshold = 0.5
+        self.min_speech_duration = 0.25
+        self.min_silence_duration = 0.5
+        self.window_size = window_size
+
+
+class FakeSherpaVadModelConfig:
+    def __init__(self, *, window_size: int) -> None:
+        self.silero_vad = FakeSherpaSileroVadConfig(window_size=window_size)
+        self.sample_rate = 16_000
+
+
+class FakeSherpaVoiceActivityDetector:
+    def __init__(
+        self,
+        config: FakeSherpaVadModelConfig,
         *,
-        iterator_cls: type | None = None,
-        get_speech_timestamps_fn: Callable[..., object] | None = None,
-    ) -> Callable[[str], object]:
-        class FakeSilero:
-            VADIterator: type | None = None
-            get_speech_timestamps: Callable[..., object] | None = None
+        buffer_size_in_seconds: int,
+        segments: list[object],
+    ) -> None:
+        self.config = config
+        self.buffer_size_in_seconds = buffer_size_in_seconds
+        self.accepted_waveforms: list[object] = []
+        self.flushed = False
+        self.segments = list(segments)
 
-            @staticmethod
-            def load_silero_vad():
-                return object()
+    def accept_waveform(self, samples) -> None:
+        self.accepted_waveforms.append(samples)
 
-        if iterator_cls is not None:  # pragma: no cover - fixture option for narrow VAD tests
-            FakeSilero.VADIterator = iterator_cls
-        if get_speech_timestamps_fn is not None:
-            FakeSilero.get_speech_timestamps = staticmethod(get_speech_timestamps_fn)
+    def flush(self) -> None:
+        self.flushed = True
+
+    def empty(self) -> bool:
+        return not self.segments
+
+    @property
+    def front(self):
+        return self.segments[0]
+
+    def pop(self) -> None:
+        self.segments.pop(0)
+
+
+class FakeSherpaModule:
+    def __init__(self, *, segments: list[object] | None, window_size: int) -> None:
+        self._segments = list(segments or [])
+        self._window_size = window_size
+        self.detectors: list[FakeSherpaVoiceActivityDetector] = []
+
+    def VadModelConfig(self) -> FakeSherpaVadModelConfig:  # noqa: N802
+        return FakeSherpaVadModelConfig(window_size=self._window_size)
+
+    def VoiceActivityDetector(  # noqa: N802
+        self, config: FakeSherpaVadModelConfig, *, buffer_size_in_seconds: int
+    ) -> FakeSherpaVoiceActivityDetector:
+        detector = FakeSherpaVoiceActivityDetector(
+            config,
+            buffer_size_in_seconds=buffer_size_in_seconds,
+            segments=self._segments,
+        )
+        self.detectors.append(detector)
+        return detector
+
+
+@pytest.fixture
+def fake_sherpa_import_module() -> Callable[..., tuple[Callable[[str], object], object]]:
+    def build(*, segments: list[object] | None = None, window_size: int = 512):
+        fake_sherpa = FakeSherpaModule(segments=segments, window_size=window_size)
 
         def fake_import_module(name: str) -> object:
-            if name == "silero_vad":
-                return FakeSilero
-            if name == "torch":
-                return FakeTorch
-            raise ImportError(name)  # pragma: no cover - mirrors importlib for unexpected modules
+            if name == "sherpa_onnx":
+                return fake_sherpa
+            return ORIGINAL_IMPORT_MODULE(name)
 
-        return fake_import_module
+        return fake_import_module, fake_sherpa
 
     return build
 
@@ -197,7 +243,12 @@ def install_pipeline_runtime(
         finally:
             audio_path.unlink(missing_ok=True)
 
-    def fake_detect_speech_regions(*_args, **_kwargs):
+    def fake_detect_speech_regions(*_args, progress_callback=None, **_kwargs):
+        if progress_callback is not None:
+            progress_callback(
+                len(runtime.audio_samples) / runtime.sample_rate,
+                len(runtime.speech_regions),
+            )
         return runtime.speech_regions, list(runtime.vad_warnings or [])
 
     monkeypatch.setattr(
