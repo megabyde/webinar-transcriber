@@ -1,8 +1,7 @@
 # Third-Party Notices
 
-This project vendors the Silero VAD ONNX model at
-`webinar_transcriber/assets/silero_vad.onnx` and a trimmed speech fixture at
-`webinar_transcriber/tests/fixtures/speech-sample.wav`.
+This project vendors the Silero VAD ONNX model at `webinar_transcriber/assets/silero_vad.onnx` and a
+trimmed speech fixture at `webinar_transcriber/tests/fixtures/speech-sample.wav`.
 
 - Source: <https://github.com/snakers4/silero-vad>
 - License: MIT
