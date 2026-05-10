@@ -184,7 +184,7 @@ def _section_from_segments(
     title: str,
     frame_id: str | None = None,
 ) -> ReportSection:
-    transcript_text = "\n\n".join(s for seg in segments if (s := seg.text.strip()))
+    transcript_text = _transcript_text_from_segments(segments)
     return ReportSection(
         id=f"section-{section_index}",
         title=title,
@@ -192,6 +192,7 @@ def _section_from_segments(
         end_sec=segments[-1].end_sec,
         transcript_text=transcript_text,
         frame_id=frame_id,
+        speakers=_speakers_from_segments(segments),
     )
 
 
@@ -211,6 +212,7 @@ def sections_from_block(
                 end_sec=block.end_sec,
                 transcript_text=block.transcript_text,
                 frame_id=block.frame_id,
+                speakers=[],
             )
         ]
 
@@ -236,6 +238,39 @@ def derive_title(source_path: str) -> str:
     """Return a report title derived from the source filename."""
     stem = Path(source_path).stem
     return stem.replace("-", " ").replace("_", " ").strip().title() or "Transcription Report"
+
+
+def _transcript_text_from_segments(segments: list[TranscriptSegment]) -> str:
+    meaningful_segments = [segment for segment in segments if segment.text.strip()]
+    if not any(segment.speaker for segment in meaningful_segments):
+        return "\n\n".join(segment.text.strip() for segment in meaningful_segments)
+
+    paragraphs: list[str] = []
+    current_speaker: str | None = None
+    current_text: list[str] = []
+    for segment in meaningful_segments:
+        if segment.speaker != current_speaker:
+            if current_text:
+                paragraphs.append(_speaker_paragraph(current_speaker, current_text))
+            current_speaker = segment.speaker
+            current_text = []
+        current_text.append(segment.text.strip())
+    if current_text:
+        paragraphs.append(_speaker_paragraph(current_speaker, current_text))
+    return "\n\n".join(paragraphs)
+
+
+def _speaker_paragraph(speaker: str | None, texts: list[str]) -> str:
+    text = " ".join(texts).strip()
+    return f"**{speaker}:** {text}" if speaker else text
+
+
+def _speakers_from_segments(segments: list[TranscriptSegment]) -> list[str]:
+    speakers: list[str] = []
+    for segment in segments:
+        if segment.speaker and segment.speaker not in speakers:
+            speakers.append(segment.speaker)
+    return speakers
 
 
 __all__ = [

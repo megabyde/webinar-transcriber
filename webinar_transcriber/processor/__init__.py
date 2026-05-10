@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from webinar_transcriber.asr import PromptCarryoverSettings, WhisperCppTranscriber
 from webinar_transcriber.diagnostics import write_run_diagnostics
+from webinar_transcriber.diarization import DEFAULT_MAX_SPEAKERS
 from webinar_transcriber.media import probe_media
 from webinar_transcriber.normalized_audio import (
     TranscriptionAudioFormat,
@@ -26,9 +27,11 @@ from .types import ProcessArtifacts, RunContext
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from webinar_transcriber.diarization import Diarizer
     from webinar_transcriber.llm.contracts import LLMProcessor
     from webinar_transcriber.models import (
         AsrPipelineDiagnostics,
+        DiarizationDiagnostics,
         MediaAsset,
         ReportDocument,
         Scene,
@@ -52,7 +55,15 @@ def run_transcription_phase(
     carryover_enabled: bool,
     language: str | None,
     keep_audio: TranscriptionAudioFormat | None,
-) -> tuple[TranscriptionResult, TranscriptionResult, AsrPipelineDiagnostics]:
+    diarize: bool,
+    diarize_max_speakers: int,
+    diarizer: Diarizer | None,
+) -> tuple[
+    TranscriptionResult,
+    TranscriptionResult,
+    AsrPipelineDiagnostics,
+    DiarizationDiagnostics | None,
+]:
     """Run the audio preparation and ASR half of the pipeline.
 
     Returns:
@@ -73,6 +84,9 @@ def run_transcription_phase(
             vad=vad,
             carryover_enabled=carryover_enabled,
             language=language,
+            diarize=diarize,
+            diarize_max_speakers=diarize_max_speakers,
+            diarizer=diarizer,
         )
 
         if keep_audio:
@@ -83,7 +97,12 @@ def run_transcription_phase(
                 )
                 st.set_detail(preserved_audio_path.name)
 
-    return asr_result.transcription, asr_result.normalized_transcription, asr_result.asr_pipeline
+    return (
+        asr_result.transcription,
+        asr_result.normalized_transcription,
+        asr_result.asr_pipeline,
+        asr_result.diarization,
+    )
 
 
 def process_input(
@@ -97,7 +116,10 @@ def process_input(
     asr_threads: int | None = None,
     keep_audio: TranscriptionAudioFormat | None = None,
     enable_llm: bool = False,
+    diarize: bool = False,
+    diarize_max_speakers: int = DEFAULT_MAX_SPEAKERS,
     transcriber: WhisperCppTranscriber | None = None,
+    diarizer: Diarizer | None = None,
     llm_processor: LLMProcessor | None = None,
     reporter: BaseStageReporter | None = None,
 ) -> ProcessArtifacts:
@@ -125,6 +147,7 @@ def process_input(
         transcription: TranscriptionResult | None = None
         normalized_transcription: TranscriptionResult | None = None
         asr_pipeline: AsrPipelineDiagnostics | None = None
+        diarization: DiarizationDiagnostics | None = None
         report: ReportDocument | None = None
         scenes: list[Scene] = []
         slide_frames: list[SlideFrame] = []
@@ -141,7 +164,12 @@ def process_input(
                 write_json(layout.metadata_path, {"media": asdict(media_asset)})
                 st.set_detail(f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s")
 
-            transcription, normalized_transcription, asr_pipeline = run_transcription_phase(
+            (
+                transcription,
+                normalized_transcription,
+                asr_pipeline,
+                diarization,
+            ) = run_transcription_phase(
                 input_path=input_path,
                 media_asset=media_asset,
                 transcriber=active_transcriber,
@@ -151,6 +179,9 @@ def process_input(
                 carryover_enabled=carryover.enabled,
                 language=language,
                 keep_audio=keep_audio,
+                diarize=diarize,
+                diarize_max_speakers=diarize_max_speakers,
+                diarizer=diarizer,
             )
 
             report, scenes, slide_frames = run_report_phase(
@@ -166,11 +197,11 @@ def process_input(
             diagnostics = write_run_diagnostics(
                 ctx,
                 status="succeeded",
-                asr_model=active_transcriber.model_name,
                 llm_enabled=enable_llm,
                 transcription=transcription,
                 normalized_transcription=normalized_transcription,
                 asr_pipeline=asr_pipeline,
+                diarization=diarization,
                 report=report,
                 scenes=scenes,
                 slide_frames=slide_frames,
@@ -195,11 +226,11 @@ def process_input(
                 status="failed",
                 failed_stage=ctx.current_stage,
                 error=str(ex),
-                asr_model=active_transcriber.model_name,
                 llm_enabled=enable_llm,
                 transcription=transcription,
                 normalized_transcription=normalized_transcription,
                 asr_pipeline=asr_pipeline,
+                diarization=diarization,
                 report=report,
                 scenes=scenes,
                 slide_frames=slide_frames,

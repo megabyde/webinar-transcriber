@@ -70,6 +70,11 @@ class RunLayout:
         return self.asr_dir / "decoded_windows.json"
 
     @property
+    def diarization_path(self) -> Path:
+        """Return the diarization artifact path."""
+        return self.run_dir / "diarization.json"
+
+    @property
     def markdown_report_path(self) -> Path:
         """Return the Markdown report path."""
         return self.run_dir / "report.md"

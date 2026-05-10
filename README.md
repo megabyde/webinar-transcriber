@@ -130,6 +130,24 @@ LLM_PROVIDER=anthropic \
     webinar-transcriber INPUT --llm
 ```
 
+### Speaker Diarization
+
+Pass `--diarize` to label transcript segments with anonymous local speaker IDs:
+
+```bash
+webinar-transcriber INPUT --diarize
+webinar-transcriber INPUT --diarize --diarize-max-speakers 4
+```
+
+Diarization runs entirely locally through `sherpa-onnx`; it does not use an API key. The first
+diarized run downloads the segmentation and speaker-embedding models into
+`~/.cache/webinar-transcriber/diarization`. Set `WEBINAR_DIARIZATION_CACHE_DIR` to use another cache
+path or to point at preloaded model files.
+
+When enabled, reports prefix transcript paragraphs with stable labels such as `S1` and `S2`, ordered
+by first appearance. The JSON artifacts include a `speaker` field on transcript segments and a
+separate `diarization.json` file with raw speaker turns.
+
 ### What You Get
 
 Successful default runs write:
@@ -144,6 +162,7 @@ Depending on options and input type, successful default runs also write:
 - `transcription-audio.mp3` with `--keep-audio`
 - `transcription-audio.wav` or `transcription-audio.mp3` with `--keep-audio FORMAT`
 - `scenes.json` and `frames/` for video input
+- `diarization.json` and speaker-labeled transcript segments with `--diarize`
 
 Failed runs also write `diagnostics.json` once the run directory exists, though they may still leave
 only partial intermediate artifacts and no final report outputs.
@@ -160,6 +179,7 @@ only partial intermediate artifacts and no final report outputs.
 1. Create ASR windows from the detected speech regions.
 1. Transcribe the windows locally with `whisper.cpp`.
 1. Reconcile adjacent windows into one transcript.
+1. Optionally diarize normalized audio locally and attach speaker labels to transcript segments.
 1. Detect scenes and extract representative frames for video input.
 1. Build report sections with local heuristics. For audio-only inputs, sectioning is best-effort and
    uses speech gaps; LLM refinement is the preferred path for stronger headings and metadata.
@@ -223,6 +243,7 @@ runs/<timestamp>_<basename>/
 ├─ asr/
 │  ├─ decoded_windows.json
 │  └─ speech_regions.json
+├─ diarization.json       # optional via --diarize
 ├─ frames/                 # video only
 ├─ diagnostics.json
 ├─ metadata.json

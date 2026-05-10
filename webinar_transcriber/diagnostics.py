@@ -6,13 +6,13 @@ import json
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Literal
 
-from webinar_transcriber.asr import ASR_BACKEND_NAME
-from webinar_transcriber.models import AsrPipelineDiagnostics, Diagnostics
+from webinar_transcriber.models import AsrPipelineDiagnostics, Diagnostics, LlmDiagnostics
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from webinar_transcriber.models import (
+        DiarizationDiagnostics,
         ReportDocument,
         Scene,
         SlideFrame,
@@ -24,11 +24,11 @@ if TYPE_CHECKING:
 def build_diagnostics(
     ctx: RunContext,
     *,
-    asr_model: str | None,
     llm_enabled: bool,
     transcription: TranscriptionResult | None = None,
     normalized_transcription: TranscriptionResult | None = None,
     asr_pipeline: AsrPipelineDiagnostics | None = None,
+    diarization: DiarizationDiagnostics | None = None,
     report: ReportDocument | None = None,
     scenes: Sequence[Scene] = (),
     slide_frames: Sequence[SlideFrame] = (),
@@ -47,13 +47,13 @@ def build_diagnostics(
         status=status,
         failed_stage=failed_stage,
         error=error,
-        asr_backend=ASR_BACKEND_NAME,
-        asr_model=asr_model,
-        llm_enabled=llm_enabled,
-        llm_model=ctx.llm_runtime.model_name,
-        llm_report_status=ctx.llm_runtime.report_status,
-        llm_report_latency_sec=ctx.llm_runtime.report_latency_sec,
-        llm_report_usage=ctx.llm_runtime.report_usage or {},
+        llm=LlmDiagnostics(
+            enabled=llm_enabled,
+            model=ctx.llm_runtime.model_name,
+            report_status=ctx.llm_runtime.report_status,
+            report_latency_sec=ctx.llm_runtime.report_latency_sec,
+            report_usage=ctx.llm_runtime.report_usage or {},
+        ),
         stage_durations_sec={key: round(value, 6) for key, value in ctx.stage_timings.items()},
         item_counts={
             "transcript_segments": len(transcription.segments) if transcription else 0,
@@ -67,6 +67,7 @@ def build_diagnostics(
             "frames": len(slide_frames),
         },
         asr_pipeline=asr_pipeline,
+        diarization=diarization,
         warnings=ctx.warnings,
     )
 
@@ -75,11 +76,11 @@ def write_run_diagnostics(
     ctx: RunContext,
     *,
     status: Literal["succeeded", "failed"],
-    asr_model: str | None,
     llm_enabled: bool,
     transcription: TranscriptionResult | None = None,
     normalized_transcription: TranscriptionResult | None = None,
     asr_pipeline: AsrPipelineDiagnostics | None = None,
+    diarization: DiarizationDiagnostics | None = None,
     report: ReportDocument | None = None,
     scenes: Sequence[Scene] = (),
     slide_frames: Sequence[SlideFrame] = (),
@@ -93,11 +94,11 @@ def write_run_diagnostics(
 
     diagnostics = build_diagnostics(
         ctx,
-        asr_model=asr_model,
         llm_enabled=llm_enabled,
         transcription=transcription,
         normalized_transcription=normalized_transcription,
         asr_pipeline=asr_pipeline,
+        diarization=diarization,
         report=report,
         scenes=scenes,
         slide_frames=slide_frames,

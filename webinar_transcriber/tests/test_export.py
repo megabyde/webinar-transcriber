@@ -190,6 +190,36 @@ class TestDocxReport:
         document = Document(str(output_path))
         assert len(document.inline_shapes) == 1
 
+    def test_formats_speaker_prefixes_as_bold_runs(self, tmp_path: Path) -> None:
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Section 1",
+                    start_sec=0.0,
+                    end_sec=5.0,
+                    tldr="**S1:** Summary paragraph.",
+                    transcript_text="**S1:** First paragraph.\n\n**S2:** Second paragraph.",
+                    speakers=["S1", "S2"],
+                )
+            ],
+        )
+
+        output_path = tmp_path / "report.docx"
+        write_docx_report(report, output_path)
+
+        document = Document(str(output_path))
+        speaker_paragraphs = [
+            paragraph
+            for paragraph in document.paragraphs
+            if paragraph.text in {"S1: First paragraph.", "S2: Second paragraph."}
+        ]
+        assert [paragraph.runs[0].bold for paragraph in speaker_paragraphs] == [True, True]
+        assert "S1: Summary paragraph." in [paragraph.text for paragraph in document.paragraphs]
+
 
 class TestMarkdownReport:
     def test_omits_blank_image_line_for_imageless_sections(self, tmp_path: Path) -> None:
@@ -292,6 +322,30 @@ class TestMarkdownReport:
 
         assert "### Section 1 (01:01:01\N{EN DASH}02:02:05)" in markdown
 
+    def test_preserves_speaker_prefixes(self, tmp_path: Path) -> None:
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Section 1",
+                    start_sec=0.0,
+                    end_sec=5.0,
+                    transcript_text="**S1:** First paragraph.\n\n**S2:** Second paragraph.",
+                    speakers=["S1", "S2"],
+                )
+            ],
+        )
+
+        output_path = tmp_path / "report.md"
+        write_markdown_report(report, output_path)
+
+        markdown = output_path.read_text(encoding="utf-8")
+        assert "**S1:** First paragraph." in markdown
+        assert "**S2:** Second paragraph." in markdown
+
 
 class TestJsonReport:
     def test_round_trips_report_document(self, tmp_path: Path) -> None:
@@ -333,3 +387,38 @@ class TestJsonReport:
                 "image_path": None,
             }
         ]
+
+    def test_includes_nonempty_section_speakers(self, tmp_path: Path) -> None:
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Section 1",
+                    start_sec=0.0,
+                    end_sec=5.0,
+                    transcript_text="**S1:** Paragraph one.",
+                    speakers=["S1"],
+                )
+            ],
+        )
+
+        output_path = tmp_path / "report.json"
+        write_json_report(report, output_path)
+
+        payload = json.loads(output_path.read_text(encoding="utf-8"))
+        assert payload["sections"][0]["speakers"] == ["S1"]
+
+    def test_compacts_empty_speaker_fields(self) -> None:
+        from webinar_transcriber.export.json_report import _compact_speaker_fields
+
+        payload = _compact_speaker_fields({
+            "speaker": None,
+            "speakers": [],
+            1: "ignored",
+            "nested": [{"speaker": "S1"}],
+        })
+
+        assert payload == {"nested": [{"speaker": "S1"}]}

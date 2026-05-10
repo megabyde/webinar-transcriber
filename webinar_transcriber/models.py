@@ -73,6 +73,7 @@ class TranscriptSegment(TimelineItem):
     """Segment-level transcript block."""
 
     text: str
+    speaker: str | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -143,6 +144,16 @@ class ReportSection(TimelineItem):
     tldr: str | None = None
     frame_id: str | None = None
     image_path: str | None = None
+    speakers: list[str] = dataclass_field(default_factory=list)
+
+
+@dataclass(slots=True, frozen=True)
+class SpeakerTurn:
+    """Time-bounded speaker turn returned by diarization."""
+
+    start_sec: float
+    end_sec: float
+    speaker: str
 
 
 @dataclass(slots=True, frozen=True)
@@ -163,6 +174,8 @@ class ReportDocument:
 class AsrPipelineDiagnostics:
     """Collected ASR diagnostics state for one processing run."""
 
+    backend: str | None
+    model: str | None
     vad_enabled: bool
     threads: int
     normalized_audio_duration_sec: float | None = None
@@ -174,20 +187,38 @@ class AsrPipelineDiagnostics:
 
 
 @dataclass(slots=True, frozen=True)
+class DiarizationDiagnostics:
+    """Collected speaker-diarization diagnostics for one processing run."""
+
+    enabled: bool
+    speaker_count: int
+    turn_count: int
+    average_turn_duration_sec: float | None
+    model: str
+    system_info: str | None = None
+
+
+@dataclass(slots=True, frozen=True)
+class LlmDiagnostics:
+    """Collected optional LLM diagnostics for one processing run."""
+
+    enabled: bool = False
+    model: str | None = None
+    report_status: Literal["disabled", "applied", "fallback"] = "disabled"
+    report_latency_sec: float | None = None
+    report_usage: dict[str, int] = dataclass_field(default_factory=dict)
+
+
+@dataclass(slots=True, frozen=True)
 class Diagnostics:
     """Execution metadata recorded for a processing run."""
 
     status: Literal["succeeded", "failed"] = "succeeded"
     failed_stage: str | None = None
     error: str | None = None
-    asr_backend: str | None = None
-    asr_model: str | None = None
-    llm_enabled: bool = False
-    llm_model: str | None = None
-    llm_report_status: Literal["disabled", "applied", "fallback"] = "disabled"
-    llm_report_latency_sec: float | None = None
-    llm_report_usage: dict[str, int] = dataclass_field(default_factory=dict)
+    llm: LlmDiagnostics = dataclass_field(default_factory=LlmDiagnostics)
     stage_durations_sec: dict[str, float] = dataclass_field(default_factory=dict)
     item_counts: dict[str, int] = dataclass_field(default_factory=dict)
     asr_pipeline: AsrPipelineDiagnostics | None = None
+    diarization: DiarizationDiagnostics | None = None
     warnings: list[str] = dataclass_field(default_factory=list)

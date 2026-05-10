@@ -86,7 +86,8 @@ def _add_section(
     )
     _add_section_tldr(document, section.tldr)
     for paragraph_text in _split_paragraphs(section.transcript_text):
-        document.add_paragraph(paragraph_text)
+        if not _add_speaker_paragraph(document, paragraph_text):
+            document.add_paragraph(paragraph_text)
 
 
 def _add_section_image(
@@ -124,8 +125,22 @@ def _add_text_blocks(document: DocxDocument, text: str) -> None:
     for paragraph_text in _split_paragraphs(text):
         lines = [line.strip() for line in paragraph_text.splitlines() if line.strip()]
         for line in lines:
+            if _add_speaker_paragraph(document, line):
+                continue
             body, style = _list_item_parts(line)
             document.add_paragraph(body or line, style=style)
+
+
+def _add_speaker_paragraph(document: DocxDocument, text: str) -> bool:
+    match = re.match(r"^\*\*(S\d+):\*\*\s*(.*)$", text)
+    if match is None:
+        return False
+
+    paragraph = document.add_paragraph()
+    paragraph.add_run(f"{match.group(1)}:").bold = True
+    if body := match.group(2).strip():
+        paragraph.add_run(f" {body}")
+    return True
 
 
 def _list_item_parts(text: str) -> tuple[str | None, str | None]:

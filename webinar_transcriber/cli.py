@@ -13,6 +13,7 @@ from webinar_transcriber.asr import (
     PromptCarryoverSettings,
     default_asr_threads,
 )
+from webinar_transcriber.diarization import DEFAULT_MAX_SPEAKERS, DiarizationProcessingError
 from webinar_transcriber.llm.contracts import LLMConfigurationError, LLMProcessingError
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
@@ -74,6 +75,19 @@ class CLIError(click.ClickException):
     help="Keep normalized transcription audio as FORMAT, defaulting to mp3.",
 )
 @click.option("--llm", is_flag=True, help="Enable optional provider-backed report enhancement.")
+@click.option(
+    "--diarize/--no-diarize",
+    default=False,
+    show_default=True,
+    help="Enable local speaker diarization.",
+)
+@click.option(
+    "--diarize-max-speakers",
+    type=click.IntRange(min=1, max=20),
+    default=DEFAULT_MAX_SPEAKERS,
+    show_default=True,
+    help="Maximum number of anonymous speakers to emit when diarization is enabled.",
+)
 def main(
     input_path: Path,
     output_dir: Path | None,
@@ -83,6 +97,8 @@ def main(
     vad: bool,
     keep_audio: str | None,
     llm: bool,
+    diarize: bool,
+    diarize_max_speakers: int,
 ) -> None:
     """Transcribe an audio or video input file."""
     if not input_path.exists():
@@ -107,6 +123,8 @@ def main(
             asr_threads=threads or default_asr_threads(),
             keep_audio=kept_format,
             enable_llm=llm,
+            diarize=diarize,
+            diarize_max_speakers=diarize_max_speakers,
             reporter=reporter,
         )
     except KeyboardInterrupt:
@@ -114,6 +132,7 @@ def main(
         raise click.exceptions.Exit(130) from None
     except (
         ASRProcessingError,
+        DiarizationProcessingError,
         LLMConfigurationError,
         LLMProcessingError,
         MediaProcessingError,

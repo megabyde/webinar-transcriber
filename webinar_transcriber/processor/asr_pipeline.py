@@ -5,11 +5,16 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING
 
+from webinar_transcriber.asr import ASR_BACKEND_NAME
+from webinar_transcriber.diarization import SherpaOnnxDiarizer, assign_speakers
 from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
+    DecodedWindow,
+    DiarizationDiagnostics,
     InferenceWindow,
     SpeechRegion,
     TranscriptionResult,
+    TranscriptSegment,
 )
 from webinar_transcriber.normalized_audio import load_normalized_audio
 from webinar_transcriber.segmentation import detect_speech_regions, normalized_audio_duration
@@ -29,6 +34,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from webinar_transcriber.asr import WhisperCppTranscriber
+    from webinar_transcriber.diarization import Diarizer
     from webinar_transcriber.models import MediaAsset
     from webinar_transcriber.paths import RunLayout
     from webinar_transcriber.segmentation import VadSettings
@@ -47,6 +53,7 @@ class AsrPipelineResult:
     transcription: TranscriptionResult
     normalized_transcription: TranscriptionResult
     asr_pipeline: AsrPipelineDiagnostics
+    diarization: DiarizationDiagnostics | None = None
 
 
 def run_asr_pipeline(
@@ -60,6 +67,9 @@ def run_asr_pipeline(
     vad: VadSettings,
     carryover_enabled: bool,
     language: str | None,
+    diarize: bool,
+    diarize_max_speakers: int,
+    diarizer: Diarizer | None = None,
 ) -> AsrPipelineResult:
     """Run the deterministic local ASR pipeline and persist intermediate artifacts.
 
@@ -129,7 +139,7 @@ def run_asr_pipeline(
         )
         write_json(
             layout.decoded_windows_path,
-            {"decoded_windows": [asdict(window) for window in decoded_windows]},
+            {"decoded_windows": [_decoded_window_payload(window) for window in decoded_windows]},
         )
         st.advance_to(media_asset.duration_sec)
         st.set_detail(
@@ -143,11 +153,79 @@ def run_asr_pipeline(
     transcription = reconcile_decoded_windows(decoded_windows)
 
     with stage(ctx, "normalize_transcript", "Normalizing transcript") as st:
-        write_json(layout.transcript_path, asdict(transcription))
         normalized_transcription = normalize_transcription(transcription)
         st.set_detail(count_label(len(normalized_transcription.segments), "segment"))
 
+    diarization: DiarizationDiagnostics | None = None
+    if diarize:
+        active_diarizer = diarizer or SherpaOnnxDiarizer()
+        diarization_total_sec = max(normalized_audio_duration_sec, 1.0)
+        with progress_stage(
+            ctx,
+            "diarize",
+            "Diarizing speakers",
+            total=diarization_total_sec,
+            count_label="s",
+            detail="0 turns",
+        ) as st:
+
+            def on_diarization_progress(
+                processed_chunks: int,
+                total_chunks: int,
+                handle: ProgressStageHandle = st,
+            ) -> None:
+                if total_chunks <= 0:
+                    return
+                completed_sec = (
+                    diarization_total_sec * min(processed_chunks, total_chunks) / total_chunks
+                )
+                handle.advance_to(completed_sec)
+
+            speaker_turns = active_diarizer.diarize(
+                audio_samples,
+                sample_rate,
+                max_speakers=diarize_max_speakers,
+                progress_callback=on_diarization_progress,
+            )
+            transcription = TranscriptionResult(
+                detected_language=transcription.detected_language,
+                segments=assign_speakers(transcription.segments, speaker_turns),
+            )
+            normalized_transcription = TranscriptionResult(
+                detected_language=normalized_transcription.detected_language,
+                segments=assign_speakers(normalized_transcription.segments, speaker_turns),
+            )
+            write_json(
+                layout.diarization_path,
+                {"speaker_turns": [asdict(turn) for turn in speaker_turns]},
+            )
+            speaker_count = len({turn.speaker for turn in speaker_turns})
+            turn_count = len(speaker_turns)
+            average_turn_duration_sec = (
+                sum(turn.end_sec - turn.start_sec for turn in speaker_turns) / turn_count
+                if turn_count
+                else None
+            )
+            detail = " | ".join([
+                count_label(speaker_count, "speaker"),
+                count_label(turn_count, "turn"),
+            ])
+            st.advance_to(diarization_total_sec, detail=detail)
+            st.set_detail(detail)
+            diarization = DiarizationDiagnostics(
+                enabled=True,
+                speaker_count=speaker_count,
+                turn_count=turn_count,
+                average_turn_duration_sec=average_turn_duration_sec,
+                model=active_diarizer.model_name,
+                system_info=active_diarizer.system_info,
+            )
+
+    write_json(layout.transcript_path, _transcription_payload(transcription))
+
     asr_pipeline = AsrPipelineDiagnostics(
+        backend=ASR_BACKEND_NAME,
+        model=transcriber.model_name,
         vad_enabled=vad.enabled,
         threads=transcriber.threads,
         normalized_audio_duration_sec=normalized_audio_duration_sec,
@@ -161,7 +239,32 @@ def run_asr_pipeline(
         transcription=transcription,
         normalized_transcription=normalized_transcription,
         asr_pipeline=asr_pipeline,
+        diarization=diarization,
     )
+
+
+def _transcription_payload(transcription: TranscriptionResult) -> dict[str, object]:
+    return {
+        "detected_language": transcription.detected_language,
+        "segments": [_segment_payload(segment) for segment in transcription.segments],
+    }
+
+
+def _decoded_window_payload(window: DecodedWindow) -> dict[str, object]:
+    return {
+        "window": asdict(window.window),
+        "input_prompt": window.input_prompt,
+        "text": window.text,
+        "segments": [_segment_payload(segment) for segment in window.segments],
+        "language": window.language,
+    }
+
+
+def _segment_payload(segment: TranscriptSegment) -> dict[str, object]:
+    payload = asdict(segment)
+    if payload.get("speaker") is None:
+        del payload["speaker"]
+    return payload
 
 
 def plan_inference_windows(
