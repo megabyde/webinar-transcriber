@@ -1,7 +1,7 @@
 """Tests for optional cloud LLM helpers."""
 
 import json
-from threading import Event
+from threading import Event, Lock
 from types import SimpleNamespace
 from typing import cast
 
@@ -406,20 +406,42 @@ class TestInstructorLlmProcessor:
 
     def test_polishes_each_section_text(self) -> None:
         progress_updates: list[int] = []
-        fake_client = self.FakeClient([
-            (
-                SectionTextResponse(
-                    tldr="Intro recap.", transcript_text="Intro review and project status update."
-                ),
-                self.FakeCompletion({"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}),
-            ),
-            (
-                SectionTextResponse(
-                    tldr="Agenda recap.", transcript_text="Agenda review and project status update."
-                ),
-                self.FakeCompletion({"input_tokens": 6, "output_tokens": 5, "total_tokens": 11}),
-            ),
-        ])
+
+        class SectionAwareClient:
+            def __init__(self) -> None:
+                self.calls: list[dict[str, object]] = []
+                self._lock = Lock()
+
+            def create_with_completion(self, **kwargs):
+                with self._lock:
+                    self.calls.append(kwargs)
+                messages = cast("list[dict[str, str]]", kwargs["messages"])
+                payload = json.loads(messages[1]["content"])
+                if payload["id"] == "section-1":
+                    return (
+                        SectionTextResponse(
+                            tldr="Intro recap.",
+                            transcript_text="Intro review and project status update.",
+                        ),
+                        TestInstructorLlmProcessor.FakeCompletion({
+                            "input_tokens": 5,
+                            "output_tokens": 4,
+                            "total_tokens": 9,
+                        }),
+                    )
+                return (
+                    SectionTextResponse(
+                        tldr="Agenda recap.",
+                        transcript_text="Agenda review and project status update.",
+                    ),
+                    TestInstructorLlmProcessor.FakeCompletion({
+                        "input_tokens": 6,
+                        "output_tokens": 5,
+                        "total_tokens": 11,
+                    }),
+                )
+
+        fake_client = SectionAwareClient()
 
         processor = InstructorLLMProcessor(
             client=fake_client, provider_name="openai", model_name="gpt-test"
