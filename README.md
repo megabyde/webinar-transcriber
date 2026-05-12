@@ -1,7 +1,7 @@
 # Webinar Transcriber
 
 [![CI](https://github.com/megabyde/webinar-transcriber/actions/workflows/ci.yml/badge.svg)](https://github.com/megabyde/webinar-transcriber/actions/workflows/ci.yml)
-[![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/release/python-3120/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![Coverage 100%](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/megabyde/webinar-transcriber/actions/workflows/ci.yml)
 [![Ruff](https://img.shields.io/badge/lint-ruff-D7FF64?logo=ruff&logoColor=1D2B34)](https://docs.astral.sh/ruff/)
 [![uv](https://img.shields.io/badge/package-uv-5C5CFF?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
@@ -20,11 +20,14 @@ provider-backed LLM refinement can polish section text and add summary bullets, 
 section titles, and section TL;DRs on top of that local output, but it does not replace the base
 pipeline.
 
+> [!NOTE]
+> The core pipeline runs locally. Cloud access is used only when you explicitly pass `--llm`.
+
 ## Install
 
 ### Prerequisites
 
-- Python 3.12 and `uv`.
+- Python 3.12+ and `uv`.
 - CUDA source builds also require a C/C++ compiler, `cmake`, and a working CUDA toolkit (`nvcc` on
   `PATH`, `CUDA_HOME` set).
 
@@ -52,10 +55,12 @@ webinar-transcriber --help
 
 Use the matching Make target for the install you need:
 
-- `make install`: standard local CLI install.
-- `make install-llm`: CLI plus optional OpenAI/Anthropic LLM dependencies.
-- `make install-cuda`: CLI with `pywhispercpp` rebuilt from source for NVIDIA.
-- `make uninstall`: remove the installed `webinar-transcriber` uv tool.
+| Command             | Installs                                                |
+| ------------------- | ------------------------------------------------------- |
+| `make install`      | Standard local CLI install.                             |
+| `make install-llm`  | CLI plus optional OpenAI/Anthropic LLM dependencies.    |
+| `make install-cuda` | CLI with `pywhispercpp` rebuilt from source for NVIDIA. |
+| `make uninstall`    | Removes the installed `webinar-transcriber` uv tool.    |
 
 The standard and LLM install targets pull the published `pywhispercpp` wheels from PyPI. On Linux
 and Windows, those wheels use the CPU backend. On macOS, the Apple Silicon wheels include Metal
@@ -65,6 +70,10 @@ base install does not pull PyTorch or another large deep-learning framework. The
 the active backend after a run, inspect `diagnostics.json` → `asr_pipeline.system_info`. Native
 whisper.cpp initialization and teardown logs are written to `whisper-cpp.log` in the run directory.
 
+> [!TIP]
+> The base install does not pull PyTorch. VAD uses the bundled Silero ONNX model through
+> `sherpa-onnx`, and Whisper inference runs through `whisper.cpp`.
+
 To inspect all available project commands:
 
 ```bash
@@ -72,6 +81,10 @@ make help
 ```
 
 ### NVIDIA (CUDA on Linux or Windows)
+
+> [!CAUTION]
+> CUDA installs rebuild `pywhispercpp` locally and depend on your system CUDA toolkit. Use the
+> standard install unless you specifically need NVIDIA acceleration.
 
 CUDA is the only supported path that builds `pywhispercpp` from source. Use the CUDA target that
 matches your workflow:
@@ -87,6 +100,10 @@ All usage examples below assume `webinar-transcriber` is available on your `PATH
 
 `webinar-transcriber` is a single root command, not a subcommand CLI. By default, it writes a fresh
 run directory under `runs/`. Use `--output-dir` to choose a specific location.
+
+> [!TIP]
+> Use a fresh `--output-dir` for reproducible comparisons. Existing output directories are not
+> overwritten.
 
 ```bash
 webinar-transcriber INPUT
@@ -112,6 +129,9 @@ Supported providers:
 
 The base install does not include the optional provider SDKs. If you want to use `--llm`, reinstall
 the CLI from this checkout with the `llm` extra:
+
+> [!IMPORTANT]
+> `--llm` requires the LLM extra. Install it first with `make install-llm`.
 
 ```bash
 make install-llm
@@ -145,11 +165,19 @@ webinar-transcriber INPUT --diarize
 webinar-transcriber INPUT --diarize --diarize-speakers 4
 ```
 
+> [!WARNING]
+> Pass `--diarize-speakers` only when the exact speaker count is known. A wrong count can force poor
+> speaker labels; omit the option to let sherpa estimate the count.
+
 Diarization runs entirely locally through `sherpa-onnx`; it does not use an API key. The first
 diarized run downloads the segmentation and speaker-embedding models into
 `~/.cache/webinar-transcriber/diarization`. Set `WEBINAR_DIARIZATION_CACHE_DIR` to use another cache
 path or to point at preloaded model files. Omit `--diarize-speakers` to let sherpa estimate the
 speaker count; provide it only when the exact number of speakers is known.
+
+> [!NOTE]
+> Speaker labels are anonymous and stable within a run: `S1`, `S2`, and so on, ordered by first
+> appearance in the timeline.
 
 When enabled, reports prefix transcript paragraphs with stable labels such as `S1` and `S2`, ordered
 by first appearance. The JSON artifacts include a `speaker` field on transcript segments and a
@@ -166,10 +194,12 @@ Successful default runs write:
 
 Depending on options and input type, successful default runs also write:
 
-- `transcription-audio.mp3` with `--keep-audio`
-- `transcription-audio.wav` or `transcription-audio.mp3` with `--keep-audio FORMAT`
-- `scenes.json` and `frames/` for video input
-- `diarization.json` and speaker-labeled transcript segments with `--diarize`
+| Artifact                                                   | When written          |
+| ---------------------------------------------------------- | --------------------- |
+| `transcription-audio.mp3`                                  | `--keep-audio`        |
+| `transcription-audio.wav` or `transcription-audio.mp3`     | `--keep-audio FORMAT` |
+| `scenes.json` and `frames/`                                | Video input           |
+| `diarization.json` and speaker-labeled transcript segments | `--diarize`           |
 
 Failed runs also write `diagnostics.json` once the run directory exists, though they may still leave
 only partial intermediate artifacts and no final report outputs.
@@ -177,20 +207,32 @@ only partial intermediate artifacts and no final report outputs.
 ### How It Works
 
 1. Probe the input and prepare deterministic transcription audio. This means a mono, `16 kHz`,
-   `16-bit PCM WAV` file that the downstream pipeline can treat as a stable contract instead of
-   re-checking format details at every stage.
+   `16-bit PCM WAV` file that downstream stages can treat as a stable contract.
 1. Prepare the local `whisper.cpp` runtime. This loads the selected model identifier or GGML model
    path, resolves the execution backend, and records runtime details for diagnostics and CLI
    progress reporting.
 1. Detect speech regions with the bundled Silero VAD ONNX model.
-1. Create ASR windows from the detected speech regions.
+   - Detected speech is padded and overlapping padded regions are merged.
+1. Plan ASR windows from the detected speech regions.
+   - Long regions are split into bounded windows.
+   - Adjacent windows overlap slightly so Whisper has enough context at window boundaries.
 1. Transcribe the windows locally with `whisper.cpp`.
-1. Reconcile adjacent windows into one transcript.
-1. Optionally diarize normalized audio locally and attach speaker labels to transcript segments.
+   - Each decoded window produces timestamped transcript segments in the original media timeline.
+1. Reconcile decoded windows into one transcript.
+   - Boundary overlap is deduplicated.
+   - Invalid or empty segments are dropped.
+   - The final segment list is normalized before report generation.
+   - Normalization merges short adjacent transcript segments when the gap is small enough.
+1. Optionally diarize normalized audio locally.
+   - Speaker labels are attached to transcript segments by time overlap with speaker turns.
 1. Detect scenes and extract representative frames for video input.
-1. Build report sections with local heuristics. For audio-only inputs, sectioning is best-effort and
-   uses speech gaps; LLM refinement is the preferred path for stronger headings and metadata.
-1. Optionally polish the report with an LLM, including summary bullets and action items.
+1. Build report sections with local heuristics.
+   - Video sections align transcript segments with scene times.
+   - Audio-only sectioning is best-effort and uses speech gaps.
+   - LLM refinement is the preferred path for stronger headings and metadata.
+1. Optionally polish the report with an LLM.
+   - The LLM can refine section text, summary bullets, action items, section titles, and section
+     TL;DRs.
 1. Write report, diagnostic, and intermediate artifacts.
 
 ## Advanced Usage
@@ -267,7 +309,7 @@ runs/<timestamp>_<basename>/
 
 ### Local Setup
 
-1. Install Python 3.12 and `uv`.
+1. Install Python 3.12+ and `uv`.
 1. Sync the checkout environment you need:
 
 - `make sync`: standard development and test dependencies.
@@ -293,7 +335,7 @@ uv run webinar-transcriber INPUT
 
 ### Toolchain
 
-- Python 3.12
+- Python 3.12+
 - `uv`
 - `ruff`
 - `ty`

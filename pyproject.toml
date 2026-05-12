@@ -59,6 +59,8 @@ dev = [
     "pytest-cov>=7.1.0,<8.0.0",
     "ruff>=0.15.7,<1.0.0",
     "ty>=0.0.25,<1.0.0",
+    "mdformat-gfm>=1.0.0,<2.0.0",
+    "mdformat-gfm-alerts>=2.0.0,<3.0.0",
 ]
 
 [tool.pytest.ini_options]
