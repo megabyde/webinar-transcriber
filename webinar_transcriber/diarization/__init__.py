@@ -6,12 +6,10 @@ from dataclasses import replace
 
 from webinar_transcriber.models import SpeakerTurn, TranscriptSegment
 
-from .config import DEFAULT_MAX_SPEAKERS
 from .contracts import DiarizationProcessingError, Diarizer
 from .sherpa_diarizer import SherpaOnnxDiarizer, normalize_speaker_labels
 
 __all__ = [
-    "DEFAULT_MAX_SPEAKERS",
     "DiarizationProcessingError",
     "Diarizer",
     "SherpaOnnxDiarizer",

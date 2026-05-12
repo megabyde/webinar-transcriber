@@ -32,7 +32,7 @@ class Diarizer(Protocol):
         samples: np.ndarray,
         sample_rate: int,
         *,
-        max_speakers: int,
+        speaker_count: int | None,
         progress_callback: Callable[[int, int], None] | None = None,
     ) -> list[SpeakerTurn]:
         """Return speaker turns for normalized audio samples."""

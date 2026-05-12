@@ -171,6 +171,8 @@ class RichStageReporter(BaseStageReporter):
         table.add_row("Diagnostics", Text(str(artifacts.layout.diagnostics_path), style="cyan"))
         table.add_row("Language", Text(artifacts.report.detected_language or "unknown"))
         table.add_row("Sections", Text(str(len(artifacts.report.sections))))
+        if processing_detail := _processing_detail(artifacts):
+            table.add_row("Processing", Text(processing_detail))
         table.add_row("Warnings", warning_text)
         self._console.print()
         self._console.print(
@@ -220,3 +222,27 @@ def _rate_text(*, completed: float, elapsed_sec: float, rate_label: object) -> s
     rate = completed / elapsed_sec
     display_rate = f"{rate:.0f}" if rate >= 100 else f"{rate:.1f}"
     return f"{display_rate} {rate_label}"
+
+
+def _processing_detail(artifacts: ProcessArtifacts) -> str | None:
+    total_sec = sum(artifacts.diagnostics.stage_durations_sec.values())
+    if total_sec <= 0:  # pragma: no cover - defensive fallback for malformed diagnostics
+        return None
+
+    duration_text = _duration_text(total_sec)
+    media_duration_sec = artifacts.media_asset.duration_sec
+    if media_duration_sec <= 0:  # pragma: no cover - media probing guarantees duration
+        return duration_text
+    rtf = format(round(media_duration_sec / total_sec, 2), "g")
+    return f"{duration_text} | RTF {rtf}x"
+
+
+def _duration_text(duration_sec: float) -> str:
+    total_seconds = round(duration_sec)
+    minutes, seconds = divmod(total_seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes:02d}m {seconds:02d}s"
+    if minutes:
+        return f"{minutes}m {seconds:02d}s"
+    return f"{seconds}s"

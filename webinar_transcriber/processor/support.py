@@ -134,10 +134,19 @@ def window_transcription_stage_detail(
 ) -> str:
     """Return the transcribe-stage summary with window count and real-time factor."""
     details = [count_label(window_count, "window")]
-    if total_duration_sec > 0 and elapsed_sec > 0:
-        realtime_multiple = format(round(total_duration_sec / elapsed_sec, 2), "g")
-        details.append(f"RTF {realtime_multiple}x")
+    if rtf := realtime_factor_detail(
+        total_duration_sec=total_duration_sec, elapsed_sec=elapsed_sec
+    ):
+        details.append(rtf)
     return " | ".join(details)
+
+
+def realtime_factor_detail(*, total_duration_sec: float, elapsed_sec: float) -> str | None:
+    """Return a compact real-time factor label for an audio-processing stage."""
+    if total_duration_sec <= 0 or elapsed_sec <= 0:
+        return None
+    realtime_multiple = format(round(total_duration_sec / elapsed_sec, 2), "g")
+    return f"RTF {realtime_multiple}x"
 
 
 def _llm_runtime_detail(*, provider_name: str | None, model_name: str | None) -> str:

@@ -37,6 +37,7 @@ def run_report_phase(
     normalized_transcription: TranscriptionResult,
     enable_llm: bool,
     llm_processor: LLMProcessor | None,
+    llm_section_max_workers: int | None,
     ctx: RunContext,
 ) -> tuple[ReportDocument, list[Scene], list[SlideFrame]]:
     """Run the video, structure, optional LLM, and export half of the pipeline.
@@ -50,6 +51,7 @@ def run_report_phase(
         reporter=ctx.reporter,
         warnings=ctx.warnings,
         llm_runtime=ctx.llm_runtime,
+        section_max_workers=llm_section_max_workers,
     )
 
     scenes: list[Scene] = []

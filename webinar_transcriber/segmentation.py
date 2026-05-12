@@ -47,6 +47,7 @@ def detect_speech_regions(
     sample_rate: int,
     *,
     settings: VadSettings = DEFAULT_VAD_SETTINGS,
+    threads: int | None = None,
     progress_callback: Callable[[float, int], None] | None = None,
 ) -> tuple[list[SpeechRegion], list[str]]:
     """Return coarse Silero speech regions and any warnings emitted during detection."""
@@ -66,6 +67,7 @@ def detect_speech_regions(
         min_speech_duration_ms=settings.min_speech_duration_ms,
         min_silence_duration_ms=settings.min_silence_duration_ms,
         speech_pad_ms=settings.speech_region_pad_ms,
+        threads=threads,
         progress_callback=progress_callback,
     )
     if timestamps is None:
@@ -124,6 +126,7 @@ def _silero_speech_timestamps(
     min_speech_duration_ms: int,
     min_silence_duration_ms: int,
     speech_pad_ms: int,
+    threads: int | None = None,
     progress_callback: Callable[[float, int], None] | None = None,
 ) -> list[dict[str, int]] | None:
     if sample_rate != NORMALIZED_SAMPLE_RATE:
@@ -140,6 +143,7 @@ def _silero_speech_timestamps(
         config.silero_vad.min_speech_duration = min_speech_duration_ms / 1000.0
         config.silero_vad.min_silence_duration = min_silence_duration_ms / 1000.0
         config.sample_rate = sample_rate
+        config.num_threads = max(1, threads or 1)
         detector = sherpa_onnx.VoiceActivityDetector(
             config, buffer_size_in_seconds=SHERPA_VAD_BUFFER_SIZE_SEC
         )

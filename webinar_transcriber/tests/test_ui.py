@@ -9,7 +9,12 @@ import pytest
 from rich.console import Console
 
 from webinar_transcriber.reporter import BaseStageReporter
-from webinar_transcriber.ui import RichStageReporter, _count_text, _rate_text
+from webinar_transcriber.ui import (
+    RichStageReporter,
+    _count_text,
+    _duration_text,
+    _rate_text,
+)
 
 if TYPE_CHECKING:
     from webinar_transcriber.processor import ProcessArtifacts
@@ -43,6 +48,10 @@ class TestFormatHelpers:
         assert formatted_count == ""
         assert rate_text == ""
 
+    def test_duration_text_formats_minutes_and_hours(self) -> None:
+        assert _duration_text(65.0) == "1m 05s"
+        assert _duration_text(3661.0) == "1h 01m 01s"
+
 
 class TestRichStageReporter:
     def test_begin_run_prints_input_name(self) -> None:
@@ -65,6 +74,10 @@ class TestRichStageReporter:
                 report=SimpleNamespace(
                     detected_language="ru", sections=[object(), object()], warnings=["warning one"]
                 ),
+                diagnostics=SimpleNamespace(
+                    stage_durations_sec={"prepare": 1.0, "transcribe": 9.0}
+                ),
+                media_asset=SimpleNamespace(duration_sec=50.0),
             ),
         )
 
@@ -80,6 +93,8 @@ class TestRichStageReporter:
         assert "ru" in output
         assert "Sections" in output
         assert "2" in output
+        assert "Processing" in output
+        assert "10s | RTF 5x" in output
         assert "Warnings" in output
         assert "1" in output
 

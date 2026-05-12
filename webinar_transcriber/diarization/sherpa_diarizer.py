@@ -37,16 +37,36 @@ from .contracts import DiarizationProcessingError
 if TYPE_CHECKING:
     from collections.abc import Callable
     from types import ModuleType
+    from typing import Protocol
 
     import numpy as np
+
+    class _DiarizationItem(Protocol):
+        start: float
+        end: float
+        speaker: object
+
+    class _DiarizationResult(Protocol):
+        def sort_by_start_time(self) -> list[_DiarizationItem]: ...
+
+    class _NativeDiarizer(Protocol):
+        def process(
+            self,
+            samples: np.ndarray,
+            *,
+            callback: Callable[[int, int], int] | None = None,
+        ) -> _DiarizationResult: ...
 
 
 class SherpaOnnxDiarizer:
     """Local speaker diarizer backed by sherpa-onnx."""
 
-    def __init__(self, *, cache_dir: Path | None = None) -> None:
+    def __init__(self, *, cache_dir: Path | None = None, threads: int | None = None) -> None:
         """Initialize a lazy sherpa-onnx diarizer."""
         self._cache_dir = cache_dir or default_cache_dir()
+        self._threads = max(1, threads) if threads is not None else None
+        self._prepared_num_clusters: int | None = None
+        self._prepared_diarizer: _NativeDiarizer | None = None
 
     @property
     def model_name(self) -> str:
@@ -66,7 +86,7 @@ class SherpaOnnxDiarizer:
         samples: np.ndarray,
         sample_rate: int,
         *,
-        max_speakers: int,
+        speaker_count: int | None,
         progress_callback: Callable[[int, int], None] | None = None,
     ) -> list[SpeakerTurn]:
         """Return speaker turns for normalized audio samples."""
@@ -75,44 +95,52 @@ class SherpaOnnxDiarizer:
                 "Speaker diarization expects normalized 16000 Hz audio."
             )
 
+        num_clusters = speaker_count or -1
+        if self._prepared_diarizer is None or self._prepared_num_clusters != num_clusters:
+            self.prepare(speaker_count=speaker_count)
+        if self._prepared_diarizer is None:  # pragma: no cover - prepare always sets this
+            raise DiarizationProcessingError("Speaker diarization model was not prepared.")
+
+        turns = self._run_diarization(
+            self._prepared_diarizer,
+            samples,
+            progress_callback=progress_callback,
+        )
+        return normalize_speaker_labels(turns)
+
+    def prepare(self, *, speaker_count: int | None) -> None:
+        """Load diarization models and construct the native diarizer."""
         sherpa_onnx = _load_sherpa_onnx()
         if sherpa_onnx is None:
             raise DiarizationProcessingError("sherpa-onnx is unavailable for speaker diarization.")
 
         paths = ensure_default_models(self._cache_dir)
-        turns = self._run_diarization(
+        num_clusters = speaker_count or -1
+        self._prepared_diarizer = self._build_diarizer(
             sherpa_onnx,
-            samples,
             paths=paths,
-            num_clusters=-1,
-            progress_callback=progress_callback,
+            num_clusters=num_clusters,
         )
-        if _speaker_count(turns) > max_speakers:
-            turns = self._run_diarization(
-                sherpa_onnx,
-                samples,
-                paths=paths,
-                num_clusters=max_speakers,
-                progress_callback=progress_callback,
-            )
-        return normalize_speaker_labels(turns)
+        self._prepared_num_clusters = num_clusters
 
-    def _run_diarization(
+    def _build_diarizer(
         self,
         sherpa_onnx: ModuleType,
-        samples: np.ndarray,
         *,
         paths: DiarizationModelPaths,
         num_clusters: int,
-        progress_callback: Callable[[int, int], None] | None,
-    ) -> list[SpeakerTurn]:
+    ) -> _NativeDiarizer:
         config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
             segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
                 pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
                     model=str(paths.segmentation_model)
-                )
+                ),
+                num_threads=self._threads or 1,
             ),
-            embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(paths.embedding_model)),
+            embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(
+                model=str(paths.embedding_model),
+                num_threads=self._threads or 1,
+            ),
             clustering=sherpa_onnx.FastClusteringConfig(
                 num_clusters=num_clusters, threshold=DEFAULT_CLUSTER_THRESHOLD
             ),
@@ -123,7 +151,18 @@ class SherpaOnnxDiarizer:
             raise DiarizationProcessingError("Speaker diarization model configuration is invalid.")
 
         try:
-            diarizer = sherpa_onnx.OfflineSpeakerDiarization(config)
+            return sherpa_onnx.OfflineSpeakerDiarization(config)
+        except RuntimeError as error:
+            raise DiarizationProcessingError(str(error)) from error
+
+    def _run_diarization(
+        self,
+        diarizer: _NativeDiarizer,
+        samples: np.ndarray,
+        *,
+        progress_callback: Callable[[int, int], None] | None,
+    ) -> list[SpeakerTurn]:
+        try:
             result = diarizer.process(samples, callback=_sherpa_progress(progress_callback))
         except RuntimeError as error:
             raise DiarizationProcessingError(str(error)) from error
@@ -173,10 +212,6 @@ def _sherpa_progress(
         return 0
 
     return callback
-
-
-def _speaker_count(turns: list[SpeakerTurn]) -> int:
-    return len({turn.speaker for turn in turns})
 
 
 def _ensure_segmentation_model(model_path: Path) -> None:

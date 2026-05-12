@@ -37,6 +37,7 @@ def resolve_llm_processor(
     reporter: BaseStageReporter,
     warnings: list[str],
     llm_runtime: LLMRuntimeState,
+    section_max_workers: int | None = None,
 ) -> LLMProcessor | None:
     """Resolve the optional LLM processor and record configuration failures as warnings.
 
@@ -52,7 +53,7 @@ def resolve_llm_processor(
         return llm_processor
 
     try:
-        resolved_processor = build_llm_processor_from_env()
+        resolved_processor = build_llm_processor_from_env(section_max_workers=section_max_workers)
     except LLMConfigurationError as error:
         warnings.append(str(error))
         reporter.warn(str(error))
