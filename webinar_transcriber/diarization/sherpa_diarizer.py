@@ -7,32 +7,65 @@ import importlib
 import tarfile
 import urllib.error
 import urllib.request
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from importlib import metadata
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from webinar_transcriber.models import SpeakerTurn
-from webinar_transcriber.normalized_audio import NORMALIZED_SAMPLE_RATE
 
-from .config import (
-    DEFAULT_CLUSTER_THRESHOLD,
-    DEFAULT_DIARIZATION_MODEL,
-    DEFAULT_MIN_DURATION_OFF_SEC,
-    DEFAULT_MIN_DURATION_ON_SEC,
-    EMBEDDING_MODEL_SHA256,
-    EMBEDDING_MODEL_URL,
-    SEGMENTATION_ARCHIVE_SHA256,
-    SEGMENTATION_ARCHIVE_URL,
-    SEGMENTATION_MODEL_DIR,
-    SEGMENTATION_MODEL_FILE,
-    SEGMENTATION_MODEL_SHA256,
-    DiarizationModelPaths,
-    default_cache_dir,
-    default_model_paths,
-)
 from .contracts import DiarizationProcessingError
+
+CLUSTER_THRESHOLD = 0.5
+MIN_DURATION_ON_SEC = 0.3
+MIN_DURATION_OFF_SEC = 0.5
+DIARIZATION_MODEL = "pyannote-segmentation-3.0-fp32+nemo-titanet-small"
+
+
+@dataclass(frozen=True)
+class _SegmentationModel:
+    directory: str
+    file_name: str
+    archive_url: str
+    archive_sha256: str
+    model_sha256: str
+
+
+@dataclass(frozen=True)
+class _EmbeddingModel:
+    file_name: str
+    url: str
+    sha256: str
+
+
+SEGMENTATION_MODEL = _SegmentationModel(
+    directory="sherpa-onnx-pyannote-segmentation-3-0",
+    file_name="model.onnx",
+    archive_url=(
+        "https://github.com/k2-fsa/sherpa-onnx/releases/download/"
+        "speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
+    ),
+    archive_sha256="24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488",
+    model_sha256="220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079",
+)
+EMBEDDING_MODEL = _EmbeddingModel(
+    file_name="nemo_en_titanet_small.onnx",
+    url=(
+        "https://github.com/k2-fsa/sherpa-onnx/releases/download/"
+        "speaker-recongition-models/nemo_en_titanet_small.onnx"
+    ),
+    sha256="ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e",
+)
+
+
+@dataclass(frozen=True)
+class DiarizationModelPaths:
+    """Resolved local model paths for sherpa-onnx diarization."""
+
+    segmentation_model: Path
+    embedding_model: Path
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -61,17 +94,11 @@ if TYPE_CHECKING:
 class SherpaOnnxDiarizer:
     """Local speaker diarizer backed by sherpa-onnx."""
 
-    def __init__(self, *, cache_dir: Path | None = None, threads: int | None = None) -> None:
+    def __init__(self, *, threads: int, cache_dir: Path | None = None) -> None:
         """Initialize a lazy sherpa-onnx diarizer."""
         self._cache_dir = cache_dir or default_cache_dir()
-        self._threads = max(1, threads) if threads is not None else None
-        self._prepared_num_clusters: int | None = None
+        self._threads = threads
         self._prepared_diarizer: _NativeDiarizer | None = None
-
-    @property
-    def model_name(self) -> str:
-        """Return a human-facing model label."""
-        return DEFAULT_DIARIZATION_MODEL
 
     @property
     def system_info(self) -> str | None:
@@ -84,25 +111,14 @@ class SherpaOnnxDiarizer:
     def diarize(
         self,
         samples: np.ndarray,
-        sample_rate: int,
         *,
-        speaker_count: int | None,
         progress_callback: Callable[[int, int], None] | None = None,
     ) -> list[SpeakerTurn]:
         """Return speaker turns for normalized audio samples."""
-        if sample_rate != NORMALIZED_SAMPLE_RATE:
-            raise DiarizationProcessingError(
-                "Speaker diarization expects normalized 16000 Hz audio."
-            )
-
-        num_clusters = speaker_count or -1
-        if self._prepared_diarizer is None or self._prepared_num_clusters != num_clusters:
-            self.prepare(speaker_count=speaker_count)
-        if self._prepared_diarizer is None:  # pragma: no cover - prepare always sets this
-            raise DiarizationProcessingError("Speaker diarization model was not prepared.")
+        diarizer = cast("_NativeDiarizer", self._prepared_diarizer)
 
         turns = self._run_diarization(
-            self._prepared_diarizer,
+            diarizer,
             samples,
             progress_callback=progress_callback,
         )
@@ -121,7 +137,6 @@ class SherpaOnnxDiarizer:
             paths=paths,
             num_clusters=num_clusters,
         )
-        self._prepared_num_clusters = num_clusters
 
     def _build_diarizer(
         self,
@@ -135,17 +150,17 @@ class SherpaOnnxDiarizer:
                 pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
                     model=str(paths.segmentation_model)
                 ),
-                num_threads=self._threads or 1,
+                num_threads=self._threads,
             ),
             embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(
                 model=str(paths.embedding_model),
-                num_threads=self._threads or 1,
+                num_threads=self._threads,
             ),
             clustering=sherpa_onnx.FastClusteringConfig(
-                num_clusters=num_clusters, threshold=DEFAULT_CLUSTER_THRESHOLD
+                num_clusters=num_clusters, threshold=CLUSTER_THRESHOLD
             ),
-            min_duration_on=DEFAULT_MIN_DURATION_ON_SEC,
-            min_duration_off=DEFAULT_MIN_DURATION_OFF_SEC,
+            min_duration_on=MIN_DURATION_ON_SEC,
+            min_duration_off=MIN_DURATION_OFF_SEC,
         )
         if not config.validate():
             raise DiarizationProcessingError("Speaker diarization model configuration is invalid.")
@@ -184,10 +199,24 @@ def ensure_default_models(cache_dir: Path | None = None) -> DiarizationModelPath
     _ensure_segmentation_model(paths.segmentation_model)
     _ensure_file(
         paths.embedding_model,
-        url=EMBEDDING_MODEL_URL,
-        expected_sha256=EMBEDDING_MODEL_SHA256,
+        url=EMBEDDING_MODEL.url,
+        expected_sha256=EMBEDDING_MODEL.sha256,
     )
     return paths
+
+
+def default_cache_dir() -> Path:
+    """Return the speaker-diarization model cache directory."""
+    return Path.home() / ".cache" / "webinar-transcriber" / "diarization"
+
+
+def default_model_paths(cache_dir: Path | None = None) -> DiarizationModelPaths:
+    """Return expected local model paths under the configured cache directory."""
+    root = cache_dir or default_cache_dir()
+    return DiarizationModelPaths(
+        segmentation_model=root / SEGMENTATION_MODEL.directory / SEGMENTATION_MODEL.file_name,
+        embedding_model=root / EMBEDDING_MODEL.file_name,
+    )
 
 
 def normalize_speaker_labels(turns: list[SpeakerTurn]) -> list[SpeakerTurn]:
@@ -215,21 +244,21 @@ def _sherpa_progress(
 
 
 def _ensure_segmentation_model(model_path: Path) -> None:
-    if _verified(model_path, SEGMENTATION_MODEL_SHA256):
+    if _verified(model_path, SEGMENTATION_MODEL.model_sha256):
         return
 
-    archive_path = model_path.parent.parent / f"{SEGMENTATION_MODEL_DIR}.tar.bz2"
+    archive_path = model_path.parent.parent / f"{SEGMENTATION_MODEL.directory}.tar.bz2"
     _ensure_file(
         archive_path,
-        url=SEGMENTATION_ARCHIVE_URL,
-        expected_sha256=SEGMENTATION_ARCHIVE_SHA256,
+        url=SEGMENTATION_MODEL.archive_url,
+        expected_sha256=SEGMENTATION_MODEL.archive_sha256,
     )
     model_path.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive_path, "r:bz2") as archive:
-        member = archive.getmember(f"{SEGMENTATION_MODEL_DIR}/{SEGMENTATION_MODEL_FILE}")
+        member = archive.getmember(f"{SEGMENTATION_MODEL.directory}/{SEGMENTATION_MODEL.file_name}")
         archive.extract(member, path=model_path.parent.parent, filter="data")
 
-    if not _verified(model_path, SEGMENTATION_MODEL_SHA256):
+    if not _verified(model_path, SEGMENTATION_MODEL.model_sha256):
         raise DiarizationProcessingError(
             f"Downloaded diarization model failed verification: {model_path}"
         )
@@ -270,5 +299,5 @@ def _verified(path: Path, expected_sha256: str) -> bool:
 def _load_sherpa_onnx() -> ModuleType | None:
     try:
         return importlib.import_module("sherpa_onnx")
-    except ImportError:
+    except ImportError:  # pragma: no cover - optional wheel/import boundary
         return None

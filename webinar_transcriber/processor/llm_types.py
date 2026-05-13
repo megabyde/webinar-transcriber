@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 
@@ -15,3 +15,4 @@ class LLMRuntimeState:
     report_status: Literal["disabled", "applied", "fallback"] = "disabled"
     report_latency_sec: float | None = None
     report_usage: dict[str, int] | None = None
+    response_metadata: list[dict[str, object]] = field(default_factory=list)

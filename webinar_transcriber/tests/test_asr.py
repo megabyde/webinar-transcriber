@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 
 from webinar_transcriber.asr import (
-    DEFAULT_WHISPER_CPP_MODEL_EXAMPLE,
-    DEFAULT_WHISPER_CPP_MODEL_FILENAME,
+    WHISPER_CPP_MODEL_EXAMPLE,
+    WHISPER_CPP_MODEL_FILENAME,
     ASRProcessingError,
     PromptCarryoverSettings,
     WhisperCppTranscriber,
@@ -16,10 +16,10 @@ from webinar_transcriber.asr import (
 )
 from webinar_transcriber.asr.config import (
     DEFAULT_MAX_ASR_THREADS,
-    DEFAULT_WHISPER_ENTROPY_THOLD,
-    DEFAULT_WHISPER_LOGPROB_THOLD,
-    DEFAULT_WHISPER_NO_SPEECH_THOLD,
-    DEFAULT_WHISPER_TEMPERATURE_INC,
+    WHISPER_ENTROPY_THOLD,
+    WHISPER_LOGPROB_THOLD,
+    WHISPER_NO_SPEECH_THOLD,
+    WHISPER_TEMPERATURE_INC,
     default_asr_threads,
 )
 from webinar_transcriber.models import DecodedWindow, InferenceWindow, TranscriptSegment
@@ -42,6 +42,7 @@ class FakeModel:
         self.returned_segments = [[FakeSegment(0, 100, "agenda review")]]
         self.init_error: Exception | None = None
         self.transcribe_error: Exception | None = None
+        self.auto_detect_error: Exception | None = None
 
     def __call__(self, model_name: str, **kwargs) -> "FakeModel":
         self.init_calls.append((model_name, kwargs))
@@ -65,6 +66,8 @@ class FakeModel:
         self, audio_samples: np.ndarray, *, n_threads: int
     ) -> tuple[tuple[str, float], dict[str, float]]:
         self.auto_detect_calls.append((audio_samples.copy(), n_threads))
+        if (auto_detect_error := self.auto_detect_error) is not None:
+            raise auto_detect_error
         return ((self.detected_language, 0.99), {self.detected_language: 0.99})
 
 
@@ -95,13 +98,15 @@ def fake_model(monkeypatch: pytest.MonkeyPatch) -> FakeModel:
 
 class TestWhisperCppTranscriber:
     def test_default_model_uses_builtin_identifier(self) -> None:
-        transcriber = WhisperCppTranscriber()
+        transcriber = WhisperCppTranscriber(threads=4)
 
-        assert transcriber.model_name == DEFAULT_WHISPER_CPP_MODEL_FILENAME
+        assert transcriber.model_name == WHISPER_CPP_MODEL_FILENAME
 
     def test_prepare_model_requires_model_file(self, tmp_path) -> None:
         with pytest.raises(ASRProcessingError, match="model file does not exist") as error:
-            WhisperCppTranscriber(model_name=str(tmp_path / "missing.bin")).prepare_model()
+            WhisperCppTranscriber(
+                model_name=str(tmp_path / "missing.bin"), threads=4
+            ).prepare_model()
 
         message = str(error.value)
         assert "--asr-model" in message
@@ -110,23 +115,23 @@ class TestWhisperCppTranscriber:
     def test_prepare_model_missing_default_model_is_actionable(self, tmp_path) -> None:
         with pytest.raises(ASRProcessingError, match="model file does not exist") as error:
             WhisperCppTranscriber(
-                model_name=str(tmp_path / "missing-default-model.bin")
+                model_name=str(tmp_path / "missing-default-model.bin"), threads=4
             ).prepare_model()
 
         message = str(error.value)
         assert "Download a whisper.cpp model there" in message
-        assert DEFAULT_WHISPER_CPP_MODEL_EXAMPLE in message
+        assert WHISPER_CPP_MODEL_EXAMPLE in message
 
     def test_prepare_model_uses_default_model_identifier(self, fake_model: FakeModel) -> None:
-        transcriber = WhisperCppTranscriber()
+        transcriber = WhisperCppTranscriber(threads=4)
 
         transcriber.prepare_model()
 
-        assert fake_model.init_calls[0][0] == DEFAULT_WHISPER_CPP_MODEL_FILENAME
-        assert transcriber.model_name == DEFAULT_WHISPER_CPP_MODEL_FILENAME
+        assert fake_model.init_calls[0][0] == WHISPER_CPP_MODEL_FILENAME
+        assert transcriber.model_name == WHISPER_CPP_MODEL_FILENAME
 
     def test_prepare_model_uses_explicit_model_identifier(self, fake_model: FakeModel) -> None:
-        transcriber = WhisperCppTranscriber(model_name="base")
+        transcriber = WhisperCppTranscriber(model_name="base", threads=4)
 
         transcriber.prepare_model()
 
@@ -153,7 +158,7 @@ class TestWhisperCppTranscriber:
             "webinar_transcriber.asr.transcriber._disable_tqdm_progress", make_progress_context
         )
 
-        WhisperCppTranscriber().prepare_model()
+        WhisperCppTranscriber(threads=4).prepare_model()
 
         assert progress_context_calls == ["enter", "exit"]
 
@@ -166,10 +171,10 @@ class TestWhisperCppTranscriber:
         assert kwargs["print_progress"] is False
         assert kwargs["no_context"] is True
         assert kwargs["split_on_word"] is False
-        assert kwargs["entropy_thold"] == DEFAULT_WHISPER_ENTROPY_THOLD
-        assert kwargs["logprob_thold"] == DEFAULT_WHISPER_LOGPROB_THOLD
-        assert kwargs["no_speech_thold"] == DEFAULT_WHISPER_NO_SPEECH_THOLD
-        assert kwargs["temperature_inc"] == DEFAULT_WHISPER_TEMPERATURE_INC
+        assert kwargs["entropy_thold"] == WHISPER_ENTROPY_THOLD
+        assert kwargs["logprob_thold"] == WHISPER_LOGPROB_THOLD
+        assert kwargs["no_speech_thold"] == WHISPER_NO_SPEECH_THOLD
+        assert kwargs["temperature_inc"] == WHISPER_TEMPERATURE_INC
 
     def test_prepare_model_redirects_native_output_to_log(
         self, monkeypatch, tmp_path, capfd
@@ -185,7 +190,7 @@ class TestWhisperCppTranscriber:
         install_fake_pywhispercpp(monkeypatch, model=native_model)
         log_path = tmp_path / "whisper-cpp.log"
 
-        transcriber = WhisperCppTranscriber()
+        transcriber = WhisperCppTranscriber(threads=4)
         transcriber.set_log_path(log_path)
         transcriber.prepare_model()
 
@@ -200,20 +205,20 @@ class TestWhisperCppTranscriber:
         fake_model.init_error = RuntimeError("boom")
 
         with pytest.raises(ASRProcessingError, match=r"Could not prepare whisper\.cpp model"):
-            WhisperCppTranscriber().prepare_model()
+            WhisperCppTranscriber(threads=4).prepare_model()
 
     def test_prepare_model_rejects_model_without_native_context(self, monkeypatch) -> None:
         install_fake_pywhispercpp(monkeypatch, model=FakeModelWithNullContext())
 
         with pytest.raises(ASRProcessingError, match=r"Could not prepare whisper\.cpp model"):
-            WhisperCppTranscriber().prepare_model()
+            WhisperCppTranscriber(threads=4).prepare_model()
 
     def test_prepare_model_reads_runtime_details(self, fake_model: FakeModel, tmp_path) -> None:
         fake_model.system_info_value = "METAL = 1"
         model_path = tmp_path / "model.bin"
         model_path.write_text("stub", encoding="utf-8")
 
-        transcriber = WhisperCppTranscriber(model_name=str(model_path))
+        transcriber = WhisperCppTranscriber(model_name=str(model_path), threads=4)
         transcriber.prepare_model()
 
         assert transcriber.device_name == "metal"
@@ -225,7 +230,7 @@ class TestWhisperCppTranscriber:
         model_path = tmp_path / "model.bin"
         model_path.write_text("stub", encoding="utf-8")
 
-        with WhisperCppTranscriber(model_name=str(model_path)) as transcriber:
+        with WhisperCppTranscriber(model_name=str(model_path), threads=4) as transcriber:
             transcriber.prepare_model()
             assert transcriber.system_info == "CPU = 1"
 
@@ -245,7 +250,7 @@ class TestWhisperCppTranscriber:
 
         install_fake_pywhispercpp(monkeypatch, model=NativeTeardownModel())
         log_path = tmp_path / "whisper-cpp.log"
-        transcriber = WhisperCppTranscriber()
+        transcriber = WhisperCppTranscriber(threads=4)
         transcriber.set_log_path(log_path)
         transcriber.prepare_model()
 
@@ -315,7 +320,7 @@ class TestWhisperCppTranscriber:
         install_fake_pywhispercpp(monkeypatch, model=fake_model)
 
         decoded_windows = WhisperCppTranscriber(
-            carryover_settings=PromptCarryoverSettings(enabled=False)
+            threads=4, carryover_settings=PromptCarryoverSettings(enabled=False)
         ).transcribe_inference_windows(
             np.zeros(80_000, dtype=np.float32),
             [
@@ -336,7 +341,9 @@ class TestWhisperCppTranscriber:
     def test_transcribe_inference_windows_uses_forced_language(self, fake_model: FakeModel) -> None:
         fake_model.detected_language = "ru"
 
-        decoded_windows = WhisperCppTranscriber(language="en").transcribe_inference_windows(
+        decoded_windows = WhisperCppTranscriber(
+            threads=4, language="en"
+        ).transcribe_inference_windows(
             np.zeros(16_000, dtype=np.float32),
             [InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
         )
@@ -358,7 +365,7 @@ class TestWhisperCppTranscriber:
             lambda: __import__("contextlib").nullcontext(),
         )
 
-        transcriber = WhisperCppTranscriber()
+        transcriber = WhisperCppTranscriber(threads=4)
         transcriber.prepare_model()
 
         assert transcriber.system_info == "CPU = 1"
@@ -387,7 +394,7 @@ class TestWhisperCppTranscriber:
         self, fake_model: FakeModel
     ) -> None:
         fake_model.returned_segments = [[FakeSegment(-50, 300, "agenda review")]]
-        transcriber = WhisperCppTranscriber()
+        transcriber = WhisperCppTranscriber(threads=4)
 
         decoded_window = transcriber.transcribe_inference_windows(
             np.zeros(32_000, dtype=np.float32),
@@ -403,7 +410,7 @@ class TestWhisperCppTranscriber:
     def test_transcribe_inference_windows_returns_empty_window_for_empty_audio(
         self, fake_model: FakeModel
     ) -> None:
-        transcriber = WhisperCppTranscriber()
+        transcriber = WhisperCppTranscriber(threads=4)
 
         decoded_window = transcriber.transcribe_inference_windows(
             np.zeros(1, dtype=np.float32),
@@ -418,7 +425,7 @@ class TestWhisperCppTranscriber:
     ) -> None:
         fake_model.returned_segments = []
 
-        decoded_window = WhisperCppTranscriber().transcribe_inference_windows(
+        decoded_window = WhisperCppTranscriber(threads=4).transcribe_inference_windows(
             np.zeros(16_000, dtype=np.float32),
             [InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
         )[0]
@@ -426,11 +433,30 @@ class TestWhisperCppTranscriber:
         assert decoded_window.text == ""
         assert decoded_window.segments == []
 
+    def test_transcribe_inference_windows_warns_when_language_detection_fails(
+        self, fake_model: FakeModel
+    ) -> None:
+        fake_model.auto_detect_error = RuntimeError("boom")
+        warnings: list[str] = []
+
+        decoded_window = WhisperCppTranscriber(threads=4).transcribe_inference_windows(
+            np.zeros(16_000, dtype=np.float32),
+            [InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
+            warning_callback=warnings.append,
+        )[0]
+
+        assert decoded_window.language is None
+        assert warnings == [
+            "whisper.cpp language detection failed for window-1; "
+            "transcribing without an explicit language hint."
+        ]
+        assert fake_model.transcribe_calls[0][1] == {}
+
     def test_transcribe_inference_windows_wraps_model_failures(self, fake_model: FakeModel) -> None:
         fake_model.transcribe_error = RuntimeError("boom")
 
         with pytest.raises(ASRProcessingError, match=r"whisper\.cpp inference failed for window-1"):
-            WhisperCppTranscriber().transcribe_inference_windows(
+            WhisperCppTranscriber(threads=4).transcribe_inference_windows(
                 np.zeros(16_000, dtype=np.float32),
                 [InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
             )
@@ -455,9 +481,9 @@ class TestWhisperCppTranscriber:
         assert default_asr_threads() == 4
 
     def test_transcriber_properties_are_safe_before_runtime_is_prepared(self) -> None:
-        transcriber = WhisperCppTranscriber(threads=0)
+        transcriber = WhisperCppTranscriber(threads=4)
 
-        assert transcriber.threads == 1
+        assert transcriber.threads == 4
         assert transcriber.system_info is None
 
     def test_ensure_model_raises_when_prepare_model_does_not_initialize_model(self) -> None:
@@ -466,7 +492,7 @@ class TestWhisperCppTranscriber:
                 return None
 
         with pytest.raises(ASRProcessingError, match="model was not initialized"):
-            BrokenTranscriber(model_name="stub.bin").transcribe_inference_windows(
+            BrokenTranscriber(model_name="stub.bin", threads=4).transcribe_inference_windows(
                 np.zeros(16_000, dtype=np.float32),
                 [InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
             )

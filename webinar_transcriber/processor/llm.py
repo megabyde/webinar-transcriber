@@ -23,7 +23,6 @@ from .support import (
 if TYPE_CHECKING:
     from webinar_transcriber.llm.contracts import LLMProcessor
     from webinar_transcriber.models import ReportDocument
-    from webinar_transcriber.reporter import BaseStageReporter
 
     from .llm_types import LLMRuntimeState
     from .support import ProgressStageHandle
@@ -34,10 +33,9 @@ def resolve_llm_processor(
     *,
     enable_llm: bool,
     llm_processor: LLMProcessor | None,
-    reporter: BaseStageReporter,
-    warnings: list[str],
+    ctx: RunContext,
     llm_runtime: LLMRuntimeState,
-    section_max_workers: int | None = None,
+    threads: int,
 ) -> LLMProcessor | None:
     """Resolve the optional LLM processor and record configuration failures as warnings.
 
@@ -53,10 +51,9 @@ def resolve_llm_processor(
         return llm_processor
 
     try:
-        resolved_processor = build_llm_processor_from_env(section_max_workers=section_max_workers)
+        resolved_processor = build_llm_processor_from_env(threads=threads)
     except LLMConfigurationError as error:
-        warnings.append(str(error))
-        reporter.warn(str(error))
+        ctx.record_warning(str(error))
         llm_runtime.report_status = "fallback"
         return None
 
@@ -70,7 +67,6 @@ def maybe_polish_report(
     *,
     llm_processor: LLMProcessor | None,
     ctx: RunContext,
-    warnings: list[str],
     llm_runtime: LLMRuntimeState,
 ) -> ReportDocument:
     """Optionally run the LLM report-polish flow and record warnings/fallbacks.
@@ -109,8 +105,7 @@ def maybe_polish_report(
                 report, progress_callback=on_section_progress
             )
         except LLMProcessingError as error:
-            warnings.append(str(error))
-            ctx.reporter.warn(str(error))
+            ctx.record_warning(str(error))
             st.set_detail(
                 llm_fallback_detail(
                     provider_name=llm_runtime.provider_name, model_name=llm_runtime.model_name
@@ -122,8 +117,7 @@ def maybe_polish_report(
         section_elapsed_sec = st.elapsed_sec()
         st.set_detail(count_label(polish_plan.section_count, "section"))
     for warning in section_result.warnings:
-        warnings.append(warning)
-        ctx.reporter.warn(warning)
+        ctx.record_warning(warning)
 
     metadata_error: LLMProcessingError | None = None
     with stage(ctx, "llm_report_metadata", summary_label) as st:
@@ -132,8 +126,7 @@ def maybe_polish_report(
                 report, section_transcripts=section_result.section_transcripts
             )
         except LLMProcessingError as error:
-            warnings.append(str(error))
-            ctx.reporter.warn(str(error))
+            ctx.record_warning(str(error))
             st.set_detail(
                 llm_fallback_detail(
                     provider_name=llm_runtime.provider_name, model_name=llm_runtime.model_name
@@ -160,6 +153,7 @@ def maybe_polish_report(
     if metadata_error is not None:
         llm_runtime.report_status = "fallback"
         llm_runtime.report_latency_sec = section_elapsed_sec + metadata_elapsed_sec
+        llm_runtime.response_metadata = section_result.response_metadata
         return report
 
     report_latency_sec = section_elapsed_sec + metadata_elapsed_sec
@@ -182,4 +176,8 @@ def maybe_polish_report(
     llm_runtime.report_status = "applied"
     llm_runtime.report_latency_sec = report_latency_sec
     llm_runtime.report_usage = usage
+    llm_runtime.response_metadata = [
+        *section_result.response_metadata,
+        *metadata_result.response_metadata,
+    ]
     return report

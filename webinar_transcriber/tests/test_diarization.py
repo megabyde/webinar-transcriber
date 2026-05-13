@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import tarfile
+from dataclasses import replace
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Self
@@ -14,15 +15,13 @@ import pytest
 
 import webinar_transcriber.diarization.sherpa_diarizer as sherpa_runtime
 from webinar_transcriber.diarization import assign_speakers
-from webinar_transcriber.diarization.config import (
-    DIARIZATION_CACHE_ENV_VAR,
-    SEGMENTATION_MODEL_DIR,
-    SEGMENTATION_MODEL_FILE,
+from webinar_transcriber.diarization.contracts import DiarizationProcessingError
+from webinar_transcriber.diarization.sherpa_diarizer import (
+    SEGMENTATION_MODEL,
     default_cache_dir,
     default_model_paths,
+    normalize_speaker_labels,
 )
-from webinar_transcriber.diarization.contracts import DiarizationProcessingError
-from webinar_transcriber.diarization.sherpa_diarizer import normalize_speaker_labels
 from webinar_transcriber.models import SpeakerTurn, TranscriptSegment
 
 
@@ -185,46 +184,28 @@ def test_normalize_speaker_labels_orders_by_first_appearance() -> None:
 
 
 class TestConfig:
-    def test_default_cache_dir_uses_home_cache(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv(DIARIZATION_CACHE_ENV_VAR, raising=False)
-
+    def test_default_cache_dir_uses_home_cache(self) -> None:
         cache_dir = default_cache_dir()
 
         assert cache_dir.name == "diarization"
         assert cache_dir.parent.name == "webinar-transcriber"
 
-    def test_default_cache_dir_uses_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv(DIARIZATION_CACHE_ENV_VAR, "~/custom-diarization-cache")
-
-        assert default_cache_dir() == Path("~/custom-diarization-cache").expanduser()
-
-    def test_default_model_paths_use_default_cache_dir(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        monkeypatch.setenv(DIARIZATION_CACHE_ENV_VAR, str(tmp_path))
-
-        paths = default_model_paths()
+    def test_default_model_paths_use_configured_cache_dir(self, tmp_path: Path) -> None:
+        paths = default_model_paths(tmp_path)
 
         assert (
-            paths.segmentation_model == tmp_path / SEGMENTATION_MODEL_DIR / SEGMENTATION_MODEL_FILE
+            paths.segmentation_model
+            == tmp_path / SEGMENTATION_MODEL.directory / SEGMENTATION_MODEL.file_name
         )
         assert paths.embedding_model == tmp_path / "nemo_en_titanet_small.onnx"
 
 
 class TestSherpaOnnxDiarizer:
-    def test_rejects_non_normalized_audio(self) -> None:
-        diarizer = sherpa_runtime.SherpaOnnxDiarizer()
-
-        with pytest.raises(DiarizationProcessingError, match="16000 Hz"):
-            diarizer.diarize(np.zeros(16, dtype=np.float32), 8_000, speaker_count=2)
-
     def test_errors_when_sherpa_is_unavailable(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sherpa_runtime, "_load_sherpa_onnx", lambda: None)
 
         with pytest.raises(DiarizationProcessingError, match="sherpa-onnx is unavailable"):
-            sherpa_runtime.SherpaOnnxDiarizer().diarize(
-                np.zeros(16, dtype=np.float32), 16_000, speaker_count=2
-            )
+            sherpa_runtime.SherpaOnnxDiarizer(threads=1).prepare(speaker_count=2)
 
     def test_runs_auto_clustering_once_and_normalizes_labels(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -249,10 +230,11 @@ class TestSherpaOnnxDiarizer:
         )
         progress: list[tuple[int, int]] = []
 
-        turns = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path, threads=3).diarize(
+        diarizer = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path, threads=3)
+        diarizer.prepare(speaker_count=None)
+
+        turns = diarizer.diarize(
             np.zeros(16, dtype=np.float32),
-            16_000,
-            speaker_count=None,
             progress_callback=lambda processed, total: progress.append((processed, total)),
         )
 
@@ -285,25 +267,25 @@ class TestSherpaOnnxDiarizer:
             ),
         )
 
-        turns = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path).diarize(
+        diarizer = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path, threads=1)
+        diarizer.prepare(speaker_count=2)
+
+        turns = diarizer.diarize(
             np.zeros(16, dtype=np.float32),
-            16_000,
-            speaker_count=2,
         )
 
         assert fake_sherpa.cluster_counts == [2]
         assert [turn.speaker for turn in turns] == ["S1", "S2"]
 
-    def test_exposes_model_name_and_system_info(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_exposes_system_info(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sherpa_runtime.metadata, "version", lambda _name: "1.2.3")
 
-        diarizer = sherpa_runtime.SherpaOnnxDiarizer()
+        diarizer = sherpa_runtime.SherpaOnnxDiarizer(threads=1)
 
-        assert diarizer.model_name == sherpa_runtime.DEFAULT_DIARIZATION_MODEL
         assert diarizer.system_info == "sherpa-onnx 1.2.3"
 
     def test_prepare_rejects_invalid_config(self, tmp_path: Path) -> None:
-        diarizer = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path)
+        diarizer = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path, threads=1)
 
         with pytest.raises(DiarizationProcessingError, match="configuration is invalid"):
             diarizer._build_diarizer(  # noqa: SLF001
@@ -320,7 +302,7 @@ class TestSherpaOnnxDiarizer:
             def OfflineSpeakerDiarization(self, _config):  # noqa: N802
                 raise RuntimeError("native constructor failure")
 
-        diarizer = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path)
+        diarizer = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path, threads=1)
 
         with pytest.raises(DiarizationProcessingError, match="native constructor failure"):
             diarizer._build_diarizer(  # noqa: SLF001
@@ -333,7 +315,7 @@ class TestSherpaOnnxDiarizer:
             )
 
     def test_run_diarization_wraps_runtime_error(self) -> None:
-        diarizer = sherpa_runtime.SherpaOnnxDiarizer()
+        diarizer = sherpa_runtime.SherpaOnnxDiarizer(threads=1)
         fake_sherpa = FakeSherpaModule(runtime_error=RuntimeError("native failure"))
 
         with pytest.raises(DiarizationProcessingError, match="native failure"):
@@ -424,14 +406,21 @@ class TestModelDownload:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         model_bytes = b"segmentation-model"
-        archive_path = tmp_path / f"{SEGMENTATION_MODEL_DIR}.tar.bz2"
-        model_path = tmp_path / SEGMENTATION_MODEL_DIR / SEGMENTATION_MODEL_FILE
+        archive_path = tmp_path / f"{SEGMENTATION_MODEL.directory}.tar.bz2"
+        model_path = tmp_path / SEGMENTATION_MODEL.directory / SEGMENTATION_MODEL.file_name
         with tarfile.open(archive_path, "w:bz2") as archive:
             model_path.parent.mkdir(parents=True)
             model_path.write_bytes(model_bytes)
-            archive.add(model_path, arcname=f"{SEGMENTATION_MODEL_DIR}/{SEGMENTATION_MODEL_FILE}")
+            archive.add(
+                model_path,
+                arcname=f"{SEGMENTATION_MODEL.directory}/{SEGMENTATION_MODEL.file_name}",
+            )
         model_path.unlink()
-        monkeypatch.setattr(sherpa_runtime, "SEGMENTATION_MODEL_SHA256", _sha256(model_bytes))
+        monkeypatch.setattr(
+            sherpa_runtime,
+            "SEGMENTATION_MODEL",
+            replace(SEGMENTATION_MODEL, model_sha256=_sha256(model_bytes)),
+        )
         monkeypatch.setattr(
             sherpa_runtime,
             "_ensure_file",
@@ -446,14 +435,21 @@ class TestModelDownload:
     def test_ensure_segmentation_model_reports_bad_extract(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        archive_path = tmp_path / f"{SEGMENTATION_MODEL_DIR}.tar.bz2"
-        model_path = tmp_path / SEGMENTATION_MODEL_DIR / SEGMENTATION_MODEL_FILE
+        archive_path = tmp_path / f"{SEGMENTATION_MODEL.directory}.tar.bz2"
+        model_path = tmp_path / SEGMENTATION_MODEL.directory / SEGMENTATION_MODEL.file_name
         with tarfile.open(archive_path, "w:bz2") as archive:
             model_path.parent.mkdir(parents=True)
             model_path.write_bytes(b"segmentation-model")
-            archive.add(model_path, arcname=f"{SEGMENTATION_MODEL_DIR}/{SEGMENTATION_MODEL_FILE}")
+            archive.add(
+                model_path,
+                arcname=f"{SEGMENTATION_MODEL.directory}/{SEGMENTATION_MODEL.file_name}",
+            )
         model_path.unlink()
-        monkeypatch.setattr(sherpa_runtime, "SEGMENTATION_MODEL_SHA256", "wrong")
+        monkeypatch.setattr(
+            sherpa_runtime,
+            "SEGMENTATION_MODEL",
+            replace(SEGMENTATION_MODEL, model_sha256="wrong"),
+        )
         monkeypatch.setattr(
             sherpa_runtime,
             "_ensure_file",

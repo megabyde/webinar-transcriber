@@ -7,9 +7,10 @@ from dataclasses import replace
 from webinar_transcriber.models import SpeakerTurn, TranscriptSegment
 
 from .contracts import DiarizationProcessingError, Diarizer
-from .sherpa_diarizer import SherpaOnnxDiarizer, normalize_speaker_labels
+from .sherpa_diarizer import DIARIZATION_MODEL, SherpaOnnxDiarizer, normalize_speaker_labels
 
 __all__ = [
+    "DIARIZATION_MODEL",
     "DiarizationProcessingError",
     "Diarizer",
     "SherpaOnnxDiarizer",
@@ -44,7 +45,7 @@ def _best_turn(segment: TranscriptSegment, turns: list[SpeakerTurn]) -> SpeakerT
         overlap = min(segment.end_sec, turn.end_sec) - max(segment.start_sec, turn.start_sec)
         if overlap <= 0:
             continue
-        midpoint_distance = abs(segment.midpoint - ((turn.start_sec + turn.end_sec) / 2.0))
+        midpoint_distance = abs(segment.midpoint - turn.midpoint)
         if overlap > best_overlap or (
             overlap == best_overlap and midpoint_distance < best_midpoint_distance
         ):

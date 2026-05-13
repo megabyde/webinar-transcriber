@@ -14,6 +14,7 @@ from PIL import Image
 
 from webinar_transcriber.asr import WhisperCppTranscriber
 from webinar_transcriber.diagnostics import write_run_diagnostics
+from webinar_transcriber.diarization import DIARIZATION_MODEL
 from webinar_transcriber.llm.contracts import (
     LLMConfigurationError,
     LLMProcessingError,
@@ -33,7 +34,8 @@ from webinar_transcriber.models import (
     TranscriptSegment,
 )
 from webinar_transcriber.paths import RunLayout
-from webinar_transcriber.processor import ProcessArtifacts, RunContext, process_input
+from webinar_transcriber.processor import ProcessArtifacts, RunContext
+from webinar_transcriber.processor import process_input as _process_input
 from webinar_transcriber.processor.asr_pipeline import plan_inference_windows
 from webinar_transcriber.processor.llm import resolve_llm_processor
 from webinar_transcriber.processor.llm_types import LLMRuntimeState
@@ -41,10 +43,9 @@ from webinar_transcriber.processor.support import (
     asr_runtime_detail,
     realtime_factor_detail,
     stage,
-    window_transcription_stage_detail,
+    transcription_stage_detail,
 )
 from webinar_transcriber.reporter import BaseStageReporter
-from webinar_transcriber.segmentation import VadSettings
 from webinar_transcriber.tests.conftest import (
     FakeTranscriber,
     RecordingReporter,
@@ -66,8 +67,12 @@ EXPECTED_LLM_SECTION_TEXT = (
 )
 
 
-def read_json(path: Path) -> dict[str, Any]:
+def read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def process_input(*args: Any, threads: int = 4, **kwargs: Any) -> ProcessArtifacts:
+    return _process_input(*args, threads=threads, **kwargs)
 
 
 class ConfigurableLLMProcessor:
@@ -128,27 +133,27 @@ class ConfigurableLLMProcessor:
 
 
 class FakeDiarizer:
-    model_name = "fake-diarizer"
     system_info = "fake sherpa"
 
     def __init__(self, turns: list[SpeakerTurn]) -> None:
         self.turns = turns
-        self.calls: list[tuple[int, int | None]] = []
+        self.calls: list[int] = []
+        self.prepare_calls: list[int | None] = []
+
+    def prepare(self, *, speaker_count: int | None) -> None:
+        self.prepare_calls.append(speaker_count)
 
     def diarize(
         self,
         samples: np.ndarray,
-        sample_rate: int,
         *,
-        speaker_count: int | None,
         progress_callback: Callable[[int, int], None] | None = None,
     ) -> list[SpeakerTurn]:
-        self.calls.append((len(samples), speaker_count))
+        self.calls.append(len(samples))
         if progress_callback is not None:
             progress_callback(1, 0)
             progress_callback(1, 2)
             progress_callback(2, 2)
-        assert sample_rate == 16_000
         return self.turns
 
 
@@ -192,9 +197,14 @@ class TestProcessInput:
 
         markdown = artifacts.layout.markdown_report_path.read_text(encoding="utf-8")
         diagnostics_payload = read_json(artifacts.layout.diagnostics_path)
+        metadata_payload = read_json(artifacts.layout.metadata_path)
 
         assert "# Sample Audio" in markdown
         assert "Agenda review and project status update." in markdown
+        assert metadata_payload["media_type"] == "audio"
+        assert metadata_payload["duration_sec"] == 6.0
+        assert "media" not in metadata_payload
+        assert not diagnostics_payload["llm"]["enabled"]
         assert diagnostics_payload["asr_pipeline"]["backend"] == "whisper.cpp"
         assert diagnostics_payload["asr_pipeline"]["model"] == "test-model"
         assert diagnostics_payload["item_counts"]["windows"] == 1
@@ -209,7 +219,8 @@ class TestProcessInput:
         assert ("advance", "vad", 1.0, "1 region") in reporter.progress
         vad_finished = [detail for stage, detail in reporter.finished if stage == "vad"]
         assert len(vad_finished) == 1
-        assert vad_finished[0].startswith("1 region | 1 window | RTF ")
+        assert vad_finished[0].startswith("1 region | RTF ")
+        assert ("plan_windows", "1 window") in reporter.finished
         assert ("start", "transcribe", 6.0, "0 segments") in reporter.progress
         assert ("advance", "transcribe", 6.0, "2 segments") in reporter.progress
 
@@ -244,9 +255,10 @@ class TestProcessInput:
         report_payload = read_json(artifacts.layout.json_report_path)
         diarization_payload = read_json(artifacts.layout.diarization_path)
 
-        assert diarizer.calls == [(16_000, 4)]
+        assert diarizer.calls == [16_000]
+        assert diarizer.prepare_calls == [4]
         assert [segment["speaker"] for segment in transcript_payload["segments"]] == ["S1", "S2"]
-        assert diarization_payload["speaker_turns"] == [
+        assert diarization_payload == [
             {"start_sec": 0.0, "end_sec": 3.2, "speaker": "S1"},
             {"start_sec": 3.2, "end_sec": 6.0, "speaker": "S2"},
         ]
@@ -284,7 +296,6 @@ class TestProcessInput:
         reporter = RecordingReporter()
 
         class PreparingDiarizer:
-            model_name = "fake-diarizer"
             system_info = "fake sherpa"
 
             def __init__(self, *, threads: int | None = None) -> None:
@@ -298,12 +309,10 @@ class TestProcessInput:
             def diarize(
                 self,
                 samples: np.ndarray,
-                sample_rate: int,
                 *,
-                speaker_count: int | None,
                 progress_callback: Callable[[int, int], None] | None = None,
             ) -> list[SpeakerTurn]:
-                del samples, sample_rate, speaker_count
+                del samples
                 if progress_callback is not None:
                     progress_callback(2, 2)
                 return [SpeakerTurn(start_sec=0.0, end_sec=2.0, speaker="S1")]
@@ -333,7 +342,7 @@ class TestProcessInput:
         assert instances
         assert instances[0].threads == transcriber.threads
         assert instances[0].prepare_calls == [1]
-        assert ("prepare_diarization", "fake-diarizer") in reporter.finished
+        assert ("prepare_diarization", DIARIZATION_MODEL) in reporter.finished
 
     def test_uses_vad_regions_as_decode_windows(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -356,7 +365,7 @@ class TestProcessInput:
         )
 
         decoded_windows_payload = read_json(artifacts.layout.decoded_windows_path)
-        assert [window["window"] for window in decoded_windows_payload["decoded_windows"]] == [
+        assert [window["window"] for window in decoded_windows_payload] == [
             {"id": "window-1", "region_index": 0, "start_sec": 0.0, "end_sec": 1.2},
             {"id": "window-2", "region_index": 1, "start_sec": 2.1, "end_sec": 3.0},
         ]
@@ -465,7 +474,7 @@ class TestProcessInput:
             output_dir=tmp_path / "real-run",
             transcriber=FakeTranscriber(),
             keep_audio="wav",
-            vad=VadSettings(enabled=False),
+            vad=False,
         )
 
         kept_audio_path = artifacts.layout.transcription_audio_path()
@@ -495,7 +504,7 @@ class TestProcessInput:
                     ),
                 ]
             ),
-            vad=VadSettings(enabled=False),
+            vad=False,
         )
 
         assert artifacts.layout.metadata_path.exists()
@@ -588,8 +597,9 @@ class TestProcessInput:
                 *,
                 language: str | None = None,
                 progress_callback: Callable[[float, int], None] | None = None,
+                warning_callback: Callable[[str], None] | None = None,
             ) -> list[DecodedWindow]:
-                del audio_samples, language
+                del audio_samples, language, warning_callback
                 if progress_callback is not None:
                     progress_callback(windows[0].end_sec, 1)
                 return [
@@ -871,12 +881,12 @@ class TestProcessorSupport:
         assert reporter.started == [("probe_media", "Probing media")]
         assert reporter.finished == []
 
-    def test_window_transcription_stage_detail_reports_rtf(self) -> None:
-        detail = window_transcription_stage_detail(
-            window_count=1, total_duration_sec=12.5, elapsed_sec=2.5
+    def test_transcription_stage_detail_reports_segments_and_rtf(self) -> None:
+        detail = transcription_stage_detail(
+            segment_count=1, total_duration_sec=12.5, elapsed_sec=2.5
         )
 
-        assert detail == "1 window | RTF 5x"
+        assert detail == "1 segment | RTF 5x"
 
     def test_realtime_factor_detail_hides_invalid_values(self) -> None:
         assert realtime_factor_detail(total_duration_sec=0.0, elapsed_sec=2.5) is None
@@ -891,13 +901,13 @@ class TestProcessorSupport:
         assert asr_runtime_detail(transcriber) == "/tmp/models/local-model.bin | cpu"
 
     def test_transcriber_device_name_is_auto_before_runtime_is_prepared(self) -> None:
-        assert WhisperCppTranscriber().device_name == "auto"
+        assert WhisperCppTranscriber(threads=4).device_name == "auto"
 
     def test_resolve_llm_processor_uses_environment_processor_details(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         reporter = RecordingReporter()
-        warnings: list[str] = []
+        ctx = RunContext(reporter=reporter)
         fake_processor = cast(
             "LLMProcessor", SimpleNamespace(provider_name="openai", model_name="gpt-test")
         )
@@ -906,9 +916,9 @@ class TestProcessorSupport:
         resolved_processor = resolve_llm_processor(
             enable_llm=True,
             llm_processor=fake_processor,
-            reporter=reporter,
-            warnings=warnings,
+            ctx=ctx,
             llm_runtime=runtime,
+            threads=3,
         )
 
         assert resolved_processor is fake_processor
@@ -920,8 +930,8 @@ class TestProcessorSupport:
         )
         build_calls: list[int | None] = []
 
-        def fake_build_llm_processor_from_env(*, section_max_workers: int | None = None):
-            build_calls.append(section_max_workers)
+        def fake_build_llm_processor_from_env(*, threads: int):
+            build_calls.append(threads)
             return env_processor
 
         monkeypatch.setattr(
@@ -933,10 +943,9 @@ class TestProcessorSupport:
         resolved_processor = resolve_llm_processor(
             enable_llm=True,
             llm_processor=None,
-            reporter=reporter,
-            warnings=warnings,
+            ctx=ctx,
             llm_runtime=runtime,
-            section_max_workers=3,
+            threads=3,
         )
 
         assert resolved_processor is env_processor
@@ -953,14 +962,14 @@ class TestProcessorSupport:
         resolved_processor = resolve_llm_processor(
             enable_llm=True,
             llm_processor=None,
-            reporter=reporter,
-            warnings=warnings,
+            ctx=ctx,
             llm_runtime=runtime,
+            threads=3,
         )
 
         assert resolved_processor is None
         assert runtime.report_status == "fallback"
-        assert warnings == ["missing env"]
+        assert ctx.warnings == ["missing env"]
         assert reporter.warnings == ["missing env"]
 
 
@@ -995,6 +1004,13 @@ def llm_success_result(
                     section_tldrs={"section-1": "Updated section TL;DR."},
                     section_transcripts={"section-1": EXPECTED_LLM_SECTION_TEXT},
                     usage={"input_tokens": 8, "output_tokens": 3, "total_tokens": 11},
+                    response_metadata=[
+                        {
+                            "stage": "section_polish",
+                            "section_id": "section-1",
+                            "finish_reason": "stop",
+                        }
+                    ],
                     warnings=[EXPECTED_LLM_WARNING],
                 ),
                 metadata_result=polished_metadata,
@@ -1022,11 +1038,17 @@ class TestProcessInputLlm:
         assert artifacts.diagnostics.llm.model == "test-llm-model"
         assert artifacts.diagnostics.llm.report_status == "applied"
         assert artifacts.diagnostics.llm.report_usage == EXPECTED_LLM_USAGE
+        assert artifacts.diagnostics.llm.response_metadata == [
+            {"stage": "section_polish", "section_id": "section-1", "finish_reason": "stop"}
+        ]
         assert "llm_report_sections" in artifacts.diagnostics.stage_durations_sec
         assert "llm_report_metadata" in artifacts.diagnostics.stage_durations_sec
 
         diagnostics_payload = read_json(artifacts.layout.diagnostics_path)
         assert diagnostics_payload["llm"]["report_usage"] == EXPECTED_LLM_USAGE
+        assert diagnostics_payload["llm"]["response_metadata"] == [
+            {"stage": "section_polish", "section_id": "section-1", "finish_reason": "stop"}
+        ]
         assert diagnostics_payload["warnings"] == [EXPECTED_LLM_WARNING]
 
     def test_preserves_zero_valued_llm_usage_keys(
@@ -1096,8 +1118,9 @@ class TestProcessInputLlm:
                 *,
                 language: str | None = None,
                 progress_callback: Callable[[float, int], None] | None = None,
+                warning_callback: Callable[[str], None] | None = None,
             ) -> list[DecodedWindow]:
-                del audio_samples, language
+                del audio_samples, language, warning_callback
                 segments = [
                     [
                         TranscriptSegment(

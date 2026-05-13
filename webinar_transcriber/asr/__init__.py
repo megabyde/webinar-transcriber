@@ -5,8 +5,8 @@ from __future__ import annotations
 from .carryover import build_prompt_carryover
 from .config import (
     ASR_BACKEND_NAME,
-    DEFAULT_WHISPER_CPP_MODEL_EXAMPLE,
-    DEFAULT_WHISPER_CPP_MODEL_FILENAME,
+    WHISPER_CPP_MODEL_EXAMPLE,
+    WHISPER_CPP_MODEL_FILENAME,
     PromptCarryoverSettings,
     default_asr_threads,
 )
@@ -14,8 +14,8 @@ from .transcriber import ASRProcessingError, WhisperCppTranscriber, device_name_
 
 __all__ = [
     "ASR_BACKEND_NAME",
-    "DEFAULT_WHISPER_CPP_MODEL_EXAMPLE",
-    "DEFAULT_WHISPER_CPP_MODEL_FILENAME",
+    "WHISPER_CPP_MODEL_EXAMPLE",
+    "WHISPER_CPP_MODEL_FILENAME",
     "ASRProcessingError",
     "PromptCarryoverSettings",
     "WhisperCppTranscriber",

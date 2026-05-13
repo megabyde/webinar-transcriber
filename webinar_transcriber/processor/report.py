@@ -12,7 +12,7 @@ import webinar_transcriber.video as video_runtime
 from webinar_transcriber.models import VideoAsset
 
 from .llm import maybe_polish_report, resolve_llm_processor
-from .support import count_label, progress_stage, stage, write_json
+from .support import count_label, counting_progress, progress_stage, stage, write_json
 
 if TYPE_CHECKING:
     from webinar_transcriber.llm.contracts import LLMProcessor
@@ -37,7 +37,7 @@ def run_report_phase(
     normalized_transcription: TranscriptionResult,
     enable_llm: bool,
     llm_processor: LLMProcessor | None,
-    llm_section_max_workers: int | None,
+    threads: int,
     ctx: RunContext,
 ) -> tuple[ReportDocument, list[Scene], list[SlideFrame]]:
     """Run the video, structure, optional LLM, and export half of the pipeline.
@@ -48,20 +48,15 @@ def run_report_phase(
     llm_enhancer = resolve_llm_processor(
         enable_llm=enable_llm,
         llm_processor=llm_processor,
-        reporter=ctx.reporter,
-        warnings=ctx.warnings,
+        ctx=ctx,
         llm_runtime=ctx.llm_runtime,
-        section_max_workers=llm_section_max_workers,
+        threads=threads,
     )
 
     scenes: list[Scene] = []
     slide_frames: list[SlideFrame] = []
     alignment_blocks: list[AlignmentBlock] | None = None
     transcript_segments = normalized_transcription.segments
-
-    def record_warning(message: str) -> None:
-        ctx.warnings.append(message)
-        ctx.reporter.warn(message)
 
     if isinstance(media_asset, VideoAsset):
         detect_scene_total = video_runtime.estimated_scene_sample_count(media_asset.duration_sec)
@@ -76,9 +71,7 @@ def run_report_phase(
             scenes = video_runtime.detect_scenes(
                 input_path,
                 duration_sec=media_asset.duration_sec,
-                progress_callback=lambda sample_count, scene_count: st.advance_to(
-                    float(sample_count), detail=count_label(scene_count, "scene")
-                ),
+                progress_callback=counting_progress(st, "scene"),
             )
             st.advance_to(float(detect_scene_total), detail=count_label(len(scenes), "scene"))
         write_json(layout.scenes_path, {"scenes": [asdict(scene) for scene in scenes]})
@@ -91,7 +84,7 @@ def run_report_phase(
                 scenes,
                 layout.frames_dir,
                 progress_callback=st.advance,
-                warning_callback=record_warning,
+                warning_callback=ctx.record_warning,
             )
             st.set_detail(count_label(len(slide_frames), "frame"))
 
@@ -119,9 +112,7 @@ def run_report_phase(
             normalized_transcription,
             alignment_blocks=alignment_blocks,
             warnings=ctx.warnings,
-            progress_callback=lambda completed_count, section_count: st.advance_to(
-                float(completed_count), detail=count_label(section_count, "section")
-            ),
+            progress_callback=counting_progress(st, "section"),
         )
         st.advance_to(float(structure_total), detail=count_label(len(report.sections), "section"))
 
@@ -142,7 +133,6 @@ def run_report_phase(
         report,
         llm_processor=llm_enhancer,
         ctx=ctx,
-        warnings=ctx.warnings,
         llm_runtime=ctx.llm_runtime,
     )
     report = replace(report, warnings=list(ctx.warnings))
@@ -150,7 +140,7 @@ def run_report_phase(
     with stage(ctx, "export", "Writing artifacts"):
         export_runtime.write_markdown_report(report, layout.markdown_report_path)
         export_runtime.write_docx_report(
-            report, layout.docx_report_path, warning_callback=record_warning
+            report, layout.docx_report_path, warning_callback=ctx.record_warning
         )
         report = replace(report, warnings=list(ctx.warnings))
         export_runtime.write_json_report(report, layout.json_report_path)

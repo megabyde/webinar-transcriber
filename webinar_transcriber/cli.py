@@ -18,9 +18,6 @@ from webinar_transcriber.llm.contracts import LLMConfigurationError, LLMProcessi
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.processor import process_input
-from webinar_transcriber.segmentation import (
-    VadSettings,
-)
 from webinar_transcriber.ui import RichStageReporter
 
 if TYPE_CHECKING:
@@ -124,10 +121,9 @@ def main(
             output_dir=output_dir,
             asr_model=asr_model,
             language=language,
-            vad=VadSettings(enabled=vad),
+            vad=vad,
             carryover=PromptCarryoverSettings(),
             threads=threads,
-            llm_section_max_workers=threads,
             keep_audio=kept_format,
             enable_llm=llm,
             diarize=diarize,
