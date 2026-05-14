@@ -7,6 +7,8 @@ from dataclasses import field as dataclass_field
 from enum import StrEnum
 from typing import Literal
 
+from webinar_transcriber.json_utils import compact_speaker_fields
+
 
 class MediaType(StrEnum):
     """Supported top-level media types."""
@@ -94,7 +96,7 @@ class TranscriptionResult:
         """Return the transcript JSON artifact payload."""
         return {
             "detected_language": self.detected_language,
-            "segments": [asdict(segment) for segment in self.segments],
+            "segments": [compact_speaker_fields(asdict(segment)) for segment in self.segments],
         }
 
 
@@ -129,7 +131,7 @@ class DecodedWindow:
             "window": asdict(self.window),
             "input_prompt": self.input_prompt,
             "text": self.text,
-            "segments": [asdict(segment) for segment in self.segments],
+            "segments": [compact_speaker_fields(asdict(segment)) for segment in self.segments],
             "language": self.language,
         }
 

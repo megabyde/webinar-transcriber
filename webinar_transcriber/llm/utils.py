@@ -7,6 +7,8 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, cast
 
+from webinar_transcriber.text_utils import split_paragraph_blocks
+
 from .contracts import (
     LLMConfigurationError,
     LLMProcessingError,
@@ -191,13 +193,9 @@ def _normalize_paragraph_blocks(text: str) -> str:
     Returns:
         str: The normalized paragraph text.
     """
-    paragraphs = []
-    for block in re.split(r"\n\s*\n+", text):
-        lines = [re.sub(r"[ \t]+", " ", line.strip()) for line in block.strip().splitlines()]
-        paragraph = "\n".join(line for line in lines if line)
-        if paragraph:
-            paragraphs.append(paragraph)
-    return "\n\n".join(paragraphs)
+    return "\n\n".join(
+        split_paragraph_blocks(text, flexible_blank_lines=True, normalize_inline_whitespace=True)
+    )
 
 
 def extract_usage(response: object) -> dict[str, int]:

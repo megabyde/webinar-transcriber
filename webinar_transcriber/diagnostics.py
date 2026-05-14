@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Literal
 
 from webinar_transcriber.models import AsrPipelineDiagnostics, Diagnostics, LlmDiagnostics
+from webinar_transcriber.processor.support import write_json
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -108,10 +108,7 @@ def write_run_diagnostics(
         error=error,
     )
     try:
-        ctx.layout.diagnostics_path.parent.mkdir(parents=True, exist_ok=True)
-        ctx.layout.diagnostics_path.write_text(
-            json.dumps(asdict(diagnostics), indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        write_json(ctx.layout.diagnostics_path, asdict(diagnostics))
     except Exception:  # pragma: no cover - best-effort failed-run diagnostics
         if not suppress_errors:
             raise

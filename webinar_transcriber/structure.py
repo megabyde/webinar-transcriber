@@ -172,10 +172,7 @@ def first_words_title(
 ) -> str:
     """Return a section title from the first meaningful transcript words."""
     text = next((segment.text.strip() for segment in segments if segment.text.strip()), "")
-    if not text:
-        return fallback
-    words = text.split()
-    return " ".join(words[:word_limit]) + ("…" if len(words) > word_limit else "")
+    return _limited_words_title(text, fallback=fallback, word_limit=word_limit, ellipsis=True)
 
 
 def _section_from_segments(
@@ -226,12 +223,21 @@ def sections_from_block(
 
 def title_from_text(text: str, *, fallback: str) -> str:
     """Return a bounded title from transcript text."""
-    cleaned = text.strip().rstrip(".")
+    return _limited_words_title(text.strip().rstrip("."), fallback=fallback, ellipsis=False)
+
+
+def _limited_words_title(
+    text: str, *, fallback: str, word_limit: int = TITLE_WORD_LIMIT, ellipsis: bool
+) -> str:
+    cleaned = text.strip()
     if not cleaned:
         return fallback
 
     words = cleaned.split()
-    return " ".join(words[:TITLE_WORD_LIMIT]) if len(words) > TITLE_WORD_LIMIT else cleaned
+    if len(words) <= word_limit:
+        return cleaned
+    title = " ".join(words[:word_limit])
+    return f"{title}…" if ellipsis else title
 
 
 def derive_title(source_path: str) -> str:

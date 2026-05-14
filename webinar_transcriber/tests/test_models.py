@@ -1,6 +1,7 @@
 """Tests for typed pipeline models."""
 
 from dataclasses import FrozenInstanceError
+from typing import cast
 
 import pytest
 
@@ -15,6 +16,7 @@ from webinar_transcriber.models import (
     ReportSection,
     Scene,
     SpeechRegion,
+    TranscriptionResult,
     TranscriptSegment,
     VideoAsset,
 )
@@ -119,6 +121,27 @@ class TestCoreModels:
         assert diagnostics.model == "test-model"
         assert diagnostics.carryover_enabled
         assert diagnostics.window_count == 4
+
+    def test_transcript_json_compacts_empty_speaker_fields(self) -> None:
+        transcription = TranscriptionResult(
+            segments=[
+                TranscriptSegment(id="segment-1", text="hello", start_sec=0.0, end_sec=1.0),
+                TranscriptSegment(
+                    id="segment-2", text="world", start_sec=1.0, end_sec=2.0, speaker="S1"
+                ),
+            ],
+        )
+
+        payload = transcription.to_json()
+
+        segments = payload["segments"]
+        assert isinstance(segments, list)
+        assert isinstance(segments[0], dict)
+        assert isinstance(segments[1], dict)
+        first_segment = cast("dict[str, object]", segments[0])
+        second_segment = cast("dict[str, object]", segments[1])
+        assert "speaker" not in first_segment
+        assert second_segment["speaker"] == "S1"
 
     def test_inference_window_is_ordered_by_timeline(self) -> None:
         windows = [
