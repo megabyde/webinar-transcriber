@@ -20,7 +20,6 @@ from webinar_transcriber.models import (
 )
 from webinar_transcriber.paths import OutputDirectoryExistsError, RunLayout
 from webinar_transcriber.processor import ProcessArtifacts
-from webinar_transcriber.segmentation import VadSettings
 
 
 def _process_artifacts(input_path, run_dir) -> ProcessArtifacts:
@@ -86,10 +85,9 @@ class TestCli:
             output_dir=None,
             asr_model=None,
             language=None,
-            vad=VadSettings(),
+            vad=True,
             carryover=PromptCarryoverSettings(),
             threads=7,
-            llm_section_max_workers=7,
             keep_audio=None,
             enable_llm=False,
             diarize=False,
@@ -139,10 +137,9 @@ class TestCli:
             output_dir=None,
             asr_model="models/whisper-cpp/custom.bin",
             language="en",
-            vad=VadSettings(enabled=False),
+            vad=False,
             carryover=PromptCarryoverSettings(),
             threads=3,
-            llm_section_max_workers=3,
             keep_audio="mp3",
             enable_llm=True,
             diarize=True,

@@ -21,8 +21,7 @@ from webinar_transcriber.normalized_audio import (
 )
 from webinar_transcriber.segmentation import (
     SHERPA_VAD_BUFFER_SIZE_SEC,
-    VadSettings,
-    _silero_speech_timestamps,
+    _silero_speech_regions,
     detect_speech_regions,
     normalize_regions,
     normalized_audio_duration,
@@ -218,14 +217,15 @@ class TestNormalizedAudio:
     ) -> None:
         progress_updates: list[tuple[float, int]] = []
         monkeypatch.setattr(
-            "webinar_transcriber.segmentation._silero_speech_timestamps",
+            "webinar_transcriber.segmentation._silero_speech_regions",
             lambda *_args, **_kwargs: None,
         )
 
         samples = np.zeros(16_000, dtype=np.float32)
         regions, warnings = detect_speech_regions(
             samples,
-            16_000,
+            enabled=True,
+            threads=1,
             progress_callback=lambda sec, count: progress_updates.append((sec, count)),
         )
 
@@ -236,7 +236,9 @@ class TestNormalizedAudio:
         assert progress_updates == [(1.0, 1)]
 
     def test_detect_speech_regions_returns_empty_for_zero_duration(self) -> None:
-        regions, warnings = detect_speech_regions(np.zeros(0, dtype=np.float32), 16_000)
+        regions, warnings = detect_speech_regions(
+            np.zeros(0, dtype=np.float32), enabled=True, threads=1
+        )
 
         assert regions == []
         assert warnings == []
@@ -245,8 +247,8 @@ class TestNormalizedAudio:
         progress_updates: list[tuple[float, int]] = []
         regions, warnings = detect_speech_regions(
             np.zeros(8_000, dtype=np.float32),
-            16_000,
-            settings=VadSettings(enabled=False),
+            enabled=False,
+            threads=1,
             progress_callback=lambda sec, count: progress_updates.append((sec, count)),
         )
 
@@ -255,19 +257,21 @@ class TestNormalizedAudio:
         assert warnings == []
         assert progress_updates == [(0.5, 1)]
 
-    def test_detect_speech_regions_drops_empty_timestamps(self, monkeypatch) -> None:
+    def test_detect_speech_regions_drops_empty_regions(self, monkeypatch) -> None:
         monkeypatch.setattr(
-            "webinar_transcriber.segmentation._silero_speech_timestamps",
-            lambda *_args, **_kwargs: [{"start": 10, "end": 10}],
+            "webinar_transcriber.segmentation._silero_speech_regions",
+            lambda *_args, **_kwargs: [SpeechRegion(start_sec=10.0, end_sec=10.0)],
         )
 
-        regions, warnings = detect_speech_regions(np.zeros(16_000, dtype=np.float32), 16_000)
+        regions, warnings = detect_speech_regions(
+            np.zeros(16_000, dtype=np.float32), enabled=True, threads=1
+        )
 
         assert regions == []
         assert warnings == []
 
-    def test_normalized_audio_duration_returns_zero_for_invalid_sample_rate(self) -> None:
-        assert normalized_audio_duration(np.zeros(16, dtype=np.float32), 0) == 0.0
+    def test_normalized_audio_duration_uses_normalized_sample_rate(self) -> None:
+        assert normalized_audio_duration(np.zeros(8_000, dtype=np.float32)) == 0.5
 
     def test_normalize_regions_handles_empty_and_overlap(self) -> None:
         assert normalize_regions([]) == []
@@ -305,22 +309,18 @@ class TestNormalizedAudio:
 
         assert normalized == [SpeechRegion(start_sec=3.0, end_sec=4.0)]
 
-    def test_silero_speech_timestamps_returns_none_when_sherpa_module_missing(self) -> None:
+    def test_silero_speech_regions_returns_none_when_sherpa_module_missing(self) -> None:
         with patch(
             "webinar_transcriber.segmentation.importlib.import_module", side_effect=ImportError
         ):
-            timestamps = _silero_speech_timestamps(
+            regions = _silero_speech_regions(
                 np.zeros(16_000, dtype=np.float32),
-                sample_rate=16_000,
-                threshold=0.5,
-                min_speech_duration_ms=250,
-                min_silence_duration_ms=600,
-                speech_pad_ms=30,
+                threads=1,
             )
 
-        assert timestamps is None
+        assert regions is None
 
-    def test_silero_speech_timestamps_uses_sherpa_vad_settings(
+    def test_silero_speech_regions_uses_sherpa_vad_settings(
         self, monkeypatch, fake_sherpa_import_module
     ) -> None:
         progress_updates: list[tuple[float, int]] = []
@@ -334,31 +334,26 @@ class TestNormalizedAudio:
             fake_import_module,
         )
 
-        timestamps = _silero_speech_timestamps(
+        regions = _silero_speech_regions(
             np.zeros(1_600, dtype=np.float32),
-            sample_rate=16_000,
-            threshold=0.5,
-            min_speech_duration_ms=10,
-            min_silence_duration_ms=600,
-            speech_pad_ms=200,
             threads=3,
             progress_callback=lambda sec, count: progress_updates.append((sec, count)),
         )
 
         detector = fake_sherpa.detectors[0]
         assert detector.config.silero_vad.model.endswith("silero_vad.onnx")
-        assert detector.config.silero_vad.threshold == 0.5
-        assert detector.config.silero_vad.min_speech_duration == 0.01
-        assert detector.config.silero_vad.min_silence_duration == 0.6
+        assert detector.config.silero_vad.threshold == 0.45
+        assert detector.config.silero_vad.min_speech_duration == 0.150
+        assert detector.config.silero_vad.min_silence_duration == 0.500
         assert detector.config.sample_rate == 16_000
         assert detector.config.num_threads == 3
         assert detector.buffer_size_in_seconds == SHERPA_VAD_BUFFER_SIZE_SEC
         assert [len(samples) for samples in detector.accepted_waveforms] == [512, 512, 512, 64]
         assert detector.flushed
-        assert timestamps == [{"start": 0, "end": 1_600}]
+        assert regions == [SpeechRegion(start_sec=0.0, end_sec=0.1)]
         assert progress_updates == [(0.1, 1)]
 
-    def test_silero_speech_timestamps_reports_progress_by_second(
+    def test_silero_speech_regions_reports_progress_by_second(
         self, monkeypatch, fake_sherpa_import_module
     ) -> None:
         progress_updates: list[tuple[float, int]] = []
@@ -374,20 +369,21 @@ class TestNormalizedAudio:
             fake_import_module,
         )
 
-        timestamps = _silero_speech_timestamps(
+        regions = _silero_speech_regions(
             np.zeros(40_000, dtype=np.float32),
-            sample_rate=16_000,
-            threshold=0.5,
-            min_speech_duration_ms=10,
-            min_silence_duration_ms=600,
-            speech_pad_ms=0,
+            threads=1,
             progress_callback=lambda sec, count: progress_updates.append((sec, count)),
         )
 
-        assert timestamps == [{"start": 400, "end": 800}, {"start": 20_000, "end": 20_800}]
+        assert regions is not None
+        assert len(regions) == 2
+        assert regions[0].start_sec == 0.0
+        assert regions[0].end_sec == pytest.approx(0.4)
+        assert regions[1].start_sec == pytest.approx(0.9)
+        assert regions[1].end_sec == pytest.approx(1.65)
         assert progress_updates == [(1.0, 2), (2.0, 2), (2.5, 2)]
 
-    def test_silero_speech_timestamps_returns_none_when_detector_construction_fails(
+    def test_silero_speech_regions_returns_none_when_detector_construction_fails(
         self, monkeypatch, fake_sherpa_import_module
     ) -> None:
         fake_import_module, _fake_sherpa = fake_sherpa_import_module()
@@ -400,18 +396,14 @@ class TestNormalizedAudio:
             Mock(side_effect=OSError("model unavailable")),
         )
 
-        timestamps = _silero_speech_timestamps(
+        regions = _silero_speech_regions(
             np.zeros(1_600, dtype=np.float32),
-            sample_rate=16_000,
-            threshold=0.5,
-            min_speech_duration_ms=10,
-            min_silence_duration_ms=600,
-            speech_pad_ms=200,
+            threads=1,
         )
 
-        assert timestamps is None
+        assert regions is None
 
-    def test_silero_speech_timestamps_returns_none_for_invalid_window_size(
+    def test_silero_speech_regions_returns_none_for_invalid_window_size(
         self, monkeypatch, fake_sherpa_import_module
     ) -> None:
         fake_import_module, _fake_sherpa = fake_sherpa_import_module(window_size=0)
@@ -420,36 +412,14 @@ class TestNormalizedAudio:
             fake_import_module,
         )
 
-        timestamps = _silero_speech_timestamps(
+        regions = _silero_speech_regions(
             np.zeros(1_600, dtype=np.float32),
-            sample_rate=16_000,
-            threshold=0.5,
-            min_speech_duration_ms=10,
-            min_silence_duration_ms=600,
-            speech_pad_ms=200,
+            threads=1,
         )
 
-        assert timestamps is None
+        assert regions is None
 
-    def test_silero_speech_timestamps_requires_normalized_16khz_audio(
-        self, monkeypatch, fake_sherpa_import_module
-    ) -> None:
-        fake_import_module, _fake_sherpa = fake_sherpa_import_module()
-        monkeypatch.setattr(
-            "webinar_transcriber.segmentation.importlib.import_module", fake_import_module
-        )
-
-        with pytest.raises(ValueError, match="16000 Hz"):
-            _silero_speech_timestamps(
-                np.zeros(800, dtype=np.float32),
-                sample_rate=8_000,
-                threshold=0.5,
-                min_speech_duration_ms=10,
-                min_silence_duration_ms=600,
-                speech_pad_ms=30,
-            )
-
-    def test_silero_speech_timestamps_pads_and_merges_sherpa_segments(
+    def test_silero_speech_regions_pads_and_merges_sherpa_segments(
         self, monkeypatch, fake_sherpa_import_module
     ) -> None:
         segments = [
@@ -466,18 +436,15 @@ class TestNormalizedAudio:
             fake_import_module,
         )
 
-        timestamps = _silero_speech_timestamps(
+        regions = _silero_speech_regions(
             np.zeros(3_000, dtype=np.float32),
-            sample_rate=16_000,
-            threshold=0.5,
-            min_speech_duration_ms=10,
-            min_silence_duration_ms=600,
-            speech_pad_ms=25,
+            threads=1,
         )
 
-        assert timestamps == [{"start": 0, "end": 1_600}, {"start": 1_700, "end": 2_600}]
+        assert regions is not None
+        assert regions == [SpeechRegion(start_sec=0.0, end_sec=0.1875)]
 
-    def test_silero_speech_timestamps_drops_empty_sherpa_segments(
+    def test_silero_speech_regions_drops_empty_sherpa_segments(
         self, monkeypatch, fake_sherpa_import_module
     ) -> None:
         segment = type("Segment", (), {"start": 1_000, "samples": np.zeros(0)})()
@@ -488,33 +455,25 @@ class TestNormalizedAudio:
             fake_import_module,
         )
 
-        timestamps = _silero_speech_timestamps(
+        regions = _silero_speech_regions(
             np.zeros(1_600, dtype=np.float32),
-            sample_rate=16_000,
-            threshold=0.5,
-            min_speech_duration_ms=10,
-            min_silence_duration_ms=600,
-            speech_pad_ms=0,
+            threads=1,
         )
 
-        assert timestamps == []
+        assert regions == []
 
     @pytest.mark.slow
-    def test_silero_speech_timestamps_detects_speech_with_real_sherpa_model(self) -> None:
-        samples, sample_rate = load_normalized_audio(FIXTURE_DIR / "speech-sample.wav")
+    def test_silero_speech_regions_detects_speech_with_real_sherpa_model(self) -> None:
+        samples, _ = load_normalized_audio(FIXTURE_DIR / "speech-sample.wav")
 
-        timestamps = _silero_speech_timestamps(
+        regions = _silero_speech_regions(
             samples,
-            sample_rate=sample_rate,
-            threshold=0.45,
-            min_speech_duration_ms=150,
-            min_silence_duration_ms=500,
-            speech_pad_ms=350,
+            threads=1,
         )
 
-        assert timestamps
-        assert timestamps[0]["start"] == 0
-        assert timestamps[0]["end"] > timestamps[0]["start"]
+        assert regions
+        assert regions[0].start_sec == 0
+        assert regions[0].end_sec > regions[0].start_sec
 
     @pytest.mark.parametrize(
         ("framerate", "channels", "sample_width", "message"),

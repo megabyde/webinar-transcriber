@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, cast
 
 from .contracts import (
@@ -13,8 +14,6 @@ from .contracts import (
 from .prompts import REPORT_SECTION_EXCERPT_LIMIT
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
-
     from webinar_transcriber.llm.schemas import ReportSectionUpdate
     from webinar_transcriber.models import ReportDocument
 
@@ -223,6 +222,62 @@ def extract_usage(response: object) -> dict[str, int]:
     ):
         extracted["total_tokens"] = extracted["input_tokens"] + extracted["output_tokens"]
     return extracted
+
+
+def extract_response_metadata(response: object) -> dict[str, object]:
+    """Extract non-sensitive provider response metadata for diagnostics."""
+    metadata: dict[str, object] = {}
+    choice = _first_choice(response)
+    message = getattr(choice, "message", None) if choice is not None else None
+
+    if finish_reason := _text_attr(choice, "finish_reason"):
+        metadata["finish_reason"] = finish_reason
+    if stop_reason := _text_attr(response, "stop_reason"):
+        metadata["stop_reason"] = stop_reason
+    refusal = getattr(message, "refusal", None)
+    if refusal:
+        metadata["refusal"] = True
+
+    safety = _json_safe(getattr(choice, "content_filter_results", None))
+    if safety is not None:
+        metadata["safety"] = safety
+    prompt_filter_results = _json_safe(getattr(response, "prompt_filter_results", None))
+    if prompt_filter_results is not None:
+        metadata["prompt_filter_results"] = prompt_filter_results
+
+    return metadata
+
+
+def _first_choice(response: object) -> object | None:
+    choices = getattr(response, "choices", None)
+    if isinstance(choices, Sequence) and choices:
+        return choices[0]
+    return None
+
+
+def _text_attr(value: object | None, name: str) -> str | None:
+    text = getattr(value, name, None)
+    return text if isinstance(text, str) and text else None
+
+
+def _json_safe(value: object) -> object | None:
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, Mapping):
+        return {
+            str(key): safe_value
+            for key, item in value.items()
+            if (safe_value := _json_safe(item)) is not None
+        }
+    if isinstance(value, Sequence) and not isinstance(value, str):
+        return [item for item in (_json_safe(item) for item in value) if item is not None]
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        return _json_safe(model_dump())
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict):
+        return _json_safe(to_dict())
+    return None
 
 
 def schema_label(response_model: type[object]) -> str:

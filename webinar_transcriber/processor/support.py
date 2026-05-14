@@ -9,7 +9,7 @@ from time import perf_counter
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
     from pathlib import Path
 
     from webinar_transcriber.asr import WhisperCppTranscriber
@@ -61,6 +61,15 @@ def count_label(count: int, singular: str, *, plural: str | None = None) -> str:
     """Return one compact count label with naive English pluralization."""
     noun = singular if count == 1 else plural or f"{singular}s"
     return f"{count} {noun}"
+
+
+def counting_progress(handle: ProgressStageHandle, singular: str) -> Callable[[float, int], None]:
+    """Return a progress callback that reports one counted detail label."""
+
+    def update(completed: float, count: int) -> None:
+        handle.advance_to(float(completed), detail=count_label(count, singular))
+
+    return update
 
 
 def _count_label_if_positive(count: int, singular: str, *, plural: str | None = None) -> str | None:
@@ -118,7 +127,7 @@ def progress_stage(
     ctx.reporter.stage_finished(key, label, detail=handle.detail)
 
 
-def write_json(output_path: Path, payload: dict[str, object]) -> None:
+def write_json(output_path: Path, payload: object) -> None:
     """Write one JSON payload with stable UTF-8 formatting."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -129,11 +138,11 @@ def asr_runtime_detail(transcriber: WhisperCppTranscriber) -> str:
     return f"{transcriber.model_name} | {transcriber.device_name}"
 
 
-def window_transcription_stage_detail(
-    *, window_count: int, total_duration_sec: float, elapsed_sec: float
+def transcription_stage_detail(
+    *, segment_count: int, total_duration_sec: float, elapsed_sec: float
 ) -> str:
-    """Return the transcribe-stage summary with window count and real-time factor."""
-    details = [count_label(window_count, "window")]
+    """Return the transcribe-stage summary with segment count and real-time factor."""
+    details = [count_label(segment_count, "segment")]
     if rtf := realtime_factor_detail(
         total_duration_sec=total_duration_sec, elapsed_sec=elapsed_sec
     ):

@@ -26,6 +26,7 @@ class LLMSectionPolishResult:
     section_tldrs: dict[str, str]
     section_transcripts: dict[str, str]
     usage: dict[str, int]
+    response_metadata: list[dict[str, object]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -37,6 +38,7 @@ class LLMReportMetadataResult:
     action_items: list[str]
     section_titles: dict[str, str]
     usage: dict[str, int]
+    response_metadata: list[dict[str, object]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,7 @@ class SectionPolishOutputs:
 
     transcripts: dict[str, str]
     tldrs: dict[str, str]
+    response_metadata: list[dict[str, object]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

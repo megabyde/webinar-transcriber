@@ -48,6 +48,28 @@ class TestNormalizeTranscription:
 
         assert segment_texts == ["Короткая фраза.", "Следующая фраза."]
 
+    def test_splits_when_speaker_changes_and_preserves_speaker(self) -> None:
+        transcription = TranscriptionResult(
+            segments=[
+                TranscriptSegment(
+                    id="segment-1", text="First speaker", start_sec=0.0, end_sec=1.0, speaker="S1"
+                ),
+                TranscriptSegment(
+                    id="segment-2", text="still talking", start_sec=1.0, end_sec=2.0, speaker="S1"
+                ),
+                TranscriptSegment(
+                    id="segment-3", text="Second speaker", start_sec=2.0, end_sec=3.0, speaker="S2"
+                ),
+            ]
+        )
+
+        normalized = normalize_transcription(transcription)
+
+        assert [(segment.text, segment.speaker) for segment in normalized.segments] == [
+            ("First speaker still talking", "S1"),
+            ("Second speaker", "S2"),
+        ]
+
     def test_returns_empty_when_all_segments_are_blank(self) -> None:
         transcription = TranscriptionResult(
             detected_language="en",

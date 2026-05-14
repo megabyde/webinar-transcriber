@@ -7,7 +7,7 @@ import io
 import os
 import re
 import sys
-from contextlib import contextmanager, redirect_stderr, redirect_stdout
+from contextlib import contextmanager, redirect_stderr
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self, cast
@@ -16,12 +16,12 @@ import numpy as np
 
 from webinar_transcriber.asr.carryover import build_prompt_carryover
 from webinar_transcriber.asr.config import (
-    DEFAULT_WHISPER_CPP_MODEL_EXAMPLE,
-    DEFAULT_WHISPER_CPP_MODEL_FILENAME,
-    DEFAULT_WHISPER_ENTROPY_THOLD,
-    DEFAULT_WHISPER_LOGPROB_THOLD,
-    DEFAULT_WHISPER_NO_SPEECH_THOLD,
-    DEFAULT_WHISPER_TEMPERATURE_INC,
+    WHISPER_CPP_MODEL_EXAMPLE,
+    WHISPER_CPP_MODEL_FILENAME,
+    WHISPER_ENTROPY_THOLD,
+    WHISPER_LOGPROB_THOLD,
+    WHISPER_NO_SPEECH_THOLD,
+    WHISPER_TEMPERATURE_INC,
     PromptCarryoverSettings,
 )
 from webinar_transcriber.models import DecodedWindow, TranscriptSegment
@@ -41,7 +41,7 @@ _WHISPER_TICKS_PER_SECOND = 100.0
 
 def _missing_model_error_message(model_path: Path) -> str:
     model_path_text = str(model_path)
-    example_path = DEFAULT_WHISPER_CPP_MODEL_EXAMPLE
+    example_path = WHISPER_CPP_MODEL_EXAMPLE
     location_hint = f"Download a whisper.cpp model there, or use --asr-model {example_path}."
     return (
         f"whisper.cpp model file does not exist: {model_path_text}. "
@@ -53,7 +53,7 @@ def _model_prepare_error_message(model_name: str) -> str:
     return (
         f"Could not prepare whisper.cpp model '{model_name}'. "
         "pywhispercpp accepts model identifiers such as 'large-v3-turbo' or local ggml model "
-        f"paths such as {DEFAULT_WHISPER_CPP_MODEL_EXAMPLE}."
+        f"paths such as {WHISPER_CPP_MODEL_EXAMPLE}."
     )
 
 
@@ -94,10 +94,6 @@ def _redirect_native_output(log_path: Path | None) -> Iterator[None]:
     sys.stderr.flush()
     with log_path.open("a", encoding="utf-8") as log_file:
         saved_fds = _duplicated_output_fds()
-        if not saved_fds:  # pragma: no cover - fallback for fd-less embedded runtimes
-            with redirect_stdout(log_file), redirect_stderr(log_file):
-                yield
-            return
         try:
             for fd, _saved_fd in saved_fds:
                 os.dup2(log_file.fileno(), fd)
@@ -147,15 +143,15 @@ class WhisperCppTranscriber:
         self,
         model_name: str | None = None,
         *,
-        threads: int | None = None,
+        threads: int,
         language: str | None = None,
         carryover_settings: PromptCarryoverSettings | None = None,
         log_path: Path | None = None,
     ) -> None:
         """Initialize the whisper.cpp transcriber wrapper."""
         self._requested_model_name = model_name
-        self._model_name = model_name or DEFAULT_WHISPER_CPP_MODEL_FILENAME
-        self._threads = max(1, 4 if threads is None else threads)
+        self._model_name = model_name or WHISPER_CPP_MODEL_FILENAME
+        self._threads = threads
         self._language = language.strip() if language else None
         self._carryover_settings = carryover_settings or PromptCarryoverSettings()
         self._log_path = log_path
@@ -207,10 +203,10 @@ class WhisperCppTranscriber:
             "print_progress": False,
             "no_context": True,
             "split_on_word": False,
-            "entropy_thold": DEFAULT_WHISPER_ENTROPY_THOLD,
-            "logprob_thold": DEFAULT_WHISPER_LOGPROB_THOLD,
-            "no_speech_thold": DEFAULT_WHISPER_NO_SPEECH_THOLD,
-            "temperature_inc": DEFAULT_WHISPER_TEMPERATURE_INC,
+            "entropy_thold": WHISPER_ENTROPY_THOLD,
+            "logprob_thold": WHISPER_LOGPROB_THOLD,
+            "no_speech_thold": WHISPER_NO_SPEECH_THOLD,
+            "temperature_inc": WHISPER_TEMPERATURE_INC,
         }
         try:
             with _redirect_native_output(self._log_path), _disable_tqdm_progress():
@@ -228,6 +224,7 @@ class WhisperCppTranscriber:
         *,
         language: str | None = None,
         progress_callback: Callable[[float, int], None] | None = None,
+        warning_callback: Callable[[str], None] | None = None,
     ) -> list[DecodedWindow]:
         """Decode ordered inference windows into transcript segments.
 
@@ -250,7 +247,12 @@ class WhisperCppTranscriber:
             if forced_language is None and previous_region_index != window.region_index:
                 language_hint = None
             decoded_window = self._transcribe_window(
-                model, audio_samples, window, prompt=carryover_prompt, language_hint=language_hint
+                model,
+                audio_samples,
+                window,
+                prompt=carryover_prompt,
+                language_hint=language_hint,
+                warning_callback=warning_callback,
             )
             decoded_windows.append(replace(decoded_window, input_prompt=carryover_prompt))
             decoded_segment_count += len(decoded_window.segments)
@@ -295,7 +297,7 @@ class WhisperCppTranscriber:
 
     def _resolve_model_name(self) -> str:
         if self._requested_model_name is None:
-            return DEFAULT_WHISPER_CPP_MODEL_FILENAME
+            return WHISPER_CPP_MODEL_FILENAME
         if not _looks_like_model_path(self._requested_model_name):
             return self._requested_model_name
         configured_model_path = Path(self._requested_model_name).expanduser()
@@ -311,6 +313,7 @@ class WhisperCppTranscriber:
         *,
         prompt: str | None,
         language_hint: str | None,
+        warning_callback: Callable[[str], None] | None,
     ) -> DecodedWindow:
         start_index = sample_index_for_time(window.start_sec)
         end_index = min(len(audio_samples), sample_index_for_time(window.end_sec))
@@ -327,10 +330,12 @@ class WhisperCppTranscriber:
                 detected_language = model.auto_detect_language(
                     window_samples, n_threads=self._threads
                 )[0][0]
-            except (RuntimeError, ValueError, IndexError) as error:  # pragma: no cover
-                raise ASRProcessingError(
-                    f"whisper.cpp language detection failed for {window.id}."
-                ) from error
+            except (RuntimeError, ValueError, IndexError):
+                if warning_callback is not None:
+                    warning_callback(
+                        f"whisper.cpp language detection failed for {window.id}; "
+                        "transcribing without an explicit language hint."
+                    )
 
         transcribe_kwargs: dict[str, str] = {}
         if prompt is not None:
@@ -366,8 +371,7 @@ class WhisperCppTranscriber:
 
 def device_name_from_system_info(system_info: str) -> str:
     """Return a user-facing ASR device name from pywhispercpp system info."""
-    match = GPU_BACKEND_PATTERN.search(system_info)
-    if match is not None:
+    if match := GPU_BACKEND_PATTERN.search(system_info):
         backend_name = match.group(1).lower()
         return "metal" if backend_name == "mtl" else backend_name
     return "cpu"

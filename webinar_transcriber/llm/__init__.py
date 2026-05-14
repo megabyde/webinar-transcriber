@@ -14,7 +14,7 @@ from .contracts import (
     LLMReportPolishPlan,
     LLMSectionPolishResult,
 )
-from .prompts import ACTION_ITEM_LIMIT, REPORT_POLISH_TOTAL_CHAR_BUDGET, SECTION_POLISH_MAX_WORKERS
+from .prompts import ACTION_ITEM_LIMIT, REPORT_POLISH_TOTAL_CHAR_BUDGET
 from .utils import required_provider_env
 
 if TYPE_CHECKING:
@@ -46,7 +46,7 @@ def ensure_llm_extra_available() -> None:
             return
 
 
-def build_llm_processor_from_env(*, section_max_workers: int | None = None) -> LLMProcessor:
+def build_llm_processor_from_env(*, threads: int) -> LLMProcessor:
     """Build a configured LLM processor from environment variables.
 
     Returns:
@@ -72,7 +72,7 @@ def build_llm_processor_from_env(*, section_max_workers: int | None = None) -> L
                 ),
                 provider_name="openai",
                 model_name=model_name,
-                section_max_workers=section_max_workers or SECTION_POLISH_MAX_WORKERS,
+                threads=threads,
             )
         case "anthropic":
             instructor = cast("Any", _required_llm_module("instructor", provider_label="Anthropic"))
@@ -88,7 +88,7 @@ def build_llm_processor_from_env(*, section_max_workers: int | None = None) -> L
                 provider_name="anthropic",
                 model_name=model_name,
                 request_kwargs={"max_tokens": 4096},
-                section_max_workers=section_max_workers or SECTION_POLISH_MAX_WORKERS,
+                threads=threads,
             )
         case _:
             raise LLMConfigurationError(
@@ -115,7 +115,6 @@ def __getattr__(name: str) -> object:
 __all__ = [
     "ACTION_ITEM_LIMIT",
     "REPORT_POLISH_TOTAL_CHAR_BUDGET",
-    "SECTION_POLISH_MAX_WORKERS",
     "InstructorLLMProcessor",
     "LLMConfigurationError",
     "LLMProcessingError",

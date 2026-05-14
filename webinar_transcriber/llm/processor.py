@@ -18,13 +18,13 @@ from .prompts import (
     ACTION_ITEM_LIMIT,
     REPORT_POLISH_SYSTEM_PROMPT,
     REPORT_POLISH_TOTAL_CHAR_BUDGET,
-    SECTION_POLISH_MAX_WORKERS,
     SECTION_POLISH_SYSTEM_PROMPT,
     SUMMARY_ITEM_LIMIT,
 )
 from .schemas import ReportPolishResponse, SchemaModelT, SectionTextResponse
 from .utils import (
     build_report_polish_payload,
+    extract_response_metadata,
     extract_usage,
     normalize_polished_section_text,
     normalize_polished_section_tldr,
@@ -58,7 +58,7 @@ class InstructorLLMProcessor:
         provider_name: str,
         model_name: str,
         request_kwargs: Mapping[str, object] | None = None,
-        section_max_workers: int = SECTION_POLISH_MAX_WORKERS,
+        threads: int,
         report_char_budget: int = REPORT_POLISH_TOTAL_CHAR_BUDGET,
     ) -> None:
         """Initialize one provider-backed Instructor processor."""
@@ -67,7 +67,7 @@ class InstructorLLMProcessor:
         self._model_name = model_name
         self._request_kwargs = {"timeout": 120, **dict(request_kwargs or {})}
         self._report_char_budget = report_char_budget
-        self._section_max_workers = section_max_workers
+        self._threads = threads
 
     @property
     def model_name(self) -> str:
@@ -95,6 +95,7 @@ class InstructorLLMProcessor:
             section_tldrs=polished_section_texts.tldrs,
             section_transcripts=polished_section_texts.transcripts,
             usage=usage_totals,
+            response_metadata=polished_section_texts.response_metadata,
             warnings=warnings,
         )
 
@@ -107,7 +108,7 @@ class InstructorLLMProcessor:
             total_char_budget=self._report_char_budget,
             section_transcripts=section_transcripts,
         )
-        parsed, usage = self._create_structured_response(
+        parsed, usage, response_metadata = self._create_structured_response(
             system_prompt=REPORT_POLISH_SYSTEM_PROMPT,
             user_payload=payload,
             response_model=ReportPolishResponse,
@@ -119,13 +120,14 @@ class InstructorLLMProcessor:
             action_items=normalize_report_lines(parsed.action_items, limit=ACTION_ITEM_LIMIT),
             section_titles=validated_section_titles(report, parsed.section_updates),
             usage=usage,
+            response_metadata=[{"stage": "report_polish", **response_metadata}],
         )
 
     def report_polish_plan(self, report: ReportDocument) -> LLMReportPolishPlan:
         """Return concurrency details for report polishing."""
         return LLMReportPolishPlan(
             section_count=len(report.sections),
-            worker_count=min(self._section_max_workers, max(len(report.sections), 1)),
+            worker_count=min(self._threads, max(len(report.sections), 1)),
         )
 
     def _polish_section_texts(
@@ -140,7 +142,9 @@ class InstructorLLMProcessor:
         if not report.sections:
             return SectionPolishOutputs(transcripts={}, tldrs={})
 
-        section_results: dict[int, tuple[str, str, str, dict[str, int], list[str]]] = {}
+        section_results: dict[
+            int, tuple[str, str, str, dict[str, int], dict[str, object], list[str]]
+        ] = {}
 
         executor = ThreadPoolExecutor(max_workers=plan.worker_count)
         futures = {
@@ -162,33 +166,45 @@ class InstructorLLMProcessor:
 
         polished_transcripts: dict[str, str] = {}
         polished_tldrs: dict[str, str] = {}
+        response_metadata: list[dict[str, object]] = []
         for index in range(len(report.sections)):
             result = section_results[index]
-            section_id, transcript_text, tldr, usage, section_warnings = result
+            section_id, transcript_text, tldr, usage, section_metadata, section_warnings = result
             polished_transcripts[section_id] = transcript_text
             if tldr:
                 polished_tldrs[section_id] = tldr
             for key, value in usage.items():
                 usage_totals[key] = usage_totals.get(key, 0) + value
+            response_metadata.append(section_metadata)
             warnings.extend(section_warnings)
 
-        return SectionPolishOutputs(transcripts=polished_transcripts, tldrs=polished_tldrs)
+        return SectionPolishOutputs(
+            transcripts=polished_transcripts,
+            tldrs=polished_tldrs,
+            response_metadata=response_metadata,
+        )
 
     def _polish_section(
         self, section: ReportSection
-    ) -> tuple[str, str, str, dict[str, int], list[str]]:
+    ) -> tuple[str, str, str, dict[str, int], dict[str, object], list[str]]:
         try:
-            transcript_text, tldr, usage, section_warnings = self._polish_section_text(section)
+            transcript_text, tldr, usage, response_metadata, section_warnings = (
+                self._polish_section_text(section)
+            )
         except LLMProcessingError as error:
             transcript_text = section.transcript_text
             tldr = section.tldr or ""
-            usage = {}
+            usage: dict[str, int] = {}
+            response_metadata: dict[str, object] = {
+                "stage": "section_polish",
+                "section_id": section.id,
+            }
             section_warnings = [str(error)]
-        return section.id, transcript_text, tldr, usage, section_warnings
+        return section.id, transcript_text, tldr, usage, response_metadata, section_warnings
 
     def _polish_section_text(
         self, section: ReportSection
-    ) -> tuple[str, str, dict[str, int], list[str]]:
+    ) -> tuple[str, str, dict[str, int], dict[str, object], list[str]]:
         payload = {
             "id": section.id,
             "title": section.title,
@@ -196,7 +212,7 @@ class InstructorLLMProcessor:
             "end_sec": section.end_sec,
             "transcript_text": section.transcript_text,
         }
-        parsed, usage = self._create_structured_response(
+        parsed, usage, response_metadata = self._create_structured_response(
             system_prompt=SECTION_POLISH_SYSTEM_PROMPT,
             user_payload=payload,
             response_model=SectionTextResponse,
@@ -215,7 +231,13 @@ class InstructorLLMProcessor:
                 "kept original text."
             )
 
-        return transcript_text, tldr, usage, warnings
+        return (
+            transcript_text,
+            tldr,
+            usage,
+            {"stage": "section_polish", "section_id": section.id, **response_metadata},
+            warnings,
+        )
 
     def _create_structured_response(
         self,
@@ -224,7 +246,7 @@ class InstructorLLMProcessor:
         user_payload: Mapping[str, object],
         response_model: type[SchemaModelT],
         error_prefix: str,
-    ) -> tuple[SchemaModelT, dict[str, int]]:
+    ) -> tuple[SchemaModelT, dict[str, int], dict[str, object]]:
         try:
             parsed, completion = self._client.create_with_completion(
                 response_model=response_model,
@@ -242,7 +264,7 @@ class InstructorLLMProcessor:
             raise LLMProcessingError(
                 f"{schema_label(response_model)} response did not match the schema."
             )
-        return parsed, extract_usage(completion)
+        return parsed, extract_usage(completion), extract_response_metadata(completion)
 
 
 def _structured_response_retries() -> object:  # pragma: no cover - optional llm extra wrapper

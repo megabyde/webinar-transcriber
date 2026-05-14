@@ -55,6 +55,8 @@ def _should_flush_before_adding(
     gap_duration = max(0.0, next_segment.start_sec - current_end)
     current_text = _merge_text(current_segments)
 
+    if current_segments[-1].speaker != next_segment.speaker:
+        return True
     if gap_duration > MERGE_GAP_SEC:
         return True
     if current_duration >= MAX_SEGMENT_DURATION_SEC:
@@ -74,6 +76,7 @@ def _merge_segment_group(segments: list[TranscriptSegment], merged_index: int) -
         text=_merge_text(segments),
         start_sec=segments[0].start_sec,
         end_sec=segments[-1].end_sec,
+        speaker=segments[0].speaker,
     )
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from dataclasses import field as dataclass_field
 from enum import StrEnum
 from typing import Literal
@@ -45,11 +45,9 @@ class VideoAsset(BaseMediaAsset):
 MediaAsset = AudioAsset | VideoAsset
 
 
-@dataclass(slots=True, frozen=True)
-class TimelineItem:
-    """Timeline-bounded model with a stable identifier."""
+class TimelineSpan:
+    """Timeline-bounded model."""
 
-    id: str
     start_sec: float
     end_sec: float
 
@@ -63,9 +61,18 @@ class TimelineItem:
         """Return the non-negative duration of the item."""
         return max(0.0, self.end_sec - self.start_sec)
 
-    def gap_before(self, other: TimelineItem) -> float:
+    def gap_before(self, other: TimelineSpan) -> float:
         """Return the non-negative gap before another timeline item."""
         return max(0.0, other.start_sec - self.end_sec)
+
+
+@dataclass(slots=True, frozen=True)
+class TimelineItem(TimelineSpan):
+    """Timeline-bounded model with a stable identifier."""
+
+    id: str
+    start_sec: float
+    end_sec: float
 
 
 @dataclass(slots=True, frozen=True)
@@ -83,9 +90,16 @@ class TranscriptionResult:
     detected_language: str | None = None
     segments: list[TranscriptSegment] = dataclass_field(default_factory=list)
 
+    def to_json(self) -> dict[str, object]:
+        """Return the transcript JSON artifact payload."""
+        return {
+            "detected_language": self.detected_language,
+            "segments": [asdict(segment) for segment in self.segments],
+        }
+
 
 @dataclass(slots=True, frozen=True)
-class SpeechRegion:
+class SpeechRegion(TimelineSpan):
     """Speech-bearing region on the normalized audio timeline."""
 
     start_sec: float
@@ -108,6 +122,16 @@ class DecodedWindow:
     text: str = ""
     segments: list[TranscriptSegment] = dataclass_field(default_factory=list)
     language: str | None = None
+
+    def to_json(self) -> dict[str, object]:
+        """Return the decoded-window JSON artifact payload."""
+        return {
+            "window": asdict(self.window),
+            "input_prompt": self.input_prompt,
+            "text": self.text,
+            "segments": [asdict(segment) for segment in self.segments],
+            "language": self.language,
+        }
 
 
 @dataclass(slots=True, frozen=True)
@@ -148,7 +172,7 @@ class ReportSection(TimelineItem):
 
 
 @dataclass(slots=True, frozen=True)
-class SpeakerTurn:
+class SpeakerTurn(TimelineSpan):
     """Time-bounded speaker turn returned by diarization."""
 
     start_sec: float
@@ -190,7 +214,6 @@ class AsrPipelineDiagnostics:
 class DiarizationDiagnostics:
     """Collected speaker-diarization diagnostics for one processing run."""
 
-    enabled: bool
     speaker_count: int
     turn_count: int
     average_turn_duration_sec: float | None
@@ -207,6 +230,7 @@ class LlmDiagnostics:
     report_status: Literal["disabled", "applied", "fallback"] = "disabled"
     report_latency_sec: float | None = None
     report_usage: dict[str, int] = dataclass_field(default_factory=dict)
+    response_metadata: list[dict[str, object]] = dataclass_field(default_factory=list)
 
 
 @dataclass(slots=True, frozen=True)

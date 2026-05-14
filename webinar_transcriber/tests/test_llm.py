@@ -24,6 +24,7 @@ from webinar_transcriber.llm.schemas import (
 )
 from webinar_transcriber.llm.utils import (
     build_report_polish_payload,
+    extract_response_metadata,
     extract_usage,
     normalize_polished_section_text,
     normalize_polished_section_tldr,
@@ -111,7 +112,7 @@ class TestBuildLlmProcessorFromEnv:
             _fake_import_module({"instructor": fake_instructor, provider_module: object()}),
         )
 
-        processor = build_llm_processor_from_env()
+        processor = build_llm_processor_from_env(threads=6)
 
         assert isinstance(processor, InstructorLLMProcessor)
         assert processor.provider_name == provider_name
@@ -133,7 +134,7 @@ class TestBuildLlmProcessorFromEnv:
         )
 
         with pytest.raises(LLMConfigurationError):
-            build_llm_processor_from_env()
+            build_llm_processor_from_env(threads=6)
 
     def test_requires_llm_extra_for_openai(self, monkeypatch) -> None:
         monkeypatch.delenv("LLM_PROVIDER", raising=False)
@@ -145,7 +146,7 @@ class TestBuildLlmProcessorFromEnv:
             LLMConfigurationError,
             match=rf"The OpenAI provider requires the 'llm' extra\..*{LLM_EXTRA_INSTALL_RE}",
         ):
-            build_llm_processor_from_env()
+            build_llm_processor_from_env(threads=6)
 
     def test_requires_llm_extra_for_anthropic(self, monkeypatch) -> None:
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
@@ -157,7 +158,7 @@ class TestBuildLlmProcessorFromEnv:
             LLMConfigurationError,
             match=rf"The Anthropic provider requires the 'llm' extra\..*{LLM_EXTRA_INSTALL_RE}",
         ):
-            build_llm_processor_from_env()
+            build_llm_processor_from_env(threads=6)
 
     @pytest.mark.parametrize(
         ("provider_env", "provider_module"),
@@ -198,13 +199,28 @@ class TestBuildLlmProcessorFromEnv:
         monkeypatch.setenv("LLM_PROVIDER", "unknown")
 
         with pytest.raises(LLMConfigurationError, match="Unsupported LLM provider"):
-            build_llm_processor_from_env()
+            build_llm_processor_from_env(threads=6)
 
 
 class TestInstructorLlmProcessor:
     class FakeCompletion:
-        def __init__(self, usage) -> None:
+        def __init__(
+            self,
+            usage,
+            *,
+            finish_reason: str | None = None,
+            refusal: str | None = None,
+            safety: dict[str, object] | None = None,
+        ) -> None:
             self.usage = SimpleNamespace(**usage)
+            if finish_reason is not None:
+                self.choices = [
+                    SimpleNamespace(
+                        finish_reason=finish_reason,
+                        message=SimpleNamespace(refusal=refusal),
+                        content_filter_results=safety,
+                    )
+                ]
 
     class FakeClient:
         def __init__(self, responses) -> None:
@@ -268,7 +284,10 @@ class TestInstructorLlmProcessor:
                     tldr="Short recap of the section.",
                     transcript_text="Agenda review and project status update.\n\nPlease listen.",
                 ),
-                self.FakeCompletion({"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}),
+                self.FakeCompletion(
+                    {"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
+                    finish_reason="stop",
+                ),
             ),
             (
                 ReportPolishResponse(
@@ -283,7 +302,7 @@ class TestInstructorLlmProcessor:
         ])
 
         processor = InstructorLLMProcessor(
-            client=fake_client, provider_name="openai", model_name="gpt-test"
+            client=fake_client, provider_name="openai", model_name="gpt-test", threads=6
         )
         report = ReportDocument(
             title="Demo",
@@ -316,6 +335,10 @@ class TestInstructorLlmProcessor:
         }
         assert section_result.usage == {"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}
         assert metadata_result.usage == {"input_tokens": 12, "output_tokens": 8, "total_tokens": 20}
+        assert section_result.response_metadata == [
+            {"stage": "section_polish", "section_id": "section-1", "finish_reason": "stop"}
+        ]
+        assert metadata_result.response_metadata == [{"stage": "report_polish"}]
         assert report.sections[0].transcript_text == "Agenda review and project status update."
         assert len(fake_client.calls) == 2
         assert "max_retries" in fake_client.calls[0]
@@ -357,6 +380,39 @@ class TestInstructorLlmProcessor:
         assert sections[0]["transcript_excerpt"] == "Overridden transcript text."
         assert report.sections[0].transcript_text == "Original transcript text."
 
+    def test_extract_response_metadata_returns_provider_finish_and_safety_fields(self) -> None:
+        class ModelDumpValue:
+            def model_dump(self) -> dict[str, object]:
+                return {"blocked": True}
+
+        class ToDictValue:
+            def to_dict(self) -> dict[str, object]:
+                return {"filtered": True}
+
+        completion = SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    finish_reason="content_filter",
+                    message=SimpleNamespace(refusal="Refused."),
+                    content_filter_results={
+                        "sexual": ModelDumpValue(),
+                        "violence": ToDictValue(),
+                        "ignored": object(),
+                    },
+                )
+            ],
+            stop_reason="end_turn",
+            prompt_filter_results=[{"prompt_index": 0, "content_filter_results": {}}],
+        )
+
+        assert extract_response_metadata(completion) == {
+            "finish_reason": "content_filter",
+            "stop_reason": "end_turn",
+            "refusal": True,
+            "safety": {"sexual": {"blocked": True}, "violence": {"filtered": True}},
+            "prompt_filter_results": [{"prompt_index": 0, "content_filter_results": {}}],
+        }
+
     def test_rejects_unknown_report_section_id(self) -> None:
         fake_client = self.FakeClient([
             (
@@ -374,7 +430,7 @@ class TestInstructorLlmProcessor:
         ])
 
         processor = InstructorLLMProcessor(
-            client=fake_client, provider_name="openai", model_name="gpt-test"
+            client=fake_client, provider_name="openai", model_name="gpt-test", threads=6
         )
         report = ReportDocument(
             title="Demo",
@@ -407,7 +463,7 @@ class TestInstructorLlmProcessor:
         ])
 
         processor = InstructorLLMProcessor(
-            client=fake_client, provider_name="openai", model_name="gpt-test"
+            client=fake_client, provider_name="openai", model_name="gpt-test", threads=6
         )
         report = ReportDocument(
             title="Demo",
@@ -433,7 +489,7 @@ class TestInstructorLlmProcessor:
     def test_wraps_client_errors(self) -> None:
         fake_client = self.FakeClient([RuntimeError("boom")])
         processor = InstructorLLMProcessor(
-            client=fake_client, provider_name="openai", model_name="gpt-test"
+            client=fake_client, provider_name="openai", model_name="gpt-test", threads=6
         )
         report = ReportDocument(title="Demo", source_file="demo.wav", media_type=MediaType.AUDIO)
 
@@ -480,7 +536,7 @@ class TestInstructorLlmProcessor:
         fake_client = SectionAwareClient()
 
         processor = InstructorLLMProcessor(
-            client=fake_client, provider_name="openai", model_name="gpt-test"
+            client=fake_client, provider_name="openai", model_name="gpt-test", threads=6
         )
         report = ReportDocument(
             title="Demo",
@@ -528,6 +584,7 @@ class TestInstructorLlmProcessor:
             provider_name="anthropic",
             model_name="claude-test",
             request_kwargs={"max_tokens": 4096},
+            threads=6,
         )
         report = ReportDocument(title="Demo", source_file="demo.wav", media_type=MediaType.AUDIO)
 
@@ -558,6 +615,7 @@ class TestInstructorLlmProcessor:
             client=fake_client,
             provider_name="openai",
             model_name="gpt-test",
+            threads=6,
         )
         report = ReportDocument(
             title="Demo",
@@ -592,6 +650,7 @@ class TestInstructorLlmProcessor:
             client=fake_client,
             provider_name="openai",
             model_name="gpt-test",
+            threads=6,
         )
         report = ReportDocument(title="Demo", source_file="demo.wav", media_type=MediaType.AUDIO)
 
@@ -633,7 +692,7 @@ class TestInstructorLlmProcessor:
             client=CompletionOrderClient(),
             provider_name="openai",
             model_name="gpt-test",
-            section_max_workers=2,
+            threads=2,
         )
         report = ReportDocument(
             title="Demo",
@@ -680,7 +739,7 @@ class TestInstructorLlmProcessor:
             )
         ])
         processor = InstructorLLMProcessor(
-            client=fake_client, provider_name="openai", model_name="gpt-test"
+            client=fake_client, provider_name="openai", model_name="gpt-test", threads=6
         )
         report = ReportDocument(
             title="Demo",
@@ -730,7 +789,10 @@ class TestInstructorProcessorFlow:
         self, responses: dict[str, tuple[BaseModel, dict[str, int]] | Exception]
     ) -> InstructorLLMProcessor:
         return InstructorLLMProcessor(
-            client=self.ResponseClient(responses), provider_name="stub", model_name="stub-model"
+            client=self.ResponseClient(responses),
+            provider_name="stub",
+            model_name="stub-model",
+            threads=6,
         )
 
     def test_returns_empty_section_result_for_report_without_sections(self) -> None:

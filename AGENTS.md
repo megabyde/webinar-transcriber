@@ -95,8 +95,7 @@ The package intentionally avoids deep nesting.
 - The Silero VAD ONNX model is vendored under `webinar_transcriber/assets/` so default speech-region
   detection does not require PyTorch or a first-run network download.
 - Speaker diarization uses `sherpa-onnx` with downloaded ONNX models cached under
-  `WEBINAR_DIARIZATION_CACHE_DIR` or `~/.cache/webinar-transcriber/diarization`; keep those model
-  artifacts out of the wheel.
+  `~/.cache/webinar-transcriber/diarization`; keep those model artifacts out of the wheel.
 
 ## Style Notes
 

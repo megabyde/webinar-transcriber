@@ -53,6 +53,7 @@ def build_diagnostics(
             report_status=ctx.llm_runtime.report_status,
             report_latency_sec=ctx.llm_runtime.report_latency_sec,
             report_usage=ctx.llm_runtime.report_usage or {},
+            response_metadata=ctx.llm_runtime.response_metadata,
         ),
         stage_durations_sec={key: round(value, 6) for key, value in ctx.stage_timings.items()},
         item_counts={
@@ -111,7 +112,7 @@ def write_run_diagnostics(
         ctx.layout.diagnostics_path.write_text(
             json.dumps(asdict(diagnostics), indent=2, ensure_ascii=False), encoding="utf-8"
         )
-    except Exception:
+    except Exception:  # pragma: no cover - best-effort failed-run diagnostics
         if not suppress_errors:
             raise
     return diagnostics

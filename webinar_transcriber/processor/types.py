@@ -39,3 +39,8 @@ class RunContext:
     current_stage: str | None = None
     layout: RunLayout | None = None
     llm_runtime: LLMRuntimeState = field(default_factory=LLMRuntimeState)
+
+    def record_warning(self, message: str) -> None:
+        """Record and report one run warning."""
+        self.warnings.append(message)
+        self.reporter.warn(message)
