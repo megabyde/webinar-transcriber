@@ -8,7 +8,7 @@ import pytest
 from click.testing import CliRunner
 
 from webinar_transcriber import __version__
-from webinar_transcriber.asr import ASRProcessingError, PromptCarryoverSettings
+from webinar_transcriber.asr import ASRProcessingError
 from webinar_transcriber.cli import main
 from webinar_transcriber.llm.contracts import LLMConfigurationError, LLMProcessingError
 from webinar_transcriber.models import (
@@ -19,7 +19,12 @@ from webinar_transcriber.models import (
     VideoAsset,
 )
 from webinar_transcriber.paths import OutputDirectoryExistsError, RunLayout
-from webinar_transcriber.processor import ProcessArtifacts
+from webinar_transcriber.processor import (
+    DiarizationConfig,
+    LLMConfig,
+    ProcessArtifacts,
+    TranscriptionConfig,
+)
 
 
 def _process_artifacts(input_path, run_dir) -> ProcessArtifacts:
@@ -83,15 +88,11 @@ class TestCli:
         process_input_mock.assert_called_once_with(
             input_path=input_path,
             output_dir=None,
-            asr_model=None,
-            language=None,
-            vad=True,
-            carryover=PromptCarryoverSettings(),
-            threads=7,
-            keep_audio=None,
-            enable_llm=False,
-            diarize=False,
-            diarize_speakers=None,
+            transcription_config=TranscriptionConfig(
+                threads=7,
+            ),
+            llm_config=LLMConfig(),
+            diarization_config=DiarizationConfig(),
             reporter=ANY,
         )
         assert process_input_mock.call_args.kwargs["reporter"].__class__.__name__ == (
@@ -121,7 +122,6 @@ class TestCli:
                     "en",
                     "--threads",
                     "3",
-                    "--no-vad",
                     "--keep-audio",
                     "mp3",
                     "--llm",
@@ -135,15 +135,14 @@ class TestCli:
         process_input_mock.assert_called_once_with(
             input_path=input_path,
             output_dir=None,
-            asr_model="models/whisper-cpp/custom.bin",
-            language="en",
-            vad=False,
-            carryover=PromptCarryoverSettings(),
-            threads=3,
-            keep_audio="mp3",
-            enable_llm=True,
-            diarize=True,
-            diarize_speakers=4,
+            transcription_config=TranscriptionConfig(
+                threads=3,
+                asr_model="models/whisper-cpp/custom.bin",
+                language="en",
+                keep_audio="mp3",
+            ),
+            llm_config=LLMConfig(enabled=True),
+            diarization_config=DiarizationConfig(enabled=True, speaker_count=4),
             reporter=ANY,
         )
 
@@ -160,7 +159,7 @@ class TestCli:
             result = runner.invoke(main, [str(input_path), "--keep-audio"])
 
         assert result.exit_code == 0
-        assert process_input_mock.call_args.kwargs["keep_audio"] == "mp3"
+        assert process_input_mock.call_args.kwargs["transcription_config"].keep_audio == "mp3"
 
     def test_help_describes_processing_options(self) -> None:
         runner = CliRunner()
@@ -171,7 +170,9 @@ class TestCli:
         assert "--asr-model" in result.output
         assert "--language" in result.output
         assert "--threads" in result.output
-        assert "--vad / --no-vad" in result.output
+        assert "Number of local audio-processing threads. Defaults" in result.output
+        assert "x>=1" not in result.output
+        assert "--vad" not in result.output
         assert "--keep-audio" in result.output
         assert "--llm" in result.output
         assert "--diarize / --no-diarize" in result.output

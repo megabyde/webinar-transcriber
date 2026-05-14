@@ -7,7 +7,6 @@ from .config import (
     ASR_BACKEND_NAME,
     WHISPER_CPP_MODEL_EXAMPLE,
     WHISPER_CPP_MODEL_FILENAME,
-    PromptCarryoverSettings,
     default_asr_threads,
 )
 from .transcriber import ASRProcessingError, WhisperCppTranscriber, device_name_from_system_info
@@ -17,7 +16,6 @@ __all__ = [
     "WHISPER_CPP_MODEL_EXAMPLE",
     "WHISPER_CPP_MODEL_FILENAME",
     "ASRProcessingError",
-    "PromptCarryoverSettings",
     "WhisperCppTranscriber",
     "build_prompt_carryover",
     "default_asr_threads",

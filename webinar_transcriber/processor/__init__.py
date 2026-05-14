@@ -6,15 +6,11 @@ from contextlib import ExitStack
 from dataclasses import asdict
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.asr import (
-    PromptCarryoverSettings,
-    WhisperCppTranscriber,
-)
+from webinar_transcriber.asr import WhisperCppTranscriber
 from webinar_transcriber.diagnostics import write_run_diagnostics
 from webinar_transcriber.llm import ensure_llm_extra_available
 from webinar_transcriber.media import probe_media
 from webinar_transcriber.normalized_audio import (
-    TranscriptionAudioFormat,
     prepared_transcription_audio,
     preserve_transcription_audio,
 )
@@ -24,13 +20,20 @@ from webinar_transcriber.reporter import BaseStageReporter
 from .asr_pipeline import AsrPipelineResult, run_asr_pipeline
 from .report import run_report_phase
 from .support import progress_stage, stage, write_json
-from .types import ProcessArtifacts, RunContext
+from .types import (
+    DiarizationConfig,
+    LLMConfig,
+    ProcessArtifacts,
+    RunContext,
+    TranscriptionConfig,
+)
+
+DEFAULT_DIARIZATION_CONFIG = DiarizationConfig()
+DEFAULT_LLM_CONFIG = LLMConfig()
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from webinar_transcriber.diarization import Diarizer
-    from webinar_transcriber.llm.contracts import LLMProcessor
     from webinar_transcriber.models import (
         MediaAsset,
         ReportDocument,
@@ -40,9 +43,6 @@ if TYPE_CHECKING:
     from webinar_transcriber.paths import RunLayout
 
 
-DEFAULT_PROMPT_CARRYOVER_SETTINGS = PromptCarryoverSettings()
-
-
 def run_transcription_phase(
     *,
     input_path: Path,
@@ -50,13 +50,8 @@ def run_transcription_phase(
     transcriber: WhisperCppTranscriber,
     layout: RunLayout,
     ctx: RunContext,
-    vad: bool,
-    carryover_enabled: bool,
-    language: str | None,
-    keep_audio: TranscriptionAudioFormat | None,
-    diarize: bool,
-    diarize_speakers: int | None,
-    diarizer: Diarizer | None,
+    transcription_config: TranscriptionConfig,
+    diarization_config: DiarizationConfig,
 ) -> AsrPipelineResult:
     """Run the audio preparation and ASR half of the pipeline.
 
@@ -89,15 +84,11 @@ def run_transcription_phase(
             transcriber=transcriber,
             layout=layout,
             ctx=ctx,
-            vad=vad,
-            carryover_enabled=carryover_enabled,
-            language=language,
-            diarize=diarize,
-            diarize_speakers=diarize_speakers,
-            diarizer=diarizer,
+            transcription_config=transcription_config,
+            diarization_config=diarization_config,
         )
 
-        if keep_audio:
+        if transcription_config.keep_audio:
             with progress_stage(
                 ctx,
                 "save_transcription_audio",
@@ -105,11 +96,13 @@ def run_transcription_phase(
                 total=transcription_audio_total,
                 count_label="s",
             ) as st:
-                preserved_audio_path = layout.transcription_audio_path(keep_audio)
+                preserved_audio_path = layout.transcription_audio_path(
+                    transcription_config.keep_audio
+                )
                 preserve_transcription_audio(
                     audio_path,
                     preserved_audio_path,
-                    audio_format=keep_audio,
+                    audio_format=transcription_config.keep_audio,
                     progress_callback=lambda completed_sec: st.advance_to(
                         min(completed_sec, transcription_audio_total)
                     ),
@@ -124,18 +117,10 @@ def process_input(
     input_path: Path,
     *,
     output_dir: Path | None = None,
-    asr_model: str | None = None,
-    language: str | None = None,
-    vad: bool = True,
-    carryover: PromptCarryoverSettings = DEFAULT_PROMPT_CARRYOVER_SETTINGS,
-    threads: int,
-    keep_audio: TranscriptionAudioFormat | None = None,
-    enable_llm: bool = False,
-    diarize: bool = False,
-    diarize_speakers: int | None = None,
+    transcription_config: TranscriptionConfig,
+    llm_config: LLMConfig = DEFAULT_LLM_CONFIG,
+    diarization_config: DiarizationConfig = DEFAULT_DIARIZATION_CONFIG,
     transcriber: WhisperCppTranscriber | None = None,
-    diarizer: Diarizer | None = None,
-    llm_processor: LLMProcessor | None = None,
     reporter: BaseStageReporter | None = None,
 ) -> ProcessArtifacts:
     """Process a single audio or video file into report artifacts.
@@ -145,17 +130,16 @@ def process_input(
     """
     active_reporter = reporter or BaseStageReporter()
     ctx = RunContext(reporter=active_reporter)
-    if enable_llm and llm_processor is None:
+    if llm_config.enabled and llm_config.processor is None:
         ensure_llm_extra_available()
 
     with ExitStack() as transcriber_scope:
         if transcriber is None:
             active_transcriber = transcriber_scope.enter_context(
                 WhisperCppTranscriber(
-                    model_name=asr_model,
-                    threads=threads,
-                    language=language,
-                    carryover_settings=carryover,
+                    model_name=transcription_config.asr_model,
+                    threads=transcription_config.threads,
+                    language=transcription_config.language,
                 )
             )
         else:
@@ -184,13 +168,8 @@ def process_input(
                 transcriber=active_transcriber,
                 layout=layout,
                 ctx=ctx,
-                vad=vad,
-                carryover_enabled=carryover.enabled,
-                language=language,
-                keep_audio=keep_audio,
-                diarize=diarize,
-                diarize_speakers=diarize_speakers,
-                diarizer=diarizer,
+                transcription_config=transcription_config,
+                diarization_config=diarization_config,
             )
 
             report, scenes, slide_frames = run_report_phase(
@@ -198,16 +177,16 @@ def process_input(
                 layout=layout,
                 media_asset=media_asset,
                 normalized_transcription=asr_result.normalized_transcription,
-                enable_llm=enable_llm,
-                llm_processor=llm_processor,
-                threads=threads,
+                enable_llm=llm_config.enabled,
+                llm_processor=llm_config.processor,
+                threads=transcription_config.threads,
                 ctx=ctx,
             )
 
             diagnostics = write_run_diagnostics(
                 ctx,
                 status="succeeded",
-                llm_enabled=enable_llm,
+                llm_enabled=llm_config.enabled,
                 transcription=asr_result.transcription,
                 normalized_transcription=asr_result.normalized_transcription,
                 asr_pipeline=asr_result.asr_pipeline,
@@ -236,7 +215,7 @@ def process_input(
                 status="failed",
                 failed_stage=ctx.current_stage,
                 error=str(ex),
-                llm_enabled=enable_llm,
+                llm_enabled=llm_config.enabled,
                 transcription=asr_result.transcription if asr_result else None,
                 normalized_transcription=(
                     asr_result.normalized_transcription if asr_result else None

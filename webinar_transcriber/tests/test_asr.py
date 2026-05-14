@@ -9,7 +9,6 @@ from webinar_transcriber.asr import (
     WHISPER_CPP_MODEL_EXAMPLE,
     WHISPER_CPP_MODEL_FILENAME,
     ASRProcessingError,
-    PromptCarryoverSettings,
     WhisperCppTranscriber,
     build_prompt_carryover,
     device_name_from_system_info,
@@ -319,9 +318,7 @@ class TestWhisperCppTranscriber:
         fake_model = SequencedLanguageModel()
         install_fake_pywhispercpp(monkeypatch, model=fake_model)
 
-        decoded_windows = WhisperCppTranscriber(
-            threads=4, carryover_settings=PromptCarryoverSettings(enabled=False)
-        ).transcribe_inference_windows(
+        decoded_windows = WhisperCppTranscriber(threads=4).transcribe_inference_windows(
             np.zeros(80_000, dtype=np.float32),
             [
                 InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
@@ -506,7 +503,7 @@ class TestPromptCarryover:
                 text="First sentence. Second sentence. Third sentence here.",
                 segments=[],
             ),
-            settings=PromptCarryoverSettings(max_chars=30),
+            max_chars=30,
         )
 
         assert carryover == "Third sentence here."
@@ -518,7 +515,7 @@ class TestPromptCarryover:
                 text=("first\N{IDEOGRAPHIC FULL STOP}second\N{IDEOGRAPHIC FULL STOP}third"),
                 segments=[],
             ),
-            settings=PromptCarryoverSettings(max_chars=7),
+            max_chars=7,
         )
 
         assert carryover == "third"
@@ -530,7 +527,7 @@ class TestPromptCarryover:
                 text="long unpunctuated carryover",
                 segments=[],
             ),
-            settings=PromptCarryoverSettings(max_chars=9),
+            max_chars=9,
         )
 
         assert carryover == "carryover"
@@ -542,7 +539,6 @@ class TestPromptCarryover:
                 text=" \n\t ",
                 segments=[],
             ),
-            settings=PromptCarryoverSettings(),
         )
 
         assert carryover is None
@@ -553,15 +549,3 @@ class TestPromptCarryover:
         assert device_name_from_system_info("CPU = 1 | METAL = 1") == "metal"
         assert device_name_from_system_info(system_info) == "metal"
         assert device_name_from_system_info("CPU = 1") == "cpu"
-
-    def test_build_prompt_carryover_drops_when_disabled(self) -> None:
-        carryover = build_prompt_carryover(
-            DecodedWindow(
-                window=InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
-                text="Carry this.",
-                segments=[],
-            ),
-            settings=PromptCarryoverSettings(enabled=False),
-        )
-
-        assert carryover is None

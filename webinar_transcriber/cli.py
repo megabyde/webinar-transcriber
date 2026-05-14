@@ -10,14 +10,18 @@ import click
 from webinar_transcriber import __version__
 from webinar_transcriber.asr import (
     ASRProcessingError,
-    PromptCarryoverSettings,
     default_asr_threads,
 )
 from webinar_transcriber.diarization import DiarizationProcessingError
 from webinar_transcriber.llm.contracts import LLMConfigurationError, LLMProcessingError
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
-from webinar_transcriber.processor import process_input
+from webinar_transcriber.processor import (
+    DiarizationConfig,
+    LLMConfig,
+    TranscriptionConfig,
+    process_input,
+)
 from webinar_transcriber.ui import RichStageReporter
 
 if TYPE_CHECKING:
@@ -29,6 +33,8 @@ class CLIError(click.ClickException):
 
 
 def _resolve_threads(_ctx: click.Context, _param: click.Parameter, value: int | None) -> int:
+    if value is not None and value < 1:
+        raise click.BadParameter("must be greater than or equal to 1")
     return value or default_asr_threads()
 
 
@@ -56,17 +62,12 @@ def _resolve_threads(_ctx: click.Context, _param: click.Parameter, value: int | 
 )
 @click.option(
     "--threads",
-    type=click.IntRange(min=1),
+    type=int,
+    metavar="INTEGER",
     default=None,
     callback=_resolve_threads,
-    show_default="host CPU count, capped at 8",
+    show_default=False,
     help="Number of local audio-processing threads. Defaults to the host CPU count, capped at 8.",
-)
-@click.option(
-    "--vad/--no-vad",
-    default=True,
-    show_default=True,
-    help="Enable Silero speech-region detection before transcription planning.",
 )
 @click.option(
     "--keep-audio",
@@ -97,7 +98,6 @@ def main(
     asr_model: str | None,
     language: str | None,
     threads: int,
-    vad: bool,
     keep_audio: str | None,
     llm: bool,
     diarize: bool,
@@ -119,15 +119,17 @@ def main(
         process_input(
             input_path=input_path,
             output_dir=output_dir,
-            asr_model=asr_model,
-            language=language,
-            vad=vad,
-            carryover=PromptCarryoverSettings(),
-            threads=threads,
-            keep_audio=kept_format,
-            enable_llm=llm,
-            diarize=diarize,
-            diarize_speakers=diarize_speakers,
+            transcription_config=TranscriptionConfig(
+                threads=threads,
+                asr_model=asr_model,
+                language=language,
+                keep_audio=kept_format,
+            ),
+            llm_config=LLMConfig(enabled=llm),
+            diarization_config=DiarizationConfig(
+                enabled=diarize,
+                speaker_count=diarize_speakers,
+            ),
             reporter=reporter,
         )
     except KeyboardInterrupt:

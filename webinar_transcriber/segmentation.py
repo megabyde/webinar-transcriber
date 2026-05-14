@@ -30,7 +30,6 @@ SHERPA_VAD_BUFFER_SIZE_SEC = 10 * 60
 def detect_speech_regions(
     samples: np.ndarray,
     *,
-    enabled: bool,
     threads: int,
     progress_callback: Callable[[float, int], None] | None = None,
 ) -> tuple[list[SpeechRegion], list[str]]:
@@ -38,11 +37,6 @@ def detect_speech_regions(
     duration_sec = normalized_audio_duration(samples)
     if duration_sec <= 0:
         return [], []
-
-    if not enabled:
-        if progress_callback is not None:
-            progress_callback(duration_sec, 1)
-        return [SpeechRegion(start_sec=0.0, end_sec=duration_sec)], []
 
     regions = _silero_speech_regions(
         samples,

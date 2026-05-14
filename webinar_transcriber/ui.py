@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from time import perf_counter
 from typing import TYPE_CHECKING
 
@@ -30,19 +31,32 @@ if TYPE_CHECKING:
     from webinar_transcriber.processor import ProcessArtifacts
 
 
+@dataclass(frozen=True)
+class _ActiveStage:
+    key: str
+    label: str
+    started_at: float
+
+
+@dataclass(frozen=True)
+class _ActiveStatusDisplay:
+    status: Status
+
+
+@dataclass(frozen=True)
+class _ActiveProgressDisplay:
+    progress: Progress
+    task_id: TaskID
+
+
 class RichStageReporter(BaseStageReporter):
     """Terminal reporter using Rich status spinners and summaries."""
 
     def __init__(self, console: Console | None = None) -> None:
         """Initialize the Rich-backed terminal reporter."""
         self._console = console or Console()
-        self._active_status: Status | None = None
-        self._active_progress: Progress | None = None
-        self._active_task_id: TaskID | None = None
-        self._active_stage_key: str | None = None
-        self._active_stage_label: str | None = None
-        self._active_stage_started_at: float | None = None
-        self._warnings: list[str] = []
+        self._active_display: _ActiveStatusDisplay | _ActiveProgressDisplay | None = None
+        self._active_stage: _ActiveStage | None = None
         self._stage_count = 0
 
     def begin_run(self, input_path: Path) -> None:
@@ -57,7 +71,7 @@ class RichStageReporter(BaseStageReporter):
         status = self._console.status(
             f"[bold blue][{self._stage_count}][/bold blue] {label}", spinner="dots"
         )
-        self._active_status = status
+        self._active_display = _ActiveStatusDisplay(status=status)
         status.start()
 
     def progress_started(
@@ -88,9 +102,8 @@ class RichStageReporter(BaseStageReporter):
             console=self._console,
             transient=True,
         )
-        self._active_progress = progress
         progress.start()
-        self._active_task_id = progress.add_task(
+        task_id = progress.add_task(
             label,
             total=max(total, 1.0),
             count_label=count_label,
@@ -103,21 +116,24 @@ class RichStageReporter(BaseStageReporter):
             rate_text="",
             detail_text=detail or "",
         )
+        self._active_display = _ActiveProgressDisplay(progress=progress, task_id=task_id)
 
     def progress_advanced(
         self, stage_key: str, *, advance: float = 1.0, detail: str | None = None
     ) -> None:
         """Advance the active determinate progress display."""
-        if self._active_stage_key != stage_key:
+        active_stage = self._active_stage
+        if active_stage is None or active_stage.key != stage_key:
             return
-        if self._active_progress is None or self._active_task_id is None:
+        active_display = self._active_display
+        if not isinstance(active_display, _ActiveProgressDisplay):
             return
-        self._active_progress.update(
-            self._active_task_id, advance=advance, detail_text=detail or ""
+        active_display.progress.update(
+            active_display.task_id, advance=advance, detail_text=detail or ""
         )
-        task = self._active_progress.tasks[self._active_task_id]
-        self._active_progress.update(
-            self._active_task_id,
+        task = active_display.progress.tasks[active_display.task_id]
+        active_display.progress.update(
+            active_display.task_id,
             count_text=_count_text(
                 completed=task.completed,
                 total=task.total,
@@ -125,7 +141,7 @@ class RichStageReporter(BaseStageReporter):
             ),
             rate_text=_rate_text(
                 completed=task.completed,
-                elapsed_sec=perf_counter() - (self._active_stage_started_at or 0.0),
+                elapsed_sec=perf_counter() - active_stage.started_at,
                 rate_label=task.fields.get("rate_label"),
             ),
         )
@@ -134,25 +150,23 @@ class RichStageReporter(BaseStageReporter):
         """Stop the active display and render a finished-stage line."""
         self._stop_active_display()
         elapsed = 0.0
-        if self._active_stage_key == stage_key and self._active_stage_started_at is not None:
-            elapsed = perf_counter() - self._active_stage_started_at
+        if self._active_stage is not None and self._active_stage.key == stage_key:
+            elapsed = perf_counter() - self._active_stage.started_at
 
         detail_suffix = f" - {detail}" if detail else ""
         self._console.print(f"[green]\u2713[/] {label}{detail_suffix} [dim]({elapsed:.2f}s)[/]")
-        self._active_status = None
         self._clear_active_stage()
 
     def warn(self, message: str) -> None:
         """Render a warning message."""
         self._stop_active_display()
-        self._warnings.append(message)
         self._console.print(f"[yellow]![/] {message}")
 
     def interrupted(self) -> None:
         """Render an interrupted-run message."""
         stage_suffix = ""
-        if self._active_stage_label is not None:
-            stage_suffix = f" during {self._active_stage_label.lower()}"
+        if self._active_stage is not None:
+            stage_suffix = f" during {self._active_stage.label.lower()}"
         self._clear_active_display()
         self._console.print(f"[red]\u2717[/] Interrupted{stage_suffix}.")
 
@@ -180,27 +194,22 @@ class RichStageReporter(BaseStageReporter):
         )
 
     def _stop_active_display(self) -> None:
-        if self._active_status is not None:
-            self._active_status.stop()
-            self._active_status = None
-        if self._active_progress is not None:
-            self._active_progress.stop()
-            self._active_progress = None
-            self._active_task_id = None
+        active_display = self._active_display
+        if isinstance(active_display, _ActiveStatusDisplay):
+            active_display.status.stop()
+        elif isinstance(active_display, _ActiveProgressDisplay):
+            active_display.progress.stop()
+        self._active_display = None
 
     def _clear_active_display(self) -> None:
         self._stop_active_display()
         self._clear_active_stage()
 
     def _set_active_stage(self, stage_key: str, label: str) -> None:
-        self._active_stage_key = stage_key
-        self._active_stage_label = label
-        self._active_stage_started_at = perf_counter()
+        self._active_stage = _ActiveStage(key=stage_key, label=label, started_at=perf_counter())
 
     def _clear_active_stage(self) -> None:
-        self._active_stage_key = None
-        self._active_stage_label = None
-        self._active_stage_started_at = None
+        self._active_stage = None
 
 
 def _count_text(*, completed: float, total: float | None, count_label: object) -> str:

@@ -7,22 +7,19 @@ from typing import TYPE_CHECKING
 
 from webinar_transcriber.text import SENTENCE_TERMINATORS
 
+from .config import CARRYOVER_MAX_CHARS
+
 if TYPE_CHECKING:
     from webinar_transcriber.models import DecodedWindow
-
-    from .config import PromptCarryoverSettings
 
 _CARRYOVER_WHITESPACE = re.compile(r"\s+")
 
 
 def build_prompt_carryover(
-    decoded_window: DecodedWindow, *, settings: PromptCarryoverSettings
+    decoded_window: DecodedWindow, *, max_chars: int = CARRYOVER_MAX_CHARS
 ) -> str | None:
     """Return a bounded prompt suffix for the next window, or `None` when confidence is weak."""
-    if not settings.enabled:
-        return None
-
-    carryover = _tail_text(decoded_window.text, max_chars=settings.max_chars)
+    carryover = _tail_text(decoded_window.text, max_chars=max_chars)
     return carryover or None
 
 
