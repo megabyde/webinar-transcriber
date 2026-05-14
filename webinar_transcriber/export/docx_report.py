@@ -10,6 +10,7 @@ from docx import Document
 from docx.shared import Inches
 
 from webinar_transcriber.export.formatting import section_timecode
+from webinar_transcriber.text_utils import split_paragraph_blocks
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -60,12 +61,7 @@ def write_docx_report(
 
 
 def _split_paragraphs(text: str) -> list[str]:
-    paragraphs = []
-    for block in text.split("\n\n"):
-        paragraph = block.strip()
-        if paragraph:
-            paragraphs.append(paragraph)
-    return paragraphs or [text]
+    return split_paragraph_blocks(text) or [text]
 
 
 def _add_section(
