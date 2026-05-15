@@ -90,6 +90,7 @@ class TestCli:
             output_dir=None,
             transcription_config=TranscriptionConfig(
                 threads=7,
+                asr_model="large-v3-turbo",
             ),
             llm_config=LLMConfig(),
             diarization_config=DiarizationConfig(),
@@ -178,6 +179,8 @@ class TestCli:
         assert "--diarize / --no-diarize" in result.output
         assert "--diarize-speakers" in result.output
         assert "Override the whisper.cpp model identifier" in result.output
+        assert "[default: large-v3-turbo]" in result.output
+        assert "Force a Whisper language code hint" in result.output
         assert "model path" in result.output
         assert "provider-backed report" in result.output
         assert "enhancement." in result.output
