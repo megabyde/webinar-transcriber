@@ -9,6 +9,7 @@ import click
 
 from webinar_transcriber import __version__
 from webinar_transcriber.asr import (
+    WHISPER_CPP_MODEL_FILENAME,
     ASRProcessingError,
     default_asr_threads,
 )
@@ -50,15 +51,16 @@ def _resolve_threads(_ctx: click.Context, _param: click.Parameter, value: int | 
 @click.option(
     "--asr-model",
     type=str,
-    default=None,
+    default=WHISPER_CPP_MODEL_FILENAME,
+    show_default=True,
     help="Override the whisper.cpp model identifier or local model path, for example "
-    "'large-v3-turbo' or 'models/whisper-cpp/ggml-large-v3-turbo.bin'.",
+    "'models/whisper-cpp/ggml-large-v3-turbo.bin'.",
 )
 @click.option(
     "--language",
     type=str,
     default=None,
-    help="Force a Whisper language code, for example 'en' or 'ru'.",
+    help="Force a Whisper language code hint, for example 'en' or 'ru'.",
 )
 @click.option(
     "--threads",
