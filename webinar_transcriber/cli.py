@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import click
 
@@ -16,6 +15,7 @@ from webinar_transcriber.asr import (
 from webinar_transcriber.diarization import DiarizationProcessingError
 from webinar_transcriber.llm.contracts import LLMConfigurationError, LLMProcessingError
 from webinar_transcriber.media import MediaProcessingError
+from webinar_transcriber.normalized_audio import TranscriptionAudioFormat
 from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.processor import (
     DiarizationConfig,
@@ -24,9 +24,6 @@ from webinar_transcriber.processor import (
     process_input,
 )
 from webinar_transcriber.ui import RichStageReporter
-
-if TYPE_CHECKING:
-    from webinar_transcriber.normalized_audio import TranscriptionAudioFormat
 
 
 class CLIError(click.ClickException):
@@ -73,7 +70,7 @@ def _resolve_threads(_ctx: click.Context, _param: click.Parameter, value: int | 
 )
 @click.option(
     "--keep-audio",
-    type=click.Choice(["wav", "mp3"], case_sensitive=False),
+    type=click.Choice(list(TranscriptionAudioFormat), case_sensitive=False),
     default=None,
     flag_value="mp3",
     is_flag=False,

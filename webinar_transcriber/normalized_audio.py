@@ -5,9 +5,10 @@ from __future__ import annotations
 import tempfile
 import wave
 from contextlib import contextmanager
+from enum import StrEnum
 from pathlib import Path
 from shutil import copy2
-from typing import TYPE_CHECKING, Literal, assert_never, cast
+from typing import TYPE_CHECKING, assert_never, cast
 
 import av
 import numpy as np
@@ -29,7 +30,13 @@ NORMALIZED_SAMPLE_RATE = 16_000
 NORMALIZED_CHANNELS = 1
 NORMALIZED_SAMPLE_WIDTH_BYTES = 2
 NORMALIZED_AUDIO_CODEC = "pcm_s16le"
-TranscriptionAudioFormat = Literal["wav", "mp3"]
+
+
+class TranscriptionAudioFormat(StrEnum):
+    """Supported normalized transcription-audio artifact formats."""
+
+    WAV = "wav"
+    MP3 = "mp3"
 
 
 def sample_index_for_time(time_sec: float) -> int:
@@ -141,7 +148,7 @@ def preserve_transcription_audio(
     audio_path: Path,
     output_path: Path,
     *,
-    audio_format: TranscriptionAudioFormat = "wav",
+    audio_format: TranscriptionAudioFormat = TranscriptionAudioFormat.WAV,
     progress_callback: Callable[[float], None] | None = None,
 ) -> Path:
     """Persist prepared transcription audio as a run artifact.
@@ -150,10 +157,10 @@ def preserve_transcription_audio(
         Path: The written artifact path.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    if audio_format == "wav":
+    if audio_format == TranscriptionAudioFormat.WAV:
         copy2(audio_path, output_path)
         return output_path
-    if audio_format == "mp3":
+    if audio_format == TranscriptionAudioFormat.MP3:
         return transcode_audio_to_mp3(audio_path, output_path, progress_callback=progress_callback)
     assert_never(audio_format)  # pragma: no cover - TranscriptionAudioFormat is exhaustive
 

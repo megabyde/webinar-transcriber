@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, cast
 
+from webinar_transcriber.models import TokenUsage
 from webinar_transcriber.text_utils import split_paragraph_blocks
 
 from .contracts import (
@@ -14,6 +16,11 @@ from .contracts import (
     LLMProcessingError,
 )
 from .prompts import REPORT_SECTION_EXCERPT_LIMIT
+
+_SCHEMA_LABELS = {
+    "SectionTextResponse": "Section polish",
+    "ReportPolishResponse": "Report polish",
+}
 
 if TYPE_CHECKING:
     from webinar_transcriber.llm.schemas import ReportSectionUpdate
@@ -153,7 +160,7 @@ def normalize_polished_text(*, polished_text: str) -> str:
     if not cleaned:
         return ""
 
-    cleaned = _normalize_paragraph_blocks(cleaned)
+    cleaned = _normalize_llm_paragraphs(cleaned)
     return re.sub(r"[ \t]+\n", "\n", cleaned)
 
 
@@ -183,12 +190,12 @@ def normalize_polished_section_tldr(tldr: str) -> str:
 
 
 def _normalize_tldr_blocks(text: str) -> str:
-    normalized = _normalize_paragraph_blocks(text)
+    normalized = _normalize_llm_paragraphs(text)
     return re.sub(r"(?<=\S)[ \t]+(?=(?:[-*]|\d+[.)])\s+)", "\n", normalized)
 
 
-def _normalize_paragraph_blocks(text: str) -> str:
-    """Normalize blank-line paragraph blocks into stable spacing.
+def _normalize_llm_paragraphs(text: str) -> str:
+    """Normalize LLM paragraph blocks into stable spacing.
 
     Returns:
         str: The normalized paragraph text.
@@ -198,28 +205,31 @@ def _normalize_paragraph_blocks(text: str) -> str:
     )
 
 
-def extract_usage(response: object) -> dict[str, int]:
+def extract_usage(response: object) -> TokenUsage:
     """Extract token usage from provider responses with a stable key subset.
 
     Returns:
-        dict[str, int]: The extracted token counts.
+        TokenUsage: The extracted token counts.
     """
     usage = getattr(response, "usage", None)
     if usage is None:
-        return {}
+        return TokenUsage()
 
-    extracted: dict[str, int] = {}
-    for field_name in ("input_tokens", "output_tokens", "total_tokens"):
-        field_value = getattr(usage, field_name, None)
-        if isinstance(field_value, int):
-            extracted[field_name] = field_value
-    if (
-        "total_tokens" not in extracted
-        and "input_tokens" in extracted
-        and "output_tokens" in extracted
-    ):
-        extracted["total_tokens"] = extracted["input_tokens"] + extracted["output_tokens"]
-    return extracted
+    input_tokens = _token_count(usage, "input_tokens")
+    output_tokens = _token_count(usage, "output_tokens")
+    total_tokens = _token_count(usage, "total_tokens")
+    if total_tokens is None and input_tokens is not None and output_tokens is not None:
+        total_tokens = input_tokens + output_tokens
+    return TokenUsage(
+        input_tokens=input_tokens or 0,
+        output_tokens=output_tokens or 0,
+        total_tokens=total_tokens or 0,
+    )
+
+
+def _token_count(usage: object, field_name: str) -> int | None:
+    field_value = getattr(usage, field_name, None)
+    return field_value if isinstance(field_value, int) else None
 
 
 def extract_response_metadata(response: object) -> dict[str, object]:
@@ -259,29 +269,23 @@ def _text_attr(value: object | None, name: str) -> str | None:
 
 
 def _json_safe(value: object) -> object | None:
-    if value is None or isinstance(value, str | int | float | bool):
-        return value
-    if isinstance(value, Mapping):
-        return {
-            str(key): safe_value
-            for key, item in value.items()
-            if (safe_value := _json_safe(item)) is not None
-        }
-    if isinstance(value, Sequence) and not isinstance(value, str):
-        return [item for item in (_json_safe(item) for item in value) if item is not None]
-    model_dump = getattr(value, "model_dump", None)
-    if callable(model_dump):
-        return _json_safe(model_dump())
-    to_dict = getattr(value, "to_dict", None)
-    if callable(to_dict):
-        return _json_safe(to_dict())
+    try:
+        return json.loads(json.dumps(value, default=_json_default, ensure_ascii=False))
+    except (TypeError, ValueError):
+        return None
+
+
+def _json_default(value: object) -> object:
+    if callable(model_dump := getattr(value, "model_dump", None)):
+        try:
+            return model_dump(mode="json")
+        except TypeError:
+            return model_dump()
+    if callable(to_dict := getattr(value, "to_dict", None)):
+        return to_dict()
     return None
 
 
 def schema_label(response_model: type[object]) -> str:
     """Return the human-facing label for one structured response schema."""
-    if response_model.__name__ == "SectionTextResponse":
-        return "Section polish"
-    if response_model.__name__ == "ReportPolishResponse":
-        return "Report polish"
-    return "Structured LLM"
+    return _SCHEMA_LABELS.get(response_model.__name__, "Structured LLM")

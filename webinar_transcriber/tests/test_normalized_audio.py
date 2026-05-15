@@ -12,6 +12,7 @@ import pytest
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.models import SpeechRegion
 from webinar_transcriber.normalized_audio import (
+    TranscriptionAudioFormat,
     _mux_audio_frames,
     extract_audio,
     load_normalized_audio,
@@ -144,7 +145,7 @@ class TestNormalizedAudio:
                 "webinar_transcriber.normalized_audio.transcode_audio_to_mp3", fake_transcode
             )
             kept_audio_path = preserve_transcription_audio(
-                audio_path, expected_output, audio_format="mp3"
+                audio_path, expected_output, audio_format=TranscriptionAudioFormat.MP3
             )
 
         assert calls == [(audio_path, expected_output)]

@@ -28,7 +28,7 @@ def _slugify_stem(path: Path) -> str:
     return stem or "input"
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True, frozen=True)
 class RunLayout:
     """Computed paths for a single processing run."""
 

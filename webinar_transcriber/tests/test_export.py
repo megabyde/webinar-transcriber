@@ -383,7 +383,7 @@ class TestJsonReport:
                 "end_sec": 5.0,
                 "transcript_text": "Paragraph one.",
                 "tldr": None,
-                "frame_id": None,
+                "video": None,
                 "image_path": None,
             }
         ]

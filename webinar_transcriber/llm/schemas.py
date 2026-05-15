@@ -1,4 +1,9 @@
-"""Pydantic response schemas for Instructor-backed LLM integrations."""
+"""Pydantic wire schemas for Instructor-backed LLM responses.
+
+These models validate provider responses at the Instructor boundary. Internal
+pipeline code should use dataclasses from `webinar_transcriber.llm.contracts`
+and `webinar_transcriber.models` instead.
+"""
 
 from __future__ import annotations
 

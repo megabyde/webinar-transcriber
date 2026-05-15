@@ -60,10 +60,6 @@ def write_docx_report(
     return output_path
 
 
-def _split_paragraphs(text: str) -> list[str]:
-    return split_paragraph_blocks(text) or [text]
-
-
 def _add_section(
     document: DocxDocument,
     section: ReportSection,
@@ -81,7 +77,8 @@ def _add_section(
         warning_callback=warning_callback,
     )
     _add_section_tldr(document, section.tldr)
-    for paragraph_text in _split_paragraphs(section.transcript_text):
+    paragraphs = split_paragraph_blocks(section.transcript_text) or [section.transcript_text]
+    for paragraph_text in paragraphs:
         if not _add_speaker_paragraph(document, paragraph_text):
             document.add_paragraph(paragraph_text)
 
@@ -118,7 +115,8 @@ def _add_section_tldr(document: DocxDocument, tldr: str | None) -> None:
 
 
 def _add_text_blocks(document: DocxDocument, text: str) -> None:
-    for paragraph_text in _split_paragraphs(text):
+    paragraphs = split_paragraph_blocks(text) or [text]
+    for paragraph_text in paragraphs:
         lines = [line.strip() for line in paragraph_text.splitlines() if line.strip()]
         for line in lines:
             if _add_speaker_paragraph(document, line):

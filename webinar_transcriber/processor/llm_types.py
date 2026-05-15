@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from webinar_transcriber.models import ReportStatus, TokenUsage
 
 
 @dataclass
@@ -12,7 +15,7 @@ class LLMRuntimeState:
 
     provider_name: str | None = None
     model_name: str | None = None
-    report_status: Literal["disabled", "applied", "fallback"] = "disabled"
+    report_status: ReportStatus = "disabled"
     report_latency_sec: float | None = None
-    report_usage: dict[str, int] | None = None
+    report_usage: TokenUsage | None = None
     response_metadata: list[dict[str, object]] = field(default_factory=list)

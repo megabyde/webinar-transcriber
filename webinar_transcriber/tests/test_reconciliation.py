@@ -15,14 +15,14 @@ class TestReconcileDecodedWindows:
         transcription = reconcile_decoded_windows([
             DecodedWindow(
                 window=InferenceWindow(id="window-2", region_index=0, start_sec=4.0, end_sec=6.0),
-                language="en",
+                detected_language="en",
                 segments=[
                     TranscriptSegment(id="w2s1", text="Action items", start_sec=4.0, end_sec=6.0)
                 ],
             ),
             DecodedWindow(
                 window=InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=2.0),
-                language="en",
+                detected_language="en",
                 segments=[
                     TranscriptSegment(id="w1s1", text="Agenda review", start_sec=0.0, end_sec=2.0)
                 ],
@@ -39,7 +39,7 @@ class TestReconcileDecodedWindows:
         transcription = reconcile_decoded_windows([
             DecodedWindow(
                 window=InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=2.0),
-                language="en",
+                detected_language="en",
                 segments=[
                     TranscriptSegment(id="w1s1", text="   ", start_sec=0.0, end_sec=1.0),
                     TranscriptSegment(id="w1s2", text="Agenda review", start_sec=1.0, end_sec=2.0),

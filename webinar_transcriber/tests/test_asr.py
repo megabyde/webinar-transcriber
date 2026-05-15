@@ -281,7 +281,7 @@ class TestWhisperCppTranscriber:
             ),
         )
 
-        assert [w.language for w in decoded_windows] == ["ru", "ru"]
+        assert [w.detected_language for w in decoded_windows] == ["ru", "ru"]
         assert [w.text for w in decoded_windows] == ["agenda review", "agenda review follow up"]
         assert [w.input_prompt for w in decoded_windows] == [None, "agenda review"]
         assert progress_updates == [1.0, 2.0]
@@ -326,7 +326,7 @@ class TestWhisperCppTranscriber:
             ],
         )
 
-        assert [window.language for window in decoded_windows] == ["ru", "ru", "en", "en"]
+        assert [window.detected_language for window in decoded_windows] == ["ru", "ru", "en", "en"]
         assert len(fake_model.auto_detect_calls) == 2
         assert fake_model.transcribe_calls[0][1] == {"language": "ru"}
         assert fake_model.transcribe_calls[1][1] == {"language": "ru"}
@@ -343,7 +343,7 @@ class TestWhisperCppTranscriber:
             [InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
         )
 
-        assert [window.language for window in decoded_windows] == ["en"]
+        assert [window.detected_language for window in decoded_windows] == ["en"]
         assert fake_model.auto_detect_calls == []
         assert fake_model.transcribe_calls[0][1] == {"language": "en"}
 
@@ -438,7 +438,7 @@ class TestWhisperCppTranscriber:
             warning_callback=warnings.append,
         )[0]
 
-        assert decoded_window.language is None
+        assert decoded_window.detected_language is None
         assert warnings == [
             "whisper.cpp language detection failed for window-1; "
             "transcribing without an explicit language hint."

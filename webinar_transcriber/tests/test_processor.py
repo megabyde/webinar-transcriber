@@ -31,8 +31,10 @@ from webinar_transcriber.models import (
     SlideFrame,
     SpeakerTurn,
     SpeechRegion,
+    TokenUsage,
     TranscriptSegment,
 )
+from webinar_transcriber.normalized_audio import TranscriptionAudioFormat
 from webinar_transcriber.paths import RunLayout
 from webinar_transcriber.processor import (
     DiarizationConfig,
@@ -64,13 +66,13 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from webinar_transcriber.diarization import Diarizer
-    from webinar_transcriber.normalized_audio import TranscriptionAudioFormat
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 EXPECTED_LLM_WARNING = (
     "Section polish response returned an empty transcript text for section-1; kept original text."
 )
-EXPECTED_LLM_USAGE = {"input_tokens": 20, "output_tokens": 6, "total_tokens": 26}
+EXPECTED_LLM_USAGE = TokenUsage(input_tokens=20, output_tokens=6, total_tokens=26)
+EXPECTED_LLM_USAGE_JSON = {"input_tokens": 20, "output_tokens": 6, "total_tokens": 26}
 EXPECTED_LLM_SECTION_TEXT = (
     "Agenda review, and project status update.\n\nNext step: please send the draft by Friday."
 )
@@ -134,7 +136,10 @@ class ConfigurableLLMProcessor:
         else:
             self._section_result = section_result
         metadata_result = metadata_result or LLMReportMetadataResult(
-            summary=[], action_items=[], section_titles={}, usage={}
+            summary=[],
+            action_items=[],
+            section_titles={},
+            usage=TokenUsage(),
         )
         if isinstance(metadata_result, LLMReportMetadataResult):
             self._metadata_result = lambda _report, _section_transcripts: metadata_result
@@ -496,7 +501,7 @@ class TestProcessInput:
             input_path,
             output_dir=tmp_path / "run",
             transcriber=FakeTranscriber(),
-            keep_audio="wav",
+            keep_audio=TranscriptionAudioFormat.WAV,
         )
 
         kept_audio_path = artifacts.layout.transcription_audio_path()
@@ -509,7 +514,7 @@ class TestProcessInput:
             FIXTURE_DIR / "sample-audio.mp3",
             output_dir=tmp_path / "real-run",
             transcriber=FakeTranscriber(),
-            keep_audio="wav",
+            keep_audio=TranscriptionAudioFormat.WAV,
         )
 
         kept_audio_path = artifacts.layout.transcription_audio_path()
@@ -640,7 +645,7 @@ class TestProcessInput:
                     DecodedWindow(
                         window=windows[0],
                         text="Agenda review and project status update.",
-                        language="en",
+                        detected_language="en",
                         segments=[
                             TranscriptSegment(
                                 id="segment-1",
@@ -1023,7 +1028,7 @@ def llm_success_result(
             summary=["Refined summary point."],
             action_items=["Send the draft by Friday."],
             section_titles={"section-1": "Refined Section Title"},
-            usage={"input_tokens": 12, "output_tokens": 3, "total_tokens": 15},
+            usage=TokenUsage(input_tokens=12, output_tokens=3, total_tokens=15),
         )
 
     artifacts = process_input(
@@ -1037,7 +1042,7 @@ def llm_success_result(
                 section_result=LLMSectionPolishResult(
                     section_tldrs={"section-1": "Updated section TL;DR."},
                     section_transcripts={"section-1": EXPECTED_LLM_SECTION_TEXT},
-                    usage={"input_tokens": 8, "output_tokens": 3, "total_tokens": 11},
+                    usage=TokenUsage(input_tokens=8, output_tokens=3, total_tokens=11),
                     response_metadata=[
                         {
                             "stage": "section_polish",
@@ -1079,7 +1084,7 @@ class TestProcessInputLlm:
         assert "llm_report_metadata" in artifacts.diagnostics.stage_durations_sec
 
         diagnostics_payload = read_json(artifacts.layout.diagnostics_path)
-        assert diagnostics_payload["llm"]["report_usage"] == EXPECTED_LLM_USAGE
+        assert diagnostics_payload["llm"]["report_usage"] == EXPECTED_LLM_USAGE_JSON
         assert diagnostics_payload["llm"]["response_metadata"] == [
             {"stage": "section_polish", "section_id": "section-1", "finish_reason": "stop"}
         ]
@@ -1092,12 +1097,8 @@ class TestProcessInputLlm:
         install_pipeline_runtime(
             monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime()
         )
-        expected_usage = {
-            "input_tokens": 0,
-            "cached_tokens": 0,
-            "total_tokens": 0,
-            "output_tokens": 0,
-        }
+        expected_usage = TokenUsage()
+        expected_usage_json = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 
         artifacts = process_input(
             input_path,
@@ -1110,13 +1111,13 @@ class TestProcessInputLlm:
                     section_result=LLMSectionPolishResult(
                         section_tldrs={},
                         section_transcripts={},
-                        usage={"input_tokens": 0, "cached_tokens": 0, "total_tokens": 0},
+                        usage=TokenUsage(input_tokens=0, total_tokens=0),
                     ),
                     metadata_result=LLMReportMetadataResult(
                         summary=[],
                         action_items=[],
                         section_titles={},
-                        usage={"output_tokens": 0, "total_tokens": 0},
+                        usage=TokenUsage(output_tokens=0, total_tokens=0),
                     ),
                 ),
             ),
@@ -1124,7 +1125,7 @@ class TestProcessInputLlm:
 
         assert artifacts.diagnostics.llm.report_usage == expected_usage
         diagnostics_payload = read_json(artifacts.layout.diagnostics_path)
-        assert diagnostics_payload["llm"]["report_usage"] == expected_usage
+        assert diagnostics_payload["llm"]["report_usage"] == expected_usage_json
 
     def test_reports_all_sections_in_llm_progress(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1177,7 +1178,7 @@ class TestProcessInputLlm:
                         window=window,
                         text=segments[index][0].text,
                         segments=segments[index],
-                        language="en",
+                        detected_language="en",
                     )
                     for index, window in enumerate(windows)
                 ]
@@ -1188,7 +1189,7 @@ class TestProcessInputLlm:
                 section_transcripts={
                     section.id: section.transcript_text for section in report.sections
                 },
-                usage={"total_tokens": 2},
+                usage=TokenUsage(total_tokens=2),
             )
 
         def metadata_polish(
@@ -1198,7 +1199,7 @@ class TestProcessInputLlm:
                 summary=[],
                 action_items=[],
                 section_titles={report.sections[0].id: "Renamed first section"},
-                usage={"total_tokens": 3},
+                usage=TokenUsage(total_tokens=3),
             )
 
         artifacts = process_input(
@@ -1220,7 +1221,7 @@ class TestProcessInputLlm:
 
         assert len(artifacts.report.sections) == 2
         assert artifacts.report.sections[0].title == "Renamed first section"
-        assert artifacts.diagnostics.llm.report_usage == {"total_tokens": 5}
+        assert artifacts.diagnostics.llm.report_usage == TokenUsage(total_tokens=5)
         assert ("start", "llm_report_sections", 2.0, None) in reporter.progress
         assert [
             event
@@ -1303,7 +1304,7 @@ class TestProcessInputLlm:
                 "LLMProcessor",
                 ConfigurableLLMProcessor(
                     section_result=LLMSectionPolishResult(
-                        section_tldrs={}, section_transcripts={}, usage={}
+                        section_tldrs={}, section_transcripts={}, usage=TokenUsage()
                     ),
                     section_error=LLMProcessingError("section polish failed"),
                 ),
@@ -1331,7 +1332,7 @@ class TestProcessInputLlm:
                 section_transcripts={
                     section.id: section.transcript_text for section in report.sections
                 },
-                usage={"total_tokens": 11},
+                usage=TokenUsage(total_tokens=11),
             )
 
         artifacts = process_input(
@@ -1351,6 +1352,6 @@ class TestProcessInputLlm:
 
         assert reporter.warnings == ["metadata failed"]
         assert artifacts.diagnostics.llm.report_status == "fallback"
-        assert artifacts.diagnostics.llm.report_usage == {}
+        assert artifacts.diagnostics.llm.report_usage == TokenUsage()
         assert "llm_report_sections" in artifacts.diagnostics.stage_durations_sec
         assert "llm_report_metadata" in artifacts.diagnostics.stage_durations_sec

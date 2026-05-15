@@ -18,6 +18,7 @@ from webinar_transcriber.models import (
     TranscriptionResult,
     VideoAsset,
 )
+from webinar_transcriber.normalized_audio import TranscriptionAudioFormat
 from webinar_transcriber.paths import OutputDirectoryExistsError, RunLayout
 from webinar_transcriber.processor import (
     DiarizationConfig,
@@ -140,7 +141,7 @@ class TestCli:
                 threads=3,
                 asr_model="models/whisper-cpp/custom.bin",
                 language="en",
-                keep_audio="mp3",
+                keep_audio=TranscriptionAudioFormat.MP3,
             ),
             llm_config=LLMConfig(enabled=True),
             diarization_config=DiarizationConfig(enabled=True, speaker_count=4),
@@ -160,7 +161,10 @@ class TestCli:
             result = runner.invoke(main, [str(input_path), "--keep-audio"])
 
         assert result.exit_code == 0
-        assert process_input_mock.call_args.kwargs["transcription_config"].keep_audio == "mp3"
+        assert (
+            process_input_mock.call_args.kwargs["transcription_config"].keep_audio
+            is TranscriptionAudioFormat.MP3
+        )
 
     def test_help_describes_processing_options(self) -> None:
         runner = CliRunner()
