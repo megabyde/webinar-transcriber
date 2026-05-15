@@ -63,10 +63,10 @@ def _should_flush_before_adding(
         return True
     if len(current_text) >= MAX_SEGMENT_CHARS:
         return True
-    return bool(
+    return (
         current_duration >= MIN_SEGMENT_DURATION_SEC
         and projected_group_duration > TARGET_SEGMENT_DURATION_SEC
-        and STRONG_SENTENCE_END_RE.search(current_text)
+        and STRONG_SENTENCE_END_RE.search(current_text) is not None
     )
 
 

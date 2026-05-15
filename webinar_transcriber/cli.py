@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import click
 
@@ -98,7 +98,7 @@ def main(
     asr_model: str | None,
     language: str | None,
     threads: int,
-    keep_audio: str | None,
+    keep_audio: TranscriptionAudioFormat | None,
     llm: bool,
     diarize: bool,
     diarize_speakers: int | None,
@@ -111,9 +111,6 @@ def main(
         raise CLIError(f"Input path is not a file: {input_path}")
 
     reporter = RichStageReporter()
-    kept_format = cast(
-        "TranscriptionAudioFormat | None", keep_audio.lower() if keep_audio else None
-    )
 
     try:
         process_input(
@@ -123,7 +120,7 @@ def main(
                 threads=threads,
                 asr_model=asr_model,
                 language=language,
-                keep_audio=kept_format,
+                keep_audio=keep_audio,
             ),
             llm_config=LLMConfig(enabled=llm),
             diarization_config=DiarizationConfig(

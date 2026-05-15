@@ -238,12 +238,12 @@ def _processing_detail(artifacts: ProcessArtifacts) -> str | None:
     if total_sec <= 0:  # pragma: no cover - defensive fallback for malformed diagnostics
         return None
 
-    duration_text = _duration_text(total_sec)
     media_duration_sec = artifacts.media_asset.duration_sec
     if media_duration_sec <= 0:  # pragma: no cover - media probing guarantees duration
-        return duration_text
+        return _duration_text(total_sec)
+
     rtf = format(round(media_duration_sec / total_sec, 2), "g")
-    return f"{duration_text} | RTF {rtf}x"
+    return f"{_duration_text(total_sec)} | RTF {rtf}x"
 
 
 def _duration_text(duration_sec: float) -> str:
