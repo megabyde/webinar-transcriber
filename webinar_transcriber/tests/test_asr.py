@@ -492,7 +492,7 @@ class TestWhisperCppTranscriber:
 
 
 class TestPromptCarryover:
-    def test_build_prompt_carryover_prefers_complete_tail_sentence(self) -> None:
+    def test_build_prompt_carryover_uses_bounded_suffix(self) -> None:
         carryover = build_prompt_carryover(
             DecodedWindow(
                 window=InferenceWindow(id="window-2", region_index=0, start_sec=18.5, end_sec=35.0),
@@ -502,19 +502,7 @@ class TestPromptCarryover:
             max_chars=30,
         )
 
-        assert carryover == "Third sentence here."
-
-    def test_build_prompt_carryover_handles_unspaced_sentence_punctuation(self) -> None:
-        carryover = build_prompt_carryover(
-            DecodedWindow(
-                window=InferenceWindow(id="window-2", region_index=0, start_sec=18.5, end_sec=35.0),
-                text=("first\N{IDEOGRAPHIC FULL STOP}second\N{IDEOGRAPHIC FULL STOP}third"),
-                segments=[],
-            ),
-            max_chars=7,
-        )
-
-        assert carryover == "third"
+        assert carryover == "sentence. Third sentence here."
 
     def test_build_prompt_carryover_keeps_suffix_without_sentence_boundary(self) -> None:
         carryover = build_prompt_carryover(
