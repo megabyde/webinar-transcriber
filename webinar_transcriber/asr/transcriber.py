@@ -255,7 +255,7 @@ class WhisperCppTranscriber:
             decoded_segment_count += len(decoded_window.segments)
             next_carryover = build_prompt_carryover(decoded_window)
             if forced_language is None:
-                language_hint = decoded_window.language
+                language_hint = decoded_window.detected_language
             previous_region_index = window.region_index
             carryover_prompt = next_carryover
             if progress_callback is not None:
@@ -316,7 +316,7 @@ class WhisperCppTranscriber:
             audio_samples[start_index:end_index], dtype=np.float32
         )
         if window_samples.size == 0:
-            return DecodedWindow(window=window, language=language_hint)
+            return DecodedWindow(window=window, detected_language=language_hint)
 
         detected_language = language_hint
         if detected_language is None:
@@ -360,7 +360,7 @@ class WhisperCppTranscriber:
             window=window,
             text=" ".join(segment.text for segment in segments if segment.text).strip(),
             segments=segments,
-            language=detected_language,
+            detected_language=detected_language,
         )
 
 

@@ -29,7 +29,7 @@ def reconcile_decoded_windows(
         ),
     )
     detected_language = next(
-        (window.language for window in ordered_windows if window.language), None
+        (window.detected_language for window in ordered_windows if window.detected_language), None
     )
 
     reconciled_segments: list[TranscriptSegment] = []

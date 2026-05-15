@@ -224,7 +224,7 @@ class FakeTranscriber(WhisperCppTranscriber):
             DecodedWindow(
                 window=window,
                 text=" ".join(segment.text for segment in self._segments),
-                language=self._detected_language,
+                detected_language=self._detected_language,
                 segments=list(self._segments),
             )
             for window in windows

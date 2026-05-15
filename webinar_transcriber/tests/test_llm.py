@@ -33,7 +33,7 @@ from webinar_transcriber.llm.utils import (
     truncate_text,
     validated_section_titles,
 )
-from webinar_transcriber.models import MediaType, ReportDocument, ReportSection
+from webinar_transcriber.models import MediaType, ReportDocument, ReportSection, TokenUsage
 
 LLM_EXTRA_INSTALL_RE = r'uv tool install --reinstall "\.\[llm\]"'
 
@@ -333,8 +333,10 @@ class TestInstructorLlmProcessor:
         assert section_result.section_transcripts == {
             "section-1": "Agenda review and project status update.\n\nPlease listen."
         }
-        assert section_result.usage == {"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}
-        assert metadata_result.usage == {"input_tokens": 12, "output_tokens": 8, "total_tokens": 20}
+        assert section_result.usage == TokenUsage(input_tokens=5, output_tokens=4, total_tokens=9)
+        assert metadata_result.usage == TokenUsage(
+            input_tokens=12, output_tokens=8, total_tokens=20
+        )
         assert section_result.response_metadata == [
             {"stage": "section_polish", "section_id": "section-1", "finish_reason": "stop"}
         ]
@@ -409,7 +411,11 @@ class TestInstructorLlmProcessor:
             "finish_reason": "content_filter",
             "stop_reason": "end_turn",
             "refusal": True,
-            "safety": {"sexual": {"blocked": True}, "violence": {"filtered": True}},
+            "safety": {
+                "sexual": {"blocked": True},
+                "violence": {"filtered": True},
+                "ignored": None,
+            },
             "prompt_filter_results": [{"prompt_index": 0, "content_filter_results": {}}],
         }
 
@@ -568,7 +574,7 @@ class TestInstructorLlmProcessor:
         assert result.section_tldrs == {"section-1": "Intro recap.", "section-2": "Agenda recap."}
         assert result.section_transcripts["section-1"] == "Intro review and project status update."
         assert result.section_transcripts["section-2"] == "Agenda review and project status update."
-        assert result.usage == {"input_tokens": 11, "output_tokens": 9, "total_tokens": 20}
+        assert result.usage == TokenUsage(input_tokens=11, output_tokens=9, total_tokens=20)
         assert result.warnings == []
         assert progress_updates == [1, 1]
 
@@ -803,7 +809,7 @@ class TestInstructorProcessorFlow:
 
         assert result.section_transcripts == {}
         assert result.section_tldrs == {}
-        assert result.usage == {}
+        assert result.usage == TokenUsage()
         assert result.warnings == []
 
     def test_report_polish_plan_counts_all_sections(self) -> None:
@@ -859,7 +865,7 @@ class TestInstructorProcessorFlow:
 
         assert result.section_transcripts == {"section-1": "Agenda review."}
         assert result.section_tldrs == {"section-1": "Existing recap."}
-        assert result.usage == {}
+        assert result.usage == TokenUsage()
         assert result.warnings == ["Section polishing failed for section-1: bad section"]
         assert progress_updates == [1]
 
@@ -991,26 +997,37 @@ class TestLlmNormalization:
             validated_section_titles(report, [ReportSectionUpdate(id="section-1", title="   ")])
 
     def test_extract_usage_supports_sdk_object_shape(self) -> None:
-        assert extract_usage(type("Response", (), {})()) == {}
+        assert extract_usage(type("Response", (), {})()) == TokenUsage()
 
         usage_obj = type("Usage", (), {"input_tokens": 3, "output_tokens": 4})()
         response_obj = type("Response", (), {"usage": usage_obj})()
-        assert extract_usage(response_obj) == {
-            "input_tokens": 3,
-            "output_tokens": 4,
-            "total_tokens": 7,
-        }
+        assert extract_usage(response_obj) == TokenUsage(
+            input_tokens=3,
+            output_tokens=4,
+            total_tokens=7,
+        )
 
         usage_with_total = type("Usage", (), {"input_tokens": 3, "total_tokens": 9})()
-        assert extract_usage(type("Response", (), {"usage": usage_with_total})()) == {
-            "input_tokens": 3,
-            "total_tokens": 9,
-        }
+        assert extract_usage(type("Response", (), {"usage": usage_with_total})()) == TokenUsage(
+            input_tokens=3,
+            total_tokens=9,
+        )
 
     def test_schema_label_covers_known_and_fallback_models(self) -> None:
+        class SectionTextResponse(BaseModel):
+            value: str
+
         class OtherResponse(BaseModel):
             value: str
 
         assert schema_label(SectionTextResponse) == "Section polish"
         assert schema_label(ReportPolishResponse) == "Report polish"
         assert schema_label(OtherResponse) == "Structured LLM"
+
+    def test_extract_response_metadata_skips_cycles(self) -> None:
+        filter_results: dict[str, object] = {}
+        filter_results["self"] = filter_results
+        choice = SimpleNamespace(content_filter_results=filter_results)
+        response = SimpleNamespace(choices=[choice])
+
+        assert extract_response_metadata(response) == {}

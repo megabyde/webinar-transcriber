@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
+from webinar_transcriber.models import TokenUsage
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -25,7 +27,7 @@ class LLMSectionPolishResult:
 
     section_tldrs: dict[str, str]
     section_transcripts: dict[str, str]
-    usage: dict[str, int]
+    usage: TokenUsage
     response_metadata: list[dict[str, object]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -37,16 +39,25 @@ class LLMReportMetadataResult:
     summary: list[str]
     action_items: list[str]
     section_titles: dict[str, str]
-    usage: dict[str, int]
+    usage: TokenUsage
     response_metadata: list[dict[str, object]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
-class SectionPolishOutputs:
-    """Polished section transcript and TL;DR payloads keyed by section id."""
+class PolishedSection:
+    """Polished section transcript and TL;DR payload."""
 
-    transcripts: dict[str, str]
-    tldrs: dict[str, str]
+    id: str
+    transcript: str
+    tldr: str
+
+
+@dataclass(frozen=True)
+class SectionPolishOutputs:
+    """Polished section payloads keyed by section id."""
+
+    sections: dict[str, PolishedSection]
+    usage: TokenUsage = field(default_factory=TokenUsage)
     response_metadata: list[dict[str, object]] = field(default_factory=list)
 
 

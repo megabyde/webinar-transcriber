@@ -7,11 +7,14 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Protocol
 
+from webinar_transcriber.models import TokenUsage
+
 from .contracts import (
     LLMProcessingError,
     LLMReportMetadataResult,
     LLMReportPolishPlan,
     LLMSectionPolishResult,
+    PolishedSection,
     SectionPolishOutputs,
 )
 from .prompts import (
@@ -83,18 +86,25 @@ class InstructorLLMProcessor:
         self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
     ) -> LLMSectionPolishResult:
         """Return polished section text with per-section progress updates."""
-        usage_totals: dict[str, int] = {}
         warnings: list[str] = []
         polished_section_texts = self._polish_section_texts(
             report,
             progress_callback=progress_callback,
-            usage_totals=usage_totals,
             warnings=warnings,
         )
+        section_tldrs = {
+            section_id: section.tldr
+            for section_id, section in polished_section_texts.sections.items()
+            if section.tldr
+        }
+        section_transcripts = {
+            section_id: section.transcript
+            for section_id, section in polished_section_texts.sections.items()
+        }
         return LLMSectionPolishResult(
-            section_tldrs=polished_section_texts.tldrs,
-            section_transcripts=polished_section_texts.transcripts,
-            usage=usage_totals,
+            section_tldrs=section_tldrs,
+            section_transcripts=section_transcripts,
+            usage=polished_section_texts.usage,
             response_metadata=polished_section_texts.response_metadata,
             warnings=warnings,
         )
@@ -135,15 +145,14 @@ class InstructorLLMProcessor:
         report: ReportDocument,
         *,
         progress_callback: Callable[[int], None] | None,
-        usage_totals: dict[str, int],
         warnings: list[str],
     ) -> SectionPolishOutputs:
         plan = self.report_polish_plan(report)
         if not report.sections:
-            return SectionPolishOutputs(transcripts={}, tldrs={})
+            return SectionPolishOutputs(sections={})
 
         section_results: dict[
-            int, tuple[str, str, str, dict[str, int], dict[str, object], list[str]]
+            int, tuple[str, str, str, TokenUsage, dict[str, object], list[str]]
         ] = {}
 
         executor = ThreadPoolExecutor(max_workers=plan.worker_count)
@@ -164,29 +173,30 @@ class InstructorLLMProcessor:
         else:
             executor.shutdown(wait=True)
 
-        polished_transcripts: dict[str, str] = {}
-        polished_tldrs: dict[str, str] = {}
+        polished_sections: dict[str, PolishedSection] = {}
+        usage_totals = TokenUsage()
         response_metadata: list[dict[str, object]] = []
         for index in range(len(report.sections)):
             result = section_results[index]
             section_id, transcript_text, tldr, usage, section_metadata, section_warnings = result
-            polished_transcripts[section_id] = transcript_text
-            if tldr:
-                polished_tldrs[section_id] = tldr
-            for key, value in usage.items():
-                usage_totals[key] = usage_totals.get(key, 0) + value
+            polished_sections[section_id] = PolishedSection(
+                id=section_id,
+                transcript=transcript_text,
+                tldr=tldr,
+            )
+            usage_totals += usage
             response_metadata.append(section_metadata)
             warnings.extend(section_warnings)
 
         return SectionPolishOutputs(
-            transcripts=polished_transcripts,
-            tldrs=polished_tldrs,
+            sections=polished_sections,
+            usage=usage_totals,
             response_metadata=response_metadata,
         )
 
     def _polish_section(
         self, section: ReportSection
-    ) -> tuple[str, str, str, dict[str, int], dict[str, object], list[str]]:
+    ) -> tuple[str, str, str, TokenUsage, dict[str, object], list[str]]:
         try:
             transcript_text, tldr, usage, response_metadata, section_warnings = (
                 self._polish_section_text(section)
@@ -194,7 +204,7 @@ class InstructorLLMProcessor:
         except LLMProcessingError as error:
             transcript_text = section.transcript_text
             tldr = section.tldr or ""
-            usage: dict[str, int] = {}
+            usage = TokenUsage()
             response_metadata: dict[str, object] = {
                 "stage": "section_polish",
                 "section_id": section.id,
@@ -204,7 +214,7 @@ class InstructorLLMProcessor:
 
     def _polish_section_text(
         self, section: ReportSection
-    ) -> tuple[str, str, dict[str, int], dict[str, object], list[str]]:
+    ) -> tuple[str, str, TokenUsage, dict[str, object], list[str]]:
         payload = {
             "id": section.id,
             "title": section.title,
@@ -246,7 +256,7 @@ class InstructorLLMProcessor:
         user_payload: Mapping[str, object],
         response_model: type[SchemaModelT],
         error_prefix: str,
-    ) -> tuple[SchemaModelT, dict[str, int], dict[str, object]]:
+    ) -> tuple[SchemaModelT, TokenUsage, dict[str, object]]:
         try:
             parsed, completion = self._client.create_with_completion(
                 response_model=response_model,

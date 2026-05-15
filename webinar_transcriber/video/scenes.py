@@ -27,7 +27,7 @@ SCENE_SCAN_FPS = 0.5
 SCENE_SCORE_THRESHOLD = 0.05
 
 
-@dataclass(frozen=True)
+@dataclass(slots=True, frozen=True)
 class SceneDetectionSettings:
     """Policy settings for sampled scene-change detection."""
 

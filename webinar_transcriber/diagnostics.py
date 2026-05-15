@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Literal
 
-from webinar_transcriber.models import AsrPipelineDiagnostics, Diagnostics, LlmDiagnostics
+from webinar_transcriber.models import (
+    AsrPipelineDiagnostics,
+    Diagnostics,
+    LlmDiagnostics,
+    TokenUsage,
+)
 from webinar_transcriber.processor.support import write_json
 
 if TYPE_CHECKING:
@@ -52,7 +57,7 @@ def build_diagnostics(
             model=ctx.llm_runtime.model_name,
             report_status=ctx.llm_runtime.report_status,
             report_latency_sec=ctx.llm_runtime.report_latency_sec,
-            report_usage=ctx.llm_runtime.report_usage or {},
+            report_usage=ctx.llm_runtime.report_usage or TokenUsage(),
             response_metadata=ctx.llm_runtime.response_metadata,
         ),
         stage_durations_sec={key: round(value, 6) for key, value in ctx.stage_timings.items()},

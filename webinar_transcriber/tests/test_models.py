@@ -6,6 +6,7 @@ from typing import cast
 import pytest
 
 from webinar_transcriber.models import (
+    AlignmentBlock,
     AsrPipelineDiagnostics,
     AudioAsset,
     DecodedWindow,
@@ -16,9 +17,11 @@ from webinar_transcriber.models import (
     ReportSection,
     Scene,
     SpeechRegion,
+    TokenUsage,
     TranscriptionResult,
     TranscriptSegment,
     VideoAsset,
+    VideoAssetRef,
 )
 
 
@@ -77,6 +80,29 @@ class TestCoreModels:
         assert report.sections[0].tldr is None
         assert report.sections[0].speakers == []
 
+    def test_video_asset_refs_expose_scene_and_frame_ids(self) -> None:
+        video = VideoAssetRef(scene_id="scene-1", frame_id="frame-1")
+        block = AlignmentBlock(
+            id="block-1",
+            start_sec=0.0,
+            end_sec=10.0,
+            transcript_text="Transcript body.",
+            video=video,
+        )
+        section = ReportSection(
+            id="section-1",
+            title="Overview",
+            start_sec=0.0,
+            end_sec=10.0,
+            transcript_text="Transcript body.",
+            video=video,
+        )
+
+        assert block.scene_id == "scene-1"
+        assert block.frame_id == "frame-1"
+        assert section.scene_id == "scene-1"
+        assert section.frame_id == "frame-1"
+
     def test_scene_exposes_midpoint(self) -> None:
         scene = Scene(id="scene-1", start_sec=2.0, end_sec=5.0)
 
@@ -87,7 +113,7 @@ class TestCoreModels:
 
         assert not diagnostics.llm.enabled
         assert diagnostics.llm.report_status == "disabled"
-        assert diagnostics.llm.report_usage == {}
+        assert diagnostics.llm.report_usage == TokenUsage()
         assert diagnostics.stage_durations_sec == {}
         assert diagnostics.item_counts == {}
         assert diagnostics.asr_pipeline is None

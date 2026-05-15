@@ -136,9 +136,7 @@ def maybe_polish_report(
             metadata_error = error
         else:
             metadata_elapsed_sec = st.elapsed_sec()
-            usage = dict(section_result.usage)
-            for key, value in metadata_result.usage.items():
-                usage[key] = usage.get(key, 0) + value
+            usage = section_result.usage + metadata_result.usage
             st.set_detail(
                 llm_report_detail(
                     section_count=polish_plan.section_count,

@@ -15,6 +15,7 @@ from webinar_transcriber.models import (
     SlideFrame,
     TranscriptionResult,
     TranscriptSegment,
+    VideoAssetRef,
 )
 
 if TYPE_CHECKING:
@@ -52,8 +53,7 @@ def align_by_time(
                 end_sec=scene.end_sec,
                 transcript_segment_ids=[segment.id for segment in scene_segments],
                 transcript_text=transcript_text,
-                scene_id=scene.id,
-                frame_id=frame.id if frame else None,
+                video=VideoAssetRef(scene_id=scene.id, frame_id=frame.id if frame else None),
             )
         )
 
@@ -180,7 +180,7 @@ def _section_from_segments(
     *,
     section_index: int,
     title: str,
-    frame_id: str | None = None,
+    video: VideoAssetRef | None = None,
 ) -> ReportSection:
     transcript_text = _transcript_text_from_segments(segments)
     return ReportSection(
@@ -189,7 +189,7 @@ def _section_from_segments(
         start_sec=segments[0].start_sec,
         end_sec=segments[-1].end_sec,
         transcript_text=transcript_text,
-        frame_id=frame_id,
+        video=video,
         speakers=_speakers_from_segments(segments),
     )
 
@@ -209,14 +209,14 @@ def sections_from_block(
                 start_sec=block.start_sec,
                 end_sec=block.end_sec,
                 transcript_text=block.transcript_text,
-                frame_id=block.frame_id,
+                video=block.video,
                 speakers=[],
             )
         ]
 
     return [
         _section_from_segments(
-            block_segments, section_index=next_section_index, title=title, frame_id=block.frame_id
+            block_segments, section_index=next_section_index, title=title, video=block.video
         )
     ]
 

@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from webinar_transcriber.asr import WhisperCppTranscriber
+    from webinar_transcriber.models import TokenUsage
     from webinar_transcriber.reporter import BaseStageReporter
 
     from .types import RunContext
@@ -178,7 +179,7 @@ def llm_report_detail(
     title_count: int,
     summary_count: int,
     action_item_count: int,
-    usage: dict[str, int],
+    usage: TokenUsage,
 ) -> str:
     """Return the summary detail string for the report-polish stage."""
     title_update_count = title_count if title_count > 0 and title_count != section_count else 0
@@ -187,7 +188,7 @@ def llm_report_detail(
         _count_label_if_positive(action_item_count, "action item"),
         _count_label_if_positive(tldr_count, "TL;DR"),
         _count_label_if_positive(title_update_count, "title updated", plural="titles updated"),
-        _count_label_if_positive(usage.get("total_tokens", 0), "token"),
+        _count_label_if_positive(usage.total_tokens, "token"),
     )
 
 

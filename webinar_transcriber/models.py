@@ -46,6 +46,25 @@ class VideoAsset(BaseMediaAsset):
 
 MediaAsset = AudioAsset | VideoAsset
 
+ReportStatus = Literal["disabled", "applied", "fallback"]
+
+
+@dataclass(slots=True, frozen=True)
+class TokenUsage:
+    """Provider token usage with stable diagnostics fields."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+
+    def __add__(self, other: TokenUsage) -> TokenUsage:
+        """Return accumulated token usage."""
+        return TokenUsage(
+            input_tokens=self.input_tokens + other.input_tokens,
+            output_tokens=self.output_tokens + other.output_tokens,
+            total_tokens=self.total_tokens + other.total_tokens,
+        )
+
 
 class TimelineSpan:
     """Timeline-bounded model."""
@@ -123,7 +142,7 @@ class DecodedWindow:
     input_prompt: str | None = None
     text: str = ""
     segments: list[TranscriptSegment] = dataclass_field(default_factory=list)
-    language: str | None = None
+    detected_language: str | None = None
 
     def to_json(self) -> dict[str, object]:
         """Return the decoded-window JSON artifact payload."""
@@ -132,7 +151,7 @@ class DecodedWindow:
             "input_prompt": self.input_prompt,
             "text": self.text,
             "segments": [compact_speaker_fields(asdict(segment)) for segment in self.segments],
-            "language": self.language,
+            "detected_language": self.detected_language,
         }
 
 
@@ -152,13 +171,30 @@ class SlideFrame:
 
 
 @dataclass(slots=True, frozen=True)
+class VideoAssetRef:
+    """Reference to video scene/frame context for report sections."""
+
+    scene_id: str
+    frame_id: str | None = None
+
+
+@dataclass(slots=True, frozen=True)
 class AlignmentBlock(TimelineItem):
     """Alignment between transcript content and media sections."""
 
     transcript_text: str
     transcript_segment_ids: list[str] = dataclass_field(default_factory=list)
-    scene_id: str | None = None
-    frame_id: str | None = None
+    video: VideoAssetRef | None = None
+
+    @property
+    def scene_id(self) -> str | None:
+        """Return the aligned scene id when available."""
+        return self.video.scene_id if self.video else None
+
+    @property
+    def frame_id(self) -> str | None:
+        """Return the aligned frame id when available."""
+        return self.video.frame_id if self.video else None
 
 
 @dataclass(slots=True, frozen=True)
@@ -168,9 +204,19 @@ class ReportSection(TimelineItem):
     title: str
     transcript_text: str
     tldr: str | None = None
-    frame_id: str | None = None
+    video: VideoAssetRef | None = None
     image_path: str | None = None
     speakers: list[str] = dataclass_field(default_factory=list)
+
+    @property
+    def scene_id(self) -> str | None:
+        """Return the aligned scene id when available."""
+        return self.video.scene_id if self.video else None
+
+    @property
+    def frame_id(self) -> str | None:
+        """Return the aligned frame id when available."""
+        return self.video.frame_id if self.video else None
 
 
 @dataclass(slots=True, frozen=True)
@@ -229,9 +275,9 @@ class LlmDiagnostics:
 
     enabled: bool = False
     model: str | None = None
-    report_status: Literal["disabled", "applied", "fallback"] = "disabled"
+    report_status: ReportStatus = "disabled"
     report_latency_sec: float | None = None
-    report_usage: dict[str, int] = dataclass_field(default_factory=dict)
+    report_usage: TokenUsage = dataclass_field(default_factory=TokenUsage)
     response_metadata: list[dict[str, object]] = dataclass_field(default_factory=list)
 
 
