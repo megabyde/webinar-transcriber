@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.text import SENTENCE_TERMINATORS
+from webinar_transcriber.text_utils import SENTENCE_TERMINATORS
 
 from .config import CARRYOVER_MAX_CHARS
 

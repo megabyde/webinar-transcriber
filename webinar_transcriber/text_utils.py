@@ -4,6 +4,14 @@ from __future__ import annotations
 
 import re
 
+SENTENCE_TERMINATORS = (
+    ".!?"
+    "\N{IDEOGRAPHIC FULL STOP}"
+    "\N{FULLWIDTH EXCLAMATION MARK}"
+    "\N{FULLWIDTH QUESTION MARK}"
+    "\N{HORIZONTAL ELLIPSIS}"
+)
+
 
 def split_paragraph_blocks(
     text: str, *, flexible_blank_lines: bool = False, normalize_inline_whitespace: bool = False

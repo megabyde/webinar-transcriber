@@ -31,7 +31,7 @@ dependencies = [
     "pywhispercpp>=1.4.1,<2.0.0",
     "python-docx>=1.2.0,<2.0.0",
     "rich>=14.3.3,<15.0.0",
-    "av>=17.0.1",
+    "av>=17.0.1,<18.0.0",
     "sherpa-onnx>=1.13.1,<1.14.0",
     "sherpa-onnx-core>=1.13.1,<1.14.0",
 ]
@@ -39,6 +39,7 @@ dependencies = [
 [project.optional-dependencies]
 llm = [
     "instructor[anthropic]>=1.9.0,<2.0.0",
+    "pydantic>=2.12.5,<3.0.0",
     "tenacity>=9.1.4,<10.0.0",
 ]
 
@@ -72,7 +73,7 @@ addopts = [
     "--cov-report=xml",
     "--durations=5",
 ]
-testpaths = ["webinar_transcriber"]
+testpaths = ["webinar_transcriber/tests"]
 markers = [
     "slow: exercises real media-processing integration paths",
 ]

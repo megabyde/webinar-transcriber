@@ -9,3 +9,19 @@ trimmed speech fixture at `webinar_transcriber/tests/fixtures/speech-sample.wav`
   model
 
 The model is included so the default local VAD path does not require a first-run network download.
+
+The project also depends on these major runtime components:
+
+- PyAV
+  - Source: <https://github.com/PyAV-Org/PyAV>
+  - License: BSD-3-Clause for PyAV; FFmpeg libraries used by PyAV are licensed separately, commonly
+    under LGPL/GPL terms depending on the linked build.
+  - Use: deterministic media probing, audio preparation, and video frame extraction.
+- sherpa-onnx
+  - Source: <https://github.com/k2-fsa/sherpa-onnx>
+  - License: Apache-2.0
+  - Use: local Silero VAD runtime and optional local speaker diarization.
+- whisper.cpp
+  - Source: <https://github.com/ggml-org/whisper.cpp>
+  - License: MIT
+  - Use: local Whisper model inference through `pywhispercpp`.
