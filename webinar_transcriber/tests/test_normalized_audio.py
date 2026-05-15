@@ -224,7 +224,6 @@ class TestNormalizedAudio:
         samples = np.zeros(16_000, dtype=np.float32)
         regions, warnings = detect_speech_regions(
             samples,
-            enabled=True,
             threads=1,
             progress_callback=lambda sec, count: progress_updates.append((sec, count)),
         )
@@ -236,26 +235,10 @@ class TestNormalizedAudio:
         assert progress_updates == [(1.0, 1)]
 
     def test_detect_speech_regions_returns_empty_for_zero_duration(self) -> None:
-        regions, warnings = detect_speech_regions(
-            np.zeros(0, dtype=np.float32), enabled=True, threads=1
-        )
+        regions, warnings = detect_speech_regions(np.zeros(0, dtype=np.float32), threads=1)
 
         assert regions == []
         assert warnings == []
-
-    def test_detect_speech_regions_returns_full_audio_when_vad_disabled(self) -> None:
-        progress_updates: list[tuple[float, int]] = []
-        regions, warnings = detect_speech_regions(
-            np.zeros(8_000, dtype=np.float32),
-            enabled=False,
-            threads=1,
-            progress_callback=lambda sec, count: progress_updates.append((sec, count)),
-        )
-
-        assert len(regions) == 1
-        assert regions[0].end_sec == 0.5
-        assert warnings == []
-        assert progress_updates == [(0.5, 1)]
 
     def test_detect_speech_regions_drops_empty_regions(self, monkeypatch) -> None:
         monkeypatch.setattr(
@@ -263,9 +246,7 @@ class TestNormalizedAudio:
             lambda *_args, **_kwargs: [SpeechRegion(start_sec=10.0, end_sec=10.0)],
         )
 
-        regions, warnings = detect_speech_regions(
-            np.zeros(16_000, dtype=np.float32), enabled=True, threads=1
-        )
+        regions, warnings = detect_speech_regions(np.zeros(16_000, dtype=np.float32), threads=1)
 
         assert regions == []
         assert warnings == []

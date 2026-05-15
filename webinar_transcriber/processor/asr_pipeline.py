@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from webinar_transcriber.paths import RunLayout
 
     from .support import ProgressStageHandle
-    from .types import RunContext
+    from .types import DiarizationConfig, RunContext, TranscriptionConfig
 
 # sherpa-onnx reports progress only after its full-audio segmentation pass.
 DIARIZATION_SEGMENTATION_PROGRESS_PERCENT = 35.0
@@ -71,12 +71,8 @@ def run_asr_pipeline(
     transcriber: WhisperCppTranscriber,
     layout: RunLayout,
     ctx: RunContext,
-    vad: bool,
-    carryover_enabled: bool,
-    language: str | None,
-    diarize: bool,
-    diarize_speakers: int | None,
-    diarizer: Diarizer | None = None,
+    transcription_config: TranscriptionConfig,
+    diarization_config: DiarizationConfig,
 ) -> AsrPipelineResult:
     """Run the deterministic local ASR pipeline and persist intermediate artifacts.
 
@@ -89,7 +85,10 @@ def run_asr_pipeline(
 
     audio_samples, _ = load_normalized_audio(audio_path)
     speech_regions = _detect_speech_regions_stage(
-        audio_samples=audio_samples, threads=transcriber.threads, ctx=ctx, vad=vad, layout=layout
+        audio_samples=audio_samples,
+        threads=transcription_config.threads,
+        ctx=ctx,
+        layout=layout,
     )
     windows = _plan_inference_windows_stage(ctx=ctx, speech_regions=speech_regions)
     vad_region_count = len(speech_regions)
@@ -107,7 +106,7 @@ def run_asr_pipeline(
         decoded_windows = transcriber.transcribe_inference_windows(
             audio_samples,
             windows,
-            language=language,
+            language=transcription_config.language,
             progress_callback=counting_progress(st, "segment"),
             warning_callback=ctx.record_warning,
         )
@@ -127,10 +126,12 @@ def run_asr_pipeline(
     transcription = reconcile_decoded_windows(decoded_windows)
 
     diarization: DiarizationDiagnostics | None = None
-    if diarize:
-        active_diarizer = diarizer or SherpaOnnxDiarizer(threads=transcriber.threads)
+    if diarization_config.enabled:
+        active_diarizer = diarization_config.diarizer or SherpaOnnxDiarizer(
+            threads=transcription_config.threads
+        )
         with stage(ctx, "prepare_diarization", "Preparing diarization model") as st:
-            active_diarizer.prepare(speaker_count=diarize_speakers)
+            active_diarizer.prepare(speaker_count=diarization_config.speaker_count)
             st.set_detail(DIARIZATION_MODEL)
         speaker_turns = _diarize_speakers_stage(
             audio_samples=audio_samples, ctx=ctx, layout=layout, diarizer=active_diarizer
@@ -155,10 +156,10 @@ def run_asr_pipeline(
     asr_pipeline = AsrPipelineDiagnostics(
         backend=ASR_BACKEND_NAME,
         model=transcriber.model_name,
-        vad_enabled=vad,
-        threads=transcriber.threads,
+        vad_enabled=True,
+        threads=transcription_config.threads,
         vad_region_count=vad_region_count,
-        carryover_enabled=carryover_enabled,
+        carryover_enabled=True,
         window_count=window_count,
         average_window_duration_sec=average_window_duration_sec,
         normalized_audio_duration_sec=normalized_audio_duration(audio_samples),
@@ -177,7 +178,6 @@ def _detect_speech_regions_stage(
     audio_samples: np.ndarray,
     threads: int,
     ctx: RunContext,
-    vad: bool,
     layout: RunLayout,
 ) -> list[SpeechRegion]:
     audio_duration_sec = normalized_audio_duration(audio_samples)
@@ -191,7 +191,6 @@ def _detect_speech_regions_stage(
     ) as st:
         speech_regions, vad_warnings = detect_speech_regions(
             audio_samples,
-            enabled=vad,
             threads=threads,
             progress_callback=counting_progress(st, "region"),
         )

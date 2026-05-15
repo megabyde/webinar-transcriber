@@ -264,10 +264,9 @@ Use `--asr-model large-v3` when maximum transcription accuracy is more important
 
 ### Speech Detection
 
-Silero VAD is enabled by default and uses the project's selected speech-region defaults. The model
-runs locally through `sherpa-onnx` and is bundled with the package, so speech detection does not
-need a first-run model download. Pass `--no-vad` only when you need to transcribe the full audio
-without speech-region planning.
+Silero VAD is always enabled and uses the project's selected speech-region defaults. The model runs
+locally through `sherpa-onnx` and is bundled with the package, so speech detection does not need a
+first-run model download.
 
 ### ASR Controls
 

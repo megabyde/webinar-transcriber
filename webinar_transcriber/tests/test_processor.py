@@ -34,7 +34,13 @@ from webinar_transcriber.models import (
     TranscriptSegment,
 )
 from webinar_transcriber.paths import RunLayout
-from webinar_transcriber.processor import ProcessArtifacts, RunContext
+from webinar_transcriber.processor import (
+    DiarizationConfig,
+    LLMConfig,
+    ProcessArtifacts,
+    RunContext,
+    TranscriptionConfig,
+)
 from webinar_transcriber.processor import process_input as _process_input
 from webinar_transcriber.processor.asr_pipeline import plan_inference_windows
 from webinar_transcriber.processor.llm import resolve_llm_processor
@@ -57,6 +63,9 @@ from webinar_transcriber.tests.conftest import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from webinar_transcriber.diarization import Diarizer
+    from webinar_transcriber.normalized_audio import TranscriptionAudioFormat
+
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 EXPECTED_LLM_WARNING = (
     "Section polish response returned an empty transcript text for section-1; kept original text."
@@ -71,8 +80,35 @@ def read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def process_input(*args: Any, threads: int = 4, **kwargs: Any) -> ProcessArtifacts:
-    return _process_input(*args, threads=threads, **kwargs)
+def process_input(
+    *args: Any,
+    threads: int = 4,
+    asr_model: str | None = None,
+    language: str | None = None,
+    keep_audio: TranscriptionAudioFormat | None = None,
+    enable_llm: bool = False,
+    llm_processor: LLMProcessor | None = None,
+    diarize: bool = False,
+    diarize_speakers: int | None = None,
+    diarizer: Diarizer | None = None,
+    **kwargs: Any,
+) -> ProcessArtifacts:
+    return _process_input(
+        *args,
+        transcription_config=TranscriptionConfig(
+            threads=threads,
+            asr_model=asr_model,
+            language=language,
+            keep_audio=keep_audio,
+        ),
+        llm_config=LLMConfig(enabled=enable_llm, processor=llm_processor),
+        diarization_config=DiarizationConfig(
+            enabled=diarize,
+            speaker_count=diarize_speakers,
+            diarizer=diarizer,
+        ),
+        **kwargs,
+    )
 
 
 class ConfigurableLLMProcessor:
@@ -474,7 +510,6 @@ class TestProcessInput:
             output_dir=tmp_path / "real-run",
             transcriber=FakeTranscriber(),
             keep_audio="wav",
-            vad=False,
         )
 
         kept_audio_path = artifacts.layout.transcription_audio_path()
@@ -504,7 +539,6 @@ class TestProcessInput:
                     ),
                 ]
             ),
-            vad=False,
         )
 
         assert artifacts.layout.metadata_path.exists()

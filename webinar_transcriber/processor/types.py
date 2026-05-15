@@ -8,14 +8,44 @@ from typing import TYPE_CHECKING
 from .llm_types import LLMRuntimeState
 
 if TYPE_CHECKING:
+    from webinar_transcriber.diarization import Diarizer
+    from webinar_transcriber.llm.contracts import LLMProcessor
     from webinar_transcriber.models import (
         Diagnostics,
         MediaAsset,
         ReportDocument,
         TranscriptionResult,
     )
+    from webinar_transcriber.normalized_audio import TranscriptionAudioFormat
     from webinar_transcriber.paths import RunLayout
     from webinar_transcriber.reporter import BaseStageReporter
+
+
+@dataclass(frozen=True)
+class TranscriptionConfig:
+    """Audio preparation and ASR options for one processing run."""
+
+    threads: int
+    asr_model: str | None = None
+    language: str | None = None
+    keep_audio: TranscriptionAudioFormat | None = None
+
+
+@dataclass(frozen=True)
+class LLMConfig:
+    """Optional cloud LLM enhancement options for one processing run."""
+
+    enabled: bool = False
+    processor: LLMProcessor | None = None
+
+
+@dataclass(frozen=True)
+class DiarizationConfig:
+    """Optional local speaker-diarization options for one processing run."""
+
+    enabled: bool = False
+    speaker_count: int | None = None
+    diarizer: Diarizer | None = None
 
 
 @dataclass(frozen=True)
