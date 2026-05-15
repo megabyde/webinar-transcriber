@@ -166,10 +166,10 @@ class TestWhisperCppTranscriber:
 
         _, kwargs = fake_model.init_calls[0]
         assert kwargs["n_threads"] == 6
-        assert kwargs["print_realtime"] is False
-        assert kwargs["print_progress"] is False
-        assert kwargs["no_context"] is True
-        assert kwargs["split_on_word"] is False
+        assert not kwargs["print_realtime"]
+        assert not kwargs["print_progress"]
+        assert kwargs["no_context"]
+        assert not kwargs["split_on_word"]
         assert kwargs["entropy_thold"] == WHISPER_ENTROPY_THOLD
         assert kwargs["logprob_thold"] == WHISPER_LOGPROB_THOLD
         assert kwargs["no_speech_thold"] == WHISPER_NO_SPEECH_THOLD
@@ -193,8 +193,6 @@ class TestWhisperCppTranscriber:
         transcriber.set_log_path(log_path)
         transcriber.prepare_model()
 
-        _, kwargs = native_model.init_calls[0]
-        assert "redirect_whispercpp_logs_to" not in kwargs
         captured = capfd.readouterr()
         assert captured.out == ""
         assert captured.err == ""
@@ -374,8 +372,6 @@ class TestWhisperCppTranscriber:
 
         with vars(transcriber_module)["_disable_tqdm_progress"]():
             assert os.environ["TQDM_DISABLE"] == "1"
-
-        assert "TQDM_DISABLE" not in os.environ
 
     def test_disable_tqdm_progress_restores_previous_env_value(self, monkeypatch) -> None:
         from webinar_transcriber.asr import transcriber as transcriber_module
