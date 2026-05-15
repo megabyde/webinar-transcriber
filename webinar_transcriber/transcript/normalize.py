@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from webinar_transcriber.models import TranscriptionResult, TranscriptSegment
-from webinar_transcriber.text import SENTENCE_TERMINATORS
+from webinar_transcriber.text_utils import SENTENCE_TERMINATORS
 
 MERGE_GAP_SEC = 0.6
 TARGET_SEGMENT_DURATION_SEC = 4.0
