@@ -125,7 +125,6 @@ class TestCli:
                     "--threads",
                     "3",
                     "--keep-audio",
-                    "mp3",
                     "--llm",
                     "--diarize",
                     "--diarize-speakers",
@@ -148,7 +147,7 @@ class TestCli:
             reporter=ANY,
         )
 
-    def test_keep_audio_without_format_defaults_to_mp3(self, tmp_path) -> None:
+    def test_keep_audio_keeps_mp3(self, tmp_path) -> None:
         runner = CliRunner()
         input_path = tmp_path / "demo.mp4"
         input_path.write_text("stub", encoding="utf-8")
@@ -179,6 +178,8 @@ class TestCli:
         assert "x>=1" not in result.output
         assert "--vad" not in result.output
         assert "--keep-audio" in result.output
+        assert "[FORMAT]" not in result.output
+        assert "Keep normalized transcription audio as mp3" in result.output
         assert "--llm" in result.output
         assert "--diarize / --no-diarize" in result.output
         assert "--diarize-speakers" in result.output

@@ -70,12 +70,8 @@ def _resolve_threads(_ctx: click.Context, _param: click.Parameter, value: int | 
 )
 @click.option(
     "--keep-audio",
-    type=click.Choice(list(TranscriptionAudioFormat), case_sensitive=False),
-    default=None,
-    flag_value="mp3",
-    is_flag=False,
-    metavar="[FORMAT]",
-    help="Keep normalized transcription audio as FORMAT, defaulting to mp3.",
+    is_flag=True,
+    help="Keep normalized transcription audio as mp3.",
 )
 @click.option("--llm", is_flag=True, help="Enable optional provider-backed report enhancement.")
 @click.option(
@@ -97,7 +93,7 @@ def main(
     asr_model: str | None,
     language: str | None,
     threads: int,
-    keep_audio: TranscriptionAudioFormat | None,
+    keep_audio: bool,
     llm: bool,
     diarize: bool,
     diarize_speakers: int | None,
@@ -119,7 +115,7 @@ def main(
                 threads=threads,
                 asr_model=asr_model,
                 language=language,
-                keep_audio=keep_audio,
+                keep_audio=TranscriptionAudioFormat.MP3 if keep_audio else None,
             ),
             llm_config=LLMConfig(enabled=llm),
             diarization_config=DiarizationConfig(
