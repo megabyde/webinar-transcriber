@@ -34,22 +34,24 @@ def assign_speakers(
 
 
 def _best_turn(segment: TranscriptSegment, turns: list[SpeakerTurn]) -> SpeakerTurn | None:
-    best_turn: SpeakerTurn | None = None
-    best_overlap = 0.0
-    best_midpoint_distance = float("inf")
+    candidates: list[SpeakerTurn] = []
     for turn in turns:
         if turn.end_sec <= segment.start_sec:
             continue
         if turn.start_sec >= segment.end_sec:
             break
-        overlap = min(segment.end_sec, turn.end_sec) - max(segment.start_sec, turn.start_sec)
-        if overlap <= 0:
-            continue
-        midpoint_distance = abs(segment.midpoint - turn.midpoint)
-        if overlap > best_overlap or (
-            overlap == best_overlap and midpoint_distance < best_midpoint_distance
-        ):
-            best_turn = turn
-            best_overlap = overlap
-            best_midpoint_distance = midpoint_distance
-    return best_turn
+        if _overlap_sec(segment, turn) > 0:
+            candidates.append(turn)
+    return max(
+        candidates,
+        key=lambda turn: (_overlap_sec(segment, turn), -_midpoint_distance_sec(segment, turn)),
+        default=None,
+    )
+
+
+def _overlap_sec(segment: TranscriptSegment, turn: SpeakerTurn) -> float:
+    return min(segment.end_sec, turn.end_sec) - max(segment.start_sec, turn.start_sec)
+
+
+def _midpoint_distance_sec(segment: TranscriptSegment, turn: SpeakerTurn) -> float:
+    return abs(segment.midpoint - turn.midpoint)
