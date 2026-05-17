@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import os
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 from .contracts import (
@@ -18,8 +19,36 @@ from .prompts import ACTION_ITEM_LIMIT, REPORT_POLISH_TOTAL_CHAR_BUDGET
 from .utils import required_provider_env
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from .processor import InstructorLLMProcessor
     from .schemas import ReportPolishResponse, ReportSectionUpdate, SectionTextResponse
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderSpec:
+    label: str
+    module_name: str
+    api_key_env: str
+    model_env: str
+    request_kwargs: Mapping[str, object] | None = None
+
+
+PROVIDERS = {
+    "openai": ProviderSpec(
+        label="OpenAI",
+        module_name="openai",
+        api_key_env="OPENAI_API_KEY",
+        model_env="OPENAI_MODEL",
+    ),
+    "anthropic": ProviderSpec(
+        label="Anthropic",
+        module_name="anthropic",
+        api_key_env="ANTHROPIC_API_KEY",
+        model_env="ANTHROPIC_MODEL",
+        request_kwargs={"max_tokens": 4096},
+    ),
+}
 
 
 def _required_llm_module(module_name: str, *, provider_label: str) -> object:
@@ -35,15 +64,11 @@ def _required_llm_module(module_name: str, *, provider_label: str) -> object:
 def ensure_llm_extra_available() -> None:
     """Raise when the configured provider cannot load the optional LLM dependencies."""
     provider = os.environ.get("LLM_PROVIDER", "openai").strip().casefold()
-    match provider:
-        case "openai":
-            _required_llm_module("instructor", provider_label="OpenAI")
-            _required_llm_module("openai", provider_label="OpenAI")
-        case "anthropic":
-            _required_llm_module("instructor", provider_label="Anthropic")
-            _required_llm_module("anthropic", provider_label="Anthropic")
-        case _:
-            return
+    spec = PROVIDERS.get(provider)
+    if spec is None:
+        return
+    _required_llm_module("instructor", provider_label=spec.label)
+    _required_llm_module(spec.module_name, provider_label=spec.label)
 
 
 def build_llm_processor_from_env(*, threads: int) -> LLMProcessor:
@@ -57,43 +82,28 @@ def build_llm_processor_from_env(*, threads: int) -> LLMProcessor:
     """
     from .processor import InstructorLLMProcessor  # noqa: PLC0415
 
-    provider = os.environ.get("LLM_PROVIDER", "openai").strip().casefold()
-    match provider:
-        case "openai":
-            instructor = cast("Any", _required_llm_module("instructor", provider_label="OpenAI"))
-            _required_llm_module("openai", provider_label="OpenAI")
-            api_key, model_name = required_provider_env(
-                api_key_env="OPENAI_API_KEY", model_env="OPENAI_MODEL"
-            )
+    provider_name = os.environ.get("LLM_PROVIDER", "openai").strip().casefold()
+    spec = PROVIDERS.get(provider_name)
+    if spec is None:
+        raise LLMConfigurationError(
+            "Unsupported LLM provider. Set LLM_PROVIDER to 'openai' or 'anthropic'."
+        )
 
-            return InstructorLLMProcessor(
-                client=instructor.from_provider(
-                    f"openai/{model_name}", api_key=api_key, mode=instructor.Mode.TOOLS
-                ),
-                provider_name="openai",
-                model_name=model_name,
-                threads=threads,
-            )
-        case "anthropic":
-            instructor = cast("Any", _required_llm_module("instructor", provider_label="Anthropic"))
-            _required_llm_module("anthropic", provider_label="Anthropic")
-            api_key, model_name = required_provider_env(
-                api_key_env="ANTHROPIC_API_KEY", model_env="ANTHROPIC_MODEL"
-            )
+    instructor = cast("Any", _required_llm_module("instructor", provider_label=spec.label))
+    _required_llm_module(spec.module_name, provider_label=spec.label)
+    api_key, model_name = required_provider_env(
+        api_key_env=spec.api_key_env, model_env=spec.model_env
+    )
 
-            return InstructorLLMProcessor(
-                client=instructor.from_provider(
-                    f"anthropic/{model_name}", api_key=api_key, mode=instructor.Mode.TOOLS
-                ),
-                provider_name="anthropic",
-                model_name=model_name,
-                request_kwargs={"max_tokens": 4096},
-                threads=threads,
-            )
-        case _:
-            raise LLMConfigurationError(
-                "Unsupported LLM provider. Set LLM_PROVIDER to 'openai' or 'anthropic'."
-            )
+    return InstructorLLMProcessor(
+        client=instructor.from_provider(
+            f"{provider_name}/{model_name}", api_key=api_key, mode=instructor.Mode.TOOLS
+        ),
+        provider_name=provider_name,
+        model_name=model_name,
+        request_kwargs=spec.request_kwargs,
+        threads=threads,
+    )
 
 
 _LAZY_EXPORTS = {
