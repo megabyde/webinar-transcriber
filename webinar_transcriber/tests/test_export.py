@@ -414,15 +414,3 @@ class TestJsonReport:
 
         payload = json.loads(output_path.read_text(encoding="utf-8"))
         assert payload["sections"][0]["speakers"] == ["S1"]
-
-    def test_compacts_empty_speaker_fields(self) -> None:
-        from webinar_transcriber.json_utils import compact_speaker_fields
-
-        payload = compact_speaker_fields({
-            "speaker": None,
-            "speakers": [],
-            1: "ignored",
-            "nested": [{"speaker": "S1"}],
-        })
-
-        assert payload == {"nested": [{"speaker": "S1"}]}

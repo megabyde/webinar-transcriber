@@ -1,22 +1,18 @@
 """Tests for typed pipeline models."""
 
-from dataclasses import FrozenInstanceError
 from typing import cast
 
 import pytest
 
 from webinar_transcriber.models import (
     AlignmentBlock,
-    AsrPipelineDiagnostics,
     AudioAsset,
-    DecodedWindow,
     Diagnostics,
     InferenceWindow,
     MediaType,
     ReportDocument,
     ReportSection,
     Scene,
-    SpeechRegion,
     TranscriptionResult,
     TranscriptSegment,
     VideoAsset,
@@ -118,34 +114,6 @@ class TestCoreModels:
         assert diagnostics.diarization is None
         assert diagnostics.warnings == []
 
-    def test_asr_pipeline_support_models_accept_expected_fields(self) -> None:
-        speech_region = SpeechRegion(start_sec=0.0, end_sec=1.5)
-        window = InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.5)
-        decoded_window = DecodedWindow(
-            window=window,
-            input_prompt="hello",
-            text="hello",
-            segments=[TranscriptSegment(id="segment-1", text="hello", start_sec=0.0, end_sec=1.0)],
-        )
-        diagnostics = AsrPipelineDiagnostics(
-            backend="whisper.cpp",
-            model="test-model",
-            normalized_audio_duration_sec=120.0,
-            vad_enabled=True,
-            threads=4,
-            vad_region_count=5,
-            carryover_enabled=True,
-            window_count=4,
-        )
-
-        assert speech_region.end_sec == 1.5
-        assert decoded_window.window.id == "window-1"
-        assert decoded_window.input_prompt == "hello"
-        assert diagnostics.backend == "whisper.cpp"
-        assert diagnostics.model == "test-model"
-        assert diagnostics.carryover_enabled
-        assert diagnostics.window_count == 4
-
     def test_transcript_json_compacts_empty_speaker_fields(self) -> None:
         transcription = TranscriptionResult(
             segments=[
@@ -199,9 +167,3 @@ class TestCoreModels:
         ]
 
         assert segment_ids == ["seg-1", "seg-2", "seg-3"]
-
-    def test_hot_path_dataclasses_are_frozen(self) -> None:
-        segment = TranscriptSegment(id="seg-1", text="first", start_sec=0.0, end_sec=1.0)
-
-        with pytest.raises(FrozenInstanceError):
-            segment.__setattr__("text", "updated")

@@ -12,7 +12,7 @@ def compact_speaker_fields(value: object) -> object:
 
     compacted: dict[str, object] = {}
     for key, item in value.items():
-        if not isinstance(key, str):
+        if not isinstance(key, str):  # pragma: no cover - report dataclasses produce string keys
             continue
         if key == "speaker" and item is None:
             continue

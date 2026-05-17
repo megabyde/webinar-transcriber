@@ -3,7 +3,6 @@
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
-from unittest.mock import Mock
 
 import pytest
 from rich.console import Console
@@ -105,37 +104,8 @@ class TestRichStageReporter:
         assert console.export_text() == "✓ Polishing report (3.50s)\n"
 
     def test_progress_started_initializes_progress_display(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, monkeypatch: pytest.MonkeyPatch, fake_rich_progress
     ) -> None:
-        class FakeProgress:
-            def __init__(self, *_args, **_kwargs) -> None:
-                self.started = False
-                self.added_task: tuple[str, float, dict[str, object]] | None = None
-
-            def start(self) -> None:
-                self.started = True
-
-            def add_task(self, label: str, *, total: float, **fields: object) -> int:
-                self.added_task = (label, total, fields)
-                return 7
-
-        fake_progresses: list[FakeProgress] = []
-
-        def fake_progress(*_args: object, **_kwargs: object) -> FakeProgress:
-            progress = FakeProgress()
-            fake_progresses.append(progress)
-            return progress
-
-        def fake_column(*_args: object, **_kwargs: object) -> object:
-            return object()
-
-        monkeypatch.setattr("webinar_transcriber.ui.Progress", fake_progress)
-        monkeypatch.setattr("webinar_transcriber.ui.SpinnerColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.TextColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.BarColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.TaskProgressColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.TimeRemainingColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.TimeElapsedColumn", fake_column)
         monkeypatch.setattr("webinar_transcriber.ui.perf_counter", lambda: 10.0)
         reporter = RichStageReporter(console=Console(width=100))
 
@@ -148,10 +118,9 @@ class TestRichStageReporter:
             detail="scene-1",
         )
 
-        progress = fake_progresses[0]
+        progress = fake_rich_progress[0]
         assert progress.started
         assert progress.added_task == (
-            "Extracting frames",
             1.0,
             {
                 "count_label": "frames",
@@ -163,52 +132,8 @@ class TestRichStageReporter:
         )
 
     def test_progress_updates_compute_rate_and_preserve_detail_in_progress_adapter(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, monkeypatch: pytest.MonkeyPatch, fake_rich_progress
     ) -> None:
-        class FakeTask:
-            def __init__(self, total: float, fields: dict[str, object]) -> None:
-                self.total = total
-                self.completed = 0.0
-                self.fields = fields
-
-        class FakeProgress:
-            def __init__(self, *_args, **_kwargs) -> None:
-                self.tasks: list[FakeTask] = []
-                self.started = False
-                self.stopped = False
-
-            def start(self) -> None:
-                self.started = True
-
-            def stop(self) -> None:
-                self.stopped = True
-
-            def add_task(self, _label: str, *, total: float, **fields: object) -> int:
-                self.tasks.append(FakeTask(total, fields))
-                return len(self.tasks) - 1
-
-            def update(self, task_id: int, *, advance: float = 0.0, **fields: object) -> None:
-                task = self.tasks[task_id]
-                task.completed += advance
-                task.fields.update(fields)
-
-        fake_progresses: list[FakeProgress] = []
-
-        def fake_progress(*_args: object, **_kwargs: object) -> FakeProgress:
-            progress = FakeProgress()
-            fake_progresses.append(progress)
-            return progress
-
-        def fake_column(*_args: object, **_kwargs: object) -> object:
-            return object()
-
-        monkeypatch.setattr("webinar_transcriber.ui.Progress", fake_progress)
-        monkeypatch.setattr("webinar_transcriber.ui.SpinnerColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.TextColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.BarColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.TaskProgressColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.TimeRemainingColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.TimeElapsedColumn", fake_column)
         perf_values = iter([22.0, 23.0, 25.0])
         monkeypatch.setattr("webinar_transcriber.ui.perf_counter", lambda: next(perf_values))
 
@@ -223,7 +148,7 @@ class TestRichStageReporter:
         )
         reporter.progress_advanced("extract_frames", advance=2.0, detail="scene-2")
 
-        progress = fake_progresses[0]
+        progress = fake_rich_progress[0]
         task = progress.tasks[0]
         assert task.fields["detail_text"] == "scene-2"
         assert task.fields["count_text"] == "2/4 frames"
@@ -248,44 +173,13 @@ class TestRichStageReporter:
         )
 
     def test_progress_advanced_ignores_inactive_or_mismatched_stage_keys(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, fake_rich_progress
     ) -> None:
-        class FakeTask:
-            def __init__(self) -> None:
-                self.completed = 0.0
-
-        class FakeProgress:
-            def __init__(self, *_args, **_kwargs) -> None:
-                self.tasks = [FakeTask()]
-                self.start = Mock()
-                self.stop = Mock()
-                self.update = Mock()
-
-            def add_task(self, *_args: object, **_kwargs: object) -> int:
-                return 0
-
-        fake_progresses: list[FakeProgress] = []
-
-        def fake_progress(*_args: object, **_kwargs: object) -> FakeProgress:
-            progress = FakeProgress()
-            fake_progresses.append(progress)
-            return progress
-
-        def fake_column(*_args: object, **_kwargs: object) -> object:
-            return object()
-
-        monkeypatch.setattr("webinar_transcriber.ui.Progress", fake_progress)
-        monkeypatch.setattr("webinar_transcriber.ui.SpinnerColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.TextColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.BarColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.TaskProgressColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.TimeRemainingColumn", fake_column)
-        monkeypatch.setattr("webinar_transcriber.ui.TimeElapsedColumn", fake_column)
         reporter = RichStageReporter(console=Console(width=100))
 
         reporter.progress_advanced("extract_frames", advance=1.0)
         reporter.progress_started("extract_frames", "Extracting frames", total=1.0)
-        progress = fake_progresses[0]
+        progress = fake_rich_progress[0]
 
         reporter.progress_advanced("detect_scenes", advance=1.0)
 

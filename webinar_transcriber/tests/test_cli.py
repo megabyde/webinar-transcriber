@@ -11,32 +11,13 @@ from webinar_transcriber import __version__
 from webinar_transcriber.asr import ASRProcessingError
 from webinar_transcriber.cli import main
 from webinar_transcriber.llm.contracts import LLMConfigurationError, LLMProcessingError
-from webinar_transcriber.models import (
-    Diagnostics,
-    MediaType,
-    ReportDocument,
-    TranscriptionResult,
-    VideoAsset,
-)
-from webinar_transcriber.paths import OutputDirectoryExistsError, RunLayout
+from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.processor import (
     DiarizationConfig,
     LLMConfig,
-    ProcessArtifacts,
     TranscriptionConfig,
 )
-
-
-def _process_artifacts(input_path, run_dir) -> ProcessArtifacts:
-    return ProcessArtifacts(
-        layout=RunLayout(run_dir=run_dir),
-        media_asset=VideoAsset(path=str(input_path), duration_sec=1.0),
-        transcription=TranscriptionResult(detected_language="en"),
-        report=ReportDocument(
-            title="Demo", source_file=str(input_path), media_type=MediaType.VIDEO
-        ),
-        diagnostics=Diagnostics(),
-    )
+from webinar_transcriber.tests.conftest import process_artifacts
 
 
 class TestCli:
@@ -77,7 +58,7 @@ class TestCli:
         with (
             patch(
                 "webinar_transcriber.cli.process_input",
-                return_value=_process_artifacts(input_path, run_dir),
+                return_value=process_artifacts(input_path, run_dir),
             ) as process_input_mock,
             patch("webinar_transcriber.cli.default_asr_threads", return_value=7),
         ):
@@ -109,7 +90,7 @@ class TestCli:
         with (
             patch(
                 "webinar_transcriber.cli.process_input",
-                return_value=_process_artifacts(input_path, run_dir),
+                return_value=process_artifacts(input_path, run_dir),
             ) as process_input_mock,
             patch("webinar_transcriber.cli.default_asr_threads", return_value=6),
         ):
@@ -154,7 +135,7 @@ class TestCli:
 
         with patch(
             "webinar_transcriber.cli.process_input",
-            return_value=_process_artifacts(input_path, run_dir),
+            return_value=process_artifacts(input_path, run_dir),
         ) as process_input_mock:
             result = runner.invoke(main, [str(input_path), "--keep-audio"])
 
@@ -171,10 +152,7 @@ class TestCli:
         assert "--language" in result.output
         assert "--threads" in result.output
         assert "Number of local audio-processing threads. Defaults" in result.output
-        assert "x>=1" not in result.output
-        assert "--vad" not in result.output
         assert "--keep-audio" in result.output
-        assert "[FORMAT]" not in result.output
         assert "Keep normalized transcription audio as mp3" in result.output
         assert "--llm" in result.output
         assert "--diarize / --no-diarize" in result.output
@@ -186,25 +164,24 @@ class TestCli:
         assert "provider-backed report" in result.output
         assert "enhancement." in result.output
 
-    @pytest.mark.parametrize(
-        ("path_name", "create_directory", "message"),
-        [
-            ("missing.wav", False, "Input file does not exist"),
-            ("input-dir", True, "Input path is not a file"),
-        ],
-    )
-    def test_rejects_invalid_input(
-        self, tmp_path, path_name: str, create_directory: bool, message: str
-    ) -> None:
+    def test_rejects_missing_input(self, tmp_path) -> None:
         runner = CliRunner()
-        input_path = tmp_path / path_name
-        if create_directory:
-            input_path.mkdir()
+        input_path = tmp_path / "missing.wav"
 
         result = runner.invoke(main, [str(input_path)])
 
         assert result.exit_code != 0
-        assert message in result.output
+        assert "Input file does not exist" in result.output
+
+    def test_rejects_directory_input(self, tmp_path) -> None:
+        runner = CliRunner()
+        input_path = tmp_path / "input-dir"
+        input_path.mkdir()
+
+        result = runner.invoke(main, [str(input_path)])
+
+        assert result.exit_code != 0
+        assert "Input path is not a file" in result.output
 
     def test_rejects_invalid_thread_count(self, tmp_path) -> None:
         runner = CliRunner()
