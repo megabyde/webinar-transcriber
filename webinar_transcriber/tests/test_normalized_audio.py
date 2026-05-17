@@ -12,7 +12,6 @@ import pytest
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.models import SpeechRegion
 from webinar_transcriber.normalized_audio import (
-    TranscriptionAudioFormat,
     _mux_audio_frames,
     load_normalized_audio,
     prepared_transcription_audio,
@@ -117,28 +116,18 @@ class TestNormalizedAudio:
 
         assert not audio_path.exists()
 
-    def test_preserve_transcription_audio_copies_wav_output(self, tmp_path: Path) -> None:
-        with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
-            kept_audio_path = preserve_transcription_audio(
-                audio_path, tmp_path / "transcription-audio.wav"
-            )
-
-        assert kept_audio_path.exists()
-        assert kept_audio_path.suffix == ".wav"
-        assert kept_audio_path.read_bytes()[:4] == b"RIFF"
-
     def test_preserve_transcription_audio_transcodes_mp3_output(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
             expected_output = tmp_path / "transcription-audio.mp3"
-            calls: list[tuple[Path, Path, TranscriptionAudioFormat]] = []
+            calls: list[tuple[Path, Path, str]] = []
 
             def fake_write(
                 input_path: Path,
                 output_path: Path,
                 *,
-                audio_format: TranscriptionAudioFormat,
+                audio_format: str,
                 progress_callback=None,
             ) -> Path:
                 del progress_callback
@@ -149,11 +138,9 @@ class TestNormalizedAudio:
             monkeypatch.setattr(
                 "webinar_transcriber.normalized_audio.write_transcription_audio", fake_write
             )
-            kept_audio_path = preserve_transcription_audio(
-                audio_path, expected_output, audio_format=TranscriptionAudioFormat.MP3
-            )
+            kept_audio_path = preserve_transcription_audio(audio_path, expected_output)
 
-        assert calls == [(audio_path, expected_output, TranscriptionAudioFormat.MP3)]
+        assert calls == [(audio_path, expected_output, "mp3")]
         assert kept_audio_path == expected_output
         assert kept_audio_path.read_text(encoding="utf-8") == "mp3"
 
@@ -161,7 +148,7 @@ class TestNormalizedAudio:
     def test_write_transcription_audio_creates_real_mp3(self, tmp_path: Path) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
             output_path = write_transcription_audio(
-                audio_path, tmp_path / "audio.mp3", audio_format=TranscriptionAudioFormat.MP3
+                audio_path, tmp_path / "audio.mp3", audio_format="mp3"
             )
 
         assert output_path.exists()

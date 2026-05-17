@@ -6,9 +6,7 @@ import tempfile
 import wave
 from contextlib import contextmanager
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
-from shutil import copy2
 from typing import TYPE_CHECKING, cast
 
 import av
@@ -33,27 +31,18 @@ NORMALIZED_SAMPLE_WIDTH_BYTES = 2
 NORMALIZED_AUDIO_CODEC = "pcm_s16le"
 
 
-class TranscriptionAudioFormat(StrEnum):
-    """Supported normalized transcription-audio artifact formats."""
-
-    WAV = "wav"
-    MP3 = "mp3"
-
-
 @dataclass(frozen=True, slots=True)
 class _AudioOutputSpec:
     output_codec: str
     resample_format: str
-    copy_when_preserving: bool = False
 
 
 _AUDIO_OUTPUT_SPECS = {
-    TranscriptionAudioFormat.WAV: _AudioOutputSpec(
+    "wav": _AudioOutputSpec(
         output_codec=NORMALIZED_AUDIO_CODEC,
         resample_format="s16",
-        copy_when_preserving=True,
     ),
-    TranscriptionAudioFormat.MP3: _AudioOutputSpec(output_codec="mp3", resample_format="fltp"),
+    "mp3": _AudioOutputSpec(output_codec="mp3", resample_format="fltp"),
 }
 
 
@@ -115,7 +104,7 @@ def write_transcription_audio(
     input_path: Path,
     output_path: Path,
     *,
-    audio_format: TranscriptionAudioFormat = TranscriptionAudioFormat.WAV,
+    audio_format: str = "wav",
     progress_callback: Callable[[float], None] | None = None,
 ) -> Path:
     """Convert audio into a normalized transcription-audio format.
@@ -148,23 +137,17 @@ def preserve_transcription_audio(
     audio_path: Path,
     output_path: Path,
     *,
-    audio_format: TranscriptionAudioFormat = TranscriptionAudioFormat.WAV,
     progress_callback: Callable[[float], None] | None = None,
 ) -> Path:
-    """Persist prepared transcription audio as a run artifact.
+    """Persist prepared transcription audio as an MP3 run artifact.
 
     Returns:
         Path: The written artifact path.
     """
-    spec = _AUDIO_OUTPUT_SPECS[audio_format]
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    if spec.copy_when_preserving:
-        copy2(audio_path, output_path)
-        return output_path
     return write_transcription_audio(
         audio_path,
         output_path,
-        audio_format=audio_format,
+        audio_format="mp3",
         progress_callback=progress_callback,
     )
 

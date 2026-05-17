@@ -15,7 +15,6 @@ from webinar_transcriber.asr import (
 from webinar_transcriber.diarization import DiarizationProcessingError
 from webinar_transcriber.llm.contracts import LLMConfigurationError, LLMProcessingError
 from webinar_transcriber.media import MediaProcessingError
-from webinar_transcriber.normalized_audio import TranscriptionAudioFormat
 from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.processor import (
     DiarizationConfig,
@@ -115,7 +114,7 @@ def main(
                 threads=threads,
                 asr_model=asr_model,
                 language=language,
-                keep_audio=TranscriptionAudioFormat.MP3 if keep_audio else None,
+                keep_audio=keep_audio,
             ),
             llm_config=LLMConfig(enabled=llm),
             diarization_config=DiarizationConfig(

@@ -34,7 +34,6 @@ from webinar_transcriber.models import (
     TokenUsage,
     TranscriptSegment,
 )
-from webinar_transcriber.normalized_audio import TranscriptionAudioFormat
 from webinar_transcriber.paths import RunLayout
 from webinar_transcriber.processor import (
     DiarizationConfig,
@@ -87,7 +86,7 @@ def process_input(
     threads: int = 4,
     asr_model: str | None = None,
     language: str | None = None,
-    keep_audio: TranscriptionAudioFormat | None = None,
+    keep_audio: bool = False,
     enable_llm: bool = False,
     llm_processor: LLMProcessor | None = None,
     diarize: bool = False,
@@ -496,17 +495,30 @@ class TestProcessInput:
         install_pipeline_runtime(
             monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime()
         )
+        preserve_calls: list[tuple[Path, Path]] = []
+
+        def fake_preserve_audio(audio_path: Path, output_path: Path, *, progress_callback=None):
+            if progress_callback is not None:
+                progress_callback(1.0)
+            preserve_calls.append((audio_path, output_path))
+            output_path.write_text("mp3", encoding="utf-8")
+            return output_path
+
+        monkeypatch.setattr(
+            "webinar_transcriber.processor.preserve_transcription_audio", fake_preserve_audio
+        )
 
         artifacts = process_input(
             input_path,
             output_dir=tmp_path / "run",
             transcriber=FakeTranscriber(),
-            keep_audio=TranscriptionAudioFormat.WAV,
+            keep_audio=True,
         )
 
         kept_audio_path = artifacts.layout.transcription_audio_path()
         assert kept_audio_path.exists()
-        assert kept_audio_path.read_bytes()[:4] == b"RIFF"
+        assert kept_audio_path.suffix == ".mp3"
+        assert preserve_calls == [(tmp_path / "sample-audio.wav", kept_audio_path)]
 
     @pytest.mark.slow
     def test_keeps_normalized_audio_artifact_with_real_media_prep(self, tmp_path: Path) -> None:
@@ -514,12 +526,12 @@ class TestProcessInput:
             FIXTURE_DIR / "sample-audio.mp3",
             output_dir=tmp_path / "real-run",
             transcriber=FakeTranscriber(),
-            keep_audio=TranscriptionAudioFormat.WAV,
+            keep_audio=True,
         )
 
         kept_audio_path = artifacts.layout.transcription_audio_path()
         assert kept_audio_path.exists()
-        assert kept_audio_path.read_bytes()[:4] == b"RIFF"
+        assert kept_audio_path.suffix == ".mp3"
         assert artifacts.media_asset.path.endswith("sample-audio.mp3")
         assert artifacts.media_asset.duration_sec > 0
 

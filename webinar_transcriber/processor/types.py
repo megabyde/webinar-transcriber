@@ -16,7 +16,6 @@ if TYPE_CHECKING:
         ReportDocument,
         TranscriptionResult,
     )
-    from webinar_transcriber.normalized_audio import TranscriptionAudioFormat
     from webinar_transcriber.paths import RunLayout
     from webinar_transcriber.reporter import BaseStageReporter
 
@@ -28,7 +27,7 @@ class TranscriptionConfig:
     threads: int
     asr_model: str | None = None
     language: str | None = None
-    keep_audio: TranscriptionAudioFormat | None = None
+    keep_audio: bool = False
 
 
 @dataclass(frozen=True)
