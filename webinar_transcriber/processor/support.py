@@ -8,8 +8,10 @@ from dataclasses import dataclass, field
 from time import perf_counter
 from typing import TYPE_CHECKING
 
+from webinar_transcriber.progress import ProgressCallback  # noqa: TC001
+
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Iterator
     from pathlib import Path
 
     from webinar_transcriber.asr import WhisperCppTranscriber
@@ -63,7 +65,7 @@ def count_label(count: int, singular: str, *, plural: str | None = None) -> str:
     return f"{count} {noun}"
 
 
-def counting_progress(handle: ProgressStageHandle, singular: str) -> Callable[[float, int], None]:
+def counting_progress(handle: ProgressStageHandle, singular: str) -> ProgressCallback:
     """Return a progress callback that reports one counted detail label."""
 
     def update(completed: float, count: int) -> None:

@@ -4,18 +4,19 @@ from __future__ import annotations
 
 from dataclasses import replace
 from itertools import islice
-
-from webinar_transcriber.models import SpeakerTurn, TranscriptSegment
+from typing import TYPE_CHECKING
 
 from .contracts import DiarizationProcessingError, Diarizer
 from .sherpa_diarizer import DIARIZATION_MODEL, SherpaOnnxDiarizer, normalize_speaker_labels
+
+if TYPE_CHECKING:
+    from webinar_transcriber.models import SpeakerTurn, TranscriptSegment
 
 __all__ = [
     "DIARIZATION_MODEL",
     "DiarizationProcessingError",
     "Diarizer",
     "SherpaOnnxDiarizer",
-    "SpeakerTurn",
     "assign_speakers",
     "normalize_speaker_labels",
 ]

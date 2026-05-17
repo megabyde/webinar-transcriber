@@ -28,7 +28,7 @@ from webinar_transcriber.models import (
     InferenceWindow,
     ReportDocument,
     Scene,
-    SlideFrame,
+    SceneFrame,
     SpeakerTurn,
     SpeechRegion,
     TranscriptSegment,
@@ -91,6 +91,9 @@ def process_input(
     diarizer: Diarizer | None = None,
     **kwargs: Any,
 ) -> ProcessArtifacts:
+    llm_source = llm_processor
+    if llm_source is None and enable_llm:
+        llm_source = "from_env"
     return _process_input(
         *args,
         transcription_config=TranscriptionConfig(
@@ -99,7 +102,7 @@ def process_input(
             language=language,
             keep_audio=keep_audio,
         ),
-        llm_config=LLMConfig(enabled=enable_llm, processor=llm_processor),
+        llm_config=LLMConfig(processor=llm_source),
         diarization_config=DiarizationConfig(
             enabled=diarize,
             speaker_count=diarize_speakers,
@@ -730,13 +733,13 @@ class TestProcessInput:
             Scene(id="scene-2", start_sec=0.9, end_sec=1.8),
         ]
         frames = [
-            SlideFrame(
+            SceneFrame(
                 id="frame-1",
                 scene_id="scene-1",
                 image_path=str(frames_dir / "scene-1.png"),
                 timestamp_sec=0.5,
             ),
-            SlideFrame(
+            SceneFrame(
                 id="frame-2",
                 scene_id="scene-2",
                 image_path=str(frames_dir / "scene-2.png"),
@@ -759,8 +762,8 @@ class TestProcessInput:
             frames_dir.mkdir(parents=True)
             for frame in frames:
                 Image.new("RGB", (8, 8), color="white").save(frame.image_path)
-            progress_callback()
-            progress_callback()
+            progress_callback(1, 1)
+            progress_callback(2, 2)
             return frames
 
         monkeypatch.setattr("webinar_transcriber.video.detect_scenes", fake_detect_scenes)
@@ -843,7 +846,7 @@ class TestProcessInput:
         monkeypatch.setattr(
             "webinar_transcriber.video.extract_representative_frames",
             lambda *_args, **_kwargs: [
-                SlideFrame(
+                SceneFrame(
                     id="frame-1",
                     scene_id="scene-1",
                     image_path=str(missing_image_path),
@@ -961,7 +964,6 @@ class TestProcessorSupport:
 
         runtime = LLMRuntimeState()
         resolved_processor = resolve_llm_processor(
-            enable_llm=True,
             llm_processor=fake_processor,
             ctx=ctx,
             llm_runtime=runtime,
@@ -988,8 +990,7 @@ class TestProcessorSupport:
 
         runtime = LLMRuntimeState()
         resolved_processor = resolve_llm_processor(
-            enable_llm=True,
-            llm_processor=None,
+            llm_processor="from_env",
             ctx=ctx,
             llm_runtime=runtime,
             threads=3,
@@ -1007,8 +1008,7 @@ class TestProcessorSupport:
 
         runtime = LLMRuntimeState()
         resolved_processor = resolve_llm_processor(
-            enable_llm=True,
-            llm_processor=None,
+            llm_processor="from_env",
             ctx=ctx,
             llm_runtime=runtime,
             threads=3,

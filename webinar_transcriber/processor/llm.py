@@ -21,6 +21,8 @@ from .support import (
 )
 
 if TYPE_CHECKING:
+    from typing import Literal
+
     from webinar_transcriber.llm.contracts import LLMProcessor
     from webinar_transcriber.models import ReportDocument
 
@@ -31,8 +33,7 @@ if TYPE_CHECKING:
 
 def resolve_llm_processor(
     *,
-    enable_llm: bool,
-    llm_processor: LLMProcessor | None,
+    llm_processor: LLMProcessor | Literal["from_env"] | None,
     ctx: RunContext,
     llm_runtime: LLMRuntimeState,
     threads: int,
@@ -42,10 +43,10 @@ def resolve_llm_processor(
     Returns:
         LLMProcessor | None: The resolved processor when LLM processing is available.
     """
-    if not enable_llm:
+    if llm_processor is None:
         return None
 
-    if llm_processor is not None:
+    if llm_processor != "from_env":
         llm_runtime.provider_name = llm_processor.provider_name
         llm_runtime.model_name = llm_processor.model_name
         return llm_processor

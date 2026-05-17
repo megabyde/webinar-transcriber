@@ -10,7 +10,7 @@ from webinar_transcriber.media import (
     MediaProcessingError,
     open_video_input_container,
 )
-from webinar_transcriber.models import SlideFrame
+from webinar_transcriber.models import SceneFrame
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from av.video.stream import VideoStream
 
     from webinar_transcriber.models import Scene
+    from webinar_transcriber.progress import ProgressCallback
 
 REPRESENTATIVE_FRAME_OFFSET_SEC = 1.0
 
@@ -29,16 +30,16 @@ def extract_representative_frames(
     scenes: list[Scene],
     frames_dir: Path,
     *,
-    progress_callback: Callable[[], None] | None = None,
+    progress_callback: ProgressCallback | None = None,
     warning_callback: Callable[[str], None] | None = None,
-) -> list[SlideFrame]:
+) -> list[SceneFrame]:
     """Extract one representative frame near the start of each scene.
 
     Returns:
-        list[SlideFrame]: The successfully extracted slide frames.
+        list[SceneFrame]: The successfully extracted scene frames.
     """
     frames_dir.mkdir(parents=True, exist_ok=True)
-    frames: list[SlideFrame] = []
+    frames: list[SceneFrame] = []
     processed_scene_count = 0
 
     try:
@@ -58,7 +59,7 @@ def extract_representative_frames(
                             f"{frame_timestamp_sec:.1f}s: {failure_detail}"
                         )
                     if progress_callback is not None:
-                        progress_callback()
+                        progress_callback(float(index), len(frames))
                     processed_scene_count = index
                     continue
 
@@ -68,7 +69,7 @@ def extract_representative_frames(
                         f"{frame_timestamp_sec:.1f}s: {failure_detail}"
                     )
                 frames.append(
-                    SlideFrame(
+                    SceneFrame(
                         id=f"frame-{index}",
                         scene_id=scene.id,
                         image_path=str(output_path),
@@ -76,12 +77,14 @@ def extract_representative_frames(
                     )
                 )
                 if progress_callback is not None:
-                    progress_callback()
+                    progress_callback(float(index), len(frames))
                 processed_scene_count = index
     except (MediaProcessingError, OSError, av.FFmpegError) as error:
         _report_frame_extraction_failures(
             scenes[processed_scene_count:],
             error,
+            completed_offset=processed_scene_count,
+            frame_count=len(frames),
             progress_callback=progress_callback,
             warning_callback=warning_callback,
         )
@@ -93,17 +96,19 @@ def _report_frame_extraction_failures(
     scenes: list[Scene],
     error: Exception,
     *,
-    progress_callback: Callable[[], None] | None,
+    completed_offset: int,
+    frame_count: int,
+    progress_callback: ProgressCallback | None,
     warning_callback: Callable[[str], None] | None,
 ) -> None:
-    for scene in scenes:
+    for index, scene in enumerate(scenes, start=completed_offset + 1):
         frame_timestamp_sec = min(scene.end_sec, scene.start_sec + REPRESENTATIVE_FRAME_OFFSET_SEC)
         if warning_callback is not None:
             warning_callback(
                 f"Frame extraction failed for {scene.id} at {frame_timestamp_sec:.1f}s: {error}"
             )
         if progress_callback is not None:
-            progress_callback()
+            progress_callback(float(index), frame_count)
 
 
 def _extract_frame_from_container(

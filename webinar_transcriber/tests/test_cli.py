@@ -141,7 +141,7 @@ class TestCli:
                 language="en",
                 keep_audio=True,
             ),
-            llm_config=LLMConfig(enabled=True),
+            llm_config=LLMConfig(processor="from_env"),
             diarization_config=DiarizationConfig(enabled=True, speaker_count=4),
             reporter=ANY,
         )
