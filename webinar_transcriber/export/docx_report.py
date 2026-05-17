@@ -19,6 +19,14 @@ if TYPE_CHECKING:
 
     from webinar_transcriber.models import ReportDocument, ReportSection
 
+_FORMATTED_PARAGRAPH_RE = re.compile(
+    r"^(?:"
+    r"\*\*(?P<speaker>S\d+):\*\*\s*(?P<speaker_body>.*)"
+    r"|[-*]\s+(?P<bullet>.+)"
+    r"|\d+[.)]\s+(?P<number>.+)"
+    r")$"
+)
+
 
 def write_docx_report(
     report: ReportDocument,
@@ -79,7 +87,7 @@ def _add_section(
     _add_section_tldr(document, section.tldr)
     paragraphs = split_paragraph_blocks(section.transcript_text) or [section.transcript_text]
     for paragraph_text in paragraphs:
-        if not _add_speaker_paragraph(document, paragraph_text):
+        if not _add_formatted_paragraph(document, paragraph_text):
             document.add_paragraph(paragraph_text)
 
 
@@ -119,31 +127,26 @@ def _add_text_blocks(document: DocxDocument, text: str) -> None:
     for paragraph_text in paragraphs:
         lines = [line.strip() for line in paragraph_text.splitlines() if line.strip()]
         for line in lines:
-            if _add_speaker_paragraph(document, line):
+            if _add_formatted_paragraph(document, line):
                 continue
-            body, style = _list_item_parts(line)
-            document.add_paragraph(body or line, style=style)
+            document.add_paragraph(line)
 
 
-def _add_speaker_paragraph(document: DocxDocument, text: str) -> bool:
-    match = re.match(r"^\*\*(S\d+):\*\*\s*(.*)$", text)
+def _add_formatted_paragraph(document: DocxDocument, text: str) -> bool:
+    match = _FORMATTED_PARAGRAPH_RE.match(text)
     if match is None:
         return False
 
-    paragraph = document.add_paragraph()
-    paragraph.add_run(f"{match.group(1)}:").bold = True
-    if body := match.group(2).strip():
-        paragraph.add_run(f" {body}")
+    if speaker := match.group("speaker"):
+        paragraph = document.add_paragraph()
+        paragraph.add_run(f"{speaker}:").bold = True
+        if body := (match.group("speaker_body") or "").strip():
+            paragraph.add_run(f" {body}")
+        return True
+
+    if body := match.group("bullet"):
+        document.add_paragraph(body, style="List Bullet")
+        return True
+
+    document.add_paragraph(match.group("number") or "", style="List Number")
     return True
-
-
-def _list_item_parts(text: str) -> tuple[str | None, str | None]:
-    bullet_match = re.match(r"^[-*]\s+(.*)$", text)
-    if bullet_match is not None:
-        return bullet_match.group(1), "List Bullet"
-
-    number_match = re.match(r"^\d+[.)]\s+(.*)$", text)
-    if number_match is not None:
-        return number_match.group(1), "List Number"
-
-    return None, None

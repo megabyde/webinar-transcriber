@@ -15,7 +15,6 @@ from webinar_transcriber.asr import (
 from webinar_transcriber.diarization import DiarizationProcessingError
 from webinar_transcriber.llm.contracts import LLMConfigurationError, LLMProcessingError
 from webinar_transcriber.media import MediaProcessingError
-from webinar_transcriber.normalized_audio import TranscriptionAudioFormat
 from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.processor import (
     DiarizationConfig,
@@ -70,12 +69,8 @@ def _resolve_threads(_ctx: click.Context, _param: click.Parameter, value: int | 
 )
 @click.option(
     "--keep-audio",
-    type=click.Choice(list(TranscriptionAudioFormat), case_sensitive=False),
-    default=None,
-    flag_value="mp3",
-    is_flag=False,
-    metavar="[FORMAT]",
-    help="Keep normalized transcription audio as FORMAT, defaulting to mp3.",
+    is_flag=True,
+    help="Keep normalized transcription audio as mp3.",
 )
 @click.option("--llm", is_flag=True, help="Enable optional provider-backed report enhancement.")
 @click.option(
@@ -97,7 +92,7 @@ def main(
     asr_model: str | None,
     language: str | None,
     threads: int,
-    keep_audio: TranscriptionAudioFormat | None,
+    keep_audio: bool,
     llm: bool,
     diarize: bool,
     diarize_speakers: int | None,

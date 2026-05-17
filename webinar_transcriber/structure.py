@@ -83,7 +83,7 @@ def build_report(
     else:
         sections = build_audio_sections(transcript_segments, progress_callback=progress_callback)
     return ReportDocument(
-        title=derive_title(media_asset.path),
+        title=title_from_path(media_asset.path),
         source_file=media_asset.path,
         media_type=media_asset.media_type,
         detected_language=transcription.detected_language,
@@ -163,16 +163,9 @@ def should_start_new_audio_section(
 def _audio_section_from_segments(
     segments: list[TranscriptSegment], section_index: int
 ) -> ReportSection:
-    title = first_words_title(segments, fallback=f"Section {section_index}")
+    text = next((segment.text for segment in segments if segment.text.strip()), "")
+    title = derive_title(text, fallback=f"Section {section_index}", ellipsis=True)
     return _section_from_segments(segments, section_index=section_index, title=title)
-
-
-def first_words_title(
-    segments: list[TranscriptSegment], *, fallback: str, word_limit: int = TITLE_WORD_LIMIT
-) -> str:
-    """Return a section title from the first meaningful transcript words."""
-    text = next((segment.text.strip() for segment in segments if segment.text.strip()), "")
-    return _limited_words_title(text, fallback=fallback, word_limit=word_limit, ellipsis=True)
 
 
 def _section_from_segments(
@@ -190,7 +183,7 @@ def _section_from_segments(
         end_sec=segments[-1].end_sec,
         transcript_text=transcript_text,
         video=video,
-        speakers=_speakers_from_segments(segments),
+        speakers=list(dict.fromkeys(segment.speaker for segment in segments if segment.speaker)),
     )
 
 
@@ -198,7 +191,7 @@ def sections_from_block(
     block: AlignmentBlock, *, block_segments: list[TranscriptSegment], next_section_index: int
 ) -> list[ReportSection]:
     """Build one report section from one scene-alignment block."""
-    title = title_from_text(block.transcript_text, fallback=f"Slide {next_section_index}")
+    title = derive_title(block.transcript_text, fallback=f"Slide {next_section_index}")
     if not block_segments:
         # Keep slide-backed sections even when no transcript segments aligned, so frame/title
         # context is preserved for scene-only blocks.
@@ -221,26 +214,20 @@ def sections_from_block(
     ]
 
 
-def title_from_text(text: str, *, fallback: str) -> str:
-    """Return a bounded title from transcript text."""
-    return _limited_words_title(text.strip().rstrip("."), fallback=fallback, ellipsis=False)
-
-
-def _limited_words_title(
-    text: str, *, fallback: str, word_limit: int = TITLE_WORD_LIMIT, ellipsis: bool
+def derive_title(
+    text: str, *, fallback: str = "Transcription Report", ellipsis: bool = False
 ) -> str:
-    cleaned = text.strip()
+    """Return a bounded title from transcript text."""
+    cleaned = text.strip().rstrip(".")
     if not cleaned:
         return fallback
 
     words = cleaned.split()
-    if len(words) <= word_limit:
-        return cleaned
-    title = " ".join(words[:word_limit])
-    return f"{title}…" if ellipsis else title
+    title = " ".join(words[:TITLE_WORD_LIMIT])
+    return f"{title}…" if ellipsis and len(words) > TITLE_WORD_LIMIT else title
 
 
-def derive_title(source_path: str) -> str:
+def title_from_path(source_path: str) -> str:
     """Return a report title derived from the source filename."""
     stem = Path(source_path).stem
     return stem.replace("-", " ").replace("_", " ").strip().title() or "Transcription Report"
@@ -263,22 +250,13 @@ def _speaker_paragraph(speaker: str | None, texts: list[str]) -> str:
     return f"**{speaker}:** {text}" if speaker else text
 
 
-def _speakers_from_segments(segments: list[TranscriptSegment]) -> list[str]:
-    speakers: list[str] = []
-    for segment in segments:
-        if segment.speaker and segment.speaker not in speakers:
-            speakers.append(segment.speaker)
-    return speakers
-
-
 __all__ = [
     "align_by_time",
     "build_audio_sections",
     "build_report",
     "build_sections_from_blocks",
     "derive_title",
-    "first_words_title",
     "sections_from_block",
     "should_start_new_audio_section",
-    "title_from_text",
+    "title_from_path",
 ]

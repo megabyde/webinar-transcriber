@@ -108,7 +108,6 @@ run directory under `runs/`. Use `--output-dir` to choose a specific location.
 ```bash
 webinar-transcriber INPUT
 webinar-transcriber INPUT --keep-audio
-webinar-transcriber INPUT --keep-audio wav
 webinar-transcriber INPUT --output-dir runs/custom-demo
 ```
 
@@ -193,12 +192,11 @@ Successful default runs write:
 
 Depending on options and input type, successful default runs also write:
 
-| Artifact                                                   | When written          |
-| ---------------------------------------------------------- | --------------------- |
-| `transcription-audio.mp3`                                  | `--keep-audio`        |
-| `transcription-audio.wav` or `transcription-audio.mp3`     | `--keep-audio FORMAT` |
-| `scenes.json` and `frames/`                                | Video input           |
-| `diarization.json` and speaker-labeled transcript segments | `--diarize`           |
+| Artifact                                                   | When written   |
+| ---------------------------------------------------------- | -------------- |
+| `transcription-audio.mp3`                                  | `--keep-audio` |
+| `scenes.json` and `frames/`                                | Video input    |
+| `diarization.json` and speaker-labeled transcript segments | `--diarize`    |
 
 Failed runs also write `diagnostics.json` once the run directory exists, though they may still leave
 only partial intermediate artifacts and no final report outputs.
@@ -299,8 +297,7 @@ runs/<timestamp>_<basename>/
 ├─ report.md
 ├─ scenes.json             # video only
 ├─ transcript.json
-├─ transcription-audio.mp3 # optional via --keep-audio mp3
-└─ transcription-audio.wav # optional via --keep-audio wav
+└─ transcription-audio.mp3 # optional via --keep-audio
 ```
 
 ## Development

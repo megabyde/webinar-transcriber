@@ -89,7 +89,7 @@ class RunLayout:
         """Return the JSON report path."""
         return self.run_dir / "report.json"
 
-    def transcription_audio_path(self, audio_format: str = "wav") -> Path:
+    def transcription_audio_path(self, audio_format: str = "mp3") -> Path:
         """Return the kept transcription-audio artifact path."""
         return self.run_dir / f"transcription-audio.{audio_format}"
 

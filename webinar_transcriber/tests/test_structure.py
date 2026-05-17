@@ -17,9 +17,9 @@ from webinar_transcriber.structure import (
     build_audio_sections,
     build_report,
     derive_title,
-    first_words_title,
     sections_from_block,
     should_start_new_audio_section,
+    title_from_path,
 )
 
 
@@ -147,7 +147,7 @@ class TestBuildReport:
 
         assert report.title == "Transcription Report"
         assert len(report.sections) == 1
-        assert report.sections[0].title == "Repeat me."
+        assert report.sections[0].title == "Repeat me"
         assert "Please follow up." in report.sections[0].transcript_text
         assert report.summary == []
         assert report.action_items == []
@@ -214,7 +214,7 @@ class TestBuildReport:
         )
 
         assert len(report.sections) == 1
-        assert report.sections[0].title == "So, well, okay, let's get started."
+        assert report.sections[0].title == "So, well, okay, let's get started"
 
     def test_returns_no_audio_sections_for_blank_segments(self) -> None:
         report = build_report(
@@ -334,7 +334,7 @@ class TestAudioSectionHeuristics:
                     )
                 ],
                 "Fallback Title",
-                "So, okay, well.",
+                "So, okay, well",
             ),
             (
                 [
@@ -350,10 +350,12 @@ class TestAudioSectionHeuristics:
             ),
         ],
     )
-    def test_first_words_title(
+    def test_derive_title_from_transcript_text(
         self, segments: list[TranscriptSegment], fallback: str, expected: str
     ) -> None:
-        assert first_words_title(segments, fallback=fallback) == expected
+        text = next((segment.text for segment in segments if segment.text.strip()), "")
 
-    def test_derive_title_formats_local_path_stem(self) -> None:
-        assert derive_title("/recordings/weekly-sync.mp4") == "Weekly Sync"
+        assert derive_title(text, fallback=fallback, ellipsis=True) == expected
+
+    def test_title_from_path_formats_local_path_stem(self) -> None:
+        assert title_from_path("/recordings/weekly-sync.mp4") == "Weekly Sync"

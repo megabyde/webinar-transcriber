@@ -18,7 +18,6 @@ from webinar_transcriber.models import (
     TranscriptionResult,
     VideoAsset,
 )
-from webinar_transcriber.normalized_audio import TranscriptionAudioFormat
 from webinar_transcriber.paths import OutputDirectoryExistsError, RunLayout
 from webinar_transcriber.processor import (
     DiarizationConfig,
@@ -125,7 +124,6 @@ class TestCli:
                     "--threads",
                     "3",
                     "--keep-audio",
-                    "mp3",
                     "--llm",
                     "--diarize",
                     "--diarize-speakers",
@@ -141,14 +139,14 @@ class TestCli:
                 threads=3,
                 asr_model="models/whisper-cpp/custom.bin",
                 language="en",
-                keep_audio=TranscriptionAudioFormat.MP3,
+                keep_audio=True,
             ),
             llm_config=LLMConfig(enabled=True),
             diarization_config=DiarizationConfig(enabled=True, speaker_count=4),
             reporter=ANY,
         )
 
-    def test_keep_audio_without_format_defaults_to_mp3(self, tmp_path) -> None:
+    def test_keep_audio_keeps_mp3(self, tmp_path) -> None:
         runner = CliRunner()
         input_path = tmp_path / "demo.mp4"
         input_path.write_text("stub", encoding="utf-8")
@@ -161,10 +159,7 @@ class TestCli:
             result = runner.invoke(main, [str(input_path), "--keep-audio"])
 
         assert result.exit_code == 0
-        assert (
-            process_input_mock.call_args.kwargs["transcription_config"].keep_audio
-            is TranscriptionAudioFormat.MP3
-        )
+        assert process_input_mock.call_args.kwargs["transcription_config"].keep_audio
 
     def test_help_describes_processing_options(self) -> None:
         runner = CliRunner()
@@ -179,6 +174,8 @@ class TestCli:
         assert "x>=1" not in result.output
         assert "--vad" not in result.output
         assert "--keep-audio" in result.output
+        assert "[FORMAT]" not in result.output
+        assert "Keep normalized transcription audio as mp3" in result.output
         assert "--llm" in result.output
         assert "--diarize / --no-diarize" in result.output
         assert "--diarize-speakers" in result.output

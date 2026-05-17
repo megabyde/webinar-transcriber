@@ -106,13 +106,10 @@ def run_transcription_phase(
                 total=transcription_audio_total,
                 count_label="s",
             ) as st:
-                preserved_audio_path = layout.transcription_audio_path(
-                    transcription_config.keep_audio
-                )
+                preserved_audio_path = layout.transcription_audio_path()
                 preserve_transcription_audio(
                     audio_path,
                     preserved_audio_path,
-                    audio_format=transcription_config.keep_audio,
                     progress_callback=lambda completed_sec: st.advance_to(
                         min(completed_sec, transcription_audio_total)
                     ),

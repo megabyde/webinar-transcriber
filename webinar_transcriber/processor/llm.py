@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from webinar_transcriber.models import ReportDocument
 
     from .llm_types import LLMRuntimeState
-    from .support import ProgressStageHandle
+    from .support import ProgressStageHandle, StageHandle
     from .types import RunContext
 
 
@@ -105,14 +105,13 @@ def maybe_polish_report(
                 report, progress_callback=on_section_progress
             )
         except LLMProcessingError as error:
-            ctx.record_warning(str(error))
-            st.set_detail(
-                llm_fallback_detail(
-                    provider_name=llm_runtime.provider_name, model_name=llm_runtime.model_name
-                )
+            _record_llm_fallback(
+                ctx=ctx,
+                st=st,
+                llm_runtime=llm_runtime,
+                error=error,
+                elapsed_sec=st.elapsed_sec(),
             )
-            llm_runtime.report_status = "fallback"
-            llm_runtime.report_latency_sec = st.elapsed_sec()
             return report
         section_elapsed_sec = st.elapsed_sec()
         st.set_detail(count_label(polish_plan.section_count, "section"))
@@ -126,13 +125,14 @@ def maybe_polish_report(
                 report, section_transcripts=section_result.section_transcripts
             )
         except LLMProcessingError as error:
-            ctx.record_warning(str(error))
-            st.set_detail(
-                llm_fallback_detail(
-                    provider_name=llm_runtime.provider_name, model_name=llm_runtime.model_name
-                )
-            )
             metadata_elapsed_sec = st.elapsed_sec()
+            _record_llm_fallback(
+                ctx=ctx,
+                st=st,
+                llm_runtime=llm_runtime,
+                error=error,
+                elapsed_sec=section_elapsed_sec + metadata_elapsed_sec,
+            )
             metadata_error = error
         else:
             metadata_elapsed_sec = st.elapsed_sec()
@@ -149,8 +149,6 @@ def maybe_polish_report(
             )
 
     if metadata_error is not None:
-        llm_runtime.report_status = "fallback"
-        llm_runtime.report_latency_sec = section_elapsed_sec + metadata_elapsed_sec
         llm_runtime.response_metadata = section_result.response_metadata
         return report
 
@@ -179,3 +177,21 @@ def maybe_polish_report(
         *metadata_result.response_metadata,
     ]
     return report
+
+
+def _record_llm_fallback(
+    *,
+    ctx: RunContext,
+    st: StageHandle,
+    llm_runtime: LLMRuntimeState,
+    error: LLMProcessingError,
+    elapsed_sec: float,
+) -> None:
+    ctx.record_warning(str(error))
+    st.set_detail(
+        llm_fallback_detail(
+            provider_name=llm_runtime.provider_name, model_name=llm_runtime.model_name
+        )
+    )
+    llm_runtime.report_status = "fallback"
+    llm_runtime.report_latency_sec = elapsed_sec

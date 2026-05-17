@@ -12,13 +12,11 @@ import pytest
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.models import SpeechRegion
 from webinar_transcriber.normalized_audio import (
-    TranscriptionAudioFormat,
     _mux_audio_frames,
-    extract_audio,
     load_normalized_audio,
     prepared_transcription_audio,
     preserve_transcription_audio,
-    transcode_audio_to_mp3,
+    write_transcription_audio,
 )
 from webinar_transcriber.segmentation import (
     SHERPA_VAD_BUFFER_SIZE_SEC,
@@ -99,8 +97,10 @@ class TestNormalizedAudio:
         assert not audio_path.exists()
 
     @pytest.mark.slow
-    def test_extract_audio_creates_wav(self, tmp_path: Path) -> None:
-        output_path = extract_audio(FIXTURE_DIR / "sample-audio.mp3", tmp_path / "audio.wav")
+    def test_write_transcription_audio_creates_wav(self, tmp_path: Path) -> None:
+        output_path = write_transcription_audio(
+            FIXTURE_DIR / "sample-audio.mp3", tmp_path / "audio.wav"
+        )
 
         assert output_path.exists()
         with wave.open(str(output_path), "rb") as wav_file:
@@ -116,46 +116,40 @@ class TestNormalizedAudio:
 
         assert not audio_path.exists()
 
-    def test_preserve_transcription_audio_copies_wav_output(self, tmp_path: Path) -> None:
-        with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
-            kept_audio_path = preserve_transcription_audio(
-                audio_path, tmp_path / "transcription-audio.wav"
-            )
-
-        assert kept_audio_path.exists()
-        assert kept_audio_path.suffix == ".wav"
-        assert kept_audio_path.read_bytes()[:4] == b"RIFF"
-
     def test_preserve_transcription_audio_transcodes_mp3_output(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
             expected_output = tmp_path / "transcription-audio.mp3"
-            calls: list[tuple[Path, Path]] = []
+            calls: list[tuple[Path, Path, str]] = []
 
-            def fake_transcode(
-                input_path: Path, output_path: Path, *, progress_callback=None
+            def fake_write(
+                input_path: Path,
+                output_path: Path,
+                *,
+                audio_format: str,
+                progress_callback=None,
             ) -> Path:
                 del progress_callback
-                calls.append((input_path, output_path))
+                calls.append((input_path, output_path, audio_format))
                 output_path.write_text("mp3", encoding="utf-8")
                 return output_path
 
             monkeypatch.setattr(
-                "webinar_transcriber.normalized_audio.transcode_audio_to_mp3", fake_transcode
+                "webinar_transcriber.normalized_audio.write_transcription_audio", fake_write
             )
-            kept_audio_path = preserve_transcription_audio(
-                audio_path, expected_output, audio_format=TranscriptionAudioFormat.MP3
-            )
+            kept_audio_path = preserve_transcription_audio(audio_path, expected_output)
 
-        assert calls == [(audio_path, expected_output)]
+        assert calls == [(audio_path, expected_output, "mp3")]
         assert kept_audio_path == expected_output
         assert kept_audio_path.read_text(encoding="utf-8") == "mp3"
 
     @pytest.mark.slow
-    def test_transcode_audio_to_mp3_creates_real_mp3(self, tmp_path: Path) -> None:
+    def test_write_transcription_audio_creates_real_mp3(self, tmp_path: Path) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
-            output_path = transcode_audio_to_mp3(audio_path, tmp_path / "audio.mp3")
+            output_path = write_transcription_audio(
+                audio_path, tmp_path / "audio.mp3", audio_format="mp3"
+            )
 
         assert output_path.exists()
         container = av.open(str(output_path))
@@ -167,7 +161,7 @@ class TestNormalizedAudio:
         finally:
             container.close()
 
-    def test_extract_audio_wraps_open_error(
+    def test_write_transcription_audio_wraps_open_error(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setattr(
@@ -176,9 +170,9 @@ class TestNormalizedAudio:
         )
 
         with pytest.raises(MediaProcessingError, match=r"Could not open .*bad open"):
-            extract_audio(FIXTURE_DIR / "sample-audio.mp3", tmp_path / "audio.wav")
+            write_transcription_audio(FIXTURE_DIR / "sample-audio.mp3", tmp_path / "audio.wav")
 
-    def test_extract_audio_rejects_inputs_without_audio_stream(
+    def test_write_transcription_audio_rejects_inputs_without_audio_stream(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         class FakeContainer(FakeContextContainer):
@@ -191,18 +185,7 @@ class TestNormalizedAudio:
         )
 
         with pytest.raises(MediaProcessingError, match="No audio stream found"):
-            extract_audio(FIXTURE_DIR / "sample-video.mp4", tmp_path / "audio.wav")
-
-    def test_transcode_audio_to_mp3_wraps_open_error(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        monkeypatch.setattr(
-            "webinar_transcriber.normalized_audio.av.open",
-            Mock(side_effect=OSError("bad open")),
-        )
-
-        with pytest.raises(MediaProcessingError, match=r"Could not open .*bad open"):
-            transcode_audio_to_mp3(tmp_path / "input.wav", tmp_path / "audio.mp3")
+            write_transcription_audio(FIXTURE_DIR / "sample-video.mp4", tmp_path / "audio.wav")
 
     def test_load_normalized_audio_returns_mono_float32_samples(self) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
