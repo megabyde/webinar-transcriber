@@ -5,10 +5,11 @@ from __future__ import annotations
 import tempfile
 import wave
 from contextlib import contextmanager
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from shutil import copy2
-from typing import TYPE_CHECKING, assert_never, cast
+from typing import TYPE_CHECKING, cast
 
 import av
 import numpy as np
@@ -37,6 +38,23 @@ class TranscriptionAudioFormat(StrEnum):
 
     WAV = "wav"
     MP3 = "mp3"
+
+
+@dataclass(frozen=True, slots=True)
+class _AudioOutputSpec:
+    output_codec: str
+    resample_format: str
+    copy_when_preserving: bool = False
+
+
+_AUDIO_OUTPUT_SPECS = {
+    TranscriptionAudioFormat.WAV: _AudioOutputSpec(
+        output_codec=NORMALIZED_AUDIO_CODEC,
+        resample_format="s16",
+        copy_when_preserving=True,
+    ),
+    TranscriptionAudioFormat.MP3: _AudioOutputSpec(output_codec="mp3", resample_format="fltp"),
+}
 
 
 def sample_index_for_time(time_sec: float) -> int:
@@ -93,42 +111,24 @@ def _transcode_audio_with_pyav(
     return output_path
 
 
-def extract_audio(
+def write_transcription_audio(
     input_path: Path,
     output_path: Path,
     *,
+    audio_format: TranscriptionAudioFormat = TranscriptionAudioFormat.WAV,
     progress_callback: Callable[[float], None] | None = None,
 ) -> Path:
-    """Convert the input media into a mono 16 kHz WAV file.
+    """Convert audio into a normalized transcription-audio format.
 
     Returns:
-        Path: The written normalized WAV path.
+        Path: The written normalized audio path.
     """
+    spec = _AUDIO_OUTPUT_SPECS[audio_format]
     return _transcode_audio_with_pyav(
         input_path,
         output_path,
-        output_codec=NORMALIZED_AUDIO_CODEC,
-        resample_format="s16",
-        progress_callback=progress_callback,
-    )
-
-
-def transcode_audio_to_mp3(
-    input_path: Path,
-    output_path: Path,
-    *,
-    progress_callback: Callable[[float], None] | None = None,
-) -> Path:
-    """Convert normalized transcription audio into an MP3 artifact.
-
-    Returns:
-        Path: The written MP3 artifact path.
-    """
-    return _transcode_audio_with_pyav(
-        input_path,
-        output_path,
-        output_codec="mp3",
-        resample_format="fltp",
+        output_codec=spec.output_codec,
+        resample_format=spec.resample_format,
         progress_callback=progress_callback,
     )
 
@@ -140,7 +140,7 @@ def prepared_transcription_audio(
     """Yield a normalized mono 16 kHz WAV file for transcription."""
     with tempfile.TemporaryDirectory(prefix="webinar-transcriber-audio-") as temp_dir:
         audio_path = Path(temp_dir) / f"{input_path.stem}.wav"
-        extract_audio(input_path, audio_path, progress_callback=progress_callback)
+        write_transcription_audio(input_path, audio_path, progress_callback=progress_callback)
         yield audio_path
 
 
@@ -156,13 +156,17 @@ def preserve_transcription_audio(
     Returns:
         Path: The written artifact path.
     """
+    spec = _AUDIO_OUTPUT_SPECS[audio_format]
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    if audio_format == TranscriptionAudioFormat.WAV:
+    if spec.copy_when_preserving:
         copy2(audio_path, output_path)
         return output_path
-    if audio_format == TranscriptionAudioFormat.MP3:
-        return transcode_audio_to_mp3(audio_path, output_path, progress_callback=progress_callback)
-    assert_never(audio_format)  # pragma: no cover - TranscriptionAudioFormat is exhaustive
+    return write_transcription_audio(
+        audio_path,
+        output_path,
+        audio_format=audio_format,
+        progress_callback=progress_callback,
+    )
 
 
 def load_normalized_audio(audio_path: Path) -> tuple[np.ndarray, int]:
