@@ -168,6 +168,34 @@ class TestAssignSpeakers:
 
         assert assigned[0].speaker == "S2"
 
+    def test_preserves_input_segment_order(self) -> None:
+        assigned = assign_speakers(
+            [
+                _segment("segment-2", 10.0, 11.0),
+                _segment("segment-1", 1.0, 2.0),
+            ],
+            [
+                SpeakerTurn(start_sec=0.0, end_sec=3.0, speaker="S1"),
+                SpeakerTurn(start_sec=9.0, end_sec=12.0, speaker="S2"),
+            ],
+        )
+
+        assert [(segment.id, segment.speaker) for segment in assigned] == [
+            ("segment-2", "S2"),
+            ("segment-1", "S1"),
+        ]
+
+    def test_ignores_expired_turns_after_active_overlapping_turn(self) -> None:
+        assigned = assign_speakers(
+            [_segment("segment-1", 5.0, 6.0)],
+            [
+                SpeakerTurn(start_sec=0.0, end_sec=10.0, speaker="S1"),
+                SpeakerTurn(start_sec=1.0, end_sec=2.0, speaker="S2"),
+            ],
+        )
+
+        assert assigned[0].speaker == "S1"
+
 
 def test_normalize_speaker_labels_orders_by_first_appearance() -> None:
     turns = normalize_speaker_labels([
