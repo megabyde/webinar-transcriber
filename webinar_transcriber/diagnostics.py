@@ -9,7 +9,6 @@ from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
     Diagnostics,
     LlmDiagnostics,
-    TokenUsage,
 )
 from webinar_transcriber.processor.support import write_json
 
@@ -57,7 +56,6 @@ def build_diagnostics(
             model=ctx.llm_runtime.model_name,
             report_status=ctx.llm_runtime.report_status,
             report_latency_sec=ctx.llm_runtime.report_latency_sec,
-            report_usage=ctx.llm_runtime.report_usage or TokenUsage(),
             response_metadata=ctx.llm_runtime.response_metadata,
         ),
         stage_durations_sec={key: round(value, 6) for key, value in ctx.stage_timings.items()},

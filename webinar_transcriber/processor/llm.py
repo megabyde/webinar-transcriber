@@ -136,7 +136,6 @@ def maybe_polish_report(
             metadata_error = error
         else:
             metadata_elapsed_sec = st.elapsed_sec()
-            usage = section_result.usage + metadata_result.usage
             st.set_detail(
                 llm_report_detail(
                     section_count=polish_plan.section_count,
@@ -144,7 +143,6 @@ def maybe_polish_report(
                     title_count=len(metadata_result.section_titles),
                     summary_count=len(metadata_result.summary),
                     action_item_count=len(metadata_result.action_items),
-                    usage=usage,
                 )
             )
 
@@ -171,7 +169,6 @@ def maybe_polish_report(
     )
     llm_runtime.report_status = "applied"
     llm_runtime.report_latency_sec = report_latency_sec
-    llm_runtime.report_usage = usage
     llm_runtime.response_metadata = [
         *section_result.response_metadata,
         *metadata_result.response_metadata,

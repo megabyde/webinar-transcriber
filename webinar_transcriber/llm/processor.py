@@ -6,9 +6,8 @@ import importlib
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Protocol
-
-from webinar_transcriber.models import TokenUsage
 
 from .contracts import (
     LLMProcessingError,
@@ -29,7 +28,6 @@ from .schemas import ReportPolishResponse, SchemaModelT, SectionTextResponse
 from .utils import (
     build_report_polish_payload,
     extract_response_metadata,
-    extract_usage,
     normalize_polished_section_text,
     normalize_polished_section_tldr,
     normalize_report_lines,
@@ -38,6 +36,7 @@ from .utils import (
 )
 
 LLM_RATE_LIMIT_RETRY_ATTEMPTS = 3
+_DEFAULT_REQUEST_TIMEOUT_SEC = 120
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,7 +46,6 @@ class SectionPolishResult:
     section_id: str
     transcript_text: str
     tldr: str
-    usage: TokenUsage = field(default_factory=TokenUsage)
     response_metadata: dict[str, object] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
@@ -56,6 +54,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from webinar_transcriber.models import ReportDocument, ReportSection
+
+_EMPTY_REQUEST_KWARGS = MappingProxyType({})
 
 
 class InstructorClient(Protocol):
@@ -74,15 +74,15 @@ class InstructorLLMProcessor:
         client: InstructorClient,
         provider_name: str,
         model_name: str,
-        request_kwargs: Mapping[str, object] | None = None,
         threads: int,
+        request_kwargs: Mapping[str, object] = _EMPTY_REQUEST_KWARGS,
         report_char_budget: int = REPORT_POLISH_TOTAL_CHAR_BUDGET,
     ) -> None:
         """Initialize one provider-backed Instructor processor."""
         self._client = client
         self._provider_name = provider_name
         self._model_name = model_name
-        self._request_kwargs = {"timeout": 120, **dict(request_kwargs or {})}
+        self._request_kwargs = {"timeout": _DEFAULT_REQUEST_TIMEOUT_SEC, **request_kwargs}
         self._report_char_budget = report_char_budget
         self._threads = threads
 
@@ -118,7 +118,6 @@ class InstructorLLMProcessor:
         return LLMSectionPolishResult(
             section_tldrs=section_tldrs,
             section_transcripts=section_transcripts,
-            usage=polished_section_texts.usage,
             response_metadata=polished_section_texts.response_metadata,
             warnings=warnings,
         )
@@ -132,7 +131,7 @@ class InstructorLLMProcessor:
             total_char_budget=self._report_char_budget,
             section_transcripts=section_transcripts,
         )
-        parsed, usage, response_metadata = self._create_structured_response(
+        parsed, response_metadata = self._create_structured_response(
             system_prompt=REPORT_POLISH_SYSTEM_PROMPT,
             user_payload=payload,
             response_model=ReportPolishResponse,
@@ -143,7 +142,6 @@ class InstructorLLMProcessor:
             summary=normalize_report_lines(parsed.summary, limit=SUMMARY_ITEM_LIMIT),
             action_items=normalize_report_lines(parsed.action_items, limit=ACTION_ITEM_LIMIT),
             section_titles=validated_section_titles(report, parsed.section_updates),
-            usage=usage,
             response_metadata=[{"stage": "report_polish", **response_metadata}],
         )
 
@@ -186,7 +184,6 @@ class InstructorLLMProcessor:
             executor.shutdown(wait=True)
 
         polished_sections: dict[str, PolishedSection] = {}
-        usage_totals = TokenUsage()
         response_metadata: list[dict[str, object]] = []
         for index in range(len(report.sections)):
             result = section_results[index]
@@ -195,13 +192,11 @@ class InstructorLLMProcessor:
                 transcript=result.transcript_text,
                 tldr=result.tldr,
             )
-            usage_totals += result.usage
             response_metadata.append(result.response_metadata)
             warnings.extend(result.warnings)
 
         return SectionPolishOutputs(
             sections=polished_sections,
-            usage=usage_totals,
             response_metadata=response_metadata,
         )
 
@@ -228,7 +223,7 @@ class InstructorLLMProcessor:
             "end_sec": section.end_sec,
             "transcript_text": section.transcript_text,
         }
-        parsed, usage, response_metadata = self._create_structured_response(
+        parsed, response_metadata = self._create_structured_response(
             system_prompt=SECTION_POLISH_SYSTEM_PROMPT,
             user_payload=payload,
             response_model=SectionTextResponse,
@@ -251,7 +246,6 @@ class InstructorLLMProcessor:
             section_id=section.id,
             transcript_text=transcript_text,
             tldr=tldr,
-            usage=usage,
             response_metadata={
                 "stage": "section_polish",
                 "section_id": section.id,
@@ -267,7 +261,7 @@ class InstructorLLMProcessor:
         user_payload: Mapping[str, object],
         response_model: type[SchemaModelT],
         error_prefix: str,
-    ) -> tuple[SchemaModelT, TokenUsage, dict[str, object]]:
+    ) -> tuple[SchemaModelT, dict[str, object]]:
         try:
             parsed, completion = self._client.create_with_completion(
                 response_model=response_model,
@@ -285,7 +279,7 @@ class InstructorLLMProcessor:
             raise LLMProcessingError(
                 f"{schema_label(response_model)} response did not match the schema."
             )
-        return parsed, extract_usage(completion), extract_response_metadata(completion)
+        return parsed, extract_response_metadata(completion)
 
 
 def _structured_response_retries() -> object:  # pragma: no cover - optional llm extra wrapper

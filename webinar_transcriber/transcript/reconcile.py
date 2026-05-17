@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import re
 
-from webinar_transcriber.models import DecodedWindow, TranscriptionResult, TranscriptSegment
+from webinar_transcriber.models import (
+    DecodedWindow,
+    TranscriptionResult,
+    TranscriptSegment,
+)
 
 _WORD_RE = re.compile(r"\w+")
 _MIN_DUPLICATE_OVERLAP_WORDS = 3
@@ -40,11 +44,12 @@ def reconcile_decoded_windows(
             if not text:
                 continue
             if reconciled_segments and segment.start_sec < covered_until_sec:
-                text = _trim_duplicate_prefix(
+                trimmed_text = _trim_duplicate_prefix(
                     _recent_transcript_text(reconciled_segments), text
-                ).strip()
-                if not text:
+                )
+                if trimmed_text is None:
                     continue
+                text = trimmed_text.strip()
 
             start_sec = max(0.0, segment.start_sec)
             if reconciled_segments and start_sec < reconciled_segments[-1].end_sec:
@@ -72,7 +77,7 @@ def _recent_transcript_text(segments: list[TranscriptSegment]) -> str:
     return " ".join(segment.text for segment in segments[-8:])
 
 
-def _trim_duplicate_prefix(previous_text: str, text: str) -> str:
+def _trim_duplicate_prefix(previous_text: str, text: str) -> str | None:
     """Trim leading words from a window segment when they duplicate the previous transcript tail.
 
     Window overlap can make Whisper repeat the end of one decode window at the start of the next, so
@@ -88,7 +93,7 @@ def _trim_duplicate_prefix(previous_text: str, text: str) -> str:
         if _extract_words(previous_suffix) != _extract_words(current_prefix):
             continue
         if overlap_word_count == len(current_words):
-            return ""
+            return None
         trim_end = current_prefix[-1][2]
         return text[trim_end:].lstrip(" \t\r\n,.;:!?-")
     return text

@@ -49,23 +49,6 @@ MediaAsset = AudioAsset | VideoAsset
 ReportStatus = Literal["disabled", "applied", "fallback"]
 
 
-@dataclass(slots=True, frozen=True)
-class TokenUsage:
-    """Provider token usage with stable diagnostics fields."""
-
-    input_tokens: int = 0
-    output_tokens: int = 0
-    total_tokens: int = 0
-
-    def __add__(self, other: TokenUsage) -> TokenUsage:
-        """Return accumulated token usage."""
-        return TokenUsage(
-            input_tokens=self.input_tokens + other.input_tokens,
-            output_tokens=self.output_tokens + other.output_tokens,
-            total_tokens=self.total_tokens + other.total_tokens,
-        )
-
-
 class TimelineSpan:
     """Timeline-bounded model."""
 
@@ -277,7 +260,6 @@ class LlmDiagnostics:
     model: str | None = None
     report_status: ReportStatus = "disabled"
     report_latency_sec: float | None = None
-    report_usage: TokenUsage = dataclass_field(default_factory=TokenUsage)
     response_metadata: list[dict[str, object]] = dataclass_field(default_factory=list)
 
 

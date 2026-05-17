@@ -13,6 +13,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING, cast
 
+from webinar_transcriber._env import diarization_cache_dir
 from webinar_transcriber.models import SpeakerTurn
 
 from .contracts import DiarizationProcessingError
@@ -207,7 +208,7 @@ def ensure_default_models(cache_dir: Path | None = None) -> DiarizationModelPath
 
 def default_cache_dir() -> Path:
     """Return the speaker-diarization model cache directory."""
-    return Path.home() / ".cache" / "webinar-transcriber" / "diarization"
+    return diarization_cache_dir() or Path.home() / ".cache" / "webinar-transcriber" / "diarization"
 
 
 def default_model_paths(cache_dir: Path | None = None) -> DiarizationModelPaths:

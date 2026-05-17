@@ -218,6 +218,13 @@ class TestConfig:
         assert cache_dir.name == "diarization"
         assert cache_dir.parent.name == "webinar-transcriber"
 
+    def test_default_cache_dir_uses_env_override(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setenv("WEBINAR_DIARIZATION_CACHE_DIR", str(tmp_path))
+
+        assert default_cache_dir() == tmp_path
+
     def test_default_model_paths_use_configured_cache_dir(self, tmp_path: Path) -> None:
         paths = default_model_paths(tmp_path)
 

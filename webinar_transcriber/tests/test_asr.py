@@ -373,7 +373,7 @@ class TestWhisperCppTranscriber:
         with vars(transcriber_module)["_disable_tqdm_progress"]():
             assert os.environ["TQDM_DISABLE"] == "1"
 
-    def test_disable_tqdm_progress_restores_previous_env_value(self, monkeypatch) -> None:
+    def test_disable_tqdm_progress_restores_previous_environment(self, monkeypatch) -> None:
         from webinar_transcriber.asr import transcriber as transcriber_module
 
         monkeypatch.setenv("TQDM_DISABLE", "0")

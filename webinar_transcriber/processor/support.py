@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from webinar_transcriber.asr import WhisperCppTranscriber
-    from webinar_transcriber.models import TokenUsage
     from webinar_transcriber.reporter import BaseStageReporter
 
     from .types import RunContext
@@ -77,7 +76,8 @@ def _count_label_if_positive(count: int, singular: str, *, plural: str | None = 
     return count_label(count, singular, plural=plural) if count > 0 else None
 
 
-def _detail_label(*parts: str | None) -> str:
+def detail_label(*parts: str | None) -> str:
+    """Return a compact detail label from non-empty parts."""
     return " | ".join(part for part in parts if part)
 
 
@@ -160,7 +160,7 @@ def realtime_factor_detail(*, total_duration_sec: float, elapsed_sec: float) -> 
 
 
 def _llm_runtime_detail(*, provider_name: str | None, model_name: str | None) -> str:
-    return _detail_label(provider_name, model_name)
+    return detail_label(provider_name, model_name)
 
 
 def llm_stage_label(
@@ -168,7 +168,7 @@ def llm_stage_label(
 ) -> str:
     """Return one stage label decorated with provider/model details."""
     runtime_detail = _llm_runtime_detail(provider_name=provider_name, model_name=model_name)
-    parenthetical = _detail_label(runtime_detail, detail)
+    parenthetical = detail_label(runtime_detail, detail)
     return f"{base_label} ({parenthetical})" if parenthetical else base_label
 
 
@@ -179,20 +179,18 @@ def llm_report_detail(
     title_count: int,
     summary_count: int,
     action_item_count: int,
-    usage: TokenUsage,
 ) -> str:
     """Return the summary detail string for the report-polish stage."""
     title_update_count = title_count if title_count > 0 and title_count != section_count else 0
-    return _detail_label(
+    return detail_label(
         _count_label_if_positive(summary_count, "summary bullet"),
         _count_label_if_positive(action_item_count, "action item"),
         _count_label_if_positive(tldr_count, "TL;DR"),
         _count_label_if_positive(title_update_count, "title updated", plural="titles updated"),
-        _count_label_if_positive(usage.total_tokens, "token"),
     )
 
 
 def llm_fallback_detail(*, provider_name: str | None, model_name: str | None) -> str:
     """Return the fallback detail string for failed LLM stages."""
     runtime_detail = _llm_runtime_detail(provider_name=provider_name, model_name=model_name)
-    return _detail_label(runtime_detail, "fallback")
+    return detail_label(runtime_detail, "fallback")

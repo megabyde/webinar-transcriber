@@ -17,7 +17,6 @@ from webinar_transcriber.models import (
     ReportSection,
     Scene,
     SpeechRegion,
-    TokenUsage,
     TranscriptionResult,
     TranscriptSegment,
     VideoAsset,
@@ -113,7 +112,6 @@ class TestCoreModels:
 
         assert not diagnostics.llm.enabled
         assert diagnostics.llm.report_status == "disabled"
-        assert diagnostics.llm.report_usage == TokenUsage()
         assert diagnostics.stage_durations_sec == {}
         assert diagnostics.item_counts == {}
         assert diagnostics.asr_pipeline is None

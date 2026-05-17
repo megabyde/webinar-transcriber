@@ -7,7 +7,7 @@ from docx import Document
 from PIL import Image
 
 from webinar_transcriber.export.docx_report import write_docx_report
-from webinar_transcriber.export.formatting import format_timecode
+from webinar_transcriber.export.formatting import format_duration, format_timecode
 from webinar_transcriber.export.json_report import write_json_report
 from webinar_transcriber.export.markdown import write_markdown_report
 from webinar_transcriber.models import MediaType, ReportDocument, ReportSection
@@ -22,6 +22,10 @@ class TestFormatting:
     def test_format_timecode_formats_short_and_long_durations(self) -> None:
         assert format_timecode(65.9) == "01:05"
         assert format_timecode(3661.2) == "01:01:01"
+
+    def test_format_duration_formats_minutes_and_hours(self) -> None:
+        assert format_duration(65.0) == "1m 05s"
+        assert format_duration(3661.0) == "1h 01m 01s"
 
 
 class TestDocxReport:
