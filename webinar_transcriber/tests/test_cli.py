@@ -27,7 +27,7 @@ class TestCli:
         result = runner.invoke(main, ["--help"])
 
         assert result.exit_code == 0
-        assert "Transcribe an audio or video input file." in result.output
+        assert "Transcribe one or more audio or video input files." in result.output
 
     def test_main_version_prints_package_version(self) -> None:
         runner = CliRunner()
@@ -80,6 +80,31 @@ class TestCli:
         assert process_input_mock.call_args.kwargs["reporter"].__class__.__name__ == (
             "RichStageReporter"
         )
+
+    def test_runs_multiple_inputs_sequentially(self, tmp_path) -> None:
+        runner = CliRunner()
+        first_input = tmp_path / "first.mp4"
+        second_input = tmp_path / "second.mp4"
+        first_input.write_text("stub", encoding="utf-8")
+        second_input.write_text("stub", encoding="utf-8")
+        run_dir = tmp_path / "run-dir"
+
+        with (
+            patch(
+                "webinar_transcriber.cli.process_input",
+                return_value=process_artifacts(first_input, run_dir),
+            ) as process_input_mock,
+            patch("webinar_transcriber.cli.default_asr_threads", return_value=7),
+        ):
+            result = runner.invoke(main, [str(first_input), str(second_input)])
+
+        assert result.exit_code == 0
+        assert [call.kwargs["input_path"] for call in process_input_mock.call_args_list] == [
+            first_input,
+            second_input,
+        ]
+        assert all(call.kwargs["output_dir"] is None for call in process_input_mock.call_args_list)
+        assert process_input_mock.call_count == 2
 
     def test_forwards_asr_options(self, tmp_path) -> None:
         runner = CliRunner()
@@ -192,6 +217,28 @@ class TestCli:
 
         assert result.exit_code != 0
         assert "Invalid value for '--threads'" in result.output
+
+    def test_rejects_output_dir_with_multiple_inputs(self, tmp_path) -> None:
+        runner = CliRunner()
+        first_input = tmp_path / "first.wav"
+        second_input = tmp_path / "second.wav"
+        first_input.write_text("stub", encoding="utf-8")
+        second_input.write_text("stub", encoding="utf-8")
+
+        with patch("webinar_transcriber.cli.process_input") as process_input_mock:
+            result = runner.invoke(
+                main,
+                [
+                    str(first_input),
+                    str(second_input),
+                    "--output-dir",
+                    str(tmp_path / "run"),
+                ],
+            )
+
+        assert result.exit_code != 0
+        assert "--output-dir can only be used with one input file" in result.output
+        process_input_mock.assert_not_called()
 
     def test_rejects_existing_output_directory(self, tmp_path) -> None:
         runner = CliRunner()

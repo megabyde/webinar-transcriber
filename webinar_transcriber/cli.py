@@ -37,7 +37,7 @@ def _resolve_threads(_ctx: click.Context, _param: click.Parameter, value: int | 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(version=__version__, prog_name="webinar-transcriber")
-@click.argument("input_path", type=click.Path(path_type=Path))
+@click.argument("input_paths", nargs=-1, required=True, type=click.Path(path_type=Path))
 @click.option(
     "--output-dir",
     type=click.Path(path_type=Path),
@@ -87,7 +87,7 @@ def _resolve_threads(_ctx: click.Context, _param: click.Parameter, value: int | 
     help="Known exact speaker count to use for diarization. Omit for auto-clustering.",
 )
 def main(
-    input_path: Path,
+    input_paths: tuple[Path, ...],
     output_dir: Path | None,
     asr_model: str | None,
     language: str | None,
@@ -97,32 +97,40 @@ def main(
     diarize: bool,
     diarize_speakers: int | None,
 ) -> None:
-    """Transcribe an audio or video input file."""
-    if not input_path.exists():
-        raise CLIError(f"Input file does not exist: {input_path}")
+    """Transcribe one or more audio or video input files."""
+    if output_dir is not None and len(input_paths) > 1:
+        raise CLIError("--output-dir can only be used with one input file.")
 
-    if not input_path.is_file():
-        raise CLIError(f"Input path is not a file: {input_path}")
+    for input_path in input_paths:
+        if not input_path.exists():
+            raise CLIError(f"Input file does not exist: {input_path}")
 
+        if not input_path.is_file():
+            raise CLIError(f"Input path is not a file: {input_path}")
+
+    transcription_config = TranscriptionConfig(
+        threads=threads,
+        asr_model=asr_model,
+        language=language,
+        keep_audio=keep_audio,
+    )
+    llm_config = LLMConfig(processor="from_env" if llm else None)
+    diarization_config = DiarizationConfig(
+        enabled=diarize,
+        speaker_count=diarize_speakers,
+    )
     reporter = RichStageReporter()
 
     try:
-        process_input(
-            input_path=input_path,
-            output_dir=output_dir,
-            transcription_config=TranscriptionConfig(
-                threads=threads,
-                asr_model=asr_model,
-                language=language,
-                keep_audio=keep_audio,
-            ),
-            llm_config=LLMConfig(processor="from_env" if llm else None),
-            diarization_config=DiarizationConfig(
-                enabled=diarize,
-                speaker_count=diarize_speakers,
-            ),
-            reporter=reporter,
-        )
+        for input_path in input_paths:
+            process_input(
+                input_path=input_path,
+                output_dir=output_dir,
+                transcription_config=transcription_config,
+                llm_config=llm_config,
+                diarization_config=diarization_config,
+                reporter=reporter,
+            )
     except KeyboardInterrupt:
         reporter.interrupted()
         raise click.exceptions.Exit(130) from None
