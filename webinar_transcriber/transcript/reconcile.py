@@ -73,21 +73,29 @@ def _recent_transcript_text(segments: list[TranscriptSegment]) -> str:
 
 
 def _trim_duplicate_prefix(previous_text: str, text: str) -> str:
+    """Trim leading words from a window segment when they duplicate the previous transcript tail.
+
+    Window overlap can make Whisper repeat the end of one decode window at the start of the next, so
+    reconciliation compares the recent transcript suffix with the new segment prefix and removes the
+    longest matching prefix above the minimum overlap threshold.
+    """
     previous_words = _word_spans(previous_text)
     current_words = _word_spans(text)
     max_overlap = min(len(previous_words), len(current_words), _MAX_DUPLICATE_OVERLAP_WORDS)
     for overlap_word_count in range(max_overlap, _MIN_DUPLICATE_OVERLAP_WORDS - 1, -1):
         previous_suffix = previous_words[-overlap_word_count:]
         current_prefix = current_words[:overlap_word_count]
-        if [word for word, _start, _end in previous_suffix] != [
-            word for word, _start, _end in current_prefix
-        ]:
+        if _extract_words(previous_suffix) != _extract_words(current_prefix):
             continue
         if overlap_word_count == len(current_words):
             return ""
         trim_end = current_prefix[-1][2]
         return text[trim_end:].lstrip(" \t\r\n,.;:!?-")
     return text
+
+
+def _extract_words(spans: list[tuple[str, int, int]]) -> list[str]:
+    return [word for word, _start, _end in spans]
 
 
 def _word_spans(text: str) -> list[tuple[str, int, int]]:
