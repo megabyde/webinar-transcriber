@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
 from webinar_transcriber.models import TokenUsage
@@ -37,6 +38,19 @@ from .utils import (
 )
 
 LLM_RATE_LIMIT_RETRY_ATTEMPTS = 3
+
+
+@dataclass(frozen=True, slots=True)
+class SectionPolishResult:
+    """Result from polishing one report section."""
+
+    section_id: str
+    transcript_text: str
+    tldr: str
+    usage: TokenUsage = field(default_factory=TokenUsage)
+    response_metadata: dict[str, object] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -151,9 +165,7 @@ class InstructorLLMProcessor:
         if not report.sections:
             return SectionPolishOutputs(sections={})
 
-        section_results: dict[
-            int, tuple[str, str, str, TokenUsage, dict[str, object], list[str]]
-        ] = {}
+        section_results: dict[int, SectionPolishResult] = {}
 
         executor = ThreadPoolExecutor(max_workers=plan.worker_count)
         futures = {
@@ -178,15 +190,14 @@ class InstructorLLMProcessor:
         response_metadata: list[dict[str, object]] = []
         for index in range(len(report.sections)):
             result = section_results[index]
-            section_id, transcript_text, tldr, usage, section_metadata, section_warnings = result
-            polished_sections[section_id] = PolishedSection(
-                id=section_id,
-                transcript=transcript_text,
-                tldr=tldr,
+            polished_sections[result.section_id] = PolishedSection(
+                id=result.section_id,
+                transcript=result.transcript_text,
+                tldr=result.tldr,
             )
-            usage_totals += usage
-            response_metadata.append(section_metadata)
-            warnings.extend(section_warnings)
+            usage_totals += result.usage
+            response_metadata.append(result.response_metadata)
+            warnings.extend(result.warnings)
 
         return SectionPolishOutputs(
             sections=polished_sections,
@@ -194,27 +205,22 @@ class InstructorLLMProcessor:
             response_metadata=response_metadata,
         )
 
-    def _polish_section(
-        self, section: ReportSection
-    ) -> tuple[str, str, str, TokenUsage, dict[str, object], list[str]]:
+    def _polish_section(self, section: ReportSection) -> SectionPolishResult:
         try:
-            transcript_text, tldr, usage, response_metadata, section_warnings = (
-                self._polish_section_text(section)
-            )
+            return self._polish_section_text(section)
         except LLMProcessingError as error:
-            transcript_text = section.transcript_text
-            tldr = section.tldr or ""
-            usage = TokenUsage()
-            response_metadata: dict[str, object] = {
-                "stage": "section_polish",
-                "section_id": section.id,
-            }
-            section_warnings = [str(error)]
-        return section.id, transcript_text, tldr, usage, response_metadata, section_warnings
+            return SectionPolishResult(
+                section_id=section.id,
+                transcript_text=section.transcript_text,
+                tldr=section.tldr or "",
+                response_metadata={
+                    "stage": "section_polish",
+                    "section_id": section.id,
+                },
+                warnings=[str(error)],
+            )
 
-    def _polish_section_text(
-        self, section: ReportSection
-    ) -> tuple[str, str, TokenUsage, dict[str, object], list[str]]:
+    def _polish_section_text(self, section: ReportSection) -> SectionPolishResult:
         payload = {
             "id": section.id,
             "title": section.title,
@@ -241,12 +247,17 @@ class InstructorLLMProcessor:
                 "kept original text."
             )
 
-        return (
-            transcript_text,
-            tldr,
-            usage,
-            {"stage": "section_polish", "section_id": section.id, **response_metadata},
-            warnings,
+        return SectionPolishResult(
+            section_id=section.id,
+            transcript_text=transcript_text,
+            tldr=tldr,
+            usage=usage,
+            response_metadata={
+                "stage": "section_polish",
+                "section_id": section.id,
+                **response_metadata,
+            },
+            warnings=warnings,
         )
 
     def _create_structured_response(
