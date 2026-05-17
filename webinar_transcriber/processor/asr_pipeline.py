@@ -25,6 +25,7 @@ from .support import (
     asr_runtime_detail,
     count_label,
     counting_progress,
+    detail_label,
     progress_stage,
     realtime_factor_detail,
     stage,
@@ -194,12 +195,12 @@ def _detect_speech_regions_stage(
             threads=threads,
             progress_callback=counting_progress(st, "region"),
         )
-        vad_detail_parts = [count_label(len(speech_regions), "region")]
-        if rtf := realtime_factor_detail(
-            total_duration_sec=audio_duration_sec, elapsed_sec=st.elapsed_sec()
-        ):
-            vad_detail_parts.append(rtf)
-        vad_detail = " | ".join(vad_detail_parts)
+        vad_detail = detail_label(
+            count_label(len(speech_regions), "region"),
+            realtime_factor_detail(
+                total_duration_sec=audio_duration_sec, elapsed_sec=st.elapsed_sec()
+            ),
+        )
         st.advance_to(audio_duration_sec, detail=vad_detail)
         st.set_detail(vad_detail)
 
@@ -259,15 +260,14 @@ def _diarize_speakers_stage(
         write_json(layout.diarization_path, [asdict(turn) for turn in speaker_turns])
         speaker_count = len({turn.speaker for turn in speaker_turns})
         turn_count = len(speaker_turns)
-        detail = " | ".join([
+        detail = detail_label(
             count_label(speaker_count, "speaker"),
             count_label(turn_count, "turn"),
-        ])
-        if rtf := realtime_factor_detail(
-            total_duration_sec=normalized_audio_duration(audio_samples),
-            elapsed_sec=st.elapsed_sec(),
-        ):
-            detail = f"{detail} | {rtf}"
+            realtime_factor_detail(
+                total_duration_sec=normalized_audio_duration(audio_samples),
+                elapsed_sec=st.elapsed_sec(),
+            ),
+        )
         st.advance_to(100.0, detail=detail)
         st.set_detail(detail)
     return speaker_turns

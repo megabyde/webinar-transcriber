@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import importlib
-import os
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, cast
+
+from webinar_transcriber._env import llm_provider_name
 
 from .contracts import (
     LLMConfigurationError,
@@ -25,13 +27,16 @@ if TYPE_CHECKING:
     from .schemas import ReportPolishResponse, ReportSectionUpdate, SectionTextResponse
 
 
+_EMPTY_REQUEST_KWARGS = MappingProxyType({})
+
+
 @dataclass(frozen=True, slots=True)
 class ProviderSpec:
     label: str
     module_name: str
     api_key_env: str
     model_env: str
-    request_kwargs: Mapping[str, object] | None = None
+    request_kwargs: Mapping[str, object] = _EMPTY_REQUEST_KWARGS
 
 
 PROVIDERS = {
@@ -63,7 +68,7 @@ def _required_llm_module(module_name: str, *, provider_label: str) -> object:
 
 def ensure_llm_extra_available() -> None:
     """Raise when the configured provider cannot load the optional LLM dependencies."""
-    provider = os.environ.get("LLM_PROVIDER", "openai").strip().casefold()
+    provider = llm_provider_name()
     spec = PROVIDERS.get(provider)
     if spec is None:
         return
@@ -82,7 +87,7 @@ def build_llm_processor_from_env(*, threads: int) -> LLMProcessor:
     """
     from .processor import InstructorLLMProcessor  # noqa: PLC0415
 
-    provider_name = os.environ.get("LLM_PROVIDER", "openai").strip().casefold()
+    provider_name = llm_provider_name()
     spec = PROVIDERS.get(provider_name)
     if spec is None:
         raise LLMConfigurationError(

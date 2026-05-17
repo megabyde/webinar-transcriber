@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from webinar_transcriber.models import ReportStatus, TokenUsage
+    from webinar_transcriber.models import ReportStatus
 
 
 @dataclass
@@ -17,5 +17,4 @@ class LLMRuntimeState:
     model_name: str | None = None
     report_status: ReportStatus = "disabled"
     report_latency_sec: float | None = None
-    report_usage: TokenUsage | None = None
     response_metadata: list[dict[str, object]] = field(default_factory=list)

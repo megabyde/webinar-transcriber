@@ -8,7 +8,6 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, cast
 
-from webinar_transcriber.models import TokenUsage
 from webinar_transcriber.text_utils import split_paragraph_blocks
 
 from .contracts import (
@@ -21,7 +20,6 @@ _SCHEMA_LABELS = {
     "SectionTextResponse": "Section polish",
     "ReportPolishResponse": "Report polish",
 }
-
 if TYPE_CHECKING:
     from webinar_transcriber.llm.schemas import ReportSectionUpdate
     from webinar_transcriber.models import ReportDocument
@@ -203,33 +201,6 @@ def _normalize_llm_paragraphs(text: str) -> str:
     return "\n\n".join(
         split_paragraph_blocks(text, flexible_blank_lines=True, normalize_inline_whitespace=True)
     )
-
-
-def extract_usage(response: object) -> TokenUsage:
-    """Extract token usage from provider responses with a stable key subset.
-
-    Returns:
-        TokenUsage: The extracted token counts.
-    """
-    usage = getattr(response, "usage", None)
-    if usage is None:
-        return TokenUsage()
-
-    input_tokens = _token_count(usage, "input_tokens")
-    output_tokens = _token_count(usage, "output_tokens")
-    total_tokens = _token_count(usage, "total_tokens")
-    if total_tokens is None and input_tokens is not None and output_tokens is not None:
-        total_tokens = input_tokens + output_tokens
-    return TokenUsage(
-        input_tokens=input_tokens or 0,
-        output_tokens=output_tokens or 0,
-        total_tokens=total_tokens or 0,
-    )
-
-
-def _token_count(usage: object, field_name: str) -> int | None:
-    field_value = getattr(usage, field_name, None)
-    return field_value if isinstance(field_value, int) else None
 
 
 def extract_response_metadata(response: object) -> dict[str, object]:

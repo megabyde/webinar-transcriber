@@ -20,6 +20,18 @@ def format_timecode(total_sec: float) -> str:
     return f"{minutes:02d}:{seconds:02d}"
 
 
+def format_duration(duration_sec: float) -> str:
+    """Format an elapsed duration for terminal summaries."""
+    total_seconds = round(duration_sec)
+    minutes, seconds = divmod(total_seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes:02d}m {seconds:02d}s"
+    if minutes:
+        return f"{minutes}m {seconds:02d}s"
+    return f"{seconds}s"
+
+
 def section_timecode(start_sec: float, end_sec: float) -> str:
     """Format a section start/end range for report headings.
 

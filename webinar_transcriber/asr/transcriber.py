@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Self, cast
 
 import numpy as np
 
+from webinar_transcriber._env import TQDM_DISABLE_ENV, temporary_environment_variable
 from webinar_transcriber.asr.carryover import build_prompt_carryover
 from webinar_transcriber.asr.config import (
     WHISPER_CPP_MODEL_EXAMPLE,
@@ -70,16 +71,8 @@ def _disable_tqdm_progress() -> Iterator[None]:
     """Suppress pywhispercpp download progress while constructing a model."""
     # pywhispercpp does not expose a per-call progress flag for model downloads;
     # tqdm reads TQDM_DISABLE when the progress bar is created.
-    previous = os.environ.get("TQDM_DISABLE")
-    os.environ["TQDM_DISABLE"] = "1"
-    try:
-        with redirect_stderr(io.StringIO()):
-            yield
-    finally:
-        if previous is None:
-            os.environ.pop("TQDM_DISABLE", None)
-        else:
-            os.environ["TQDM_DISABLE"] = previous
+    with temporary_environment_variable(TQDM_DISABLE_ENV, "1"), redirect_stderr(io.StringIO()):
+        yield
 
 
 @contextmanager
@@ -207,7 +200,8 @@ class WhisperCppTranscriber:
         }
         try:
             with _redirect_native_output(self._log_path), _disable_tqdm_progress():
-                model = cast("Model", cast("Any", _model_cls())(self._model_name, **model_kwargs))
+                model_cls = cast("Any", _model_cls())
+                model = cast("Model", model_cls(self._model_name, **model_kwargs))
         except Exception as error:
             raise ASRProcessingError(_model_prepare_error_message(self._model_name)) from error
         if getattr(model, "_ctx", True) is None:

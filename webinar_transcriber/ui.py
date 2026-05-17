@@ -21,6 +21,7 @@ from rich.progress import (
 from rich.table import Table
 from rich.text import Text
 
+from webinar_transcriber.export.formatting import format_duration
 from webinar_transcriber.reporter import BaseStageReporter
 
 if TYPE_CHECKING:
@@ -111,7 +112,8 @@ class RichStageReporter(BaseStageReporter):
                 completed=0.0,
                 total=max(total, 1.0),
                 count_label=count_label,
-            ),
+            )
+            or "",
             rate_label=rate_label,
             rate_text="",
             detail_text=detail or "",
@@ -138,12 +140,14 @@ class RichStageReporter(BaseStageReporter):
                 completed=task.completed,
                 total=task.total,
                 count_label=task.fields.get("count_label"),
-            ),
+            )
+            or "",
             rate_text=_rate_text(
                 completed=task.completed,
                 elapsed_sec=perf_counter() - active_stage.started_at,
                 rate_label=task.fields.get("rate_label"),
-            ),
+            )
+            or "",
         )
 
     def stage_finished(self, stage_key: str, label: str, *, detail: str | None = None) -> None:
@@ -212,9 +216,9 @@ class RichStageReporter(BaseStageReporter):
         self._active_stage = None
 
 
-def _count_text(*, completed: float, total: float | None, count_label: object) -> str:
+def _count_text(*, completed: float, total: float | None, count_label: object) -> str | None:
     if total is None or not count_label:
-        return ""
+        return None
 
     completed_count = int(completed)
     total_count = int(total)
@@ -222,11 +226,11 @@ def _count_text(*, completed: float, total: float | None, count_label: object) -
     return f"{completed_count}/{total_count}{sep}{count_label}"
 
 
-def _rate_text(*, completed: float, elapsed_sec: float, rate_label: object) -> str:
+def _rate_text(*, completed: float, elapsed_sec: float, rate_label: object) -> str | None:
     if not rate_label or completed <= 0:
-        return ""
+        return None
     if elapsed_sec <= 0:
-        return ""
+        return None
 
     rate = completed / elapsed_sec
     display_rate = f"{rate:.0f}" if rate >= 100 else f"{rate:.1f}"
@@ -240,18 +244,7 @@ def _processing_detail(artifacts: ProcessArtifacts) -> str | None:
 
     media_duration_sec = artifacts.media_asset.duration_sec
     if media_duration_sec <= 0:  # pragma: no cover - media probing guarantees duration
-        return _duration_text(total_sec)
+        return format_duration(total_sec)
 
     rtf = format(round(media_duration_sec / total_sec, 2), "g")
-    return f"{_duration_text(total_sec)} | RTF {rtf}x"
-
-
-def _duration_text(duration_sec: float) -> str:
-    total_seconds = round(duration_sec)
-    minutes, seconds = divmod(total_seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-    if hours:
-        return f"{hours}h {minutes:02d}m {seconds:02d}s"
-    if minutes:
-        return f"{minutes}m {seconds:02d}s"
-    return f"{seconds}s"
+    return f"{format_duration(total_sec)} | RTF {rtf}x"

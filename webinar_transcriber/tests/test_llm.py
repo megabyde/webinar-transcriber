@@ -25,7 +25,6 @@ from webinar_transcriber.llm.schemas import (
 from webinar_transcriber.llm.utils import (
     build_report_polish_payload,
     extract_response_metadata,
-    extract_usage,
     normalize_polished_section_text,
     normalize_polished_section_tldr,
     normalize_report_lines,
@@ -33,7 +32,7 @@ from webinar_transcriber.llm.utils import (
     truncate_text,
     validated_section_titles,
 )
-from webinar_transcriber.models import MediaType, ReportDocument, ReportSection, TokenUsage
+from webinar_transcriber.models import MediaType, ReportDocument, ReportSection
 
 LLM_EXTRA_INSTALL_RE = r'uv tool install --reinstall "\.\[llm\]"'
 
@@ -206,13 +205,11 @@ class TestInstructorLlmProcessor:
     class FakeCompletion:
         def __init__(
             self,
-            usage,
             *,
             finish_reason: str | None = None,
             refusal: str | None = None,
             safety: dict[str, object] | None = None,
         ) -> None:
-            self.usage = SimpleNamespace(**usage)
             if finish_reason is not None:
                 self.choices = [
                     SimpleNamespace(
@@ -285,7 +282,6 @@ class TestInstructorLlmProcessor:
                     transcript_text="Agenda review and project status update.\n\nPlease listen.",
                 ),
                 self.FakeCompletion(
-                    {"input_tokens": 5, "output_tokens": 4, "total_tokens": 9},
                     finish_reason="stop",
                 ),
             ),
@@ -297,7 +293,7 @@ class TestInstructorLlmProcessor:
                         ReportSectionUpdate(id="section-1", title="Improved overview")
                     ],
                 ),
-                self.FakeCompletion({"input_tokens": 12, "output_tokens": 8, "total_tokens": 20}),
+                self.FakeCompletion(),
             ),
         ])
 
@@ -333,10 +329,6 @@ class TestInstructorLlmProcessor:
         assert section_result.section_transcripts == {
             "section-1": "Agenda review and project status update.\n\nPlease listen."
         }
-        assert section_result.usage == TokenUsage(input_tokens=5, output_tokens=4, total_tokens=9)
-        assert metadata_result.usage == TokenUsage(
-            input_tokens=12, output_tokens=8, total_tokens=20
-        )
         assert section_result.response_metadata == [
             {"stage": "section_polish", "section_id": "section-1", "finish_reason": "stop"}
         ]
@@ -425,13 +417,13 @@ class TestInstructorLlmProcessor:
                 SectionTextResponse(
                     tldr="Agenda recap.", transcript_text="Agenda review and project status update."
                 ),
-                self.FakeCompletion({"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}),
+                self.FakeCompletion(),
             ),
             (
                 ReportPolishResponse(
                     section_updates=[ReportSectionUpdate(id="section-x", title="Unexpected title")]
                 ),
-                self.FakeCompletion({"input_tokens": 3, "output_tokens": 2, "total_tokens": 5}),
+                self.FakeCompletion(),
             ),
         ])
 
@@ -464,7 +456,7 @@ class TestInstructorLlmProcessor:
         fake_client = self.FakeClient([
             (
                 object(),
-                self.FakeCompletion({"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}),
+                self.FakeCompletion(),
             )
         ])
 
@@ -521,22 +513,14 @@ class TestInstructorLlmProcessor:
                             tldr="Intro recap.",
                             transcript_text="Intro review and project status update.",
                         ),
-                        TestInstructorLlmProcessor.FakeCompletion({
-                            "input_tokens": 5,
-                            "output_tokens": 4,
-                            "total_tokens": 9,
-                        }),
+                        TestInstructorLlmProcessor.FakeCompletion(),
                     )
                 return (
                     SectionTextResponse(
                         tldr="Agenda recap.",
                         transcript_text="Agenda review and project status update.",
                     ),
-                    TestInstructorLlmProcessor.FakeCompletion({
-                        "input_tokens": 6,
-                        "output_tokens": 5,
-                        "total_tokens": 11,
-                    }),
+                    TestInstructorLlmProcessor.FakeCompletion(),
                 )
 
         fake_client = SectionAwareClient()
@@ -574,7 +558,6 @@ class TestInstructorLlmProcessor:
         assert result.section_tldrs == {"section-1": "Intro recap.", "section-2": "Agenda recap."}
         assert result.section_transcripts["section-1"] == "Intro review and project status update."
         assert result.section_transcripts["section-2"] == "Agenda review and project status update."
-        assert result.usage == TokenUsage(input_tokens=11, output_tokens=9, total_tokens=20)
         assert result.warnings == []
         assert progress_updates == [1, 1]
 
@@ -582,7 +565,7 @@ class TestInstructorLlmProcessor:
         fake_client = self.FakeClient([
             (
                 ReportPolishResponse(),
-                self.FakeCompletion({"input_tokens": 1, "output_tokens": 1, "total_tokens": 2}),
+                self.FakeCompletion(),
             )
         ])
         processor = InstructorLLMProcessor(
@@ -614,7 +597,7 @@ class TestInstructorLlmProcessor:
             self.ProviderStatusError(429),
             (
                 SectionTextResponse(tldr="Agenda recap.", transcript_text="Agenda review."),
-                self.FakeCompletion({"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}),
+                self.FakeCompletion(),
             ),
         ])
         processor = InstructorLLMProcessor(
@@ -691,7 +674,7 @@ class TestInstructorLlmProcessor:
                         tldr=f"{section_id} recap.",
                         transcript_text=f"{section_id} transcript.",
                     ),
-                    fake_completion_cls({"input_tokens": 1, "output_tokens": 1}),
+                    fake_completion_cls(),
                 )
 
         processor = InstructorLLMProcessor(
@@ -741,7 +724,7 @@ class TestInstructorLlmProcessor:
                     tldr="The speaker pauses for a music break.",
                     transcript_text="The speaker pauses.\n\n[music break]\n\nThe session resumes.",
                 ),
-                self.FakeCompletion({"input_tokens": 5, "output_tokens": 4, "total_tokens": 9}),
+                self.FakeCompletion(),
             )
         ])
         processor = InstructorLLMProcessor(
@@ -779,7 +762,7 @@ class TestInstructorLlmProcessor:
 
 class TestInstructorProcessorFlow:
     class ResponseClient:
-        def __init__(self, responses: dict[str, tuple[BaseModel, dict[str, int]] | Exception]):
+        def __init__(self, responses: dict[str, tuple[BaseModel, object] | Exception]):
             self._responses = responses
 
         def create_with_completion(self, **kwargs):
@@ -792,7 +775,7 @@ class TestInstructorProcessorFlow:
             return response
 
     def processor(
-        self, responses: dict[str, tuple[BaseModel, dict[str, int]] | Exception]
+        self, responses: dict[str, tuple[BaseModel, object] | Exception]
     ) -> InstructorLLMProcessor:
         return InstructorLLMProcessor(
             client=self.ResponseClient(responses),
@@ -809,7 +792,6 @@ class TestInstructorProcessorFlow:
 
         assert result.section_transcripts == {}
         assert result.section_tldrs == {}
-        assert result.usage == TokenUsage()
         assert result.warnings == []
 
     def test_report_polish_plan_counts_all_sections(self) -> None:
@@ -865,7 +847,6 @@ class TestInstructorProcessorFlow:
 
         assert result.section_transcripts == {"section-1": "Agenda review."}
         assert result.section_tldrs == {"section-1": "Existing recap."}
-        assert result.usage == TokenUsage()
         assert result.warnings == ["Section polishing failed for section-1: bad section"]
         assert progress_updates == [1]
 
@@ -873,7 +854,7 @@ class TestInstructorProcessorFlow:
         processor = self.processor({
             "section-1": (
                 SectionTextResponse(tldr="Recap.", transcript_text="   "),
-                {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5},
+                object(),
             )
         })
         report = ReportDocument(
@@ -995,23 +976,6 @@ class TestLlmNormalization:
 
         with pytest.raises(LLMProcessingError, match="empty section title"):
             validated_section_titles(report, [ReportSectionUpdate(id="section-1", title="   ")])
-
-    def test_extract_usage_supports_sdk_object_shape(self) -> None:
-        assert extract_usage(type("Response", (), {})()) == TokenUsage()
-
-        usage_obj = type("Usage", (), {"input_tokens": 3, "output_tokens": 4})()
-        response_obj = type("Response", (), {"usage": usage_obj})()
-        assert extract_usage(response_obj) == TokenUsage(
-            input_tokens=3,
-            output_tokens=4,
-            total_tokens=7,
-        )
-
-        usage_with_total = type("Usage", (), {"input_tokens": 3, "total_tokens": 9})()
-        assert extract_usage(type("Response", (), {"usage": usage_with_total})()) == TokenUsage(
-            input_tokens=3,
-            total_tokens=9,
-        )
 
     def test_schema_label_covers_known_and_fallback_models(self) -> None:
         class SectionTextResponse(BaseModel):

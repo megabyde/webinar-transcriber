@@ -12,7 +12,6 @@ from webinar_transcriber.reporter import BaseStageReporter
 from webinar_transcriber.ui import (
     RichStageReporter,
     _count_text,
-    _duration_text,
     _rate_text,
 )
 
@@ -39,18 +38,14 @@ class TestFormatHelpers:
     def test_rate_text_hides_empty_values(self) -> None:
         rate_text = _rate_text(completed=0.0, elapsed_sec=1.0, rate_label="frames/s")
 
-        assert rate_text == ""
+        assert rate_text is None
 
     def test_count_and_rate_helpers_hide_empty_values(self) -> None:
         formatted_count = _count_text(completed=3.0, total=None, count_label="frames")
         rate_text = _rate_text(completed=3.0, elapsed_sec=0.0, rate_label="frames/s")
 
-        assert formatted_count == ""
-        assert rate_text == ""
-
-    def test_duration_text_formats_minutes_and_hours(self) -> None:
-        assert _duration_text(65.0) == "1m 05s"
-        assert _duration_text(3661.0) == "1h 01m 01s"
+        assert formatted_count is None
+        assert rate_text is None
 
 
 class TestRichStageReporter:
