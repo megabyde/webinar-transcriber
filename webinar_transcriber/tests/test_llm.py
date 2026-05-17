@@ -33,18 +33,9 @@ from webinar_transcriber.llm.utils import (
     validated_section_titles,
 )
 from webinar_transcriber.models import MediaType, ReportDocument, ReportSection
+from webinar_transcriber.tests.conftest import fake_import_module
 
 LLM_EXTRA_INSTALL_RE = r'uv tool install --reinstall "\.\[llm\]"'
-
-
-def _fake_import_module(modules: dict[str, object]):
-    def fake_import_module(name: str) -> object:
-        try:
-            return modules[name]
-        except KeyError as error:
-            raise ImportError(name) from error
-
-    return fake_import_module
 
 
 class FakeInstructorModule:
@@ -108,7 +99,7 @@ class TestBuildLlmProcessorFromEnv:
         monkeypatch.setenv(model_env, provider_model.rsplit("/", 1)[1])
         monkeypatch.setattr(
             "webinar_transcriber.llm.importlib.import_module",
-            _fake_import_module({"instructor": fake_instructor, provider_module: object()}),
+            fake_import_module({"instructor": fake_instructor, provider_module: object()}),
         )
 
         processor = build_llm_processor_from_env(threads=6)
@@ -129,7 +120,7 @@ class TestBuildLlmProcessorFromEnv:
         monkeypatch.delenv("OPENAI_MODEL", raising=False)
         monkeypatch.setattr(
             "webinar_transcriber.llm.importlib.import_module",
-            _fake_import_module({"instructor": FakeInstructorModule(object()), "openai": object()}),
+            fake_import_module({"instructor": FakeInstructorModule(object()), "openai": object()}),
         )
 
         with pytest.raises(LLMConfigurationError):
@@ -138,7 +129,7 @@ class TestBuildLlmProcessorFromEnv:
     def test_requires_llm_extra_for_openai(self, monkeypatch) -> None:
         monkeypatch.delenv("LLM_PROVIDER", raising=False)
         monkeypatch.setattr(
-            "webinar_transcriber.llm.importlib.import_module", _fake_import_module({})
+            "webinar_transcriber.llm.importlib.import_module", fake_import_module({})
         )
 
         with pytest.raises(
@@ -150,7 +141,7 @@ class TestBuildLlmProcessorFromEnv:
     def test_requires_llm_extra_for_anthropic(self, monkeypatch) -> None:
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         monkeypatch.setattr(
-            "webinar_transcriber.llm.importlib.import_module", _fake_import_module({})
+            "webinar_transcriber.llm.importlib.import_module", fake_import_module({})
         )
 
         with pytest.raises(
@@ -172,7 +163,7 @@ class TestBuildLlmProcessorFromEnv:
             monkeypatch.setenv("LLM_PROVIDER", provider_env)
         monkeypatch.setattr(
             "webinar_transcriber.llm.importlib.import_module",
-            _fake_import_module({"instructor": object(), provider_module: object()}),
+            fake_import_module({"instructor": object(), provider_module: object()}),
         )
 
         ensure_llm_extra_available()
@@ -181,7 +172,7 @@ class TestBuildLlmProcessorFromEnv:
         monkeypatch.delenv("LLM_PROVIDER", raising=False)
         monkeypatch.setattr(
             "webinar_transcriber.llm.importlib.import_module",
-            _fake_import_module({"instructor": object()}),
+            fake_import_module({"instructor": object()}),
         )
 
         with pytest.raises(LLMConfigurationError, match="requires the 'llm' extra"):

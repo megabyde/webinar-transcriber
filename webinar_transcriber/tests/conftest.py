@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -14,16 +15,105 @@ from webinar_transcriber.asr import WhisperCppTranscriber
 from webinar_transcriber.models import (
     AudioAsset,
     DecodedWindow,
+    Diagnostics,
     InferenceWindow,
+    MediaType,
+    ReportDocument,
+    Scene,
+    SceneFrame,
     SpeechRegion,
+    TranscriptionResult,
     TranscriptSegment,
     VideoAsset,
 )
+from webinar_transcriber.paths import RunLayout
 from webinar_transcriber.processor import ProcessArtifacts
 from webinar_transcriber.reporter import BaseStageReporter
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 ORIGINAL_IMPORT_MODULE = importlib.import_module
+
+
+def fake_import_module(
+    modules: dict[str, object], *, fallback: bool = False
+) -> Callable[[str], object]:
+    def import_module(name: str) -> object:
+        if name in modules:
+            return modules[name]
+        if fallback:
+            return ORIGINAL_IMPORT_MODULE(name)
+        raise ImportError(name)
+
+    return import_module
+
+
+@dataclass
+class FakeRichTask:
+    total: float
+    fields: dict[str, object]
+    completed: float = 0.0
+
+
+class FakeRichProgress:
+    def __init__(self) -> None:
+        self.tasks: list[FakeRichTask] = []
+        self.started = False
+        self.stopped = False
+        self.update = Mock(side_effect=self._update)
+
+    def start(self) -> None:
+        self.started = True
+
+    def stop(self) -> None:
+        self.stopped = True
+
+    def add_task(self, _label: str, *, total: float, **fields: object) -> int:
+        self.tasks.append(FakeRichTask(total=total, fields=fields))
+        return len(self.tasks) - 1
+
+    def _update(self, task_id: int, *, advance: float = 0.0, **fields: object) -> None:
+        task = self.tasks[task_id]
+        task.completed += advance
+        task.fields.update(fields)
+
+    @property
+    def added_task(self) -> tuple[float, dict[str, object]]:
+        task = self.tasks[0]
+        return task.total, task.fields
+
+
+@pytest.fixture
+def fake_rich_progress(monkeypatch: pytest.MonkeyPatch) -> list[FakeRichProgress]:
+    progresses: list[FakeRichProgress] = []
+
+    def fake_progress(*_args: object, **_kwargs: object) -> FakeRichProgress:
+        progress = FakeRichProgress()
+        progresses.append(progress)
+        return progress
+
+    def fake_column(*_args: object, **_kwargs: object) -> object:
+        return object()
+
+    monkeypatch.setattr("webinar_transcriber.ui.Progress", fake_progress)
+    monkeypatch.setattr("webinar_transcriber.ui.SpinnerColumn", fake_column)
+    monkeypatch.setattr("webinar_transcriber.ui.TextColumn", fake_column)
+    monkeypatch.setattr("webinar_transcriber.ui.BarColumn", fake_column)
+    monkeypatch.setattr("webinar_transcriber.ui.TaskProgressColumn", fake_column)
+    monkeypatch.setattr("webinar_transcriber.ui.TimeRemainingColumn", fake_column)
+    monkeypatch.setattr("webinar_transcriber.ui.TimeElapsedColumn", fake_column)
+    return progresses
+
+
+def process_artifacts(input_path: Path, run_dir: Path) -> ProcessArtifacts:
+    return ProcessArtifacts(
+        layout=RunLayout(run_dir=run_dir),
+        media_asset=VideoAsset(path=str(input_path), duration_sec=1.0),
+        transcription=TranscriptionResult(detected_language="en"),
+        report=ReportDocument(
+            title="Demo", source_file=str(input_path), media_type=MediaType.VIDEO
+        ),
+        diagnostics=Diagnostics(),
+    )
 
 
 class FakeContextContainer:
@@ -106,13 +196,7 @@ class FakeSherpaModule:
 def fake_sherpa_import_module() -> Callable[..., tuple[Callable[[str], object], object]]:
     def build(*, segments: list[object] | None = None, window_size: int = 512):
         fake_sherpa = FakeSherpaModule(segments=segments, window_size=window_size)
-
-        def fake_import_module(name: str) -> object:
-            if name == "sherpa_onnx":
-                return fake_sherpa
-            return ORIGINAL_IMPORT_MODULE(name)
-
-        return fake_import_module, fake_sherpa
+        return fake_import_module({"sherpa_onnx": fake_sherpa}, fallback=True), fake_sherpa
 
     return build
 
@@ -270,6 +354,39 @@ def install_pipeline_runtime(
     monkeypatch.setattr(
         "webinar_transcriber.processor.asr_pipeline.detect_speech_regions",
         fake_detect_speech_regions,
+    )
+
+
+def install_video_scene_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    scenes: list[Scene],
+    frames: list[SceneFrame] | None = None,
+    frame_warning: str | None = None,
+) -> None:
+    def fake_detect_scenes(*_args, progress_callback=None, **_kwargs) -> list[Scene]:
+        if progress_callback is not None:
+            for index in range(1, len(scenes) + 1):
+                progress_callback(index, index)
+        return scenes
+
+    def fake_extract_frames(*_args, progress_callback=None, warning_callback=None, **_kwargs):
+        from PIL import Image
+
+        if frame_warning is not None:
+            assert warning_callback is not None
+            warning_callback(frame_warning)
+        extracted_frames = list(frames or [])
+        for index, frame in enumerate(extracted_frames, start=1):
+            Path(frame.image_path).parent.mkdir(parents=True, exist_ok=True)
+            Image.new("RGB", (8, 8), color="white").save(frame.image_path)
+            if progress_callback is not None:
+                progress_callback(index, index)
+        return extracted_frames
+
+    monkeypatch.setattr("webinar_transcriber.video.detect_scenes", fake_detect_scenes)
+    monkeypatch.setattr(
+        "webinar_transcriber.video.extract_representative_frames", fake_extract_frames
     )
 
 

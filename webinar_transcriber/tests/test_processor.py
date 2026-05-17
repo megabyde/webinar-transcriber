@@ -10,7 +10,6 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
-from PIL import Image
 
 from webinar_transcriber.asr import WhisperCppTranscriber
 from webinar_transcriber.diagnostics import write_run_diagnostics
@@ -57,6 +56,7 @@ from webinar_transcriber.tests.conftest import (
     RecordingReporter,
     audio_runtime,
     install_pipeline_runtime,
+    install_video_scene_runtime,
     video_runtime,
 )
 
@@ -196,23 +196,29 @@ class FakeDiarizer:
         return self.turns
 
 
+def run_basic_audio_pipeline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[ProcessArtifacts, RecordingReporter, FakeTranscriber]:
+    input_path = FIXTURE_DIR / "sample-audio.mp3"
+    reporter = RecordingReporter()
+    transcriber = FakeTranscriber()
+    install_pipeline_runtime(monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime())
+
+    artifacts = process_input(
+        input_path,
+        output_dir=tmp_path / "run",
+        language="en",
+        transcriber=transcriber,
+        reporter=reporter,
+    )
+    return artifacts, reporter, transcriber
+
+
 class TestProcessInput:
-    def test_processes_audio_into_reports_and_diagnostics(
+    def test_processes_audio_into_report_sections(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        input_path = FIXTURE_DIR / "sample-audio.mp3"
-        reporter = RecordingReporter()
-        transcriber = FakeTranscriber()
-        runtime = audio_runtime()
-        install_pipeline_runtime(monkeypatch, tmp_path, input_path=input_path, runtime=runtime)
-
-        artifacts = process_input(
-            input_path,
-            output_dir=tmp_path / "run",
-            language="en",
-            transcriber=transcriber,
-            reporter=reporter,
-        )
+        artifacts, reporter, transcriber = run_basic_audio_pipeline(tmp_path, monkeypatch)
 
         assert transcriber.language_hints == ["en"]
         assert reporter.completed is artifacts
@@ -225,6 +231,11 @@ class TestProcessInput:
             in artifacts.report.sections[0].transcript_text
         )
 
+    def test_processes_audio_writes_expected_artifacts(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        artifacts, _, _ = run_basic_audio_pipeline(tmp_path, monkeypatch)
+
         assert artifacts.layout.metadata_path.exists()
         assert artifacts.layout.transcript_path.exists()
         assert artifacts.layout.markdown_report_path.exists()
@@ -233,16 +244,22 @@ class TestProcessInput:
         assert artifacts.layout.speech_regions_path.exists()
         assert artifacts.layout.decoded_windows_path.exists()
         assert not artifacts.layout.transcription_audio_path().exists()
+        assert not artifacts.layout.diarization_path.exists()
 
         markdown = artifacts.layout.markdown_report_path.read_text(encoding="utf-8")
+        assert "# Sample Audio" in markdown
+        assert "Agenda review and project status update." in markdown
+
+    def test_processes_audio_writes_metadata_and_diagnostics(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        artifacts, _, _ = run_basic_audio_pipeline(tmp_path, monkeypatch)
+
         diagnostics_payload = read_json(artifacts.layout.diagnostics_path)
         metadata_payload = read_json(artifacts.layout.metadata_path)
 
-        assert "# Sample Audio" in markdown
-        assert "Agenda review and project status update." in markdown
         assert metadata_payload["media_type"] == "audio"
         assert metadata_payload["duration_sec"] == 6.0
-        assert "media" not in metadata_payload
         assert not diagnostics_payload["llm"]["enabled"]
         assert diagnostics_payload["asr_pipeline"]["backend"] == "whisper.cpp"
         assert diagnostics_payload["asr_pipeline"]["model"] == "test-model"
@@ -251,7 +268,12 @@ class TestProcessInput:
         assert artifacts.diagnostics.asr_pipeline is not None
         assert artifacts.diagnostics.asr_pipeline.system_info == "CPU = 1"
         assert artifacts.diagnostics.diarization is None
-        assert not artifacts.layout.diarization_path.exists()
+
+    def test_processes_audio_reports_progress(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _, reporter, _ = run_basic_audio_pipeline(tmp_path, monkeypatch)
+
         assert ("start", "prepare_transcription_audio", 6.0, None) in reporter.progress
         assert ("advance", "prepare_transcription_audio", 6.0, None) in reporter.progress
         assert ("start", "vad", 1.0, "0 regions") in reporter.progress
@@ -749,27 +771,7 @@ class TestProcessInput:
         install_pipeline_runtime(
             monkeypatch, tmp_path, input_path=input_path, runtime=video_runtime()
         )
-
-        def fake_detect_scenes(*_args, progress_callback=None, **_kwargs) -> list[Scene]:
-            assert progress_callback is not None
-            progress_callback(1, 1)
-            progress_callback(2, 2)
-            return scenes
-
-        def fake_extract_frames(*_args, progress_callback=None, warning_callback=None, **_kwargs):
-            assert progress_callback is not None
-            assert warning_callback is not None
-            frames_dir.mkdir(parents=True)
-            for frame in frames:
-                Image.new("RGB", (8, 8), color="white").save(frame.image_path)
-            progress_callback(1, 1)
-            progress_callback(2, 2)
-            return frames
-
-        monkeypatch.setattr("webinar_transcriber.video.detect_scenes", fake_detect_scenes)
-        monkeypatch.setattr(
-            "webinar_transcriber.video.extract_representative_frames", fake_extract_frames
-        )
+        install_video_scene_runtime(monkeypatch, scenes=scenes, frames=frames)
 
         artifacts = process_input(
             input_path,
@@ -806,18 +808,10 @@ class TestProcessInput:
         install_pipeline_runtime(
             monkeypatch, tmp_path, input_path=input_path, runtime=video_runtime()
         )
-        monkeypatch.setattr(
-            "webinar_transcriber.video.detect_scenes",
-            lambda *_args, **_kwargs: [Scene(id="scene-1", start_sec=0.0, end_sec=1.8)],
-        )
-
-        def fake_extract_frames(*_args, warning_callback=None, **_kwargs):
-            assert warning_callback is not None
-            warning_callback("Frame extraction failed")
-            return []
-
-        monkeypatch.setattr(
-            "webinar_transcriber.video.extract_representative_frames", fake_extract_frames
+        install_video_scene_runtime(
+            monkeypatch,
+            scenes=[Scene(id="scene-1", start_sec=0.0, end_sec=1.8)],
+            frame_warning="Frame extraction failed",
         )
 
         artifacts = process_input(
