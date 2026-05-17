@@ -15,10 +15,11 @@ from webinar_transcriber.models import SpeechRegion
 from webinar_transcriber.normalized_audio import NORMALIZED_SAMPLE_RATE
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from types import ModuleType
 
     import numpy as np
+
+    from webinar_transcriber.progress import ProgressCallback
 
 VAD_THRESHOLD = 0.45
 MIN_SPEECH_DURATION_SEC = 0.150
@@ -31,7 +32,7 @@ def detect_speech_regions(
     samples: np.ndarray,
     *,
     threads: int,
-    progress_callback: Callable[[float, int], None] | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> tuple[list[SpeechRegion], list[str]]:
     """Return coarse Silero speech regions and any warnings emitted during detection."""
     duration_sec = normalized_audio_duration(samples)
@@ -85,7 +86,7 @@ def _silero_speech_regions(
     samples: np.ndarray,
     *,
     threads: int,
-    progress_callback: Callable[[float, int], None] | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> list[SpeechRegion] | None:
     sherpa_onnx = _load_sherpa_onnx()
     if sherpa_onnx is None:

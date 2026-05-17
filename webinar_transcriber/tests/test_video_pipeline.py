@@ -101,9 +101,9 @@ def _write_synthetic_video(output_path: Path, frame_colors: list[int], *, fps: i
 class TestDetectScenes:
     @pytest.mark.slow
     def test_detect_scenes_finds_multiple_segments(self) -> None:
-        progress_updates: list[tuple[int, int]] = []
+        progress_updates: list[tuple[float, int]] = []
 
-        def on_progress(sample_count: int, scene_count: int) -> None:
+        def on_progress(sample_count: float, scene_count: int) -> None:
             progress_updates.append((sample_count, scene_count))
 
         scenes = detect_scenes(
@@ -197,7 +197,7 @@ class TestFrameExtraction:
             SAMPLE_VIDEO_PATH,
             scenes,
             tmp_path / "frames",
-            progress_callback=lambda: progress_ticks.append(1),
+            progress_callback=lambda _completed, _count: progress_ticks.append(1),
         )
 
         assert len(frames) >= 2
@@ -225,7 +225,7 @@ class TestFrameExtraction:
             SAMPLE_VIDEO_PATH,
             scenes,
             tmp_path / "frames",
-            progress_callback=lambda: progress_ticks.append(1),
+            progress_callback=lambda _completed, _count: progress_ticks.append(1),
             warning_callback=warnings.append,
         )
 
@@ -277,7 +277,7 @@ class TestFrameExtraction:
             SAMPLE_VIDEO_PATH,
             scenes,
             tmp_path / "frames",
-            progress_callback=lambda: progress_ticks.append(1),
+            progress_callback=lambda _completed, _count: progress_ticks.append(1),
             warning_callback=warnings.append,
         )
 
@@ -319,7 +319,7 @@ class TestFrameExtraction:
             SAMPLE_VIDEO_PATH,
             scenes,
             tmp_path / "frames",
-            progress_callback=lambda: progress_ticks.append(1),
+            progress_callback=lambda _completed, _count: progress_ticks.append(1),
             warning_callback=warnings.append,
         )
 

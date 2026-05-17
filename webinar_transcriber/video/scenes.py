@@ -16,10 +16,11 @@ from webinar_transcriber.media import (
 from webinar_transcriber.models import Scene
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from pathlib import Path
 
     from av.video.stream import VideoStream
+
+    from webinar_transcriber.progress import ProgressCallback
 
 
 MIN_SCENE_LENGTH_SEC = 2.0
@@ -44,7 +45,7 @@ def detect_scenes(
     *,
     duration_sec: float | None = None,
     settings: SceneDetectionSettings = DEFAULT_SCENE_DETECTION_SETTINGS,
-    progress_callback: Callable[[int, int], None] | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> list[Scene]:
     """Detect slide changes with PyAV's native scene filter.
 
@@ -72,7 +73,7 @@ def _select_scene_starts(
     video_path: Path,
     *,
     settings: SceneDetectionSettings,
-    progress_callback: Callable[[int, int], None] | None = None,
+    progress_callback: ProgressCallback | None = None,
 ) -> tuple[list[float], float]:
     try:
         with open_video_input_container(video_path) as (input_container, video_stream):
@@ -143,7 +144,7 @@ def _sample_count_for_frame(
 
 
 def _report_scene_progress(
-    progress_callback: Callable[[int, int], None],
+    progress_callback: ProgressCallback,
     frame: object,
     *,
     settings: SceneDetectionSettings,
@@ -161,7 +162,7 @@ def _report_scene_progress(
 
 
 def _report_final_scene_progress(
-    progress_callback: Callable[[int, int], None],
+    progress_callback: ProgressCallback,
     *,
     duration_sec: float,
     settings: SceneDetectionSettings,

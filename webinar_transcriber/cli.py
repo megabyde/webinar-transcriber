@@ -116,7 +116,7 @@ def main(
                 language=language,
                 keep_audio=keep_audio,
             ),
-            llm_config=LLMConfig(enabled=llm),
+            llm_config=LLMConfig(processor="from_env" if llm else None),
             diarization_config=DiarizationConfig(
                 enabled=diarize,
                 speaker_count=diarize_speakers,

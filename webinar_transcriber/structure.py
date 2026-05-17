@@ -12,7 +12,7 @@ from webinar_transcriber.models import (
     ReportDocument,
     ReportSection,
     Scene,
-    SlideFrame,
+    SceneFrame,
     TranscriptionResult,
     TranscriptSegment,
     VideoAssetRef,
@@ -28,14 +28,14 @@ TITLE_WORD_LIMIT = 6
 def align_by_time(
     transcript_segments: list[TranscriptSegment],
     scenes: list[Scene],
-    slide_frames: list[SlideFrame],
+    scene_frames: list[SceneFrame],
 ) -> list[AlignmentBlock]:
     """Assign transcript segments to scenes using midpoint inclusion.
 
     Returns:
         list[AlignmentBlock]: The scene-aligned transcript blocks.
     """
-    frame_by_scene = {frame.scene_id: frame for frame in slide_frames}
+    frame_by_scene = {frame.scene_id: frame for frame in scene_frames}
     blocks: list[AlignmentBlock] = []
 
     for index, scene in enumerate(scenes, start=1):
@@ -193,7 +193,7 @@ def sections_from_block(
     """Build one report section from one scene-alignment block."""
     title = derive_title(block.transcript_text, fallback=f"Slide {next_section_index}")
     if not block_segments:
-        # Keep slide-backed sections even when no transcript segments aligned, so frame/title
+        # Keep scene-backed sections even when no transcript segments aligned, so frame/title
         # context is preserved for scene-only blocks.
         return [
             ReportSection(

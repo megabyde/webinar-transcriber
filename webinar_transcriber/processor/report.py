@@ -15,13 +15,15 @@ from .llm import maybe_polish_report, resolve_llm_processor
 from .support import count_label, counting_progress, progress_stage, stage, write_json
 
 if TYPE_CHECKING:
+    from typing import Literal
+
     from webinar_transcriber.llm.contracts import LLMProcessor
     from webinar_transcriber.models import (
         AlignmentBlock,
         MediaAsset,
         ReportDocument,
         Scene,
-        SlideFrame,
+        SceneFrame,
         TranscriptionResult,
     )
     from webinar_transcriber.paths import RunLayout
@@ -35,18 +37,16 @@ def run_report_phase(
     layout: RunLayout,
     media_asset: MediaAsset,
     normalized_transcription: TranscriptionResult,
-    enable_llm: bool,
-    llm_processor: LLMProcessor | None,
+    llm_processor: LLMProcessor | Literal["from_env"] | None,
     threads: int,
     ctx: RunContext,
-) -> tuple[ReportDocument, list[Scene], list[SlideFrame]]:
+) -> tuple[ReportDocument, list[Scene], list[SceneFrame]]:
     """Run the video, structure, optional LLM, and export half of the pipeline.
 
     Returns:
         tuple: The report artifact and video diagnostics inputs.
     """
     llm_enhancer = resolve_llm_processor(
-        enable_llm=enable_llm,
         llm_processor=llm_processor,
         ctx=ctx,
         llm_runtime=ctx.llm_runtime,
@@ -54,7 +54,7 @@ def run_report_phase(
     )
 
     scenes: list[Scene] = []
-    slide_frames: list[SlideFrame] = []
+    scene_frames: list[SceneFrame] = []
     alignment_blocks: list[AlignmentBlock] | None = None
     transcript_segments = normalized_transcription.segments
 
@@ -77,19 +77,19 @@ def run_report_phase(
         write_json(layout.scenes_path, {"scenes": [asdict(scene) for scene in scenes]})
 
         with progress_stage(
-            ctx, "extract_frames", "Extracting slide frames", total=float(len(scenes))
+            ctx, "extract_frames", "Extracting scene frames", total=float(len(scenes))
         ) as st:
-            slide_frames = video_runtime.extract_representative_frames(
+            scene_frames = video_runtime.extract_representative_frames(
                 input_path,
                 scenes,
                 layout.frames_dir,
-                progress_callback=st.advance,
+                progress_callback=counting_progress(st, "frame"),
                 warning_callback=ctx.record_warning,
             )
-            st.set_detail(count_label(len(slide_frames), "frame"))
+            st.set_detail(count_label(len(scene_frames), "frame"))
 
         alignment_blocks = structure_runtime.align_by_time(
-            transcript_segments, scenes, slide_frames
+            transcript_segments, scenes, scene_frames
         )
 
     if alignment_blocks is not None:
@@ -116,8 +116,8 @@ def run_report_phase(
         )
         st.advance_to(float(structure_total), detail=count_label(len(report.sections), "section"))
 
-    if slide_frames:
-        frame_by_id = {frame.id: frame for frame in slide_frames}
+    if scene_frames:
+        frame_by_id = {frame.id: frame for frame in scene_frames}
         sections = []
         for section in report.sections:
             frame_id = section.frame_id
@@ -145,10 +145,10 @@ def run_report_phase(
         report = replace(report, warnings=list(ctx.warnings))
         export_runtime.write_json_report(report, layout.json_report_path)
 
-    return report, scenes, slide_frames
+    return report, scenes, scene_frames
 
 
-def _report_image_path(frame: SlideFrame, run_dir: Path) -> str:
+def _report_image_path(frame: SceneFrame, run_dir: Path) -> str:
     image_path = Path(frame.image_path)
     try:
         return image_path.relative_to(run_dir).as_posix()

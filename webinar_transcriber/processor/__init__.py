@@ -48,7 +48,7 @@ if TYPE_CHECKING:
         MediaAsset,
         ReportDocument,
         Scene,
-        SlideFrame,
+        SceneFrame,
     )
     from webinar_transcriber.paths import RunLayout
 
@@ -137,7 +137,7 @@ def process_input(
     """
     active_reporter = reporter or BaseStageReporter()
     ctx = RunContext(reporter=active_reporter)
-    if llm_config.enabled and llm_config.processor is None:
+    if llm_config.processor == "from_env":
         ensure_llm_extra_available()
 
     with ExitStack() as transcriber_scope:
@@ -155,7 +155,7 @@ def process_input(
         asr_result: AsrPipelineResult | None = None
         report: ReportDocument | None = None
         scenes: list[Scene] = []
-        slide_frames: list[SlideFrame] = []
+        scene_frames: list[SceneFrame] = []
         ctx.reporter.begin_run(input_path)
         try:
             with stage(ctx, "prepare_run_dir", "Preparing run directory") as st:
@@ -179,12 +179,11 @@ def process_input(
                 diarization_config=diarization_config,
             )
 
-            report, scenes, slide_frames = run_report_phase(
+            report, scenes, scene_frames = run_report_phase(
                 input_path=input_path,
                 layout=layout,
                 media_asset=media_asset,
                 normalized_transcription=asr_result.normalized_transcription,
-                enable_llm=llm_config.enabled,
                 llm_processor=llm_config.processor,
                 threads=transcription_config.threads,
                 ctx=ctx,
@@ -200,7 +199,7 @@ def process_input(
                 diarization=asr_result.diarization,
                 report=report,
                 scenes=scenes,
-                slide_frames=slide_frames,
+                scene_frames=scene_frames,
             )
             if diagnostics is None:  # pragma: no cover - run layout always exists on success
                 raise RuntimeError(
@@ -231,7 +230,7 @@ def process_input(
                 diarization=asr_result.diarization if asr_result else None,
                 report=report,
                 scenes=scenes,
-                slide_frames=slide_frames,
+                scene_frames=scene_frames,
                 suppress_errors=True,
             )
             raise

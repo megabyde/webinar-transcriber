@@ -6,7 +6,7 @@ from webinar_transcriber.models import (
     AlignmentBlock,
     AudioAsset,
     Scene,
-    SlideFrame,
+    SceneFrame,
     TranscriptionResult,
     TranscriptSegment,
     VideoAsset,
@@ -34,11 +34,11 @@ class TestAlignByTime:
                 Scene(id="scene-1", start_sec=0.0, end_sec=1.0),
                 Scene(id="scene-2", start_sec=1.0, end_sec=2.0),
             ],
-            slide_frames=[
-                SlideFrame(
+            scene_frames=[
+                SceneFrame(
                     id="frame-1", scene_id="scene-1", image_path="scene-1.png", timestamp_sec=0.5
                 ),
-                SlideFrame(
+                SceneFrame(
                     id="frame-2", scene_id="scene-2", image_path="scene-2.png", timestamp_sec=1.5
                 ),
             ],
@@ -54,7 +54,7 @@ class TestAlignByTime:
                 TranscriptSegment(id="seg-1", text="Intro", start_sec=0.0, end_sec=0.8)
             ],
             scenes=[],
-            slide_frames=[],
+            scene_frames=[],
         )
 
         assert blocks == []
@@ -68,7 +68,7 @@ class TestAlignByTime:
                 Scene(id="scene-1", start_sec=0.0, end_sec=1.0),
                 Scene(id="scene-2", start_sec=1.0, end_sec=2.0),
             ],
-            slide_frames=[],
+            scene_frames=[],
         )
 
         assert blocks[0].transcript_segment_ids == []

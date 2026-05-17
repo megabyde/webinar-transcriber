@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from .llm_types import LLMRuntimeState
 
@@ -34,8 +34,12 @@ class TranscriptionConfig:
 class LLMConfig:
     """Optional cloud LLM enhancement options for one processing run."""
 
-    enabled: bool = False
-    processor: LLMProcessor | None = None
+    processor: LLMProcessor | Literal["from_env"] | None = None
+
+    @property
+    def enabled(self) -> bool:
+        """Return whether LLM processing should run."""
+        return self.processor is not None
 
 
 @dataclass(frozen=True)

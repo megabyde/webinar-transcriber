@@ -144,7 +144,7 @@ class Scene(TimelineItem):
 
 
 @dataclass(slots=True, frozen=True)
-class SlideFrame:
+class SceneFrame:
     """Representative frame selected from a scene."""
 
     id: str
