@@ -99,7 +99,8 @@ All usage examples below assume `webinar-transcriber` is available on your `PATH
 ### Quick Start
 
 `webinar-transcriber` is a single root command, not a subcommand CLI. By default, it writes a fresh
-run directory under `runs/`. Use `--output-dir` to choose a specific location.
+run directory under `runs/`. Pass multiple inputs to process them sequentially. Use `--output-dir`
+with a single input to choose a specific location.
 
 > [!TIP]
 > Use a fresh `--output-dir` for reproducible comparisons. Existing output directories are not
@@ -107,6 +108,7 @@ run directory under `runs/`. Use `--output-dir` to choose a specific location.
 
 ```bash
 webinar-transcriber INPUT
+webinar-transcriber INPUT1 INPUT2 INPUT3
 webinar-transcriber INPUT --keep-audio
 webinar-transcriber INPUT --output-dir runs/custom-demo
 ```
