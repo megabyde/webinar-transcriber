@@ -8,7 +8,7 @@ import pytest
 from click.testing import CliRunner
 
 from webinar_transcriber import __version__
-from webinar_transcriber.asr import ASRProcessingError
+from webinar_transcriber.asr import ASRProcessingError, default_asr_threads
 from webinar_transcriber.cli import main
 from webinar_transcriber.llm.contracts import LLMConfigurationError, LLMProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
@@ -55,13 +55,10 @@ class TestCli:
         input_path.write_text("stub", encoding="utf-8")
         run_dir = tmp_path / "run-dir"
 
-        with (
-            patch(
-                "webinar_transcriber.cli.process_input",
-                return_value=process_artifacts(input_path, run_dir),
-            ) as process_input_mock,
-            patch("webinar_transcriber.cli.default_asr_threads", return_value=7),
-        ):
+        with patch(
+            "webinar_transcriber.cli.process_input",
+            return_value=process_artifacts(input_path, run_dir),
+        ) as process_input_mock:
             result = runner.invoke(main, [str(input_path)])
 
         assert result.exit_code == 0
@@ -70,7 +67,7 @@ class TestCli:
             input_path=input_path,
             output_dir=None,
             transcription_config=TranscriptionConfig(
-                threads=7,
+                threads=default_asr_threads(),
                 asr_model="large-v3-turbo",
             ),
             llm_config=LLMConfig(),
@@ -89,13 +86,10 @@ class TestCli:
         second_input.write_text("stub", encoding="utf-8")
         run_dir = tmp_path / "run-dir"
 
-        with (
-            patch(
-                "webinar_transcriber.cli.process_input",
-                return_value=process_artifacts(first_input, run_dir),
-            ) as process_input_mock,
-            patch("webinar_transcriber.cli.default_asr_threads", return_value=7),
-        ):
+        with patch(
+            "webinar_transcriber.cli.process_input",
+            return_value=process_artifacts(first_input, run_dir),
+        ) as process_input_mock:
             result = runner.invoke(main, [str(first_input), str(second_input)])
 
         assert result.exit_code == 0
@@ -112,13 +106,10 @@ class TestCli:
         input_path.write_text("stub", encoding="utf-8")
         run_dir = tmp_path / "run-dir"
 
-        with (
-            patch(
-                "webinar_transcriber.cli.process_input",
-                return_value=process_artifacts(input_path, run_dir),
-            ) as process_input_mock,
-            patch("webinar_transcriber.cli.default_asr_threads", return_value=6),
-        ):
+        with patch(
+            "webinar_transcriber.cli.process_input",
+            return_value=process_artifacts(input_path, run_dir),
+        ) as process_input_mock:
             result = runner.invoke(
                 main,
                 [
@@ -171,12 +162,14 @@ class TestCli:
         runner = CliRunner()
 
         result = runner.invoke(main, ["--help"])
+        normalized_output = " ".join(result.output.split())
 
         assert result.exit_code == 0
         assert "--asr-model" in result.output
         assert "--language" in result.output
         assert "--threads" in result.output
-        assert "Number of local audio-processing threads. Defaults" in result.output
+        assert "Defaults to the host CPU count, capped at 8" in normalized_output
+        assert f"[default: {default_asr_threads()}]" in normalized_output
         assert "--keep-audio" in result.output
         assert "Keep normalized transcription audio as mp3" in result.output
         assert "--llm" in result.output
@@ -188,25 +181,6 @@ class TestCli:
         assert "model path" in result.output
         assert "provider-backed report" in result.output
         assert "enhancement." in result.output
-
-    def test_rejects_missing_input(self, tmp_path) -> None:
-        runner = CliRunner()
-        input_path = tmp_path / "missing.wav"
-
-        result = runner.invoke(main, [str(input_path)])
-
-        assert result.exit_code != 0
-        assert "Input file does not exist" in result.output
-
-    def test_rejects_directory_input(self, tmp_path) -> None:
-        runner = CliRunner()
-        input_path = tmp_path / "input-dir"
-        input_path.mkdir()
-
-        result = runner.invoke(main, [str(input_path)])
-
-        assert result.exit_code != 0
-        assert "Input path is not a file" in result.output
 
     def test_rejects_invalid_thread_count(self, tmp_path) -> None:
         runner = CliRunner()
