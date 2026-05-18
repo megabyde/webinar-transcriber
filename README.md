@@ -172,8 +172,7 @@ webinar-transcriber INPUT --diarize --diarize-speakers 4
 
 Diarization runs entirely locally through `sherpa-onnx`; it does not use an API key. The first
 diarized run downloads the segmentation and speaker-embedding models into
-`~/.cache/webinar-transcriber/diarization`. Omit `--diarize-speakers` to let sherpa estimate the
-speaker count; provide it only when the exact number of speakers is known.
+`~/.cache/webinar-transcriber/diarization`.
 
 > [!NOTE]
 > Speaker labels are anonymous and stable within a run: `S1`, `S2`, and so on, ordered by first
@@ -304,28 +303,23 @@ curl -L \
 
 Use `--asr-model large-v3` when maximum transcription accuracy is more important than local runtime.
 
-### Speech Detection
-
-Silero VAD is always enabled and uses the project's selected speech-region defaults. The model runs
-locally through `sherpa-onnx` and is bundled with the package, so speech detection does not need a
-first-run model download.
-
 ### ASR Controls
 
-The default ASR path uses the selected `whisper.cpp` model, automatic language detection, bounded
-prompt carryover, and an automatically selected thread count.
+The default ASR path uses the selected `whisper.cpp` model, automatic language detection, and an
+automatically selected thread count.
 
 - `--language CODE`: force a Whisper language code such as `en` or `ru`.
 - `--threads N`: set the CPU worker count passed to `whisper.cpp`. GPU-enabled builds can offload
   supported model work to the GPU, but `whisper.cpp` still uses CPU threads for non-offloaded work,
-  scheduling, and language detection. By default, the transcriber uses the host CPU count capped at
-  8 threads; lower this when you need to leave CPU capacity for other work.
+  scheduling, and language detection. The same value is also used by local VAD, local diarization,
+  and concurrent LLM section polishing. By default, the CLI uses the host CPU count capped at 8;
+  lower this when you need to leave CPU capacity for other work.
 
 ## Reference
 
 ### Output Layout
 
-Successful default runs write:
+Successful runs can write:
 
 ```text
 runs/<timestamp>_<basename>/
@@ -349,11 +343,12 @@ runs/<timestamp>_<basename>/
 ### Local Setup
 
 1. Install Python 3.12+ and `uv`.
+
 1. Sync the checkout environment you need:
 
-- `make sync`: standard development and test dependencies.
-- `make sync-llm`: development dependencies plus optional LLM SDKs.
-- `make sync-cuda`: development environment with CUDA-built `pywhispercpp`.
+   - `make sync`: standard development and test dependencies.
+   - `make sync-llm`: development dependencies plus optional LLM SDKs.
+   - `make sync-cuda`: development environment with CUDA-built `pywhispercpp`.
 
 On Windows, use uv directly:
 

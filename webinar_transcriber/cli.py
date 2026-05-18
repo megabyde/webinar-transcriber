@@ -24,6 +24,8 @@ from webinar_transcriber.processor import (
 )
 from webinar_transcriber.ui import RichStageReporter
 
+_THREADS_DEFAULT = default_asr_threads()
+
 
 class CLIError(click.ClickException):
     """CLI error for actionable user-facing failures."""
@@ -37,7 +39,12 @@ def _resolve_threads(_ctx: click.Context, _param: click.Parameter, value: int | 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(version=__version__, prog_name="webinar-transcriber")
-@click.argument("input_paths", nargs=-1, required=True, type=click.Path(path_type=Path))
+@click.argument(
+    "input_paths",
+    nargs=-1,
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
 @click.option(
     "--output-dir",
     type=click.Path(path_type=Path),
@@ -62,9 +69,9 @@ def _resolve_threads(_ctx: click.Context, _param: click.Parameter, value: int | 
     "--threads",
     type=int,
     metavar="INTEGER",
-    default=None,
+    default=_THREADS_DEFAULT,
     callback=_resolve_threads,
-    show_default=False,
+    show_default=True,
     help="Number of local audio-processing threads. Defaults to the host CPU count, capped at 8.",
 )
 @click.option(
@@ -100,13 +107,6 @@ def main(
     """Transcribe one or more audio or video input files."""
     if output_dir is not None and len(input_paths) > 1:
         raise CLIError("--output-dir can only be used with one input file.")
-
-    for input_path in input_paths:
-        if not input_path.exists():
-            raise CLIError(f"Input file does not exist: {input_path}")
-
-        if not input_path.is_file():
-            raise CLIError(f"Input path is not a file: {input_path}")
 
     transcription_config = TranscriptionConfig(
         threads=threads,
