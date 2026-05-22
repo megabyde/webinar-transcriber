@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING
 
 from webinar_transcriber.asr import ASR_BACKEND_NAME
-from webinar_transcriber.diarization import DIARIZATION_MODEL, SherpaOnnxDiarizer, assign_speakers
+from webinar_transcriber.diarization import DIARIZATION_MODEL, assign_speakers
 from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
     DiarizationDiagnostics,
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from webinar_transcriber.paths import RunLayout
 
     from .support import ProgressStageHandle
-    from .types import DiarizationConfig, RunContext, TranscriptionConfig
+    from .types import RunContext, TranscriptionConfig
 
 # sherpa-onnx reports progress only after its full-audio segmentation pass.
 DIARIZATION_SEGMENTATION_PROGRESS_PERCENT = 35.0
@@ -73,7 +73,8 @@ def run_asr_pipeline(
     layout: RunLayout,
     ctx: RunContext,
     transcription_config: TranscriptionConfig,
-    diarization_config: DiarizationConfig,
+    diarizer: Diarizer | None = None,
+    diarization_speaker_count: int | None = None,
 ) -> AsrPipelineResult:
     """Run the deterministic local ASR pipeline and persist intermediate artifacts.
 
@@ -127,15 +128,12 @@ def run_asr_pipeline(
     transcription = reconcile_decoded_windows(decoded_windows)
 
     diarization: DiarizationDiagnostics | None = None
-    if diarization_config.enabled:
-        active_diarizer = diarization_config.diarizer or SherpaOnnxDiarizer(
-            threads=transcription_config.threads
-        )
+    if diarizer is not None:
         with stage(ctx, "prepare_diarization", "Preparing diarization model") as st:
-            active_diarizer.prepare(speaker_count=diarization_config.speaker_count)
+            diarizer.prepare(speaker_count=diarization_speaker_count)
             st.set_detail(DIARIZATION_MODEL)
         speaker_turns = _diarize_speakers_stage(
-            audio_samples=audio_samples, ctx=ctx, layout=layout, diarizer=active_diarizer
+            audio_samples=audio_samples, ctx=ctx, layout=layout, diarizer=diarizer
         )
         transcription = _assign_speakers_stage(
             ctx=ctx, transcription=transcription, speaker_turns=speaker_turns
@@ -145,7 +143,7 @@ def run_asr_pipeline(
             turn_count=len(speaker_turns),
             average_turn_duration_sec=average_duration_sec(speaker_turns),
             model=DIARIZATION_MODEL,
-            system_info=active_diarizer.system_info,
+            system_info=diarizer.system_info,
         )
 
     with stage(ctx, "normalize_transcript", "Normalizing transcript") as st:

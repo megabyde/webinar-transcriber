@@ -7,8 +7,6 @@ from dataclasses import field as dataclass_field
 from enum import StrEnum
 from typing import Literal
 
-from webinar_transcriber.json_utils import compact_speaker_fields
-
 
 class MediaType(StrEnum):
     """Supported top-level media types."""
@@ -47,6 +45,25 @@ class VideoAsset(BaseMediaAsset):
 MediaAsset = AudioAsset | VideoAsset
 
 ReportStatus = Literal["disabled", "applied", "fallback"]
+
+
+def compact_speaker_fields(value: object) -> object:
+    """Return a JSON payload without empty speaker fields."""
+    if isinstance(value, list):
+        return [compact_speaker_fields(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+
+    compacted: dict[str, object] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):  # pragma: no cover - report dataclasses produce string keys
+            continue
+        if key == "speaker" and item is None:
+            continue
+        if key == "speakers" and item == []:
+            continue
+        compacted[key] = compact_speaker_fields(item)
+    return compacted
 
 
 class TimelineSpan:

@@ -15,11 +15,12 @@ from webinar_transcriber.models import SpeechRegion
 from webinar_transcriber.normalized_audio import NORMALIZED_SAMPLE_RATE
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from types import ModuleType
 
     import numpy as np
 
-    from webinar_transcriber.progress import ProgressCallback
+    ProgressCallback = Callable[[float, int], None]
 
 VAD_THRESHOLD = 0.45
 MIN_SPEECH_DURATION_SEC = 0.150

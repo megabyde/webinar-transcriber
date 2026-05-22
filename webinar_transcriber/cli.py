@@ -12,13 +12,12 @@ from webinar_transcriber.asr import (
     ASRProcessingError,
     default_asr_threads,
 )
-from webinar_transcriber.diarization import DiarizationProcessingError
+from webinar_transcriber.diarization import DiarizationProcessingError, SherpaOnnxDiarizer
+from webinar_transcriber.llm import build_llm_processor_from_env
 from webinar_transcriber.llm.contracts import LLMConfigurationError, LLMProcessingError
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.processor import (
-    DiarizationConfig,
-    LLMConfig,
     TranscriptionConfig,
     process_input,
 )
@@ -114,21 +113,19 @@ def main(
         language=language,
         keep_audio=keep_audio,
     )
-    llm_config = LLMConfig(processor="from_env" if llm else None)
-    diarization_config = DiarizationConfig(
-        enabled=diarize,
-        speaker_count=diarize_speakers,
-    )
     reporter = RichStageReporter()
 
     try:
+        llm_processor = build_llm_processor_from_env(threads=threads) if llm else None
         for input_path in input_paths:
+            diarizer = SherpaOnnxDiarizer(threads=threads) if diarize else None
             process_input(
                 input_path=input_path,
                 output_dir=output_dir,
                 transcription_config=transcription_config,
-                llm_config=llm_config,
-                diarization_config=diarization_config,
+                llm_processor=llm_processor,
+                diarizer=diarizer,
+                diarization_speaker_count=diarize_speakers,
                 reporter=reporter,
             )
     except KeyboardInterrupt:

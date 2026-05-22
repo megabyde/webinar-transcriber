@@ -16,11 +16,12 @@ from webinar_transcriber.media import (
 from webinar_transcriber.models import Scene
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     from av.video.stream import VideoStream
 
-    from webinar_transcriber.progress import ProgressCallback
+    ProgressCallback = Callable[[float, int], None]
 
 
 MIN_SCENE_LENGTH_SEC = 2.0

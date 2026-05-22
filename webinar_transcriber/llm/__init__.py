@@ -66,16 +66,6 @@ def _required_llm_module(module_name: str, *, provider_label: str) -> object:
         ) from error
 
 
-def ensure_llm_extra_available() -> None:
-    """Raise when the configured provider cannot load the optional LLM dependencies."""
-    provider = llm_provider_name()
-    spec = PROVIDERS.get(provider)
-    if spec is None:
-        return
-    _required_llm_module("instructor", provider_label=spec.label)
-    _required_llm_module(spec.module_name, provider_label=spec.label)
-
-
 def build_llm_processor_from_env(*, threads: int) -> LLMProcessor:
     """Build a configured LLM processor from environment variables.
 
@@ -141,5 +131,4 @@ __all__ = [
     "ReportSectionUpdate",
     "SectionTextResponse",
     "build_llm_processor_from_env",
-    "ensure_llm_extra_available",
 ]

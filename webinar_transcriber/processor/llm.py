@@ -5,11 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.llm import build_llm_processor_from_env
-from webinar_transcriber.llm.contracts import (
-    LLMConfigurationError,
-    LLMProcessingError,
-)
+from webinar_transcriber.llm.contracts import LLMProcessingError
 
 from .support import (
     count_label,
@@ -21,46 +17,11 @@ from .support import (
 )
 
 if TYPE_CHECKING:
-    from typing import Literal
-
     from webinar_transcriber.llm.contracts import LLMProcessor
     from webinar_transcriber.models import ReportDocument
 
-    from .llm_types import LLMRuntimeState
     from .support import ProgressStageHandle, StageHandle
-    from .types import RunContext
-
-
-def resolve_llm_processor(
-    *,
-    llm_processor: LLMProcessor | Literal["from_env"] | None,
-    ctx: RunContext,
-    llm_runtime: LLMRuntimeState,
-    threads: int,
-) -> LLMProcessor | None:
-    """Resolve the optional LLM processor and record configuration failures as warnings.
-
-    Returns:
-        LLMProcessor | None: The resolved processor when LLM processing is available.
-    """
-    if llm_processor is None:
-        return None
-
-    if llm_processor != "from_env":
-        llm_runtime.provider_name = llm_processor.provider_name
-        llm_runtime.model_name = llm_processor.model_name
-        return llm_processor
-
-    try:
-        resolved_processor = build_llm_processor_from_env(threads=threads)
-    except LLMConfigurationError as error:
-        ctx.record_warning(str(error))
-        llm_runtime.report_status = "fallback"
-        return None
-
-    llm_runtime.provider_name = resolved_processor.provider_name
-    llm_runtime.model_name = resolved_processor.model_name
-    return resolved_processor
+    from .types import LLMRuntimeState, RunContext
 
 
 def maybe_polish_report(
@@ -78,6 +39,8 @@ def maybe_polish_report(
     if llm_processor is None:
         return report
 
+    llm_runtime.provider_name = llm_processor.provider_name
+    llm_runtime.model_name = llm_processor.model_name
     polish_plan = llm_processor.report_polish_plan(report)
     section_label = llm_stage_label(
         "Polishing section text with LLM",

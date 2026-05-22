@@ -14,7 +14,6 @@ from webinar_transcriber.llm import (
     LLMProcessingError,
     LLMReportPolishPlan,
     build_llm_processor_from_env,
-    ensure_llm_extra_available,
 )
 from webinar_transcriber.llm import processor as llm_processor
 from webinar_transcriber.llm.schemas import (
@@ -149,41 +148,6 @@ class TestBuildLlmProcessorFromEnv:
             match=rf"The Anthropic provider requires the 'llm' extra\..*{LLM_EXTRA_INSTALL_RE}",
         ):
             build_llm_processor_from_env(threads=6)
-
-    @pytest.mark.parametrize(
-        ("provider_env", "provider_module"),
-        [(None, "openai"), ("anthropic", "anthropic")],
-    )
-    def test_checks_llm_extra_without_requiring_provider_env(
-        self, monkeypatch, provider_env: str | None, provider_module: str
-    ) -> None:
-        if provider_env is None:
-            monkeypatch.delenv("LLM_PROVIDER", raising=False)
-        else:
-            monkeypatch.setenv("LLM_PROVIDER", provider_env)
-        monkeypatch.setattr(
-            "webinar_transcriber.llm.importlib.import_module",
-            fake_import_module({"instructor": object(), provider_module: object()}),
-        )
-
-        ensure_llm_extra_available()
-
-    def test_checks_llm_extra_raises_for_missing_provider_module(self, monkeypatch) -> None:
-        monkeypatch.delenv("LLM_PROVIDER", raising=False)
-        monkeypatch.setattr(
-            "webinar_transcriber.llm.importlib.import_module",
-            fake_import_module({"instructor": object()}),
-        )
-
-        with pytest.raises(LLMConfigurationError, match="requires the 'llm' extra"):
-            ensure_llm_extra_available()
-
-    def test_checks_llm_extra_ignores_unknown_provider_until_configuration_resolution(
-        self, monkeypatch
-    ) -> None:
-        monkeypatch.setenv("LLM_PROVIDER", "unknown")
-
-        ensure_llm_extra_available()
 
     def test_rejects_unknown_provider(self, monkeypatch) -> None:
         monkeypatch.setenv("LLM_PROVIDER", "unknown")
