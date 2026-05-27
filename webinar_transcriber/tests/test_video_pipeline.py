@@ -142,7 +142,7 @@ class TestDetectScenes:
     @pytest.mark.slow
     def test_detect_scenes_finds_synthetic_alternating_color_scene(self, tmp_path: Path) -> None:
         video_path = tmp_path / "alternating-color.mp4"
-        progress_updates: list[tuple[int, int]] = []
+        progress_updates: list[tuple[float, int]] = []
         _write_synthetic_video(video_path, [0, 255] * 5)
 
         scenes = detect_scenes(

@@ -12,11 +12,7 @@ from webinar_transcriber.asr import ASRProcessingError, default_asr_threads
 from webinar_transcriber.cli import main
 from webinar_transcriber.llm.contracts import LLMConfigurationError, LLMProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
-from webinar_transcriber.processor import (
-    DiarizationConfig,
-    LLMConfig,
-    TranscriptionConfig,
-)
+from webinar_transcriber.processor import TranscriptionConfig
 from webinar_transcriber.tests.conftest import process_artifacts
 
 
@@ -70,8 +66,9 @@ class TestCli:
                 threads=default_asr_threads(),
                 asr_model="large-v3-turbo",
             ),
-            llm_config=LLMConfig(),
-            diarization_config=DiarizationConfig(),
+            llm_processor=None,
+            diarizer=None,
+            diarization_speaker_count=None,
             reporter=ANY,
         )
         assert process_input_mock.call_args.kwargs["reporter"].__class__.__name__ == (
@@ -105,11 +102,22 @@ class TestCli:
         input_path = tmp_path / "demo.mp4"
         input_path.write_text("stub", encoding="utf-8")
         run_dir = tmp_path / "run-dir"
+        llm_processor = object()
+        diarizer = object()
 
-        with patch(
-            "webinar_transcriber.cli.process_input",
-            return_value=process_artifacts(input_path, run_dir),
-        ) as process_input_mock:
+        with (
+            patch(
+                "webinar_transcriber.cli.process_input",
+                return_value=process_artifacts(input_path, run_dir),
+            ) as process_input_mock,
+            patch(
+                "webinar_transcriber.cli.build_llm_processor_from_env",
+                return_value=llm_processor,
+            ) as build_llm_processor_mock,
+            patch(
+                "webinar_transcriber.cli.SherpaOnnxDiarizer", return_value=diarizer
+            ) as diarizer_mock,
+        ):
             result = runner.invoke(
                 main,
                 [
@@ -138,10 +146,13 @@ class TestCli:
                 language="en",
                 keep_audio=True,
             ),
-            llm_config=LLMConfig(processor="from_env"),
-            diarization_config=DiarizationConfig(enabled=True, speaker_count=4),
+            llm_processor=llm_processor,
+            diarizer=diarizer,
+            diarization_speaker_count=4,
             reporter=ANY,
         )
+        build_llm_processor_mock.assert_called_once_with(threads=3)
+        diarizer_mock.assert_called_once_with(threads=3)
 
     def test_keep_audio_keeps_mp3(self, tmp_path) -> None:
         runner = CliRunner()
@@ -252,6 +263,24 @@ class TestCli:
 
         assert result.exit_code != 0
         assert message in result.output
+
+    def test_reports_llm_configuration_errors_before_pipeline(self, tmp_path) -> None:
+        runner = CliRunner()
+        input_path = tmp_path / "demo.wav"
+        input_path.write_text("stub", encoding="utf-8")
+
+        with (
+            patch(
+                "webinar_transcriber.cli.build_llm_processor_from_env",
+                side_effect=LLMConfigurationError("missing LLM config"),
+            ),
+            patch("webinar_transcriber.cli.process_input") as process_input_mock,
+        ):
+            result = runner.invoke(main, [str(input_path), "--llm"])
+
+        assert result.exit_code != 0
+        assert "missing LLM config" in result.output
+        process_input_mock.assert_not_called()
 
     def test_resets_active_display_before_cli_errors(self, tmp_path) -> None:
         runner = CliRunner()

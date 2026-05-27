@@ -3,17 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal
-
-from .llm_types import LLMRuntimeState
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from webinar_transcriber.diarization import Diarizer
-    from webinar_transcriber.llm.contracts import LLMProcessor
     from webinar_transcriber.models import (
         Diagnostics,
         MediaAsset,
         ReportDocument,
+        ReportStatus,
         TranscriptionResult,
     )
     from webinar_transcriber.paths import RunLayout
@@ -31,27 +28,6 @@ class TranscriptionConfig:
 
 
 @dataclass(frozen=True)
-class LLMConfig:
-    """Optional cloud LLM enhancement options for one processing run."""
-
-    processor: LLMProcessor | Literal["from_env"] | None = None
-
-    @property
-    def enabled(self) -> bool:
-        """Return whether LLM processing should run."""
-        return self.processor is not None
-
-
-@dataclass(frozen=True)
-class DiarizationConfig:
-    """Optional local speaker-diarization options for one processing run."""
-
-    enabled: bool = False
-    speaker_count: int | None = None
-    diarizer: Diarizer | None = None
-
-
-@dataclass(frozen=True)
 class ProcessArtifacts:
     """Runtime artifacts returned from a processing run."""
 
@@ -60,6 +36,17 @@ class ProcessArtifacts:
     transcription: TranscriptionResult
     report: ReportDocument
     diagnostics: Diagnostics
+
+
+@dataclass
+class LLMRuntimeState:
+    """Observed state for the optional LLM report stage."""
+
+    provider_name: str | None = None
+    model_name: str | None = None
+    report_status: ReportStatus = "disabled"
+    report_latency_sec: float | None = None
+    response_metadata: list[dict[str, object]] = field(default_factory=list)
 
 
 @dataclass

@@ -15,7 +15,6 @@ from webinar_transcriber.asr import WhisperCppTranscriber
 from webinar_transcriber.diagnostics import write_run_diagnostics
 from webinar_transcriber.diarization import DIARIZATION_MODEL
 from webinar_transcriber.llm.contracts import (
-    LLMConfigurationError,
     LLMProcessingError,
     LLMProcessor,
     LLMReportMetadataResult,
@@ -34,16 +33,12 @@ from webinar_transcriber.models import (
 )
 from webinar_transcriber.paths import RunLayout
 from webinar_transcriber.processor import (
-    DiarizationConfig,
-    LLMConfig,
     ProcessArtifacts,
     RunContext,
     TranscriptionConfig,
 )
 from webinar_transcriber.processor import process_input as _process_input
 from webinar_transcriber.processor.asr_pipeline import plan_inference_windows
-from webinar_transcriber.processor.llm import resolve_llm_processor
-from webinar_transcriber.processor.llm_types import LLMRuntimeState
 from webinar_transcriber.processor.support import (
     asr_runtime_detail,
     realtime_factor_detail,
@@ -84,16 +79,11 @@ def process_input(
     asr_model: str | None = None,
     language: str | None = None,
     keep_audio: bool = False,
-    enable_llm: bool = False,
     llm_processor: LLMProcessor | None = None,
-    diarize: bool = False,
     diarize_speakers: int | None = None,
     diarizer: Diarizer | None = None,
     **kwargs: Any,
 ) -> ProcessArtifacts:
-    llm_source = llm_processor
-    if llm_source is None and enable_llm:
-        llm_source = "from_env"
     return _process_input(
         *args,
         transcription_config=TranscriptionConfig(
@@ -102,12 +92,9 @@ def process_input(
             language=language,
             keep_audio=keep_audio,
         ),
-        llm_config=LLMConfig(processor=llm_source),
-        diarization_config=DiarizationConfig(
-            enabled=diarize,
-            speaker_count=diarize_speakers,
-            diarizer=diarizer,
-        ),
+        llm_processor=llm_processor,
+        diarizer=diarizer,
+        diarization_speaker_count=diarize_speakers,
         **kwargs,
     )
 
@@ -306,7 +293,6 @@ class TestProcessInput:
             input_path,
             output_dir=tmp_path / "diarized-run",
             transcriber=transcriber,
-            diarize=True,
             diarize_speakers=4,
             diarizer=diarizer,
             reporter=reporter,
@@ -349,7 +335,7 @@ class TestProcessInput:
         assert len(diarize_finished) == 1
         assert diarize_finished[0].startswith("2 speakers | 2 turns | RTF ")
 
-    def test_prepares_default_diarization_model_before_progress(
+    def test_prepares_diarization_model_before_progress(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         input_path = FIXTURE_DIR / "sample-audio.mp3"
@@ -362,7 +348,6 @@ class TestProcessInput:
             def __init__(self, *, threads: int | None = None) -> None:
                 self.threads = threads
                 self.prepare_calls: list[int | None] = []
-                instances.append(self)
 
             def prepare(self, *, speaker_count: int | None) -> None:
                 self.prepare_calls.append(speaker_count)
@@ -378,12 +363,7 @@ class TestProcessInput:
                     progress_callback(2, 2)
                 return [SpeakerTurn(start_sec=0.0, end_sec=2.0, speaker="S1")]
 
-        instances: list[PreparingDiarizer] = []
-
-        monkeypatch.setattr(
-            "webinar_transcriber.processor.asr_pipeline.SherpaOnnxDiarizer",
-            PreparingDiarizer,
-        )
+        diarizer = PreparingDiarizer(threads=transcriber.threads)
         install_pipeline_runtime(
             monkeypatch,
             tmp_path,
@@ -395,14 +375,13 @@ class TestProcessInput:
             input_path,
             output_dir=tmp_path / "diarized-default-run",
             transcriber=transcriber,
-            diarize=True,
             diarize_speakers=1,
+            diarizer=diarizer,
             reporter=reporter,
         )
 
-        assert instances
-        assert instances[0].threads == transcriber.threads
-        assert instances[0].prepare_calls == [1]
+        assert diarizer.threads == transcriber.threads
+        assert diarizer.prepare_calls == [1]
         assert ("prepare_diarization", DIARIZATION_MODEL) in reporter.finished
 
     def test_uses_vad_regions_as_decode_windows(
@@ -590,7 +569,7 @@ class TestProcessInput:
         assert artifacts.report.sections
         assert any(section.image_path for section in artifacts.report.sections)
 
-    def test_does_not_close_caller_supplied_transcriber(
+    def test_closes_caller_supplied_transcriber(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         input_path = FIXTURE_DIR / "sample-audio.mp3"
@@ -603,14 +582,14 @@ class TestProcessInput:
                 super().__init__()
                 self.close_calls = 0
 
-            def close(self) -> None:  # pragma: no cover - the test asserts this is not called
+            def close(self) -> None:
                 self.close_calls += 1
 
         transcriber = CloseTrackingTranscriber()
 
         process_input(input_path, output_dir=tmp_path / "run", transcriber=transcriber)
 
-        assert transcriber.close_calls == 0
+        assert transcriber.close_calls == 1
 
     def test_closes_owned_transcriber_on_failure(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -947,72 +926,6 @@ class TestProcessorSupport:
     def test_transcriber_device_name_is_auto_before_runtime_is_prepared(self) -> None:
         assert WhisperCppTranscriber(threads=4).device_name == "auto"
 
-    def test_resolve_llm_processor_uses_environment_processor_details(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        reporter = RecordingReporter()
-        ctx = RunContext(reporter=reporter)
-        fake_processor = cast(
-            "LLMProcessor", SimpleNamespace(provider_name="openai", model_name="gpt-test")
-        )
-
-        runtime = LLMRuntimeState()
-        resolved_processor = resolve_llm_processor(
-            llm_processor=fake_processor,
-            ctx=ctx,
-            llm_runtime=runtime,
-            threads=3,
-        )
-
-        assert resolved_processor is fake_processor
-        assert runtime.provider_name == "openai"
-        assert runtime.model_name == "gpt-test"
-
-        env_processor = cast(
-            "LLMProcessor", SimpleNamespace(provider_name="anthropic", model_name="claude-test")
-        )
-        build_calls: list[int | None] = []
-
-        def fake_build_llm_processor_from_env(*, threads: int):
-            build_calls.append(threads)
-            return env_processor
-
-        monkeypatch.setattr(
-            "webinar_transcriber.processor.llm.build_llm_processor_from_env",
-            fake_build_llm_processor_from_env,
-        )
-
-        runtime = LLMRuntimeState()
-        resolved_processor = resolve_llm_processor(
-            llm_processor="from_env",
-            ctx=ctx,
-            llm_runtime=runtime,
-            threads=3,
-        )
-
-        assert resolved_processor is env_processor
-        assert runtime.provider_name == "anthropic"
-        assert runtime.model_name == "claude-test"
-        assert build_calls == [3]
-
-        monkeypatch.setattr(
-            "webinar_transcriber.processor.llm.build_llm_processor_from_env",
-            Mock(side_effect=LLMConfigurationError("missing env")),
-        )
-
-        runtime = LLMRuntimeState()
-        resolved_processor = resolve_llm_processor(
-            llm_processor="from_env",
-            ctx=ctx,
-            llm_runtime=runtime,
-            threads=3,
-        )
-
-        assert resolved_processor is None
-        assert runtime.report_status == "fallback"
-        assert ctx.warnings == ["missing env"]
-        assert reporter.warnings == ["missing env"]
-
 
 @pytest.fixture
 def llm_success_result(
@@ -1036,7 +949,6 @@ def llm_success_result(
         input_path,
         output_dir=tmp_path / "llm-run",
         transcriber=FakeTranscriber(),
-        enable_llm=True,
         llm_processor=cast(
             "LLMProcessor",
             ConfigurableLLMProcessor(
@@ -1165,7 +1077,6 @@ class TestProcessInputLlm:
             input_path,
             output_dir=tmp_path / "llm-two-section-run",
             transcriber=TwoSectionTranscriber(),
-            enable_llm=True,
             llm_processor=cast(
                 "LLMProcessor",
                 ConfigurableLLMProcessor(
@@ -1190,60 +1101,6 @@ class TestProcessInputLlm:
             ("advance", "llm_report_sections", 1.0, None),
         ]
 
-    def test_warns_when_llm_configuration_is_missing(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        input_path = FIXTURE_DIR / "sample-audio.mp3"
-        install_pipeline_runtime(
-            monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime()
-        )
-        reporter = RecordingReporter()
-        monkeypatch.setattr(
-            "webinar_transcriber.processor.ensure_llm_extra_available", lambda: None
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.processor.llm.build_llm_processor_from_env",
-            Mock(side_effect=LLMConfigurationError("missing llm config")),
-        )
-
-        artifacts = process_input(
-            input_path,
-            output_dir=tmp_path / "missing-llm-run",
-            transcriber=FakeTranscriber(),
-            enable_llm=True,
-            reporter=reporter,
-        )
-
-        assert reporter.warnings == ["missing llm config"]
-        assert artifacts.report.warnings == ["missing llm config"]
-        assert artifacts.diagnostics.llm.enabled
-        assert artifacts.diagnostics.llm.report_status == "fallback"
-        assert artifacts.diagnostics.llm.model is None
-
-    def test_fails_early_when_requested_llm_extra_is_missing(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        input_path = FIXTURE_DIR / "sample-audio.mp3"
-        install_pipeline_runtime(
-            monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime()
-        )
-        reporter = RecordingReporter()
-        monkeypatch.setattr(
-            "webinar_transcriber.processor.ensure_llm_extra_available",
-            Mock(side_effect=LLMConfigurationError("missing llm extra")),
-        )
-
-        with pytest.raises(LLMConfigurationError, match="missing llm extra"):
-            process_input(
-                input_path,
-                output_dir=tmp_path / "missing-extra-run",
-                transcriber=FakeTranscriber(),
-                enable_llm=True,
-                reporter=reporter,
-            )
-
-        assert reporter.started == []
-
     def test_falls_back_when_section_polish_fails(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -1257,7 +1114,6 @@ class TestProcessInputLlm:
             input_path,
             output_dir=tmp_path / "section-fallback-run",
             transcriber=FakeTranscriber(),
-            enable_llm=True,
             llm_processor=cast(
                 "LLMProcessor",
                 ConfigurableLLMProcessor(
@@ -1297,7 +1153,6 @@ class TestProcessInputLlm:
             input_path,
             output_dir=tmp_path / "metadata-fallback-run",
             transcriber=FakeTranscriber(),
-            enable_llm=True,
             llm_processor=cast(
                 "LLMProcessor",
                 ConfigurableLLMProcessor(

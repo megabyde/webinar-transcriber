@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 
 from webinar_transcriber.asr import WhisperCppTranscriber
 from webinar_transcriber.diagnostics import write_run_diagnostics
-from webinar_transcriber.llm import ensure_llm_extra_available
 from webinar_transcriber.media import probe_media
 from webinar_transcriber.normalized_audio import (
     prepared_transcription_audio,
@@ -21,19 +20,12 @@ from .asr_pipeline import AsrPipelineResult, run_asr_pipeline
 from .report import run_report_phase
 from .support import progress_stage, stage, write_json
 from .types import (
-    DiarizationConfig,
-    LLMConfig,
     ProcessArtifacts,
     RunContext,
     TranscriptionConfig,
 )
 
-DEFAULT_DIARIZATION_CONFIG = DiarizationConfig()
-DEFAULT_LLM_CONFIG = LLMConfig()
-
 __all__ = [
-    "DiarizationConfig",
-    "LLMConfig",
     "ProcessArtifacts",
     "RunContext",
     "TranscriptionConfig",
@@ -44,6 +36,8 @@ __all__ = [
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from webinar_transcriber.diarization import Diarizer
+    from webinar_transcriber.llm.contracts import LLMProcessor
     from webinar_transcriber.models import (
         MediaAsset,
         ReportDocument,
@@ -61,7 +55,8 @@ def run_transcription_phase(
     layout: RunLayout,
     ctx: RunContext,
     transcription_config: TranscriptionConfig,
-    diarization_config: DiarizationConfig,
+    diarizer: Diarizer | None = None,
+    diarization_speaker_count: int | None = None,
 ) -> AsrPipelineResult:
     """Run the audio preparation and ASR half of the pipeline.
 
@@ -95,7 +90,8 @@ def run_transcription_phase(
             layout=layout,
             ctx=ctx,
             transcription_config=transcription_config,
-            diarization_config=diarization_config,
+            diarizer=diarizer,
+            diarization_speaker_count=diarization_speaker_count,
         )
 
         if transcription_config.keep_audio:
@@ -125,8 +121,9 @@ def process_input(
     *,
     output_dir: Path | None = None,
     transcription_config: TranscriptionConfig,
-    llm_config: LLMConfig = DEFAULT_LLM_CONFIG,
-    diarization_config: DiarizationConfig = DEFAULT_DIARIZATION_CONFIG,
+    llm_processor: LLMProcessor | None = None,
+    diarizer: Diarizer | None = None,
+    diarization_speaker_count: int | None = None,
     transcriber: WhisperCppTranscriber | None = None,
     reporter: BaseStageReporter | None = None,
 ) -> ProcessArtifacts:
@@ -137,21 +134,14 @@ def process_input(
     """
     active_reporter = reporter or BaseStageReporter()
     ctx = RunContext(reporter=active_reporter)
-    if llm_config.processor == "from_env":
-        ensure_llm_extra_available()
 
-    with ExitStack() as transcriber_scope:
-        if transcriber is None:
-            active_transcriber = transcriber_scope.enter_context(
-                WhisperCppTranscriber(
-                    model_name=transcription_config.asr_model,
-                    threads=transcription_config.threads,
-                    language=transcription_config.language,
-                )
-            )
-        else:
-            active_transcriber = transcriber
+    transcriber = transcriber or WhisperCppTranscriber(
+        model_name=transcription_config.asr_model,
+        threads=transcription_config.threads,
+        language=transcription_config.language,
+    )
 
+    with transcriber as active_transcriber:
         asr_result: AsrPipelineResult | None = None
         report: ReportDocument | None = None
         scenes: list[Scene] = []
@@ -176,7 +166,8 @@ def process_input(
                 layout=layout,
                 ctx=ctx,
                 transcription_config=transcription_config,
-                diarization_config=diarization_config,
+                diarizer=diarizer,
+                diarization_speaker_count=diarization_speaker_count,
             )
 
             report, scenes, scene_frames = run_report_phase(
@@ -184,15 +175,14 @@ def process_input(
                 layout=layout,
                 media_asset=media_asset,
                 normalized_transcription=asr_result.normalized_transcription,
-                llm_processor=llm_config.processor,
-                threads=transcription_config.threads,
+                llm_processor=llm_processor,
                 ctx=ctx,
             )
 
             diagnostics = write_run_diagnostics(
                 ctx,
                 status="succeeded",
-                llm_enabled=llm_config.enabled,
+                llm_enabled=llm_processor is not None,
                 transcription=asr_result.transcription,
                 normalized_transcription=asr_result.normalized_transcription,
                 asr_pipeline=asr_result.asr_pipeline,
@@ -221,7 +211,7 @@ def process_input(
                 status="failed",
                 failed_stage=ctx.current_stage,
                 error=str(ex),
-                llm_enabled=llm_config.enabled,
+                llm_enabled=llm_processor is not None,
                 transcription=asr_result.transcription if asr_result else None,
                 normalized_transcription=(
                     asr_result.normalized_transcription if asr_result else None

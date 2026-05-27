@@ -20,7 +20,8 @@ if TYPE_CHECKING:
     from av.video.stream import VideoStream
 
     from webinar_transcriber.models import Scene
-    from webinar_transcriber.progress import ProgressCallback
+
+    ProgressCallback = Callable[[float, int], None]
 
 REPRESENTATIVE_FRAME_OFFSET_SEC = 1.0
 

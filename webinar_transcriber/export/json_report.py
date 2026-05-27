@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.json_utils import compact_speaker_fields
+from webinar_transcriber.models import compact_speaker_fields
 from webinar_transcriber.processor.support import write_json
 
 if TYPE_CHECKING:

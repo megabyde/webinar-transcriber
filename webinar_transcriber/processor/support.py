@@ -8,16 +8,16 @@ from dataclasses import dataclass, field
 from time import perf_counter
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.progress import ProgressCallback  # noqa: TC001
-
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
     from pathlib import Path
 
     from webinar_transcriber.asr import WhisperCppTranscriber
     from webinar_transcriber.reporter import BaseStageReporter
 
     from .types import RunContext
+
+    ProgressCallback = Callable[[float, int], None]
 
 
 @dataclass

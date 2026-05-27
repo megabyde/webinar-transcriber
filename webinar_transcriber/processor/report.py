@@ -11,12 +11,10 @@ import webinar_transcriber.structure as structure_runtime
 import webinar_transcriber.video as video_runtime
 from webinar_transcriber.models import VideoAsset
 
-from .llm import maybe_polish_report, resolve_llm_processor
+from .llm import maybe_polish_report
 from .support import count_label, counting_progress, progress_stage, stage, write_json
 
 if TYPE_CHECKING:
-    from typing import Literal
-
     from webinar_transcriber.llm.contracts import LLMProcessor
     from webinar_transcriber.models import (
         AlignmentBlock,
@@ -37,8 +35,7 @@ def run_report_phase(
     layout: RunLayout,
     media_asset: MediaAsset,
     normalized_transcription: TranscriptionResult,
-    llm_processor: LLMProcessor | Literal["from_env"] | None,
-    threads: int,
+    llm_processor: LLMProcessor | None,
     ctx: RunContext,
 ) -> tuple[ReportDocument, list[Scene], list[SceneFrame]]:
     """Run the video, structure, optional LLM, and export half of the pipeline.
@@ -46,13 +43,6 @@ def run_report_phase(
     Returns:
         tuple: The report artifact and video diagnostics inputs.
     """
-    llm_enhancer = resolve_llm_processor(
-        llm_processor=llm_processor,
-        ctx=ctx,
-        llm_runtime=ctx.llm_runtime,
-        threads=threads,
-    )
-
     scenes: list[Scene] = []
     scene_frames: list[SceneFrame] = []
     alignment_blocks: list[AlignmentBlock] | None = None
@@ -131,7 +121,7 @@ def run_report_phase(
 
     report = maybe_polish_report(
         report,
-        llm_processor=llm_enhancer,
+        llm_processor=llm_processor,
         ctx=ctx,
         llm_runtime=ctx.llm_runtime,
     )
