@@ -168,7 +168,7 @@ webinar-transcriber INPUT --diarize --diarize-speakers 4
 
 > [!WARNING]
 > Pass `--diarize-speakers` only when the exact speaker count is known. A wrong count can force poor
-> speaker labels; omit the option to let sherpa estimate the count.
+> speaker labels; omit the option to let Sherpa estimate the count.
 
 Diarization runs entirely locally through `sherpa-onnx`; it does not use an API key. The first
 diarized run downloads the segmentation and speaker-embedding models into
@@ -326,16 +326,16 @@ runs/<timestamp>_<basename>/
 ├─ asr/
 │  ├─ decoded_windows.json
 │  └─ speech_regions.json
-├─ diarization.json       # optional via --diarize
-├─ frames/                 # video only
+├─ diarization.json         # optional via --diarize
+├─ frames/                  # video only
 ├─ diagnostics.json
 ├─ metadata.json
 ├─ report.docx
 ├─ report.json
 ├─ report.md
-├─ scenes.json             # video only
+├─ scenes.json              # video only
 ├─ transcript.json
-└─ transcription-audio.mp3 # optional via --keep-audio
+└─ transcription-audio.mp3  # optional via --keep-audio
 ```
 
 ## Development
