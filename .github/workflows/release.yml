@@ -52,7 +52,7 @@ jobs:
         run: uv run ty check webinar_transcriber
 
       - name: Run tests
-        run: uv run pytest
+        run: uv run pytest --cov-report=xml
 
   release:
     needs: validate
