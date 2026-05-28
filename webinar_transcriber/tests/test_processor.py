@@ -40,6 +40,7 @@ from webinar_transcriber.processor import (
 from webinar_transcriber.processor import process_input as _process_input
 from webinar_transcriber.processor.asr_pipeline import plan_inference_windows
 from webinar_transcriber.processor.support import (
+    ProgressStageHandle,
     asr_runtime_detail,
     realtime_factor_detail,
     stage,
@@ -903,6 +904,26 @@ class TestProcessorSupport:
         assert "probe_media" in ctx.stage_timings
         assert reporter.started == [("probe_media", "Probing media")]
         assert reporter.finished == []
+
+    def test_progress_stage_handle_ignores_non_positive_advances(self) -> None:
+        reporter = RecordingReporter()
+        handle = ProgressStageHandle(key="vad", label="Detecting speech", reporter=reporter)
+
+        handle.advance(0, detail="ignored")
+
+        assert reporter.progress == []
+        assert handle.detail is None
+
+    def test_progress_stage_handle_updates_detail_when_already_complete(self) -> None:
+        reporter = RecordingReporter()
+        handle = ProgressStageHandle(
+            key="vad", label="Detecting speech", reporter=reporter, completed=1.0
+        )
+
+        handle.advance_to(1.0, detail="1 region | RTF 10x")
+
+        assert reporter.progress == []
+        assert handle.detail == "1 region | RTF 10x"
 
     def test_transcription_stage_detail_reports_segments_and_rtf(self) -> None:
         detail = transcription_stage_detail(

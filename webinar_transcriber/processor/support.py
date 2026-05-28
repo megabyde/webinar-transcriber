@@ -56,7 +56,11 @@ class ProgressStageHandle(StageHandle):
 
     def advance_to(self, completed: float, *, detail: str | None = None) -> None:
         """Advance stage progress up to one cumulative completed value."""
-        self.advance(max(0.0, completed - self.completed), detail=detail)
+        advance = max(0.0, completed - self.completed)
+        if advance > 0:
+            self.advance(advance, detail=detail)
+        elif detail is not None:
+            self.set_detail(detail)
 
 
 def count_label(count: int, singular: str, *, plural: str | None = None) -> str:

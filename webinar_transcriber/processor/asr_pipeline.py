@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
     from webinar_transcriber.asr import WhisperCppTranscriber
     from webinar_transcriber.diarization import Diarizer
-    from webinar_transcriber.models import MediaAsset
+    from webinar_transcriber.models import DecodedWindow, MediaAsset
     from webinar_transcriber.paths import RunLayout
 
     from .support import ProgressStageHandle
@@ -95,36 +95,15 @@ def run_asr_pipeline(
     windows = _plan_inference_windows_stage(ctx=ctx, speech_regions=speech_regions)
     vad_region_count = len(speech_regions)
 
-    window_count = len(windows)
-    average_window_duration_sec = average_duration_sec(windows)
-    with progress_stage(
-        ctx,
-        "transcribe",
-        "Transcribing audio",
-        total=media_asset.duration_sec,
-        count_label="s",
-        detail="0 segments",
-    ) as st:
-        decoded_windows = transcriber.transcribe_inference_windows(
-            audio_samples,
-            windows,
-            language=transcription_config.language,
-            progress_callback=counting_progress(st, "segment"),
-            warning_callback=ctx.record_warning,
-        )
-        write_json(
-            layout.decoded_windows_path,
-            [window.to_json() for window in decoded_windows],
-        )
-        st.advance_to(media_asset.duration_sec)
-        st.set_detail(
-            transcription_stage_detail(
-                segment_count=sum(len(window.segments) for window in decoded_windows),
-                total_duration_sec=media_asset.duration_sec,
-                elapsed_sec=st.elapsed_sec(),
-            )
-        )
-
+    decoded_windows = _transcribe_windows_stage(
+        audio_samples=audio_samples,
+        windows=windows,
+        media_duration_sec=media_asset.duration_sec,
+        language=transcription_config.language,
+        transcriber=transcriber,
+        ctx=ctx,
+        layout=layout,
+    )
     transcription = reconcile_decoded_windows(decoded_windows)
 
     diarization: DiarizationDiagnostics | None = None
@@ -159,8 +138,8 @@ def run_asr_pipeline(
         threads=transcription_config.threads,
         vad_region_count=vad_region_count,
         carryover_enabled=True,
-        window_count=window_count,
-        average_window_duration_sec=average_window_duration_sec,
+        window_count=len(windows),
+        average_window_duration_sec=average_duration_sec(windows),
         normalized_audio_duration_sec=normalized_audio_duration(audio_samples),
         system_info=transcriber.system_info,
     )
@@ -200,7 +179,6 @@ def _detect_speech_regions_stage(
             ),
         )
         st.advance_to(audio_duration_sec, detail=vad_detail)
-        st.set_detail(vad_detail)
 
     for warning in vad_warnings:
         ctx.record_warning(warning)
@@ -218,6 +196,46 @@ def _plan_inference_windows_stage(
         windows = plan_inference_windows(speech_regions)
         st.set_detail(count_label(len(windows), "window"))
     return windows
+
+
+def _transcribe_windows_stage(
+    *,
+    audio_samples: np.ndarray,
+    windows: list[InferenceWindow],
+    media_duration_sec: float,
+    language: str | None,
+    transcriber: WhisperCppTranscriber,
+    ctx: RunContext,
+    layout: RunLayout,
+) -> list[DecodedWindow]:
+    with progress_stage(
+        ctx,
+        "transcribe",
+        "Transcribing audio",
+        total=media_duration_sec,
+        count_label="s",
+        detail="0 segments",
+    ) as st:
+        decoded_windows = transcriber.transcribe_inference_windows(
+            audio_samples,
+            windows,
+            language=language,
+            progress_callback=counting_progress(st, "segment"),
+            warning_callback=ctx.record_warning,
+        )
+        write_json(
+            layout.decoded_windows_path,
+            [window.to_json() for window in decoded_windows],
+        )
+        st.advance_to(media_duration_sec)
+        st.set_detail(
+            transcription_stage_detail(
+                segment_count=sum(len(window.segments) for window in decoded_windows),
+                total_duration_sec=media_duration_sec,
+                elapsed_sec=st.elapsed_sec(),
+            )
+        )
+    return decoded_windows
 
 
 def _diarize_speakers_stage(
@@ -267,7 +285,6 @@ def _diarize_speakers_stage(
             ),
         )
         st.advance_to(100.0, detail=detail)
-        st.set_detail(detail)
     return speaker_turns
 
 
