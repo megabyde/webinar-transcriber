@@ -6,18 +6,29 @@ import json
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from time import perf_counter
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
-    from webinar_transcriber.asr import WhisperCppTranscriber
     from webinar_transcriber.reporter import BaseStageReporter
 
     from .types import RunContext
 
     ProgressCallback = Callable[[float, int], None]
+
+
+class AsrRuntime(Protocol):
+    """ASR runtime fields used in processor progress details."""
+
+    @property
+    def model_name(self) -> str:
+        """Return the configured ASR model identifier."""
+
+    @property
+    def device_name(self) -> str:
+        """Return the prepared ASR device label."""
 
 
 @dataclass
@@ -140,7 +151,7 @@ def write_json(output_path: Path, payload: object) -> None:
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def asr_runtime_detail(transcriber: WhisperCppTranscriber) -> str:
+def asr_runtime_detail(transcriber: AsrRuntime) -> str:
     """Return a human-facing ASR runtime label."""
     return f"{transcriber.model_name} | {transcriber.device_name}"
 

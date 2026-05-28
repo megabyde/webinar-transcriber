@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -100,7 +100,7 @@ def process_input(
     )
 
 
-class ConfigurableLLMProcessor:
+class ConfigurableLLMProcessor(LLMProcessor):
     provider_name = "openai"
     model_name = "test-llm-model"
 
@@ -937,10 +937,7 @@ class TestProcessorSupport:
         assert realtime_factor_detail(total_duration_sec=12.5, elapsed_sec=0.0) is None
 
     def test_asr_runtime_detail_uses_model_name_verbatim(self) -> None:
-        transcriber = cast(
-            "WhisperCppTranscriber",
-            SimpleNamespace(model_name="/tmp/models/local-model.bin", device_name="cpu"),
-        )
+        transcriber = SimpleNamespace(model_name="/tmp/models/local-model.bin", device_name="cpu")
 
         assert asr_runtime_detail(transcriber) == "/tmp/models/local-model.bin | cpu"
 
@@ -970,23 +967,20 @@ def llm_success_result(
         input_path,
         output_dir=tmp_path / "llm-run",
         transcriber=FakeTranscriber(),
-        llm_processor=cast(
-            "LLMProcessor",
-            ConfigurableLLMProcessor(
-                section_result=LLMSectionPolishResult(
-                    section_tldrs={"section-1": "Updated section TL;DR."},
-                    section_transcripts={"section-1": EXPECTED_LLM_SECTION_TEXT},
-                    response_metadata=[
-                        {
-                            "stage": "section_polish",
-                            "section_id": "section-1",
-                            "finish_reason": "stop",
-                        }
-                    ],
-                    warnings=[EXPECTED_LLM_WARNING],
-                ),
-                metadata_result=polished_metadata,
+        llm_processor=ConfigurableLLMProcessor(
+            section_result=LLMSectionPolishResult(
+                section_tldrs={"section-1": "Updated section TL;DR."},
+                section_transcripts={"section-1": EXPECTED_LLM_SECTION_TEXT},
+                response_metadata=[
+                    {
+                        "stage": "section_polish",
+                        "section_id": "section-1",
+                        "finish_reason": "stop",
+                    }
+                ],
+                warnings=[EXPECTED_LLM_WARNING],
             ),
+            metadata_result=polished_metadata,
         ),
         reporter=reporter,
     )
@@ -1098,14 +1092,11 @@ class TestProcessInputLlm:
             input_path,
             output_dir=tmp_path / "llm-two-section-run",
             transcriber=TwoSectionTranscriber(),
-            llm_processor=cast(
-                "LLMProcessor",
-                ConfigurableLLMProcessor(
-                    section_result=section_polish,
-                    metadata_result=metadata_polish,
-                    section_progress=[1, 1],
-                    worker_count=2,
-                ),
+            llm_processor=ConfigurableLLMProcessor(
+                section_result=section_polish,
+                metadata_result=metadata_polish,
+                section_progress=[1, 1],
+                worker_count=2,
             ),
             reporter=reporter,
         )
@@ -1135,15 +1126,12 @@ class TestProcessInputLlm:
             input_path,
             output_dir=tmp_path / "section-fallback-run",
             transcriber=FakeTranscriber(),
-            llm_processor=cast(
-                "LLMProcessor",
-                ConfigurableLLMProcessor(
-                    section_result=LLMSectionPolishResult(
-                        section_tldrs={},
-                        section_transcripts={},
-                    ),
-                    section_error=LLMProcessingError("section polish failed"),
+            llm_processor=ConfigurableLLMProcessor(
+                section_result=LLMSectionPolishResult(
+                    section_tldrs={},
+                    section_transcripts={},
                 ),
+                section_error=LLMProcessingError("section polish failed"),
             ),
             reporter=reporter,
         )
@@ -1174,12 +1162,9 @@ class TestProcessInputLlm:
             input_path,
             output_dir=tmp_path / "metadata-fallback-run",
             transcriber=FakeTranscriber(),
-            llm_processor=cast(
-                "LLMProcessor",
-                ConfigurableLLMProcessor(
-                    section_result=section_polish,
-                    metadata_error=LLMProcessingError("metadata failed"),
-                ),
+            llm_processor=ConfigurableLLMProcessor(
+                section_result=section_polish,
+                metadata_error=LLMProcessingError("metadata failed"),
             ),
             reporter=reporter,
         )
