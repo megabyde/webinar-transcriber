@@ -184,7 +184,7 @@ def _attach_section_images(
         report,
         sections=[
             replace(section, image_path=_report_image_path(frame, run_dir))
-            if (frame_id := section.frame_id) and (frame := frame_by_id.get(frame_id))
+            if section.frame_id and (frame := frame_by_id.get(section.frame_id))
             else section
             for section in report.sections
         ],
