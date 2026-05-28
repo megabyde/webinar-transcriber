@@ -162,7 +162,7 @@ def _prepare_video_report_inputs(
             input_path,
             scenes,
             layout.frames_dir,
-            progress_callback=lambda completed, _count: st.advance_to(float(completed)),
+            progress_callback=st.advance_to,
             warning_callback=ctx.record_warning,
         )
 

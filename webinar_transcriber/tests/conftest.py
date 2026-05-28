@@ -381,7 +381,7 @@ def install_video_scene_runtime(
             Path(frame.image_path).parent.mkdir(parents=True, exist_ok=True)
             Image.new("RGB", (8, 8), color="white").save(frame.image_path)
             if progress_callback is not None:
-                progress_callback(index, index)
+                progress_callback(index)
         return extracted_frames
 
     monkeypatch.setattr("webinar_transcriber.video.detect_scenes", fake_detect_scenes)
