@@ -152,16 +152,19 @@ def _prepare_video_report_inputs(
     write_json(layout.scenes_path, {"scenes": [asdict(scene) for scene in scenes]})
 
     with progress_stage(
-        ctx, "extract_frames", "Extracting scene frames", total=float(len(scenes))
+        ctx,
+        "extract_frames",
+        "Extracting scene frames",
+        total=float(len(scenes)),
+        count_label="scenes",
     ) as st:
         scene_frames = video_runtime.extract_representative_frames(
             input_path,
             scenes,
             layout.frames_dir,
-            progress_callback=counting_progress(st, "frame"),
+            progress_callback=lambda completed, _count: st.advance_to(float(completed)),
             warning_callback=ctx.record_warning,
         )
-        st.set_detail(count_label(len(scene_frames), "frame"))
 
     return VideoPhaseResult(
         scenes=scenes,
