@@ -41,7 +41,7 @@ jobs:
       - name: Type check
         run: uv run ty check webinar_transcriber
       - name: Run tests
-        run: uv run pytest
+        run: uv run pytest --cov-report=xml
       - name: Install LLM extra
         run: uv sync --extra llm --group dev
       - name: Run LLM tests

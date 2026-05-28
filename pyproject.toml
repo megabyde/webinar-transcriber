@@ -70,7 +70,6 @@ addopts = [
     "--strict-markers",
     "--cov=webinar_transcriber",
     "--cov-report=term-missing",
-    "--cov-report=xml",
     "--durations=5",
 ]
 testpaths = ["webinar_transcriber/tests"]
