@@ -4,11 +4,7 @@ from __future__ import annotations
 
 import re
 
-from webinar_transcriber.models import (
-    DecodedWindow,
-    TranscriptionResult,
-    TranscriptSegment,
-)
+from webinar_transcriber.models import DecodedWindow, TranscriptionResult, TranscriptSegment
 
 _WORD_RE = re.compile(r"\w+")
 _MIN_DUPLICATE_OVERLAP_WORDS = 3

@@ -5,11 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Literal
 
-from webinar_transcriber.models import (
-    AsrPipelineDiagnostics,
-    Diagnostics,
-    LlmDiagnostics,
-)
+from webinar_transcriber.models import AsrPipelineDiagnostics, Diagnostics, LlmDiagnostics
 from webinar_transcriber.processor.support import write_json
 
 if TYPE_CHECKING:

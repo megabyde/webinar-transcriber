@@ -19,11 +19,7 @@ from webinar_transcriber.reporter import BaseStageReporter
 from .asr_pipeline import AsrPipelineResult, run_asr_pipeline
 from .report import ReportPhaseResult, run_report_phase
 from .support import progress_stage, stage, write_json
-from .types import (
-    ProcessArtifacts,
-    RunContext,
-    TranscriptionConfig,
-)
+from .types import ProcessArtifacts, RunContext, TranscriptionConfig
 
 __all__ = [
     "ProcessArtifacts",

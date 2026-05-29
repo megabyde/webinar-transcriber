@@ -13,10 +13,7 @@ from webinar_transcriber.asr import (
     build_prompt_carryover,
     device_name_from_system_info,
 )
-from webinar_transcriber.asr.config import (
-    DEFAULT_MAX_ASR_THREADS,
-    default_asr_threads,
-)
+from webinar_transcriber.asr.config import DEFAULT_MAX_ASR_THREADS, default_asr_threads
 from webinar_transcriber.models import DecodedWindow, InferenceWindow, TranscriptSegment
 
 

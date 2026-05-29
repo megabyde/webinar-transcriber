@@ -6,10 +6,7 @@ from typing import TYPE_CHECKING
 
 import av
 
-from webinar_transcriber.media import (
-    MediaProcessingError,
-    open_video_input_container,
-)
+from webinar_transcriber.media import MediaProcessingError, open_video_input_container
 from webinar_transcriber.models import SceneFrame
 
 if TYPE_CHECKING:
@@ -56,8 +53,8 @@ def extract_representative_frames(
                 if not extracted:
                     if warning_callback is not None:
                         warning_callback(
-                            f"Frame extraction failed for {scene.id} at "
-                            f"{frame_timestamp_sec:.1f}s: {failure_detail}"
+                            f"Frame extraction failed for {scene.id} "
+                            f"at {frame_timestamp_sec:.1f}s: {failure_detail}"
                         )
                     if progress_callback is not None:
                         progress_callback(index)
@@ -66,8 +63,8 @@ def extract_representative_frames(
 
                 if failure_detail is not None and warning_callback is not None:
                     warning_callback(
-                        f"Frame extraction used nearest decoded frame for {scene.id} at "
-                        f"{frame_timestamp_sec:.1f}s: {failure_detail}"
+                        f"Frame extraction used nearest decoded frame for {scene.id} "
+                        f"at {frame_timestamp_sec:.1f}s: {failure_detail}"
                     )
                 frames.append(
                     SceneFrame(
