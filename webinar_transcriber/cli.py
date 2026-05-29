@@ -17,10 +17,7 @@ from webinar_transcriber.llm import build_llm_processor_from_env
 from webinar_transcriber.llm.contracts import LLMConfigurationError, LLMProcessingError
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
-from webinar_transcriber.processor import (
-    TranscriptionConfig,
-    process_input,
-)
+from webinar_transcriber.processor import TranscriptionConfig, process_input
 from webinar_transcriber.ui import RichStageReporter
 
 _THREADS_DEFAULT = default_asr_threads()
@@ -55,8 +52,10 @@ def _resolve_threads(_ctx: click.Context, _param: click.Parameter, value: int | 
     type=str,
     default=WHISPER_CPP_MODEL_FILENAME,
     show_default=True,
-    help="Override the whisper.cpp model identifier or local model path, for example "
-    "'models/whisper-cpp/ggml-large-v3-turbo.bin'.",
+    help=(
+        "Override the whisper.cpp model identifier or local model path, for example "
+        "'models/whisper-cpp/ggml-large-v3-turbo.bin'."
+    ),
 )
 @click.option(
     "--language",

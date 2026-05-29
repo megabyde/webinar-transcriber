@@ -61,8 +61,8 @@ def _required_llm_module(module_name: str, *, provider_label: str) -> object:
         return importlib.import_module(module_name)
     except ImportError as error:
         raise LLMConfigurationError(
-            f"The {provider_label} provider requires the 'llm' extra. "
-            'Install it with: uv tool install --reinstall ".[llm]"'
+            f"The {provider_label} provider requires the 'llm' extra. Install it with: "
+            'uv tool install --reinstall ".[llm]"'
         ) from error
 
 

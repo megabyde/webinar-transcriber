@@ -9,10 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 import av
 from av.filter import Graph
 
-from webinar_transcriber.media import (
-    MediaProcessingError,
-    open_video_input_container,
-)
+from webinar_transcriber.media import MediaProcessingError, open_video_input_container
 from webinar_transcriber.models import Scene
 
 if TYPE_CHECKING:
