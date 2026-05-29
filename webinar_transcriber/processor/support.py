@@ -6,18 +6,29 @@ import json
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from time import perf_counter
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
-    from webinar_transcriber.asr import WhisperCppTranscriber
     from webinar_transcriber.reporter import BaseStageReporter
 
     from .types import RunContext
 
     ProgressCallback = Callable[[float, int], None]
+
+
+class AsrRuntime(Protocol):
+    """ASR runtime fields used in processor progress details."""
+
+    @property
+    def model_name(self) -> str:
+        """Return the configured ASR model identifier."""
+
+    @property
+    def device_name(self) -> str:
+        """Return the prepared ASR device label."""
 
 
 @dataclass
@@ -28,6 +39,7 @@ class StageHandle:
     label: str
     detail: str | None = None
     start_sec: float = 0.0
+    detail_callback: Callable[[str], None] | None = field(default=None, repr=False)
 
     def elapsed_sec(self) -> float:
         """Return the current elapsed stage time in seconds."""
@@ -36,6 +48,8 @@ class StageHandle:
     def set_detail(self, detail: str) -> None:
         """Set the final status detail reported when the stage finishes."""
         self.detail = detail
+        if self.detail_callback is not None:
+            self.detail_callback(detail)
 
 
 @dataclass
@@ -56,7 +70,11 @@ class ProgressStageHandle(StageHandle):
 
     def advance_to(self, completed: float, *, detail: str | None = None) -> None:
         """Advance stage progress up to one cumulative completed value."""
-        self.advance(max(0.0, completed - self.completed), detail=detail)
+        advance = max(0.0, completed - self.completed)
+        if advance > 0:
+            self.advance(advance, detail=detail)
+        elif detail is not None:
+            self.set_detail(detail)
 
 
 def count_label(count: int, singular: str, *, plural: str | None = None) -> str:
@@ -88,7 +106,19 @@ def stage(
     ctx: RunContext, key: str, label: str, *, indeterminate: bool = True
 ) -> Iterator[StageHandle]:
     """Record one stage's timing and lifecycle through a context manager."""
-    handle = StageHandle(key=key, label=label, start_sec=perf_counter())
+    detail_callback: Callable[[str], None] | None = None
+    if indeterminate:
+
+        def update_detail(detail: str) -> None:
+            ctx.reporter.stage_detail_updated(key, label, detail=detail)
+
+        detail_callback = update_detail
+    handle = StageHandle(
+        key=key,
+        label=label,
+        start_sec=perf_counter(),
+        detail_callback=detail_callback,
+    )
     ctx.current_stage = key
     if indeterminate:
         ctx.reporter.stage_started(key, label)
@@ -136,7 +166,7 @@ def write_json(output_path: Path, payload: object) -> None:
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def asr_runtime_detail(transcriber: WhisperCppTranscriber) -> str:
+def asr_runtime_detail(transcriber: AsrRuntime) -> str:
     """Return a human-facing ASR runtime label."""
     return f"{transcriber.model_name} | {transcriber.device_name}"
 
@@ -177,7 +207,6 @@ def llm_stage_label(
 def llm_report_detail(
     *,
     section_count: int,
-    tldr_count: int,
     title_count: int,
     summary_count: int,
     action_item_count: int,
@@ -187,7 +216,6 @@ def llm_report_detail(
     return detail_label(
         _count_label_if_positive(summary_count, "summary bullet"),
         _count_label_if_positive(action_item_count, "action item"),
-        _count_label_if_positive(tldr_count, "TL;DR"),
         _count_label_if_positive(title_update_count, "title updated", plural="titles updated"),
     )
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -40,6 +40,7 @@ from webinar_transcriber.processor import (
 from webinar_transcriber.processor import process_input as _process_input
 from webinar_transcriber.processor.asr_pipeline import plan_inference_windows
 from webinar_transcriber.processor.support import (
+    ProgressStageHandle,
     asr_runtime_detail,
     realtime_factor_detail,
     stage,
@@ -99,7 +100,7 @@ def process_input(
     )
 
 
-class ConfigurableLLMProcessor:
+class ConfigurableLLMProcessor(LLMProcessor):
     provider_name = "openai"
     model_name = "test-llm-model"
 
@@ -269,8 +270,8 @@ class TestProcessInput:
         assert len(vad_finished) == 1
         assert vad_finished[0].startswith("1 region | RTF ")
         assert ("plan_windows", "1 window") in reporter.finished
-        assert ("start", "transcribe", 6.0, "0 segments") in reporter.progress
-        assert ("advance", "transcribe", 6.0, "2 segments") in reporter.progress
+        assert ("start", "transcribe", 1.0, "0 segments") in reporter.progress
+        assert ("advance", "transcribe", 1.0, "2 segments") in reporter.progress
 
     def test_diarizes_transcript_and_report_when_enabled(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -647,12 +648,12 @@ class TestProcessInput:
                 windows: list[InferenceWindow],
                 *,
                 language: str | None = None,
-                progress_callback: Callable[[float, int], None] | None = None,
+                progress_callback: Callable[[int, int], None] | None = None,
                 warning_callback: Callable[[str], None] | None = None,
             ) -> list[DecodedWindow]:
                 del audio_samples, language, warning_callback
                 if progress_callback is not None:
-                    progress_callback(windows[0].end_sec, 1)
+                    progress_callback(1, 1)
                 return [
                     DecodedWindow(
                         window=windows[0],
@@ -904,6 +905,26 @@ class TestProcessorSupport:
         assert reporter.started == [("probe_media", "Probing media")]
         assert reporter.finished == []
 
+    def test_progress_stage_handle_ignores_non_positive_advances(self) -> None:
+        reporter = RecordingReporter()
+        handle = ProgressStageHandle(key="vad", label="Detecting speech", reporter=reporter)
+
+        handle.advance(0, detail="ignored")
+
+        assert reporter.progress == []
+        assert handle.detail is None
+
+    def test_progress_stage_handle_updates_detail_when_already_complete(self) -> None:
+        reporter = RecordingReporter()
+        handle = ProgressStageHandle(
+            key="vad", label="Detecting speech", reporter=reporter, completed=1.0
+        )
+
+        handle.advance_to(1.0, detail="1 region | RTF 10x")
+
+        assert reporter.progress == []
+        assert handle.detail == "1 region | RTF 10x"
+
     def test_transcription_stage_detail_reports_segments_and_rtf(self) -> None:
         detail = transcription_stage_detail(
             segment_count=1, total_duration_sec=12.5, elapsed_sec=2.5
@@ -916,10 +937,7 @@ class TestProcessorSupport:
         assert realtime_factor_detail(total_duration_sec=12.5, elapsed_sec=0.0) is None
 
     def test_asr_runtime_detail_uses_model_name_verbatim(self) -> None:
-        transcriber = cast(
-            "WhisperCppTranscriber",
-            SimpleNamespace(model_name="/tmp/models/local-model.bin", device_name="cpu"),
-        )
+        transcriber = SimpleNamespace(model_name="/tmp/models/local-model.bin", device_name="cpu")
 
         assert asr_runtime_detail(transcriber) == "/tmp/models/local-model.bin | cpu"
 
@@ -949,23 +967,20 @@ def llm_success_result(
         input_path,
         output_dir=tmp_path / "llm-run",
         transcriber=FakeTranscriber(),
-        llm_processor=cast(
-            "LLMProcessor",
-            ConfigurableLLMProcessor(
-                section_result=LLMSectionPolishResult(
-                    section_tldrs={"section-1": "Updated section TL;DR."},
-                    section_transcripts={"section-1": EXPECTED_LLM_SECTION_TEXT},
-                    response_metadata=[
-                        {
-                            "stage": "section_polish",
-                            "section_id": "section-1",
-                            "finish_reason": "stop",
-                        }
-                    ],
-                    warnings=[EXPECTED_LLM_WARNING],
-                ),
-                metadata_result=polished_metadata,
+        llm_processor=ConfigurableLLMProcessor(
+            section_result=LLMSectionPolishResult(
+                section_tldrs={"section-1": "Updated section TL;DR."},
+                section_transcripts={"section-1": EXPECTED_LLM_SECTION_TEXT},
+                response_metadata=[
+                    {
+                        "stage": "section_polish",
+                        "section_id": "section-1",
+                        "finish_reason": "stop",
+                    }
+                ],
+                warnings=[EXPECTED_LLM_WARNING],
             ),
+            metadata_result=polished_metadata,
         ),
         reporter=reporter,
     )
@@ -1025,7 +1040,7 @@ class TestProcessInputLlm:
                 windows: list[InferenceWindow],
                 *,
                 language: str | None = None,
-                progress_callback: Callable[[float, int], None] | None = None,
+                progress_callback: Callable[[int, int], None] | None = None,
                 warning_callback: Callable[[str], None] | None = None,
             ) -> list[DecodedWindow]:
                 del audio_samples, language, warning_callback
@@ -1045,7 +1060,7 @@ class TestProcessInputLlm:
                     ],
                 ]
                 if progress_callback is not None:
-                    progress_callback(windows[-1].end_sec, 2)
+                    progress_callback(len(windows), 2)
                 return [
                     DecodedWindow(
                         window=window,
@@ -1077,14 +1092,11 @@ class TestProcessInputLlm:
             input_path,
             output_dir=tmp_path / "llm-two-section-run",
             transcriber=TwoSectionTranscriber(),
-            llm_processor=cast(
-                "LLMProcessor",
-                ConfigurableLLMProcessor(
-                    section_result=section_polish,
-                    metadata_result=metadata_polish,
-                    section_progress=[1, 1],
-                    worker_count=2,
-                ),
+            llm_processor=ConfigurableLLMProcessor(
+                section_result=section_polish,
+                metadata_result=metadata_polish,
+                section_progress=[1, 1],
+                worker_count=2,
             ),
             reporter=reporter,
         )
@@ -1114,15 +1126,12 @@ class TestProcessInputLlm:
             input_path,
             output_dir=tmp_path / "section-fallback-run",
             transcriber=FakeTranscriber(),
-            llm_processor=cast(
-                "LLMProcessor",
-                ConfigurableLLMProcessor(
-                    section_result=LLMSectionPolishResult(
-                        section_tldrs={},
-                        section_transcripts={},
-                    ),
-                    section_error=LLMProcessingError("section polish failed"),
+            llm_processor=ConfigurableLLMProcessor(
+                section_result=LLMSectionPolishResult(
+                    section_tldrs={},
+                    section_transcripts={},
                 ),
+                section_error=LLMProcessingError("section polish failed"),
             ),
             reporter=reporter,
         )
@@ -1153,12 +1162,9 @@ class TestProcessInputLlm:
             input_path,
             output_dir=tmp_path / "metadata-fallback-run",
             transcriber=FakeTranscriber(),
-            llm_processor=cast(
-                "LLMProcessor",
-                ConfigurableLLMProcessor(
-                    section_result=section_polish,
-                    metadata_error=LLMProcessingError("metadata failed"),
-                ),
+            llm_processor=ConfigurableLLMProcessor(
+                section_result=section_polish,
+                metadata_error=LLMProcessingError("metadata failed"),
             ),
             reporter=reporter,
         )

@@ -82,7 +82,6 @@ def maybe_polish_report(
     for warning in section_result.warnings:
         ctx.record_warning(warning)
 
-    metadata_error: LLMProcessingError | None = None
     with stage(ctx, "llm_report_metadata", summary_label) as st:
         try:
             metadata_result = llm_processor.polish_report_metadata(
@@ -97,22 +96,18 @@ def maybe_polish_report(
                 error=error,
                 elapsed_sec=section_elapsed_sec + metadata_elapsed_sec,
             )
-            metadata_error = error
+            llm_runtime.response_metadata = section_result.response_metadata
+            return report
         else:
             metadata_elapsed_sec = st.elapsed_sec()
             st.set_detail(
                 llm_report_detail(
                     section_count=polish_plan.section_count,
-                    tldr_count=len(section_result.section_tldrs),
                     title_count=len(metadata_result.section_titles),
                     summary_count=len(metadata_result.summary),
                     action_item_count=len(metadata_result.action_items),
                 )
             )
-
-    if metadata_error is not None:
-        llm_runtime.response_metadata = section_result.response_metadata
-        return report
 
     report_latency_sec = section_elapsed_sec + metadata_elapsed_sec
     report = replace(

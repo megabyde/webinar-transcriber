@@ -103,6 +103,53 @@ class TestRichStageReporter:
 
         assert console.export_text() == "✓ Polishing report (3.50s)\n"
 
+    def test_stage_detail_update_refreshes_active_spinner(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class FakeStatus:
+            def __init__(self, text: str) -> None:
+                self.text = text
+                self.updates: list[str] = []
+
+            def start(self) -> None:
+                return None
+
+            def stop(self) -> None:
+                return None
+
+            def update(self, status: str) -> None:
+                self.updates.append(status)
+
+        statuses: list[FakeStatus] = []
+
+        def fake_status(text: str, *, spinner: str) -> FakeStatus:
+            assert spinner == "dots"
+            status = FakeStatus(text)
+            statuses.append(status)
+            return status
+
+        console = Console(record=True, width=100)
+        monkeypatch.setattr(console, "status", fake_status)
+        reporter = RichStageReporter(console=console)
+
+        reporter.stage_started("prepare_asr", "Preparing ASR model")
+        reporter.stage_detail_updated(
+            "prepare_asr", "Preparing ASR model", detail="large-v3-turbo | metal"
+        )
+
+        assert statuses[0].text == "[bold blue][1][/bold blue] Preparing ASR model"
+        assert statuses[0].updates == [
+            "[bold blue][1][/bold blue] Preparing ASR model - large-v3-turbo | metal"
+        ]
+
+        reporter.stage_detail_updated("other_stage", "Other stage", detail="ignored")
+        assert statuses[0].updates == [
+            "[bold blue][1][/bold blue] Preparing ASR model - large-v3-turbo | metal"
+        ]
+
+        reporter.stage_finished("prepare_asr", "Preparing ASR model")
+        assert console.export_text() == "✓ Preparing ASR model (0.00s)\n"
+
     def test_progress_started_initializes_progress_display(
         self, monkeypatch: pytest.MonkeyPatch, fake_rich_progress
     ) -> None:
@@ -215,3 +262,4 @@ class TestBaseStageReporter:
         reporter.warn("warning")
         reporter.interrupted()
         reporter.reset_active_display()
+        reporter.stage_detail_updated("prepare_asr", "Preparing ASR model", detail="model")

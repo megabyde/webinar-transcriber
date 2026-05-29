@@ -197,7 +197,7 @@ class TestFrameExtraction:
             SAMPLE_VIDEO_PATH,
             scenes,
             tmp_path / "frames",
-            progress_callback=lambda _completed, _count: progress_ticks.append(1),
+            progress_callback=lambda _completed: progress_ticks.append(1),
         )
 
         assert len(frames) >= 2
@@ -225,7 +225,7 @@ class TestFrameExtraction:
             SAMPLE_VIDEO_PATH,
             scenes,
             tmp_path / "frames",
-            progress_callback=lambda _completed, _count: progress_ticks.append(1),
+            progress_callback=lambda _completed: progress_ticks.append(1),
             warning_callback=warnings.append,
         )
 
@@ -277,7 +277,7 @@ class TestFrameExtraction:
             SAMPLE_VIDEO_PATH,
             scenes,
             tmp_path / "frames",
-            progress_callback=lambda _completed, _count: progress_ticks.append(1),
+            progress_callback=lambda _completed: progress_ticks.append(1),
             warning_callback=warnings.append,
         )
 
@@ -319,7 +319,7 @@ class TestFrameExtraction:
             SAMPLE_VIDEO_PATH,
             scenes,
             tmp_path / "frames",
-            progress_callback=lambda _completed, _count: progress_ticks.append(1),
+            progress_callback=lambda _completed: progress_ticks.append(1),
             warning_callback=warnings.append,
         )
 

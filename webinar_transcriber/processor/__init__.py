@@ -17,7 +17,7 @@ from webinar_transcriber.paths import create_run_layout
 from webinar_transcriber.reporter import BaseStageReporter
 
 from .asr_pipeline import AsrPipelineResult, run_asr_pipeline
-from .report import run_report_phase
+from .report import ReportPhaseResult, run_report_phase
 from .support import progress_stage, stage, write_json
 from .types import (
     ProcessArtifacts,
@@ -40,9 +40,6 @@ if TYPE_CHECKING:
     from webinar_transcriber.llm.contracts import LLMProcessor
     from webinar_transcriber.models import (
         MediaAsset,
-        ReportDocument,
-        Scene,
-        SceneFrame,
     )
     from webinar_transcriber.paths import RunLayout
 
@@ -81,7 +78,6 @@ def run_transcription_phase(
                 )
             )
             st.advance_to(transcription_audio_total, detail=audio_path.name)
-            st.set_detail(str(audio_path.name))
 
         asr_result = run_asr_pipeline(
             audio_path=audio_path,
@@ -111,7 +107,6 @@ def run_transcription_phase(
                     ),
                 )
                 st.advance_to(transcription_audio_total, detail=preserved_audio_path.name)
-                st.set_detail(preserved_audio_path.name)
 
     return asr_result
 
@@ -143,21 +138,13 @@ def process_input(
 
     with transcriber as active_transcriber:
         asr_result: AsrPipelineResult | None = None
-        report: ReportDocument | None = None
-        scenes: list[Scene] = []
-        scene_frames: list[SceneFrame] = []
+        report_result: ReportPhaseResult | None = None
         ctx.reporter.begin_run(input_path)
         try:
-            with stage(ctx, "prepare_run_dir", "Preparing run directory") as st:
-                layout = create_run_layout(input_path=input_path, output_dir=output_dir)
-                ctx.layout = layout
-                st.set_detail(str(layout.run_dir))
+            layout = _prepare_run_layout(ctx, input_path=input_path, output_dir=output_dir)
             active_transcriber.set_log_path(layout.run_dir / "whisper-cpp.log")
 
-            with stage(ctx, "probe_media", "Probing media") as st:
-                media_asset = probe_media(input_path)
-                write_json(layout.metadata_path, asdict(media_asset))
-                st.set_detail(f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s")
+            media_asset = _probe_media_asset(ctx, input_path=input_path, layout=layout)
 
             asr_result = run_transcription_phase(
                 input_path=input_path,
@@ -170,7 +157,7 @@ def process_input(
                 diarization_speaker_count=diarization_speaker_count,
             )
 
-            report, scenes, scene_frames = run_report_phase(
+            report_result = run_report_phase(
                 input_path=input_path,
                 layout=layout,
                 media_asset=media_asset,
@@ -187,9 +174,9 @@ def process_input(
                 normalized_transcription=asr_result.normalized_transcription,
                 asr_pipeline=asr_result.asr_pipeline,
                 diarization=asr_result.diarization,
-                report=report,
-                scenes=scenes,
-                scene_frames=scene_frames,
+                report=report_result.report,
+                scenes=report_result.scenes,
+                scene_frames=report_result.scene_frames,
             )
             if diagnostics is None:  # pragma: no cover - run layout always exists on success
                 raise RuntimeError(
@@ -200,7 +187,7 @@ def process_input(
                 layout=layout,
                 media_asset=media_asset,
                 transcription=asr_result.transcription,
-                report=report,
+                report=report_result.report,
                 diagnostics=diagnostics,
             )
             ctx.reporter.complete_run(artifacts)
@@ -218,9 +205,25 @@ def process_input(
                 ),
                 asr_pipeline=asr_result.asr_pipeline if asr_result else None,
                 diarization=asr_result.diarization if asr_result else None,
-                report=report,
-                scenes=scenes,
-                scene_frames=scene_frames,
+                report=report_result.report if report_result else None,
+                scenes=report_result.scenes if report_result else (),
+                scene_frames=report_result.scene_frames if report_result else (),
                 suppress_errors=True,
             )
             raise
+
+
+def _prepare_run_layout(ctx: RunContext, *, input_path: Path, output_dir: Path | None) -> RunLayout:
+    with stage(ctx, "prepare_run_dir", "Preparing run directory") as st:
+        layout = create_run_layout(input_path=input_path, output_dir=output_dir)
+        ctx.layout = layout
+        st.set_detail(str(layout.run_dir))
+    return layout
+
+
+def _probe_media_asset(ctx: RunContext, *, input_path: Path, layout: RunLayout) -> MediaAsset:
+    with stage(ctx, "probe_media", "Probing media") as st:
+        media_asset = probe_media(input_path)
+        write_json(layout.metadata_path, asdict(media_asset))
+        st.set_detail(f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s")
+    return media_asset

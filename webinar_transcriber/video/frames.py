@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from webinar_transcriber.models import Scene
 
-    ProgressCallback = Callable[[float, int], None]
+    ProgressCallback = Callable[[int], None]
 
 REPRESENTATIVE_FRAME_OFFSET_SEC = 1.0
 
@@ -60,7 +60,7 @@ def extract_representative_frames(
                             f"{frame_timestamp_sec:.1f}s: {failure_detail}"
                         )
                     if progress_callback is not None:
-                        progress_callback(float(index), len(frames))
+                        progress_callback(index)
                     processed_scene_count = index
                     continue
 
@@ -78,14 +78,13 @@ def extract_representative_frames(
                     )
                 )
                 if progress_callback is not None:
-                    progress_callback(float(index), len(frames))
+                    progress_callback(index)
                 processed_scene_count = index
     except (MediaProcessingError, OSError, av.FFmpegError) as error:
         _report_frame_extraction_failures(
             scenes[processed_scene_count:],
             error,
             completed_offset=processed_scene_count,
-            frame_count=len(frames),
             progress_callback=progress_callback,
             warning_callback=warning_callback,
         )
@@ -98,7 +97,6 @@ def _report_frame_extraction_failures(
     error: Exception,
     *,
     completed_offset: int,
-    frame_count: int,
     progress_callback: ProgressCallback | None,
     warning_callback: Callable[[str], None] | None,
 ) -> None:
@@ -109,7 +107,7 @@ def _report_frame_extraction_failures(
                 f"Frame extraction failed for {scene.id} at {frame_timestamp_sec:.1f}s: {error}"
             )
         if progress_callback is not None:
-            progress_callback(float(index), frame_count)
+            progress_callback(index)
 
 
 def _extract_frame_from_container(
