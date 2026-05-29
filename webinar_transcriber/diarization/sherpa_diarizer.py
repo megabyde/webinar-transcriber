@@ -43,17 +43,13 @@ class _EmbeddingModel:
 SEGMENTATION_MODEL = _SegmentationModel(
     directory="sherpa-onnx-pyannote-segmentation-3-0",
     file_name="model.onnx",
-    archive_url=(
-        "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
-    ),
+    archive_url="https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
     archive_sha256="24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488",
     model_sha256="220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079",
 )
 EMBEDDING_MODEL = _EmbeddingModel(
     file_name="nemo_en_titanet_small.onnx",
-    url=(
-        "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/nemo_en_titanet_small.onnx"
-    ),
+    url="https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/nemo_en_titanet_small.onnx",
     sha256="ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e",
 )
 
@@ -83,10 +79,7 @@ if TYPE_CHECKING:
 
     class _NativeDiarizer(Protocol):
         def process(
-            self,
-            samples: np.ndarray,
-            *,
-            callback: Callable[[int, int], int] | None = None,
+            self, samples: np.ndarray, *, callback: Callable[[int, int], int] | None = None
         ) -> _DiarizationResult: ...
 
 
@@ -108,10 +101,7 @@ class SherpaOnnxDiarizer:
             return None
 
     def diarize(
-        self,
-        samples: np.ndarray,
-        *,
-        progress_callback: Callable[[int, int], None] | None = None,
+        self, samples: np.ndarray, *, progress_callback: Callable[[int, int], None] | None = None
     ) -> list[SpeakerTurn]:
         """Return speaker turns for normalized audio samples."""
         diarizer = cast("_NativeDiarizer", self._prepared_diarizer)
@@ -132,17 +122,11 @@ class SherpaOnnxDiarizer:
         paths = ensure_default_models(self._cache_dir)
         num_clusters = speaker_count or -1
         self._prepared_diarizer = self._build_diarizer(
-            sherpa_onnx,
-            paths=paths,
-            num_clusters=num_clusters,
+            sherpa_onnx, paths=paths, num_clusters=num_clusters
         )
 
     def _build_diarizer(
-        self,
-        sherpa_onnx: ModuleType,
-        *,
-        paths: DiarizationModelPaths,
-        num_clusters: int,
+        self, sherpa_onnx: ModuleType, *, paths: DiarizationModelPaths, num_clusters: int
     ) -> _NativeDiarizer:
         config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
             segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
@@ -183,9 +167,7 @@ class SherpaOnnxDiarizer:
 
         return [
             SpeakerTurn(
-                start_sec=float(item.start),
-                end_sec=float(item.end),
-                speaker=str(item.speaker),
+                start_sec=float(item.start), end_sec=float(item.end), speaker=str(item.speaker)
             )
             for item in result.sort_by_start_time()
             if float(item.end) > float(item.start)
@@ -197,9 +179,7 @@ def ensure_default_models(cache_dir: Path | None = None) -> DiarizationModelPath
     paths = default_model_paths(cache_dir)
     _ensure_segmentation_model(paths.segmentation_model)
     _ensure_file(
-        paths.embedding_model,
-        url=EMBEDDING_MODEL.url,
-        expected_sha256=EMBEDDING_MODEL.sha256,
+        paths.embedding_model, url=EMBEDDING_MODEL.url, expected_sha256=EMBEDDING_MODEL.sha256
     )
     return paths
 

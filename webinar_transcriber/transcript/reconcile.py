@@ -11,9 +11,7 @@ _MIN_DUPLICATE_OVERLAP_WORDS = 3
 _MAX_DUPLICATE_OVERLAP_WORDS = 80
 
 
-def reconcile_decoded_windows(
-    decoded_windows: list[DecodedWindow],
-) -> TranscriptionResult:
+def reconcile_decoded_windows(decoded_windows: list[DecodedWindow]) -> TranscriptionResult:
     """Merge decoded windows while keeping segment boundaries monotonic.
 
     Returns:
