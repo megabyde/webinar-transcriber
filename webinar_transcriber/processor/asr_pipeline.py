@@ -82,6 +82,7 @@ def run_asr_pipeline(
         AsrPipelineResult: The raw and normalized transcription outputs.
     """
     with stage(ctx, "prepare_asr", "Preparing ASR model") as st:
+        st.set_detail(transcriber.model_name)
         transcriber.prepare_model()
         st.set_detail(asr_runtime_detail(transcriber))
 
@@ -212,8 +213,8 @@ def _transcribe_windows_stage(
         ctx,
         "transcribe",
         "Transcribing audio",
-        total=media_duration_sec,
-        count_label="s",
+        total=float(len(windows)),
+        count_label="windows",
         detail="0 segments",
     ) as st:
         decoded_windows = transcriber.transcribe_inference_windows(
@@ -227,7 +228,7 @@ def _transcribe_windows_stage(
             layout.decoded_windows_path,
             [window.to_json() for window in decoded_windows],
         )
-        st.advance_to(media_duration_sec)
+        st.advance_to(float(len(windows)))
         st.set_detail(
             transcription_stage_detail(
                 segment_count=sum(len(window.segments) for window in decoded_windows),

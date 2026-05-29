@@ -39,6 +39,7 @@ class StageHandle:
     label: str
     detail: str | None = None
     start_sec: float = 0.0
+    detail_callback: Callable[[str], None] | None = field(default=None, repr=False)
 
     def elapsed_sec(self) -> float:
         """Return the current elapsed stage time in seconds."""
@@ -47,6 +48,8 @@ class StageHandle:
     def set_detail(self, detail: str) -> None:
         """Set the final status detail reported when the stage finishes."""
         self.detail = detail
+        if self.detail_callback is not None:
+            self.detail_callback(detail)
 
 
 @dataclass
@@ -103,7 +106,19 @@ def stage(
     ctx: RunContext, key: str, label: str, *, indeterminate: bool = True
 ) -> Iterator[StageHandle]:
     """Record one stage's timing and lifecycle through a context manager."""
-    handle = StageHandle(key=key, label=label, start_sec=perf_counter())
+    detail_callback: Callable[[str], None] | None = None
+    if indeterminate:
+
+        def update_detail(detail: str) -> None:
+            ctx.reporter.stage_detail_updated(key, label, detail=detail)
+
+        detail_callback = update_detail
+    handle = StageHandle(
+        key=key,
+        label=label,
+        start_sec=perf_counter(),
+        detail_callback=detail_callback,
+    )
     ctx.current_stage = key
     if indeterminate:
         ctx.reporter.stage_started(key, label)
@@ -192,7 +207,6 @@ def llm_stage_label(
 def llm_report_detail(
     *,
     section_count: int,
-    tldr_count: int,
     title_count: int,
     summary_count: int,
     action_item_count: int,
@@ -202,7 +216,6 @@ def llm_report_detail(
     return detail_label(
         _count_label_if_positive(summary_count, "summary bullet"),
         _count_label_if_positive(action_item_count, "action item"),
-        _count_label_if_positive(tldr_count, "TL;DR"),
         _count_label_if_positive(title_update_count, "title updated", plural="titles updated"),
     )
 

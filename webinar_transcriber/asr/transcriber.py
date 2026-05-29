@@ -214,7 +214,7 @@ class WhisperCppTranscriber:
         windows: list[InferenceWindow],
         *,
         language: str | None = None,
-        progress_callback: Callable[[float, int], None] | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
         warning_callback: Callable[[str], None] | None = None,
     ) -> list[DecodedWindow]:
         """Decode ordered inference windows into transcript segments.
@@ -234,7 +234,7 @@ class WhisperCppTranscriber:
         decoded_segment_count = 0
         previous_region_index: int | None = None
 
-        for window in ordered_windows:
+        for window_index, window in enumerate(ordered_windows, start=1):
             if forced_language is None and previous_region_index != window.region_index:
                 language_hint = None
             decoded_window = self._transcribe_window(
@@ -253,7 +253,7 @@ class WhisperCppTranscriber:
             previous_region_index = window.region_index
             carryover_prompt = next_carryover
             if progress_callback is not None:
-                progress_callback(window.end_sec, decoded_segment_count)
+                progress_callback(window_index, decoded_segment_count)
         return decoded_windows
 
     def close(self) -> None:

@@ -19,6 +19,9 @@ class BaseStageReporter:
     def stage_started(self, stage_key: str, label: str) -> None:
         """Ignore a stage-start event."""
 
+    def stage_detail_updated(self, stage_key: str, label: str, *, detail: str) -> None:
+        """Ignore an indeterminate stage-detail update."""
+
     def progress_started(
         self,
         stage_key: str,

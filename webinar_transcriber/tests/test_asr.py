@@ -256,7 +256,7 @@ class TestWhisperCppTranscriber:
             [FakeSegment(0, 100, "agenda review")],
             [FakeSegment(0, 100, "agenda review follow up")],
         ]
-        progress_updates: list[float] = []
+        progress_updates: list[int] = []
 
         transcriber = WhisperCppTranscriber(threads=6)
         decoded_windows = transcriber.transcribe_inference_windows(
@@ -265,15 +265,15 @@ class TestWhisperCppTranscriber:
                 InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
                 InferenceWindow(id="window-2", region_index=0, start_sec=1.0, end_sec=2.0),
             ],
-            progress_callback=lambda completed_sec, _segment_count: progress_updates.append(
-                completed_sec
+            progress_callback=lambda completed_windows, _segment_count: progress_updates.append(
+                completed_windows
             ),
         )
 
         assert [w.detected_language for w in decoded_windows] == ["ru", "ru"]
         assert [w.text for w in decoded_windows] == ["agenda review", "agenda review follow up"]
         assert [w.input_prompt for w in decoded_windows] == [None, "agenda review"]
-        assert progress_updates == [1.0, 2.0]
+        assert progress_updates == [1, 2]
         assert transcriber.device_name == "cuda"
         assert len(fake_model.auto_detect_calls) == 1
         np.testing.assert_array_equal(

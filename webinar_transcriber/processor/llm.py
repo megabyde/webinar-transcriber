@@ -103,7 +103,6 @@ def maybe_polish_report(
             st.set_detail(
                 llm_report_detail(
                     section_count=polish_plan.section_count,
-                    tldr_count=len(section_result.section_tldrs),
                     title_count=len(metadata_result.section_titles),
                     summary_count=len(metadata_result.summary),
                     action_item_count=len(metadata_result.action_items),

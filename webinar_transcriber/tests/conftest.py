@@ -295,15 +295,15 @@ class FakeTranscriber(WhisperCppTranscriber):
         windows: list[InferenceWindow],
         *,
         language: str | None = None,
-        progress_callback: Callable[[float, int], None] | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
         warning_callback: Callable[[str], None] | None = None,
     ) -> list[DecodedWindow]:
         del audio_samples, warning_callback
         self.language_hints.append(language)
         self.windows_seen = list(windows)
         if progress_callback is not None:
-            for window in windows:
-                progress_callback(window.end_sec, len(self._segments))
+            for index, _window in enumerate(windows, start=1):
+                progress_callback(index, len(self._segments))
         return [
             DecodedWindow(
                 window=window,

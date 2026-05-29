@@ -270,8 +270,8 @@ class TestProcessInput:
         assert len(vad_finished) == 1
         assert vad_finished[0].startswith("1 region | RTF ")
         assert ("plan_windows", "1 window") in reporter.finished
-        assert ("start", "transcribe", 6.0, "0 segments") in reporter.progress
-        assert ("advance", "transcribe", 6.0, "2 segments") in reporter.progress
+        assert ("start", "transcribe", 1.0, "0 segments") in reporter.progress
+        assert ("advance", "transcribe", 1.0, "2 segments") in reporter.progress
 
     def test_diarizes_transcript_and_report_when_enabled(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -648,12 +648,12 @@ class TestProcessInput:
                 windows: list[InferenceWindow],
                 *,
                 language: str | None = None,
-                progress_callback: Callable[[float, int], None] | None = None,
+                progress_callback: Callable[[int, int], None] | None = None,
                 warning_callback: Callable[[str], None] | None = None,
             ) -> list[DecodedWindow]:
                 del audio_samples, language, warning_callback
                 if progress_callback is not None:
-                    progress_callback(windows[0].end_sec, 1)
+                    progress_callback(1, 1)
                 return [
                     DecodedWindow(
                         window=windows[0],
@@ -1040,7 +1040,7 @@ class TestProcessInputLlm:
                 windows: list[InferenceWindow],
                 *,
                 language: str | None = None,
-                progress_callback: Callable[[float, int], None] | None = None,
+                progress_callback: Callable[[int, int], None] | None = None,
                 warning_callback: Callable[[str], None] | None = None,
             ) -> list[DecodedWindow]:
                 del audio_samples, language, warning_callback
@@ -1060,7 +1060,7 @@ class TestProcessInputLlm:
                     ],
                 ]
                 if progress_callback is not None:
-                    progress_callback(windows[-1].end_sec, 2)
+                    progress_callback(len(windows), 2)
                 return [
                     DecodedWindow(
                         window=window,

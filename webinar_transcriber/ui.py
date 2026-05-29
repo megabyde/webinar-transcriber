@@ -69,11 +69,21 @@ class RichStageReporter(BaseStageReporter):
         self._stop_active_display()
         self._stage_count += 1
         self._set_active_stage(stage_key, label)
-        status = self._console.status(
-            f"[bold blue][{self._stage_count}][/bold blue] {label}", spinner="dots"
-        )
+        status = self._console.status(self._stage_status_text(label), spinner="dots")
         self._active_display = _ActiveStatusDisplay(status=status)
         status.start()
+
+    def stage_detail_updated(self, stage_key: str, label: str, *, detail: str) -> None:
+        """Update an active indeterminate stage spinner."""
+        active_stage = self._active_stage
+        active_display = self._active_display
+        if (
+            active_stage is None
+            or active_stage.key != stage_key
+            or not isinstance(active_display, _ActiveStatusDisplay)
+        ):
+            return
+        active_display.status.update(self._stage_status_text(label, detail=detail))
 
     def progress_started(
         self,
@@ -214,6 +224,10 @@ class RichStageReporter(BaseStageReporter):
 
     def _clear_active_stage(self) -> None:
         self._active_stage = None
+
+    def _stage_status_text(self, label: str, *, detail: str | None = None) -> str:
+        detail_suffix = f" - {detail}" if detail else ""
+        return f"[bold blue][{self._stage_count}][/bold blue] {label}{detail_suffix}"
 
 
 def _count_text(*, completed: float, total: float | None, count_label: object) -> str | None:
