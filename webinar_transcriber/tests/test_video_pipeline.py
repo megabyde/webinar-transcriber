@@ -284,8 +284,8 @@ class TestFrameExtraction:
         assert [frame.scene_id for frame in frames] == ["scene-1"]
         assert progress_ticks == [1, 1]
         assert warnings == [
-            f"Frame extraction failed for scene-2 at 3.0s: PyAV did not write "
-            f"{tmp_path / 'frames' / 'scene-2.png'}"
+            f"Frame extraction failed for scene-2 at 3.0s: "
+            f"PyAV did not write {tmp_path / 'frames' / 'scene-2.png'}"
         ]
 
     def test_extract_representative_frames_uses_first_stable_frame(

@@ -307,9 +307,7 @@ def average_duration_sec(items: Sequence[TimelineSpan]) -> float | None:
     return sum(item.duration_sec for item in items) / len(items) if items else None
 
 
-def plan_inference_windows(
-    speech_regions: list[SpeechRegion],
-) -> list[InferenceWindow]:
+def plan_inference_windows(speech_regions: list[SpeechRegion]) -> list[InferenceWindow]:
     """Plan bounded Whisper inference windows from speech regions.
 
     Returns:

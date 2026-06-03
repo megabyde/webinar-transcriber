@@ -32,11 +32,7 @@ from webinar_transcriber.models import (
     TranscriptSegment,
 )
 from webinar_transcriber.paths import RunLayout
-from webinar_transcriber.processor import (
-    ProcessArtifacts,
-    RunContext,
-    TranscriptionConfig,
-)
+from webinar_transcriber.processor import ProcessArtifacts, RunContext, TranscriptionConfig
 from webinar_transcriber.processor import process_input as _process_input
 from webinar_transcriber.processor.asr_pipeline import plan_inference_windows
 from webinar_transcriber.processor.support import (

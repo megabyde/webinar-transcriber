@@ -10,10 +10,7 @@ from typing import TYPE_CHECKING, cast
 
 from webinar_transcriber.text_utils import split_paragraph_blocks
 
-from .contracts import (
-    LLMConfigurationError,
-    LLMProcessingError,
-)
+from .contracts import LLMConfigurationError, LLMProcessingError
 from .prompts import REPORT_SECTION_EXCERPT_LIMIT
 
 _SCHEMA_LABELS = {
