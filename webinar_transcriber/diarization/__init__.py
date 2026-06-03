@@ -23,14 +23,12 @@ __all__ = [
 
 
 def assign_speakers(
-    segments: list[TranscriptSegment],
-    turns: list[SpeakerTurn],
+    segments: list[TranscriptSegment], turns: list[SpeakerTurn]
 ) -> list[TranscriptSegment]:
     """Return copies of transcript segments labeled by maximum speaker-turn overlap."""
     ordered_turns = sorted(turns, key=lambda turn: (turn.start_sec, turn.end_sec))
     indexed_segments = sorted(
-        enumerate(segments),
-        key=lambda item: (item[1].start_sec, item[1].end_sec),
+        enumerate(segments), key=lambda item: (item[1].start_sec, item[1].end_sec)
     )
     assigned = list(segments)
     first_relevant_turn_index = 0
@@ -43,17 +41,13 @@ def assign_speakers(
 
         turn = _best_turn(segment, ordered_turns, start_index=first_relevant_turn_index)
         assigned[segment_index] = replace(
-            segment,
-            speaker=turn.speaker if turn is not None else None,
+            segment, speaker=turn.speaker if turn is not None else None
         )
     return assigned
 
 
 def _best_turn(
-    segment: TranscriptSegment,
-    turns: list[SpeakerTurn],
-    *,
-    start_index: int,
+    segment: TranscriptSegment, turns: list[SpeakerTurn], *, start_index: int
 ) -> SpeakerTurn | None:
     best_turn: SpeakerTurn | None = None
     best_key: tuple[float, float] | None = None

@@ -9,13 +9,13 @@ from .config import (
     WHISPER_CPP_MODEL_FILENAME,
     default_asr_threads,
 )
-from .transcriber import ASRProcessingError, WhisperCppTranscriber, device_name_from_system_info
+from .transcriber import AsrProcessingError, WhisperCppTranscriber, device_name_from_system_info
 
 __all__ = [
     "ASR_BACKEND_NAME",
     "WHISPER_CPP_MODEL_EXAMPLE",
     "WHISPER_CPP_MODEL_FILENAME",
-    "ASRProcessingError",
+    "AsrProcessingError",
     "WhisperCppTranscriber",
     "build_prompt_carryover",
     "default_asr_threads",

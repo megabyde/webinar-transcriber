@@ -6,7 +6,7 @@ from dataclasses import asdict
 from typing import TYPE_CHECKING, Literal
 
 from webinar_transcriber.models import AsrPipelineDiagnostics, Diagnostics, LlmDiagnostics
-from webinar_transcriber.processor.support import write_json
+from webinar_transcriber.processor.stages import write_json
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
         SceneFrame,
         TranscriptionResult,
     )
-    from webinar_transcriber.processor.types import RunContext
+    from webinar_transcriber.processor import RunContext
 
 
 def build_diagnostics(

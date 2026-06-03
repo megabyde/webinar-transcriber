@@ -11,16 +11,16 @@ if TYPE_CHECKING:
     from webinar_transcriber.models import ReportDocument
 
 
-class LLMConfigurationError(RuntimeError):
+class LlmConfigurationError(RuntimeError):
     """Raised when required LLM configuration is missing."""
 
 
-class LLMProcessingError(RuntimeError):
+class LlmProcessingError(RuntimeError):
     """Raised when the LLM response cannot be validated or applied."""
 
 
 @dataclass(frozen=True)
-class LLMSectionPolishResult:
+class LlmSectionPolishResult:
     """Validated result from the section-text polishing phase."""
 
     section_tldrs: dict[str, str]
@@ -30,7 +30,7 @@ class LLMSectionPolishResult:
 
 
 @dataclass(frozen=True)
-class LLMReportMetadataResult:
+class LlmReportMetadataResult:
     """Validated result from the final report metadata polishing phase."""
 
     summary: list[str]
@@ -57,14 +57,14 @@ class SectionPolishOutputs:
 
 
 @dataclass(frozen=True)
-class LLMReportPolishPlan:
+class LlmReportPolishPlan:
     """Execution plan for report polishing progress/reporting."""
 
     section_count: int
     worker_count: int
 
 
-class LLMProcessor(Protocol):
+class LlmProcessor(Protocol):
     """Protocol for optional transcript/report enhancement backends."""
 
     @property
@@ -77,13 +77,13 @@ class LLMProcessor(Protocol):
 
     def polish_report_sections_with_progress(
         self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
-    ) -> LLMSectionPolishResult:
+    ) -> LlmSectionPolishResult:
         """Return polished section text with per-section progress updates."""
 
     def polish_report_metadata(
         self, report: ReportDocument, *, section_transcripts: dict[str, str]
-    ) -> LLMReportMetadataResult:
+    ) -> LlmReportMetadataResult:
         """Return polished summary, action items, and section titles."""
 
-    def report_polish_plan(self, report: ReportDocument) -> LLMReportPolishPlan:
+    def report_polish_plan(self, report: ReportDocument) -> LlmReportPolishPlan:
         """Return concurrency details for report polishing."""

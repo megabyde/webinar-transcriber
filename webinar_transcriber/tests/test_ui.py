@@ -7,46 +7,16 @@ from typing import TYPE_CHECKING, cast
 import pytest
 from rich.console import Console
 
-from webinar_transcriber.reporter import BaseStageReporter
-from webinar_transcriber.ui import RichStageReporter, _count_text, _rate_text
+from webinar_transcriber.ui import StageReporter
 
 if TYPE_CHECKING:
     from webinar_transcriber.processor import ProcessArtifacts
 
 
-class TestFormatHelpers:
-    def test_count_text_renders_frame_counter(self) -> None:
-        count_text = _count_text(completed=74.0, total=100.0, count_label="frames")
-
-        assert count_text == "74/100 frames"
-
-    def test_count_text_renders_compact_seconds_suffix(self) -> None:
-        count_text = _count_text(completed=74.0, total=100.0, count_label="s")
-
-        assert count_text == "74/100s"
-
-    def test_rate_text_renders_frames_per_second(self) -> None:
-        rate_text = _rate_text(completed=74.0, elapsed_sec=1.0, rate_label="frames/s")
-
-        assert rate_text == "74.0 frames/s"
-
-    def test_rate_text_hides_empty_values(self) -> None:
-        rate_text = _rate_text(completed=0.0, elapsed_sec=1.0, rate_label="frames/s")
-
-        assert rate_text is None
-
-    def test_count_and_rate_helpers_hide_empty_values(self) -> None:
-        formatted_count = _count_text(completed=3.0, total=None, count_label="frames")
-        rate_text = _rate_text(completed=3.0, elapsed_sec=0.0, rate_label="frames/s")
-
-        assert formatted_count is None
-        assert rate_text is None
-
-
-class TestRichStageReporter:
+class TestStageReporter:
     def test_begin_run_prints_input_name(self) -> None:
         console = Console(record=True, width=100)
-        reporter = RichStageReporter(console=console)
+        reporter = StageReporter(console=console)
 
         reporter.begin_run(Path("demo.wav"))
 
@@ -54,7 +24,7 @@ class TestRichStageReporter:
 
     def test_complete_run_renders_completion_panel(self) -> None:
         console = Console(record=True, width=100)
-        reporter = RichStageReporter(console=console)
+        reporter = StageReporter(console=console)
         artifacts = cast(
             "ProcessArtifacts",
             SimpleNamespace(
@@ -88,174 +58,92 @@ class TestRichStageReporter:
         assert "Warnings" in output
         assert "1" in output
 
-    def test_stage_started_records_elapsed_time(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_track_indeterminate_records_elapsed_time(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         console = Console(record=True, width=100)
-        reporter = RichStageReporter(console=console)
+        reporter = StageReporter(console=console)
         perf_values = iter([10.0, 13.5])
         monkeypatch.setattr("webinar_transcriber.ui.perf_counter", lambda: next(perf_values))
 
-        reporter.stage_started("llm_report", "Polishing report")
-        reporter.stage_finished("llm_report", "Polishing report")
+        with reporter.track("llm_report", "Polishing report"):
+            pass
 
-        assert console.export_text() == "✓ Polishing report (3.50s)\n"
+        assert console.export_text().strip() == "✓ Polishing report (3.50s)"
 
-    def test_stage_detail_update_refreshes_active_spinner(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        class FakeStatus:
-            def __init__(self, text: str) -> None:
-                self.text = text
-                self.updates: list[str] = []
-
-            def start(self) -> None:
-                return None
-
-            def stop(self) -> None:
-                return None
-
-            def update(self, status: str) -> None:
-                self.updates.append(status)
-
-        statuses: list[FakeStatus] = []
-
-        def fake_status(text: str, *, spinner: str) -> FakeStatus:
-            assert spinner == "dots"
-            status = FakeStatus(text)
-            statuses.append(status)
-            return status
-
+    def test_track_records_detail_on_finish_line(self) -> None:
         console = Console(record=True, width=100)
-        monkeypatch.setattr(console, "status", fake_status)
-        reporter = RichStageReporter(console=console)
+        reporter = StageReporter(console=console)
 
-        reporter.stage_started("prepare_asr", "Preparing ASR model")
-        reporter.stage_detail_updated(
-            "prepare_asr", "Preparing ASR model", detail="large-v3-turbo | metal"
-        )
+        with reporter.track("prepare_asr", "Preparing ASR model") as handle:
+            handle.update(detail="large-v3-turbo | metal")
 
-        assert statuses[0].text == "[bold blue][1][/bold blue] Preparing ASR model"
-        assert statuses[0].updates == [
-            "[bold blue][1][/bold blue] Preparing ASR model - large-v3-turbo | metal"
-        ]
+        output = console.export_text()
+        assert "Preparing ASR model - large-v3-turbo | metal" in output
 
-        reporter.stage_detail_updated("other_stage", "Other stage", detail="ignored")
-        assert statuses[0].updates == [
-            "[bold blue][1][/bold blue] Preparing ASR model - large-v3-turbo | metal"
-        ]
-
-        reporter.stage_finished("prepare_asr", "Preparing ASR model")
-        assert console.export_text() == "✓ Preparing ASR model (0.00s)\n"
-
-    def test_progress_started_initializes_progress_display(
-        self, monkeypatch: pytest.MonkeyPatch, fake_rich_progress
-    ) -> None:
-        monkeypatch.setattr("webinar_transcriber.ui.perf_counter", lambda: 10.0)
-        reporter = RichStageReporter(console=Console(width=100))
-
-        reporter.progress_started(
-            "extract_frames",
-            "Extracting frames",
-            total=0.0,
-            count_label="frames",
-            rate_label="frames/s",
-            detail="scene-1",
-        )
-
-        progress = fake_rich_progress[0]
-        assert progress.started
-        assert progress.added_task == (
-            1.0,
-            {
-                "count_label": "frames",
-                "count_text": "0/1 frames",
-                "rate_label": "frames/s",
-                "rate_text": "",
-                "detail_text": "scene-1",
-            },
-        )
-
-    def test_progress_updates_compute_rate_and_preserve_detail_in_progress_adapter(
-        self, monkeypatch: pytest.MonkeyPatch, fake_rich_progress
-    ) -> None:
-        perf_values = iter([22.0, 23.0, 25.0])
-        monkeypatch.setattr("webinar_transcriber.ui.perf_counter", lambda: next(perf_values))
-
+    def test_track_determinate_records_progress_advances(self) -> None:
         console = Console(record=True, width=100)
-        reporter = RichStageReporter(console=console)
-        reporter.progress_started(
-            "extract_frames",
-            "Extracting frames",
-            total=4.0,
-            count_label="frames",
-            rate_label="frames/s",
-        )
-        reporter.progress_advanced("extract_frames", advance=2.0, detail="scene-2")
+        reporter = StageReporter(console=console)
 
-        progress = fake_rich_progress[0]
-        task = progress.tasks[0]
-        assert task.fields["detail_text"] == "scene-2"
-        assert task.fields["count_text"] == "2/4 frames"
-        assert task.fields["rate_text"] == "2.0 frames/s"
+        with reporter.track("extract_frames", "Extracting frames", total=4.0) as handle:
+            handle.update(advance=2.0, detail="scene-2")
+            assert handle.completed == 2.0
+            assert handle.detail == "scene-2"
 
-        reporter.stage_finished("extract_frames", "Extracting frames", detail="done")
+        assert "Extracting frames - scene-2" in console.export_text()
 
-        assert progress.stopped
-        assert console.export_text() == "✓ Extracting frames - done (3.00s)\n"
+    def test_update_with_completed_advances_relative_to_current(self) -> None:
+        reporter = StageReporter(console=Console(quiet=True))
 
-    def test_warn_and_interrupted_render_messages(self) -> None:
+        with reporter.track("vad", "Detecting", total=10.0) as handle:
+            handle.update(completed=4.0)
+            handle.update(completed=4.0)  # no-op advance
+            handle.update(completed=7.0)
+
+            assert handle.completed == 7.0
+
+    def test_update_with_zero_advance_keeps_detail_in_sync(self) -> None:
+        reporter = StageReporter(console=Console(quiet=True))
+
+        with reporter.track("vad", "Detecting", total=10.0) as handle:
+            handle.update(completed=10.0, detail="done")
+            handle.update(detail="finalized")
+
+            assert handle.completed == 10.0
+            assert handle.detail == "finalized"
+
+    def test_warn_renders_messages(self) -> None:
         console = Console(record=True, width=100)
-        reporter = RichStageReporter(console=console)
+        reporter = StageReporter(console=console)
 
-        reporter.stage_started("probe_media", "Probing media")
         reporter.warn("ffprobe returned a warning")
-        reporter.stage_started("detect_scenes", "Detecting scenes")
+
+        assert console.export_text() == "! ffprobe returned a warning\n"
+
+    def test_interrupted_during_active_stage_names_it(self) -> None:
+        console = Console(record=True, width=100)
+        reporter = StageReporter(console=console)
+
+        try:
+            with reporter.track("detect_scenes", "Detecting scenes"):
+                raise KeyboardInterrupt
+        except KeyboardInterrupt:
+            reporter.interrupted()
+
+        output = console.export_text()
+        assert "Interrupted during detecting scenes." in output
+        # finish line should not be printed on exception
+        assert "✓ Detecting scenes" not in output
+
+    def test_interrupted_without_active_stage_omits_suffix(self) -> None:
+        console = Console(record=True, width=100)
+        reporter = StageReporter(console=console)
+
         reporter.interrupted()
 
-        assert console.export_text() == (
-            "! ffprobe returned a warning\n✗ Interrupted during detecting scenes.\n"
-        )
+        assert console.export_text() == "✗ Interrupted.\n"
 
-    def test_progress_advanced_ignores_inactive_or_mismatched_stage_keys(
-        self, fake_rich_progress
-    ) -> None:
-        reporter = RichStageReporter(console=Console(width=100))
+    def test_reset_active_display_is_safe_when_idle(self) -> None:
+        reporter = StageReporter(console=Console(quiet=True))
 
-        reporter.progress_advanced("extract_frames", advance=1.0)
-        reporter.progress_started("extract_frames", "Extracting frames", total=1.0)
-        progress = fake_rich_progress[0]
-
-        reporter.progress_advanced("detect_scenes", advance=1.0)
-
-        assert progress.tasks[0].completed == 0
-        progress.update.assert_not_called()
-
-    def test_progress_advanced_ignores_indeterminate_stage(self) -> None:
-        console = Console(record=True, width=100)
-        reporter = RichStageReporter(console=console)
-        reporter.stage_started("extract_frames", "Extracting frames")
-
-        reporter.progress_advanced("extract_frames", advance=1.0)
-
-        reporter.stage_finished("extract_frames", "Extracting frames")
-        assert console.export_text() == "✓ Extracting frames (0.00s)\n"
-
-    def test_stage_finished_without_matching_active_event_reports_zero_elapsed(
-        self,
-    ) -> None:
-        console = Console(record=True, width=100)
-        reporter = RichStageReporter(console=console)
-
-        reporter.stage_started("probe_media", "Probing media")
-        reporter.stage_finished("other_stage", "Other stage")
-
-        assert console.export_text() == "✓ Other stage (0.00s)\n"
-
-
-class TestBaseStageReporter:
-    def test_warning_and_interrupt_noops_accept_calls(self) -> None:
-        reporter = BaseStageReporter()
-
-        reporter.warn("warning")
-        reporter.interrupted()
-        reporter.reset_active_display()
-        reporter.stage_detail_updated("prepare_asr", "Preparing ASR model", detail="model")
+        reporter.reset_active_display()  # no active display; should not error

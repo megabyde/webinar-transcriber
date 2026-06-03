@@ -33,11 +33,10 @@ cache-permission failures.
 The package intentionally avoids deep nesting.
 
 - `webinar_transcriber/cli.py`: Click CLI entrypoints
-- `webinar_transcriber/processor/`: high-level orchestration and processor support helpers
-- `webinar_transcriber/processor/asr_pipeline.py`: ASR pipeline orchestration and inference-window
-  planning
-- `webinar_transcriber/processor/llm_types.py`: optional LLM runtime state shared by processor
-  helpers
+- `webinar_transcriber/processor/__init__.py`: pipeline orchestration, run-context dataclasses, and
+  stage-level helpers (`_run_asr_pipeline`, `_run_report_phase`, `_maybe_polish_report`)
+- `webinar_transcriber/processor/stages.py`: pure helpers (inference-window planning, JSON writer,
+  duration averaging)
 - `webinar_transcriber/asr/`: ASR backend selection, carryover policy, and the `pywhispercpp`
   wrapper
 - `webinar_transcriber/diarization/`: optional local speaker diarization through `sherpa-onnx`
@@ -48,8 +47,8 @@ The package intentionally avoids deep nesting.
   helpers
 - `webinar_transcriber/transcript/`: transcript normalization and window reconciliation
 - `webinar_transcriber/structure.py`: transcript-scene alignment and report heuristics
-- `webinar_transcriber/reporter.py`: reporter protocol and no-op implementation
-- `webinar_transcriber/ui.py`: Rich progress reporting
+- `webinar_transcriber/ui.py`: `StageReporter` Rich-backed progress reporter (single `track()`
+  context for both indeterminate and determinate stages)
 - `webinar_transcriber/video/`: scene detection and frame extraction
 - `webinar_transcriber/export/`: Markdown, DOCX, and JSON writers
 - `webinar_transcriber/tests/`: flat test suite with tiny committed fixtures under `fixtures/`
@@ -105,6 +104,8 @@ The package intentionally avoids deep nesting.
   meaning obvious.
 - In ASR code and artifacts, use `speech region` for VAD/planning inputs and `window` for Whisper
   decode units; avoid `chunk` for ASR concepts.
+- Treat acronyms as words in PascalCase identifiers: `LlmProcessor`, `AsrPipelineDiagnostics`,
+  `WhisperCppTranscriber`. Constants stay SCREAMING_SNAKE: `ASR_BACKEND_NAME`, `LLM_PROVIDER_ENV`.
 
 ## Open Work
 

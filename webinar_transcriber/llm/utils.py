@@ -10,13 +10,10 @@ from typing import TYPE_CHECKING, cast
 
 from webinar_transcriber.text_utils import split_paragraph_blocks
 
-from .contracts import LLMConfigurationError, LLMProcessingError
+from .contracts import LlmConfigurationError, LlmProcessingError
 from .prompts import REPORT_SECTION_EXCERPT_LIMIT
 
-_SCHEMA_LABELS = {
-    "SectionTextResponse": "Section polish",
-    "ReportPolishResponse": "Report polish",
-}
+_SCHEMA_LABELS = {"SectionTextResponse": "Section polish", "ReportPolishResponse": "Report polish"}
 if TYPE_CHECKING:
     from webinar_transcriber.llm.schemas import ReportSectionUpdate
     from webinar_transcriber.models import ReportDocument
@@ -29,7 +26,7 @@ def required_provider_env(*, api_key_env: str, model_env: str) -> tuple[str, str
         tuple[str, str]: The configured API key and model name.
 
     Raises:
-        LLMConfigurationError: If either required environment variable is missing.
+        LlmConfigurationError: If either required environment variable is missing.
     """
     api_key = os.environ.get(api_key_env)
     model_name = os.environ.get(model_env)
@@ -40,7 +37,7 @@ def required_provider_env(*, api_key_env: str, model_env: str) -> tuple[str, str
     ]
     if missing_vars:
         missing = ", ".join(missing_vars)
-        raise LLMConfigurationError(f"Missing required LLM environment variables: {missing}.")
+        raise LlmConfigurationError(f"Missing required LLM environment variables: {missing}.")
     return cast("tuple[str, str]", (api_key, model_name))
 
 
@@ -127,19 +124,19 @@ def validated_section_titles(
         dict[str, str]: Cleaned replacement titles keyed by section ID.
 
     Raises:
-        LLMProcessingError: If the response references invalid, duplicate, or empty titles.
+        LlmProcessingError: If the response references invalid, duplicate, or empty titles.
     """
     valid_ids = {section.id for section in report.sections}
     polished_titles: dict[str, str] = {}
 
     for item in section_titles:
         if item.id not in valid_ids:
-            raise LLMProcessingError("Report polish response returned an unknown section ID.")
+            raise LlmProcessingError("Report polish response returned an unknown section ID.")
         if item.id in polished_titles:
-            raise LLMProcessingError("Report polish response returned duplicate section IDs.")
+            raise LlmProcessingError("Report polish response returned duplicate section IDs.")
         cleaned_title = item.title.strip()
         if not cleaned_title:
-            raise LLMProcessingError("Report polish response returned an empty section title.")
+            raise LlmProcessingError("Report polish response returned an empty section title.")
         polished_titles[item.id] = cleaned_title
 
     return polished_titles

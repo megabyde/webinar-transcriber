@@ -124,11 +124,7 @@ class TestNormalizedAudio:
             calls: list[tuple[Path, Path, str]] = []
 
             def fake_write(
-                input_path: Path,
-                output_path: Path,
-                *,
-                audio_format: str,
-                progress_callback=None,
+                input_path: Path, output_path: Path, *, audio_format: str, progress_callback=None
             ) -> Path:
                 del progress_callback
                 calls.append((input_path, output_path, audio_format))
@@ -165,8 +161,7 @@ class TestNormalizedAudio:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setattr(
-            "webinar_transcriber.normalized_audio.av.open",
-            Mock(side_effect=OSError("bad open")),
+            "webinar_transcriber.normalized_audio.av.open", Mock(side_effect=OSError("bad open"))
         )
 
         with pytest.raises(MediaProcessingError, match=r"Could not open .*bad open"):
@@ -278,10 +273,7 @@ class TestNormalizedAudio:
         with patch(
             "webinar_transcriber.segmentation.importlib.import_module", side_effect=ImportError
         ):
-            regions = _silero_speech_regions(
-                np.zeros(16_000, dtype=np.float32),
-                threads=1,
-            )
+            regions = _silero_speech_regions(np.zeros(16_000, dtype=np.float32), threads=1)
 
         assert regions is None
 
@@ -295,8 +287,7 @@ class TestNormalizedAudio:
         )
 
         monkeypatch.setattr(
-            "webinar_transcriber.segmentation.importlib.import_module",
-            fake_import_module,
+            "webinar_transcriber.segmentation.importlib.import_module", fake_import_module
         )
 
         regions = _silero_speech_regions(
@@ -330,8 +321,7 @@ class TestNormalizedAudio:
             segments=segments, window_size=8_000
         )
         monkeypatch.setattr(
-            "webinar_transcriber.segmentation.importlib.import_module",
-            fake_import_module,
+            "webinar_transcriber.segmentation.importlib.import_module", fake_import_module
         )
 
         regions = _silero_speech_regions(
@@ -353,18 +343,14 @@ class TestNormalizedAudio:
     ) -> None:
         fake_import_module, _fake_sherpa = fake_sherpa_import_module()
         monkeypatch.setattr(
-            "webinar_transcriber.segmentation.importlib.import_module",
-            fake_import_module,
+            "webinar_transcriber.segmentation.importlib.import_module", fake_import_module
         )
         monkeypatch.setattr(
             "webinar_transcriber.segmentation._silero_vad_model_path",
             Mock(side_effect=OSError("model unavailable")),
         )
 
-        regions = _silero_speech_regions(
-            np.zeros(1_600, dtype=np.float32),
-            threads=1,
-        )
+        regions = _silero_speech_regions(np.zeros(1_600, dtype=np.float32), threads=1)
 
         assert regions is None
 
@@ -373,14 +359,10 @@ class TestNormalizedAudio:
     ) -> None:
         fake_import_module, _fake_sherpa = fake_sherpa_import_module(window_size=0)
         monkeypatch.setattr(
-            "webinar_transcriber.segmentation.importlib.import_module",
-            fake_import_module,
+            "webinar_transcriber.segmentation.importlib.import_module", fake_import_module
         )
 
-        regions = _silero_speech_regions(
-            np.zeros(1_600, dtype=np.float32),
-            threads=1,
-        )
+        regions = _silero_speech_regions(np.zeros(1_600, dtype=np.float32), threads=1)
 
         assert regions is None
 
@@ -397,14 +379,10 @@ class TestNormalizedAudio:
         )
 
         monkeypatch.setattr(
-            "webinar_transcriber.segmentation.importlib.import_module",
-            fake_import_module,
+            "webinar_transcriber.segmentation.importlib.import_module", fake_import_module
         )
 
-        regions = _silero_speech_regions(
-            np.zeros(3_000, dtype=np.float32),
-            threads=1,
-        )
+        regions = _silero_speech_regions(np.zeros(3_000, dtype=np.float32), threads=1)
 
         assert regions is not None
         assert regions == [SpeechRegion(start_sec=0.0, end_sec=0.1875)]
@@ -416,14 +394,10 @@ class TestNormalizedAudio:
         fake_import_module, _fake_sherpa = fake_sherpa_import_module(segments=[segment])
 
         monkeypatch.setattr(
-            "webinar_transcriber.segmentation.importlib.import_module",
-            fake_import_module,
+            "webinar_transcriber.segmentation.importlib.import_module", fake_import_module
         )
 
-        regions = _silero_speech_regions(
-            np.zeros(1_600, dtype=np.float32),
-            threads=1,
-        )
+        regions = _silero_speech_regions(np.zeros(1_600, dtype=np.float32), threads=1)
 
         assert regions == []
 
@@ -431,10 +405,7 @@ class TestNormalizedAudio:
     def test_silero_speech_regions_detects_speech_with_real_sherpa_model(self) -> None:
         samples, _ = load_normalized_audio(FIXTURE_DIR / "speech-sample.wav")
 
-        regions = _silero_speech_regions(
-            samples,
-            threads=1,
-        )
+        regions = _silero_speech_regions(samples, threads=1)
 
         assert regions
         assert regions[0].start_sec == 0

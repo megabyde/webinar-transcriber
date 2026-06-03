@@ -51,9 +51,7 @@ def detect_scenes(
         list[Scene]: The detected scene list.
     """
     scene_starts, resolved_duration_sec = _select_scene_starts(
-        video_path,
-        settings=settings,
-        progress_callback=progress_callback,
+        video_path, settings=settings, progress_callback=progress_callback
     )
     duration_sec = resolved_duration_sec if duration_sec is None else duration_sec
     scene_bounds = list(zip(scene_starts, [*scene_starts[1:], duration_sec], strict=False))

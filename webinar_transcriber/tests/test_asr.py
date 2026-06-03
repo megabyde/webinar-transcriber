@@ -8,7 +8,7 @@ import pytest
 from webinar_transcriber.asr import (
     WHISPER_CPP_MODEL_EXAMPLE,
     WHISPER_CPP_MODEL_FILENAME,
-    ASRProcessingError,
+    AsrProcessingError,
     WhisperCppTranscriber,
     build_prompt_carryover,
     device_name_from_system_info,
@@ -95,7 +95,7 @@ class TestWhisperCppTranscriber:
         assert transcriber.model_name == WHISPER_CPP_MODEL_FILENAME
 
     def test_prepare_model_requires_model_file(self, tmp_path) -> None:
-        with pytest.raises(ASRProcessingError, match="model file does not exist") as error:
+        with pytest.raises(AsrProcessingError, match="model file does not exist") as error:
             WhisperCppTranscriber(
                 model_name=str(tmp_path / "missing.bin"), threads=4
             ).prepare_model()
@@ -105,7 +105,7 @@ class TestWhisperCppTranscriber:
         assert "README.md" in message
 
     def test_prepare_model_missing_default_model_is_actionable(self, tmp_path) -> None:
-        with pytest.raises(ASRProcessingError, match="model file does not exist") as error:
+        with pytest.raises(AsrProcessingError, match="model file does not exist") as error:
             WhisperCppTranscriber(
                 model_name=str(tmp_path / "missing-default-model.bin"), threads=4
             ).prepare_model()
@@ -187,13 +187,13 @@ class TestWhisperCppTranscriber:
     def test_prepare_model_wraps_model_initialization_failures(self, fake_model: FakeModel) -> None:
         fake_model.init_error = RuntimeError("boom")
 
-        with pytest.raises(ASRProcessingError, match=r"Could not prepare whisper\.cpp model"):
+        with pytest.raises(AsrProcessingError, match=r"Could not prepare whisper\.cpp model"):
             WhisperCppTranscriber(threads=4).prepare_model()
 
     def test_prepare_model_rejects_model_without_native_context(self, monkeypatch) -> None:
         install_fake_pywhispercpp(monkeypatch, model=FakeModelWithNullContext())
 
-        with pytest.raises(ASRProcessingError, match=r"Could not prepare whisper\.cpp model"):
+        with pytest.raises(AsrProcessingError, match=r"Could not prepare whisper\.cpp model"):
             WhisperCppTranscriber(threads=4).prepare_model()
 
     def test_prepare_model_reads_runtime_details(self, fake_model: FakeModel, tmp_path) -> None:
@@ -434,7 +434,7 @@ class TestWhisperCppTranscriber:
     def test_transcribe_inference_windows_wraps_model_failures(self, fake_model: FakeModel) -> None:
         fake_model.transcribe_error = RuntimeError("boom")
 
-        with pytest.raises(ASRProcessingError, match=r"whisper\.cpp inference failed for window-1"):
+        with pytest.raises(AsrProcessingError, match=r"whisper\.cpp inference failed for window-1"):
             WhisperCppTranscriber(threads=4).transcribe_inference_windows(
                 np.zeros(16_000, dtype=np.float32),
                 [InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
@@ -470,7 +470,7 @@ class TestWhisperCppTranscriber:
             def prepare_model(self) -> None:
                 return None
 
-        with pytest.raises(ASRProcessingError, match="model was not initialized"):
+        with pytest.raises(AsrProcessingError, match="model was not initialized"):
             BrokenTranscriber(model_name="stub.bin", threads=4).transcribe_inference_windows(
                 np.zeros(16_000, dtype=np.float32),
                 [InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0)],
@@ -508,7 +508,7 @@ class TestPromptCarryover:
                 window=InferenceWindow(id="window-2", region_index=0, start_sec=18.5, end_sec=35.0),
                 text=" \n\t ",
                 segments=[],
-            ),
+            )
         )
 
         assert carryover is None
