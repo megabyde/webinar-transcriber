@@ -28,7 +28,7 @@ dependencies = [
     "click>=8.4.1,<9.0.0",
     "numpy>=2.4.6,<3.0.0",
     "pillow>=12.1.1,<13.0.0",
-    "pywhispercpp>=1.4.1,<2.0.0",
+    "pywhispercpp>=1.5.0,<2.0.0",
     "python-docx>=1.2.0,<2.0.0",
     "rich>=14.3.3,<15.0.0",
     "av>=17.0.1,<18.0.0",
@@ -52,14 +52,14 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "coverage[toml]>=7.14.0,<8.0.0",
+    "coverage[toml]>=7.14.1,<8.0.0",
     "mdformat>=1.0.0,<2.0.0",
     "pymarkdownlnt>=0.9.37,<1.0.0",
     "pydantic>=2.13.4,<3.0.0",
     "pytest>=9.0.3,<10.0.0",
     "pytest-cov>=7.1.0,<8.0.0",
-    "ruff>=0.15.14,<1.0.0",
-    "ty>=0.0.39,<1.0.0",
+    "ruff>=0.15.15,<1.0.0",
+    "ty>=0.0.40,<1.0.0",
     "mdformat-gfm>=1.0.0,<2.0.0",
     "mdformat-gfm-alerts>=2.0.0,<3.0.0",
 ]
