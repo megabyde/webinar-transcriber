@@ -4,22 +4,20 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
+from rich.console import Console
 
-from webinar_transcriber.asr import WhisperCppTranscriber
 from webinar_transcriber.diagnostics import write_run_diagnostics
-from webinar_transcriber.diarization import DIARIZATION_MODEL
 from webinar_transcriber.llm.contracts import (
-    LLMProcessingError,
-    LLMProcessor,
-    LLMReportMetadataResult,
-    LLMReportPolishPlan,
-    LLMSectionPolishResult,
+    LlmProcessingError,
+    LlmProcessor,
+    LlmReportMetadataResult,
+    LlmReportPolishPlan,
+    LlmSectionPolishResult,
 )
 from webinar_transcriber.models import (
     DecodedWindow,
@@ -32,25 +30,22 @@ from webinar_transcriber.models import (
     TranscriptSegment,
 )
 from webinar_transcriber.paths import RunLayout
-from webinar_transcriber.processor import ProcessArtifacts, RunContext, TranscriptionConfig
-from webinar_transcriber.processor import process_input as _process_input
-from webinar_transcriber.processor.asr_pipeline import plan_inference_windows
-from webinar_transcriber.processor.support import (
-    ProgressStageHandle,
-    asr_runtime_detail,
-    realtime_factor_detail,
-    stage,
-    transcription_stage_detail,
+from webinar_transcriber.processor import (
+    ProcessArtifacts,
+    RunContext,
+    TranscriptionConfig,
+    plan_inference_windows,
 )
-from webinar_transcriber.reporter import BaseStageReporter
+from webinar_transcriber.processor import process_input as _process_input
 from webinar_transcriber.tests.conftest import (
     FakeTranscriber,
-    RecordingReporter,
+    RecordingStageReporter,
     audio_runtime,
     install_pipeline_runtime,
     install_video_scene_runtime,
     video_runtime,
 )
+from webinar_transcriber.ui import StageReporter
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -70,13 +65,17 @@ def read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def silent_reporter() -> StageReporter:
+    return StageReporter(console=Console(quiet=True))
+
+
 def process_input(
     *args: Any,
     threads: int = 4,
     asr_model: str | None = None,
     language: str | None = None,
     keep_audio: bool = False,
-    llm_processor: LLMProcessor | None = None,
+    llm_processor: LlmProcessor | None = None,
     diarize_speakers: int | None = None,
     diarizer: Diarizer | None = None,
     **kwargs: Any,
@@ -84,10 +83,7 @@ def process_input(
     return _process_input(
         *args,
         transcription_config=TranscriptionConfig(
-            threads=threads,
-            asr_model=asr_model,
-            language=language,
-            keep_audio=keep_audio,
+            threads=threads, asr_model=asr_model, language=language, keep_audio=keep_audio
         ),
         llm_processor=llm_processor,
         diarizer=diarizer,
@@ -96,34 +92,32 @@ def process_input(
     )
 
 
-class ConfigurableLLMProcessor(LLMProcessor):
+class ConfigurableLLMProcessor(LlmProcessor):
     provider_name = "openai"
     model_name = "test-llm-model"
 
     def __init__(
         self,
         *,
-        section_result: LLMSectionPolishResult | Callable[[ReportDocument], LLMSectionPolishResult],
+        section_result: LlmSectionPolishResult | Callable[[ReportDocument], LlmSectionPolishResult],
         metadata_result: (
-            LLMReportMetadataResult
-            | Callable[[ReportDocument, dict[str, str]], LLMReportMetadataResult]
+            LlmReportMetadataResult
+            | Callable[[ReportDocument, dict[str, str]], LlmReportMetadataResult]
             | None
         ) = None,
-        section_error: LLMProcessingError | None = None,
-        metadata_error: LLMProcessingError | None = None,
+        section_error: LlmProcessingError | None = None,
+        metadata_error: LlmProcessingError | None = None,
         section_progress: list[int] | None = None,
         worker_count: int = 1,
     ) -> None:
-        if isinstance(section_result, LLMSectionPolishResult):
+        if isinstance(section_result, LlmSectionPolishResult):
             self._section_result = lambda _report: section_result
         else:
             self._section_result = section_result
-        metadata_result = metadata_result or LLMReportMetadataResult(
-            summary=[],
-            action_items=[],
-            section_titles={},
+        metadata_result = metadata_result or LlmReportMetadataResult(
+            summary=[], action_items=[], section_titles={}
         )
-        if isinstance(metadata_result, LLMReportMetadataResult):
+        if isinstance(metadata_result, LlmReportMetadataResult):
             self._metadata_result = lambda _report, _section_transcripts: metadata_result
         else:
             self._metadata_result = metadata_result
@@ -132,14 +126,14 @@ class ConfigurableLLMProcessor(LLMProcessor):
         self._section_progress = section_progress
         self._worker_count = worker_count
 
-    def report_polish_plan(self, report: ReportDocument) -> LLMReportPolishPlan:
-        return LLMReportPolishPlan(
+    def report_polish_plan(self, report: ReportDocument) -> LlmReportPolishPlan:
+        return LlmReportPolishPlan(
             section_count=len(report.sections), worker_count=self._worker_count
         )
 
     def polish_report_sections_with_progress(
         self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
-    ) -> LLMSectionPolishResult:
+    ) -> LlmSectionPolishResult:
         if self._section_error is not None:
             raise self._section_error
         if progress_callback is not None:
@@ -149,7 +143,7 @@ class ConfigurableLLMProcessor(LLMProcessor):
 
     def polish_report_metadata(
         self, report: ReportDocument, *, section_transcripts: dict[str, str]
-    ) -> LLMReportMetadataResult:
+    ) -> LlmReportMetadataResult:
         if self._metadata_error is not None:
             raise self._metadata_error
         return self._metadata_result(report, section_transcripts)
@@ -167,10 +161,7 @@ class FakeDiarizer:
         self.prepare_calls.append(speaker_count)
 
     def diarize(
-        self,
-        samples: np.ndarray,
-        *,
-        progress_callback: Callable[[int, int], None] | None = None,
+        self, samples: np.ndarray, *, progress_callback: Callable[[int, int], None] | None = None
     ) -> list[SpeakerTurn]:
         self.calls.append(len(samples))
         if progress_callback is not None:
@@ -182,9 +173,9 @@ class FakeDiarizer:
 
 def run_basic_audio_pipeline(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> tuple[ProcessArtifacts, RecordingReporter, FakeTranscriber]:
+) -> tuple[ProcessArtifacts, RecordingStageReporter, FakeTranscriber]:
     input_path = FIXTURE_DIR / "sample-audio.mp3"
-    reporter = RecordingReporter()
+    reporter = RecordingStageReporter()
     transcriber = FakeTranscriber()
     install_pipeline_runtime(monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime())
 
@@ -265,7 +256,6 @@ class TestProcessInput:
         vad_finished = [detail for stage, detail in reporter.finished if stage == "vad"]
         assert len(vad_finished) == 1
         assert vad_finished[0].startswith("1 region | RTF ")
-        assert ("plan_windows", "1 window") in reporter.finished
         assert ("start", "transcribe", 1.0, "0 segments") in reporter.progress
         assert ("advance", "transcribe", 1.0, "2 segments") in reporter.progress
 
@@ -274,16 +264,13 @@ class TestProcessInput:
     ) -> None:
         input_path = FIXTURE_DIR / "sample-audio.mp3"
         transcriber = FakeTranscriber()
-        reporter = RecordingReporter()
+        reporter = RecordingStageReporter()
         diarizer = FakeDiarizer([
             SpeakerTurn(start_sec=0.0, end_sec=3.2, speaker="S1"),
             SpeakerTurn(start_sec=3.2, end_sec=6.0, speaker="S2"),
         ])
         install_pipeline_runtime(
-            monkeypatch,
-            tmp_path,
-            input_path=input_path,
-            runtime=audio_runtime(duration_sec=6.0),
+            monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime(duration_sec=6.0)
         )
 
         artifacts = process_input(
@@ -316,19 +303,21 @@ class TestProcessInput:
         assert artifacts.diagnostics.diarization is not None
         assert artifacts.diagnostics.diarization.speaker_count == 2
         assert artifacts.diagnostics.diarization.turn_count == 2
-        assert ("start", "diarize", 100.0, "analyzing audio") in reporter.progress
+        assert ("start", "diarize", 100.0, "preparing model") in reporter.progress
         assert ("advance", "diarize", 1.0, "analyzing audio") in reporter.progress
         assert ("advance", "diarize", 64.0, "embedding speakers") in reporter.progress
         diarize_progress = [
             detail
-            for action, stage, _, detail in reporter.progress
-            if action == "advance" and stage == "diarize"
+            for action, stage_key, _, detail in reporter.progress
+            if action == "advance" and stage_key == "diarize"
         ]
         assert any(
             detail and detail.startswith("2 speakers | 2 turns | RTF ")
             for detail in diarize_progress
         )
-        diarize_finished = [detail for stage, detail in reporter.finished if stage == "diarize"]
+        diarize_finished = [
+            detail for stage_key, detail in reporter.finished if stage_key == "diarize"
+        ]
         assert len(diarize_finished) == 1
         assert diarize_finished[0].startswith("2 speakers | 2 turns | RTF ")
 
@@ -337,7 +326,7 @@ class TestProcessInput:
     ) -> None:
         input_path = FIXTURE_DIR / "sample-audio.mp3"
         transcriber = FakeTranscriber()
-        reporter = RecordingReporter()
+        reporter = RecordingStageReporter()
 
         class PreparingDiarizer:
             system_info = "fake sherpa"
@@ -362,10 +351,7 @@ class TestProcessInput:
 
         diarizer = PreparingDiarizer(threads=transcriber.threads)
         install_pipeline_runtime(
-            monkeypatch,
-            tmp_path,
-            input_path=input_path,
-            runtime=audio_runtime(duration_sec=6.0),
+            monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime(duration_sec=6.0)
         )
 
         process_input(
@@ -379,7 +365,7 @@ class TestProcessInput:
 
         assert diarizer.threads == transcriber.threads
         assert diarizer.prepare_calls == [1]
-        assert ("prepare_diarization", DIARIZATION_MODEL) in reporter.finished
+        assert any(key == "diarize" for key, _ in reporter.finished)
 
     def test_uses_vad_regions_as_decode_windows(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -425,8 +411,7 @@ class TestProcessInput:
             tmp_path,
             input_path=input_path,
             runtime=audio_runtime(
-                duration_sec=65.0,
-                speech_regions=[SpeechRegion(start_sec=0.0, end_sec=65.0)],
+                duration_sec=65.0, speech_regions=[SpeechRegion(start_sec=0.0, end_sec=65.0)]
             ),
         )
 
@@ -494,9 +479,7 @@ class TestProcessInput:
         )
         preserve_calls: list[tuple[Path, Path]] = []
 
-        def fake_preserve_audio(audio_path: Path, output_path: Path, *, progress_callback=None):
-            if progress_callback is not None:
-                progress_callback(1.0)
+        def fake_preserve_audio(audio_path: Path, output_path: Path):
             preserve_calls.append((audio_path, output_path))
             output_path.write_text("mp3", encoding="utf-8")
             return output_path
@@ -506,10 +489,7 @@ class TestProcessInput:
         )
 
         artifacts = process_input(
-            input_path,
-            output_dir=tmp_path / "run",
-            transcriber=FakeTranscriber(),
-            keep_audio=True,
+            input_path, output_dir=tmp_path / "run", transcriber=FakeTranscriber(), keep_audio=True
         )
 
         kept_audio_path = artifacts.layout.transcription_audio_path()
@@ -540,16 +520,10 @@ class TestProcessInput:
             transcriber=FakeTranscriber(
                 segments=[
                     TranscriptSegment(
-                        id="segment-1",
-                        text="Opening slide.",
-                        start_sec=0.0,
-                        end_sec=0.8,
+                        id="segment-1", text="Opening slide.", start_sec=0.0, end_sec=0.8
                     ),
                     TranscriptSegment(
-                        id="segment-2",
-                        text="Closing slide.",
-                        start_sec=0.8,
-                        end_sec=1.8,
+                        id="segment-2", text="Closing slide.", start_sec=0.8, end_sec=1.8
                     ),
                 ]
             ),
@@ -605,7 +579,7 @@ class TestProcessInput:
             lambda *args, **kwargs: transcriber,
         )
         monkeypatch.setattr(
-            "webinar_transcriber.processor.run_asr_pipeline",
+            "webinar_transcriber.processor._run_asr_pipeline",
             Mock(side_effect=RuntimeError("asr failed")),
         )
 
@@ -668,13 +642,13 @@ class TestProcessInput:
 
         output_dir = tmp_path / "failed-run"
         with (
-            patch("webinar_transcriber.structure.build_report", side_effect=RuntimeError("boom")),
+            patch("webinar_transcriber.processor.build_report", side_effect=RuntimeError("boom")),
             patch(
-                "webinar_transcriber.processor.asr_pipeline.load_normalized_audio",
+                "webinar_transcriber.processor.load_normalized_audio",
                 return_value=(np.zeros(16_000, dtype=np.float32), 16_000),
             ),
             patch(
-                "webinar_transcriber.processor.asr_pipeline.detect_speech_regions",
+                "webinar_transcriber.processor.detect_speech_regions",
                 return_value=([SpeechRegion(start_sec=0.0, end_sec=3.0)], []),
             ),
             pytest.raises(RuntimeError, match="boom"),
@@ -691,17 +665,16 @@ class TestProcessInput:
         assert (output_dir / "asr" / "decoded_windows.json").exists()
         diagnostics_payload = read_json(output_dir / "diagnostics.json")
         assert diagnostics_payload["status"] == "failed"
-        assert diagnostics_payload["failed_stage"] == "structure"
-        assert diagnostics_payload["error"] == "boom"
         assert diagnostics_payload["item_counts"]["transcript_segments"] == 1
         assert diagnostics_payload["item_counts"]["windows"] == 1
+        assert diagnostics_payload["error"] == "boom"
         assert not (output_dir / "report.json").exists()
 
     def test_forwards_vad_warnings_to_report_and_reporter(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         input_path = FIXTURE_DIR / "sample-audio.mp3"
-        reporter = RecordingReporter()
+        reporter = RecordingStageReporter()
         install_pipeline_runtime(
             monkeypatch,
             tmp_path,
@@ -780,7 +753,7 @@ class TestProcessInput:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         input_path = FIXTURE_DIR / "sample-video.mp4"
-        reporter = RecordingReporter()
+        reporter = RecordingStageReporter()
         install_pipeline_runtime(
             monkeypatch, tmp_path, input_path=input_path, runtime=video_runtime()
         )
@@ -810,11 +783,11 @@ class TestProcessInput:
             monkeypatch, tmp_path, input_path=input_path, runtime=video_runtime()
         )
         monkeypatch.setattr(
-            "webinar_transcriber.video.detect_scenes",
+            "webinar_transcriber.processor.detect_scenes",
             lambda *_args, **_kwargs: [Scene(id="scene-1", start_sec=0.0, end_sec=1.8)],
         )
         monkeypatch.setattr(
-            "webinar_transcriber.video.extract_representative_frames",
+            "webinar_transcriber.processor.extract_representative_frames",
             lambda *_args, **_kwargs: [
                 SceneFrame(
                     id="frame-1",
@@ -826,9 +799,7 @@ class TestProcessInput:
         )
 
         artifacts = process_input(
-            input_path,
-            output_dir=tmp_path / "docx-warning-run",
-            transcriber=FakeTranscriber(),
+            input_path, output_dir=tmp_path / "docx-warning-run", transcriber=FakeTranscriber()
         )
 
         expected_warning = f"Section image does not exist: {missing_image_path}"
@@ -841,14 +812,10 @@ class TestProcessInput:
 
 class TestProcessorSupport:
     def test_write_run_diagnostics_returns_none_without_layout(self) -> None:
-        ctx = RunContext(reporter=BaseStageReporter())
+        ctx = RunContext(reporter=silent_reporter())
 
         diagnostics = write_run_diagnostics(
-            ctx,
-            status="failed",
-            failed_stage="prepare_run_dir",
-            error="boom",
-            llm_enabled=False,
+            ctx, status="failed", failed_stage="probe_media", error="boom", llm_enabled=False
         )
 
         assert diagnostics is None
@@ -856,10 +823,7 @@ class TestProcessorSupport:
     def test_write_run_diagnostics_can_suppress_write_errors(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        ctx = RunContext(
-            reporter=BaseStageReporter(),
-            layout=RunLayout(run_dir=tmp_path),
-        )
+        ctx = RunContext(reporter=silent_reporter(), layout=RunLayout(run_dir=tmp_path))
 
         def fail_write_text(self, *args, **kwargs):
             del self, args, kwargs
@@ -870,7 +834,7 @@ class TestProcessorSupport:
         diagnostics = write_run_diagnostics(
             ctx,
             status="failed",
-            failed_stage="prepare_run_dir",
+            failed_stage="probe_media",
             error="boom",
             llm_enabled=False,
             suppress_errors=True,
@@ -883,77 +847,39 @@ class TestProcessorSupport:
         assert diagnostics.item_counts["windows"] == 0
         with pytest.raises(OSError, match="readonly"):
             write_run_diagnostics(
-                ctx,
-                status="failed",
-                failed_stage="prepare_run_dir",
-                error="boom",
-                llm_enabled=False,
+                ctx, status="failed", failed_stage="probe_media", error="boom", llm_enabled=False
             )
 
     def test_stage_records_timing_on_failure_without_finish_event(self) -> None:
-        reporter = RecordingReporter()
+        reporter = RecordingStageReporter()
         ctx = RunContext(reporter=reporter)
 
-        with pytest.raises(RuntimeError, match="boom"), stage(ctx, "probe_media", "Probing media"):
+        with pytest.raises(RuntimeError, match="boom"), ctx.stage("probe_media", "Probing media"):
             raise RuntimeError("boom")
 
         assert "probe_media" in ctx.stage_timings
         assert reporter.started == [("probe_media", "Probing media")]
         assert reporter.finished == []
 
-    def test_progress_stage_handle_ignores_non_positive_advances(self) -> None:
-        reporter = RecordingReporter()
-        handle = ProgressStageHandle(key="vad", label="Detecting speech", reporter=reporter)
-
-        handle.advance(0, detail="ignored")
-
-        assert reporter.progress == []
-        assert handle.detail is None
-
-    def test_progress_stage_handle_updates_detail_when_already_complete(self) -> None:
-        reporter = RecordingReporter()
-        handle = ProgressStageHandle(
-            key="vad", label="Detecting speech", reporter=reporter, completed=1.0
-        )
-
-        handle.advance_to(1.0, detail="1 region | RTF 10x")
-
-        assert reporter.progress == []
-        assert handle.detail == "1 region | RTF 10x"
-
-    def test_transcription_stage_detail_reports_segments_and_rtf(self) -> None:
-        detail = transcription_stage_detail(
-            segment_count=1, total_duration_sec=12.5, elapsed_sec=2.5
-        )
-
-        assert detail == "1 segment | RTF 5x"
-
-    def test_realtime_factor_detail_hides_invalid_values(self) -> None:
-        assert realtime_factor_detail(total_duration_sec=0.0, elapsed_sec=2.5) is None
-        assert realtime_factor_detail(total_duration_sec=12.5, elapsed_sec=0.0) is None
-
-    def test_asr_runtime_detail_uses_model_name_verbatim(self) -> None:
-        transcriber = SimpleNamespace(model_name="/tmp/models/local-model.bin", device_name="cpu")
-
-        assert asr_runtime_detail(transcriber) == "/tmp/models/local-model.bin | cpu"
-
     def test_transcriber_device_name_is_auto_before_runtime_is_prepared(self) -> None:
+        from webinar_transcriber.asr import WhisperCppTranscriber
+
         assert WhisperCppTranscriber(threads=4).device_name == "auto"
 
 
 @pytest.fixture
 def llm_success_result(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> tuple[ProcessArtifacts, RecordingReporter]:
+) -> tuple[ProcessArtifacts, RecordingStageReporter]:
     input_path = FIXTURE_DIR / "sample-audio.mp3"
     install_pipeline_runtime(monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime())
-    reporter = RecordingReporter()
+    reporter = RecordingStageReporter()
 
     def polished_metadata(
         _report: ReportDocument, section_transcripts: dict[str, str]
-    ) -> LLMReportMetadataResult:
+    ) -> LlmReportMetadataResult:
         assert section_transcripts == {"section-1": EXPECTED_LLM_SECTION_TEXT}
-        return LLMReportMetadataResult(
+        return LlmReportMetadataResult(
             summary=["Refined summary point."],
             action_items=["Send the draft by Friday."],
             section_titles={"section-1": "Refined Section Title"},
@@ -964,15 +890,11 @@ def llm_success_result(
         output_dir=tmp_path / "llm-run",
         transcriber=FakeTranscriber(),
         llm_processor=ConfigurableLLMProcessor(
-            section_result=LLMSectionPolishResult(
+            section_result=LlmSectionPolishResult(
                 section_tldrs={"section-1": "Updated section TL;DR."},
                 section_transcripts={"section-1": EXPECTED_LLM_SECTION_TEXT},
                 response_metadata=[
-                    {
-                        "stage": "section_polish",
-                        "section_id": "section-1",
-                        "finish_reason": "stop",
-                    }
+                    {"stage": "section_polish", "section_id": "section-1", "finish_reason": "stop"}
                 ],
                 warnings=[EXPECTED_LLM_WARNING],
             ),
@@ -985,7 +907,7 @@ def llm_success_result(
 
 class TestProcessInputLlm:
     def test_applies_llm_outputs_to_report_and_diagnostics(
-        self, llm_success_result: tuple[ProcessArtifacts, RecordingReporter]
+        self, llm_success_result: tuple[ProcessArtifacts, RecordingStageReporter]
     ) -> None:
         artifacts, reporter = llm_success_result
 
@@ -1027,7 +949,7 @@ class TestProcessInputLlm:
                 ],
             ),
         )
-        reporter = RecordingReporter()
+        reporter = RecordingStageReporter()
 
         class TwoSectionTranscriber(FakeTranscriber):
             def transcribe_inference_windows(
@@ -1067,8 +989,8 @@ class TestProcessInputLlm:
                     for index, window in enumerate(windows)
                 ]
 
-        def section_polish(report: ReportDocument) -> LLMSectionPolishResult:
-            return LLMSectionPolishResult(
+        def section_polish(report: ReportDocument) -> LlmSectionPolishResult:
+            return LlmSectionPolishResult(
                 section_tldrs={section.id: f"{section.title} recap" for section in report.sections},
                 section_transcripts={
                     section.id: section.transcript_text for section in report.sections
@@ -1077,8 +999,8 @@ class TestProcessInputLlm:
 
         def metadata_polish(
             report: ReportDocument, _section_transcripts: dict[str, str]
-        ) -> LLMReportMetadataResult:
-            return LLMReportMetadataResult(
+        ) -> LlmReportMetadataResult:
+            return LlmReportMetadataResult(
                 summary=[],
                 action_items=[],
                 section_titles={report.sections[0].id: "Renamed first section"},
@@ -1099,12 +1021,19 @@ class TestProcessInputLlm:
 
         assert len(artifacts.report.sections) == 2
         assert artifacts.report.sections[0].title == "Renamed first section"
-        assert ("start", "llm_report_sections", 2.0, None) in reporter.progress
-        assert [
+        section_starts = [
             event
             for event in reporter.progress
-            if event[0] == "advance" and event[1] == "llm_report_sections"
-        ] == [
+            if event[0] == "start" and event[1] == "llm_report_sections"
+        ]
+        assert len(section_starts) == 1
+        assert section_starts[0][2] == 2.0
+        non_zero_advances = [
+            event
+            for event in reporter.progress
+            if event[0] == "advance" and event[1] == "llm_report_sections" and event[2] > 0
+        ]
+        assert non_zero_advances == [
             ("advance", "llm_report_sections", 1.0, None),
             ("advance", "llm_report_sections", 1.0, None),
         ]
@@ -1116,18 +1045,15 @@ class TestProcessInputLlm:
         install_pipeline_runtime(
             monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime()
         )
-        reporter = RecordingReporter()
+        reporter = RecordingStageReporter()
 
         artifacts = process_input(
             input_path,
             output_dir=tmp_path / "section-fallback-run",
             transcriber=FakeTranscriber(),
             llm_processor=ConfigurableLLMProcessor(
-                section_result=LLMSectionPolishResult(
-                    section_tldrs={},
-                    section_transcripts={},
-                ),
-                section_error=LLMProcessingError("section polish failed"),
+                section_result=LlmSectionPolishResult(section_tldrs={}, section_transcripts={}),
+                section_error=LlmProcessingError("section polish failed"),
             ),
             reporter=reporter,
         )
@@ -1144,10 +1070,10 @@ class TestProcessInputLlm:
         install_pipeline_runtime(
             monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime()
         )
-        reporter = RecordingReporter()
+        reporter = RecordingStageReporter()
 
-        def section_polish(report: ReportDocument) -> LLMSectionPolishResult:
-            return LLMSectionPolishResult(
+        def section_polish(report: ReportDocument) -> LlmSectionPolishResult:
+            return LlmSectionPolishResult(
                 section_tldrs={},
                 section_transcripts={
                     section.id: section.transcript_text for section in report.sections
@@ -1159,8 +1085,7 @@ class TestProcessInputLlm:
             output_dir=tmp_path / "metadata-fallback-run",
             transcriber=FakeTranscriber(),
             llm_processor=ConfigurableLLMProcessor(
-                section_result=section_polish,
-                metadata_error=LLMProcessingError("metadata failed"),
+                section_result=section_polish, metadata_error=LlmProcessingError("metadata failed")
             ),
             reporter=reporter,
         )

@@ -30,21 +30,14 @@ SHERPA_VAD_BUFFER_SIZE_SEC = 10 * 60
 
 
 def detect_speech_regions(
-    samples: np.ndarray,
-    *,
-    threads: int,
-    progress_callback: ProgressCallback | None = None,
+    samples: np.ndarray, *, threads: int, progress_callback: ProgressCallback | None = None
 ) -> tuple[list[SpeechRegion], list[str]]:
     """Return coarse Silero speech regions and any warnings emitted during detection."""
     duration_sec = normalized_audio_duration(samples)
     if duration_sec <= 0:
         return [], []
 
-    regions = _silero_speech_regions(
-        samples,
-        threads=threads,
-        progress_callback=progress_callback,
-    )
+    regions = _silero_speech_regions(samples, threads=threads, progress_callback=progress_callback)
     if regions is None:
         if progress_callback is not None:
             progress_callback(duration_sec, 1)
@@ -84,10 +77,7 @@ def normalize_regions(regions: list[SpeechRegion]) -> list[SpeechRegion]:
 
 
 def _silero_speech_regions(
-    samples: np.ndarray,
-    *,
-    threads: int,
-    progress_callback: ProgressCallback | None = None,
+    samples: np.ndarray, *, threads: int, progress_callback: ProgressCallback | None = None
 ) -> list[SpeechRegion] | None:
     sherpa_onnx = _load_sherpa_onnx()
     if sherpa_onnx is None:

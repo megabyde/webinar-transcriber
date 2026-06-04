@@ -26,11 +26,7 @@ from webinar_transcriber.models import SpeakerTurn, TranscriptSegment
 
 
 def _segment(
-    segment_id: str,
-    start_sec: float,
-    end_sec: float,
-    *,
-    text: str = "text",
+    segment_id: str, start_sec: float, end_sec: float, *, text: str = "text"
 ) -> TranscriptSegment:
     return TranscriptSegment(id=segment_id, start_sec=start_sec, end_sec=end_sec, text=text)
 
@@ -170,10 +166,7 @@ class TestAssignSpeakers:
 
     def test_preserves_input_segment_order(self) -> None:
         assigned = assign_speakers(
-            [
-                _segment("segment-2", 10.0, 11.0),
-                _segment("segment-1", 1.0, 2.0),
-            ],
+            [_segment("segment-2", 10.0, 11.0), _segment("segment-1", 1.0, 2.0)],
             [
                 SpeakerTurn(start_sec=0.0, end_sec=3.0, speaker="S1"),
                 SpeakerTurn(start_sec=9.0, end_sec=12.0, speaker="S2"),
@@ -251,7 +244,7 @@ class TestSherpaOnnxDiarizer:
                     FakeSherpaItem(0.0, 1.0, 9),
                     FakeSherpaItem(1.0, 2.0, 8),
                     FakeSherpaItem(2.0, 2.0, 9),
-                ],
+                ]
             ]
         )
         monkeypatch.setattr(sherpa_runtime, "_load_sherpa_onnx", lambda: fake_sherpa)
@@ -259,8 +252,7 @@ class TestSherpaOnnxDiarizer:
             sherpa_runtime,
             "ensure_default_models",
             lambda _cache_dir: sherpa_runtime.DiarizationModelPaths(
-                segmentation_model=tmp_path / "seg.onnx",
-                embedding_model=tmp_path / "emb.onnx",
+                segmentation_model=tmp_path / "seg.onnx", embedding_model=tmp_path / "emb.onnx"
             ),
         )
         progress: list[tuple[int, int]] = []
@@ -285,29 +277,21 @@ class TestSherpaOnnxDiarizer:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         fake_sherpa = FakeSherpaModule(
-            results=[
-                [
-                    FakeSherpaItem(0.0, 1.0, 9),
-                    FakeSherpaItem(1.0, 2.0, 8),
-                ],
-            ]
+            results=[[FakeSherpaItem(0.0, 1.0, 9), FakeSherpaItem(1.0, 2.0, 8)]]
         )
         monkeypatch.setattr(sherpa_runtime, "_load_sherpa_onnx", lambda: fake_sherpa)
         monkeypatch.setattr(
             sherpa_runtime,
             "ensure_default_models",
             lambda _cache_dir: sherpa_runtime.DiarizationModelPaths(
-                segmentation_model=tmp_path / "seg.onnx",
-                embedding_model=tmp_path / "emb.onnx",
+                segmentation_model=tmp_path / "seg.onnx", embedding_model=tmp_path / "emb.onnx"
             ),
         )
 
         diarizer = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path, threads=1)
         diarizer.prepare(speaker_count=2)
 
-        turns = diarizer.diarize(
-            np.zeros(16, dtype=np.float32),
-        )
+        turns = diarizer.diarize(np.zeros(16, dtype=np.float32))
 
         assert fake_sherpa.cluster_counts == [2]
         assert [turn.speaker for turn in turns] == ["S1", "S2"]
@@ -326,8 +310,7 @@ class TestSherpaOnnxDiarizer:
             diarizer._build_diarizer(  # noqa: SLF001
                 FakeSherpaModule(valid=False),
                 paths=sherpa_runtime.DiarizationModelPaths(
-                    segmentation_model=tmp_path / "seg.onnx",
-                    embedding_model=tmp_path / "emb.onnx",
+                    segmentation_model=tmp_path / "seg.onnx", embedding_model=tmp_path / "emb.onnx"
                 ),
                 num_clusters=-1,
             )
@@ -343,8 +326,7 @@ class TestSherpaOnnxDiarizer:
             diarizer._build_diarizer(  # noqa: SLF001
                 BrokenConstructorSherpa(),
                 paths=sherpa_runtime.DiarizationModelPaths(
-                    segmentation_model=tmp_path / "seg.onnx",
-                    embedding_model=tmp_path / "emb.onnx",
+                    segmentation_model=tmp_path / "seg.onnx", embedding_model=tmp_path / "emb.onnx"
                 ),
                 num_clusters=-1,
             )
@@ -366,20 +348,15 @@ class TestModelDownload:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         paths = sherpa_runtime.DiarizationModelPaths(
-            segmentation_model=tmp_path / "seg.onnx",
-            embedding_model=tmp_path / "emb.onnx",
+            segmentation_model=tmp_path / "seg.onnx", embedding_model=tmp_path / "emb.onnx"
         )
         calls: list[Path] = []
         monkeypatch.setattr(sherpa_runtime, "default_model_paths", lambda _cache_dir: paths)
         monkeypatch.setattr(
-            sherpa_runtime,
-            "_ensure_segmentation_model",
-            lambda path: calls.append(Path(path)),
+            sherpa_runtime, "_ensure_segmentation_model", lambda path: calls.append(Path(path))
         )
         monkeypatch.setattr(
-            sherpa_runtime,
-            "_ensure_file",
-            lambda path, **_kwargs: calls.append(Path(path)),
+            sherpa_runtime, "_ensure_file", lambda path, **_kwargs: calls.append(Path(path))
         )
 
         assert sherpa_runtime.ensure_default_models(tmp_path) == paths
@@ -391,32 +368,24 @@ class TestModelDownload:
         payload = b"model-bytes"
         assert FakeResponse(payload).read() == payload
         monkeypatch.setattr(
-            sherpa_runtime.urllib.request,
-            "urlopen",
-            lambda _url: FakeResponse(payload),
+            sherpa_runtime.urllib.request, "urlopen", lambda _url: FakeResponse(payload)
         )
 
         output_path = tmp_path / "model.onnx"
         sherpa_runtime._ensure_file(  # noqa: SLF001
-            output_path,
-            url="https://example.test/model",
-            expected_sha256=_sha256(payload),
+            output_path, url="https://example.test/model", expected_sha256=_sha256(payload)
         )
 
         assert output_path.read_bytes() == payload
         sherpa_runtime._ensure_file(  # noqa: SLF001
-            output_path,
-            url="https://example.test/model",
-            expected_sha256=_sha256(payload),
+            output_path, url="https://example.test/model", expected_sha256=_sha256(payload)
         )
 
     def test_ensure_file_reports_download_and_hash_failures(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setattr(
-            sherpa_runtime.urllib.request,
-            "urlopen",
-            Mock(side_effect=OSError("offline")),
+            sherpa_runtime.urllib.request, "urlopen", Mock(side_effect=OSError("offline"))
         )
         with pytest.raises(DiarizationProcessingError, match="Failed to download"):
             sherpa_runtime._ensure_file(  # noqa: SLF001
@@ -426,15 +395,11 @@ class TestModelDownload:
             )
 
         monkeypatch.setattr(
-            sherpa_runtime.urllib.request,
-            "urlopen",
-            lambda _url: FakeResponse(b"wrong"),
+            sherpa_runtime.urllib.request, "urlopen", lambda _url: FakeResponse(b"wrong")
         )
         with pytest.raises(DiarizationProcessingError, match="failed verification"):
             sherpa_runtime._ensure_file(  # noqa: SLF001
-                tmp_path / "bad.onnx",
-                url="https://example.test/model",
-                expected_sha256="missing",
+                tmp_path / "bad.onnx", url="https://example.test/model", expected_sha256="missing"
             )
 
     def test_ensure_segmentation_model_extracts_archive(
@@ -447,8 +412,7 @@ class TestModelDownload:
             model_path.parent.mkdir(parents=True)
             model_path.write_bytes(model_bytes)
             archive.add(
-                model_path,
-                arcname=f"{SEGMENTATION_MODEL.directory}/{SEGMENTATION_MODEL.file_name}",
+                model_path, arcname=f"{SEGMENTATION_MODEL.directory}/{SEGMENTATION_MODEL.file_name}"
             )
         model_path.unlink()
         monkeypatch.setattr(
@@ -476,14 +440,11 @@ class TestModelDownload:
             model_path.parent.mkdir(parents=True)
             model_path.write_bytes(b"segmentation-model")
             archive.add(
-                model_path,
-                arcname=f"{SEGMENTATION_MODEL.directory}/{SEGMENTATION_MODEL.file_name}",
+                model_path, arcname=f"{SEGMENTATION_MODEL.directory}/{SEGMENTATION_MODEL.file_name}"
             )
         model_path.unlink()
         monkeypatch.setattr(
-            sherpa_runtime,
-            "SEGMENTATION_MODEL",
-            replace(SEGMENTATION_MODEL, model_sha256="wrong"),
+            sherpa_runtime, "SEGMENTATION_MODEL", replace(SEGMENTATION_MODEL, model_sha256="wrong")
         )
         monkeypatch.setattr(
             sherpa_runtime,
@@ -496,9 +457,7 @@ class TestModelDownload:
 
     def test_load_sherpa_onnx_handles_missing_module(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            sherpa_runtime.importlib,
-            "import_module",
-            Mock(side_effect=ImportError),
+            sherpa_runtime.importlib, "import_module", Mock(side_effect=ImportError)
         )
 
         assert sherpa_runtime._load_sherpa_onnx() is None  # noqa: SLF001

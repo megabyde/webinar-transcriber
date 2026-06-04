@@ -6,7 +6,7 @@ from dataclasses import asdict
 from typing import TYPE_CHECKING
 
 from webinar_transcriber.models import compact_speaker_fields
-from webinar_transcriber.processor.support import write_json
+from webinar_transcriber.processor.stages import write_json
 
 if TYPE_CHECKING:
     from pathlib import Path

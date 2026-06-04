@@ -151,8 +151,7 @@ class TestProbeMedia:
 
     def test_wraps_open_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "webinar_transcriber.media.av.open",
-            Mock(side_effect=OSError("bad open")),
+            "webinar_transcriber.media.av.open", Mock(side_effect=OSError("bad open"))
         )
 
         with pytest.raises(MediaProcessingError, match=r"Could not open .* with PyAV: bad open"):
@@ -169,8 +168,7 @@ class TestStreamDurationSec:
 class TestOpenOutputMediaContainer:
     def test_wraps_open_error(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         monkeypatch.setattr(
-            "webinar_transcriber.media.av.open",
-            Mock(side_effect=OSError("bad open")),
+            "webinar_transcriber.media.av.open", Mock(side_effect=OSError("bad open"))
         )
 
         with pytest.raises(

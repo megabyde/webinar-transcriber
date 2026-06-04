@@ -106,11 +106,7 @@ class SherpaOnnxDiarizer:
         """Return speaker turns for normalized audio samples."""
         diarizer = cast("_NativeDiarizer", self._prepared_diarizer)
 
-        turns = self._run_diarization(
-            diarizer,
-            samples,
-            progress_callback=progress_callback,
-        )
+        turns = self._run_diarization(diarizer, samples, progress_callback=progress_callback)
         return normalize_speaker_labels(turns)
 
     def prepare(self, *, speaker_count: int | None) -> None:
@@ -136,8 +132,7 @@ class SherpaOnnxDiarizer:
                 num_threads=self._threads,
             ),
             embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(
-                model=str(paths.embedding_model),
-                num_threads=self._threads,
+                model=str(paths.embedding_model), num_threads=self._threads
             ),
             clustering=sherpa_onnx.FastClusteringConfig(
                 num_clusters=num_clusters, threshold=CLUSTER_THRESHOLD

@@ -3,13 +3,14 @@
 import importlib
 from collections.abc import Callable
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from time import perf_counter
 from typing import Self
-from unittest.mock import Mock
 
 import numpy as np
 import pytest
+from rich.console import Console
 
 from webinar_transcriber.asr import WhisperCppTranscriber
 from webinar_transcriber.models import (
@@ -28,7 +29,7 @@ from webinar_transcriber.models import (
 )
 from webinar_transcriber.paths import RunLayout
 from webinar_transcriber.processor import ProcessArtifacts
-from webinar_transcriber.reporter import BaseStageReporter
+from webinar_transcriber.ui import StageReporter
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 ORIGINAL_IMPORT_MODULE = importlib.import_module
@@ -48,60 +49,70 @@ def fake_import_module(
 
 
 @dataclass
-class FakeRichTask:
-    total: float
-    fields: dict[str, object]
+class _RecordingHandle:
+    """Test handle that captures update() calls on a determinate stage."""
+
+    key: str
+    label: str
+    total: float | None
+    detail: str | None
+    progress_log: list[tuple[str, str, float, str | None]]
     completed: float = 0.0
+    started_at: float = field(default_factory=perf_counter)
+
+    def elapsed_sec(self) -> float:
+        return perf_counter() - self.started_at
+
+    def update(
+        self,
+        *,
+        advance: float | None = None,
+        completed: float | None = None,
+        detail: str | None = None,
+    ) -> None:
+        if completed is not None:
+            advance = max(0.0, completed - self.completed)
+        applied_advance = advance if advance is not None and advance > 0 else 0.0
+        if applied_advance > 0:
+            self.completed += applied_advance
+        if detail is not None:
+            self.detail = detail
+        if self.total is not None:
+            self.progress_log.append(("advance", self.key, applied_advance, detail))
 
 
-class FakeRichProgress:
+class RecordingStageReporter(StageReporter):
+    """Test reporter that records observable pipeline events."""
+
     def __init__(self) -> None:
-        self.tasks: list[FakeRichTask] = []
-        self.started = False
-        self.stopped = False
-        self.update = Mock(side_effect=self._update)
+        super().__init__(console=Console(quiet=True))
+        self.started: list[tuple[str, str]] = []
+        self.finished: list[tuple[str, str]] = []
+        self.progress: list[tuple[str, str, float, str | None]] = []
+        self.warnings: list[str] = []
+        self.completed: ProcessArtifacts | None = None
 
-    def start(self) -> None:
-        self.started = True
+    @contextmanager
+    def track(self, key, label, *, total=None, detail=None):
+        self.started.append((key, label))
+        if total is not None:
+            self.progress.append(("start", key, total, detail))
+        handle = _RecordingHandle(
+            key=key, label=label, total=total, detail=detail, progress_log=self.progress
+        )
+        completed_normally = False
+        try:
+            yield handle
+            completed_normally = True
+        finally:
+            if completed_normally:
+                self.finished.append((key, handle.detail or ""))
 
-    def stop(self) -> None:
-        self.stopped = True
+    def warn(self, message: str) -> None:
+        self.warnings.append(message)
 
-    def add_task(self, _label: str, *, total: float, **fields: object) -> int:
-        self.tasks.append(FakeRichTask(total=total, fields=fields))
-        return len(self.tasks) - 1
-
-    def _update(self, task_id: int, *, advance: float = 0.0, **fields: object) -> None:
-        task = self.tasks[task_id]
-        task.completed += advance
-        task.fields.update(fields)
-
-    @property
-    def added_task(self) -> tuple[float, dict[str, object]]:
-        task = self.tasks[0]
-        return task.total, task.fields
-
-
-@pytest.fixture
-def fake_rich_progress(monkeypatch: pytest.MonkeyPatch) -> list[FakeRichProgress]:
-    progresses: list[FakeRichProgress] = []
-
-    def fake_progress(*_args: object, **_kwargs: object) -> FakeRichProgress:
-        progress = FakeRichProgress()
-        progresses.append(progress)
-        return progress
-
-    def fake_column(*_args: object, **_kwargs: object) -> object:
-        return object()
-
-    monkeypatch.setattr("webinar_transcriber.ui.Progress", fake_progress)
-    monkeypatch.setattr("webinar_transcriber.ui.SpinnerColumn", fake_column)
-    monkeypatch.setattr("webinar_transcriber.ui.TextColumn", fake_column)
-    monkeypatch.setattr("webinar_transcriber.ui.BarColumn", fake_column)
-    monkeypatch.setattr("webinar_transcriber.ui.TaskProgressColumn", fake_column)
-    monkeypatch.setattr("webinar_transcriber.ui.TimeRemainingColumn", fake_column)
-    monkeypatch.setattr("webinar_transcriber.ui.TimeElapsedColumn", fake_column)
-    return progresses
+    def complete_run(self, artifacts: ProcessArtifacts) -> None:
+        self.completed = artifacts
 
 
 def process_artifacts(input_path: Path, run_dir: Path) -> ProcessArtifacts:
@@ -184,9 +195,7 @@ class FakeSherpaModule:
         self, config: FakeSherpaVadModelConfig, *, buffer_size_in_seconds: int
     ) -> FakeSherpaVoiceActivityDetector:
         detector = FakeSherpaVoiceActivityDetector(
-            config,
-            buffer_size_in_seconds=buffer_size_in_seconds,
-            segments=self._segments,
+            config, buffer_size_in_seconds=buffer_size_in_seconds, segments=self._segments
         )
         self.detectors.append(detector)
         return detector
@@ -208,49 +217,6 @@ class PipelineRuntime:
     audio_samples: np.ndarray
     sample_rate: int = 16_000
     vad_warnings: list[str] | None = None
-
-
-class RecordingReporter(BaseStageReporter):
-    """Small reporter fake that records observable pipeline notifications."""
-
-    def __init__(self) -> None:
-        self.started: list[tuple[str, str]] = []
-        self.finished: list[tuple[str, str]] = []
-        self.progress: list[tuple[str, str, float, str | None]] = []
-        self.warnings: list[str] = []
-        self.completed: ProcessArtifacts | None = None
-
-    def stage_started(self, stage_key: str, label: str) -> None:
-        self.started.append((stage_key, label))
-
-    def progress_started(
-        self,
-        stage_key: str,
-        label: str,
-        *,
-        total: float,
-        count_label: str | None = None,
-        rate_label: str | None = None,
-        detail: str | None = None,
-    ) -> None:
-        del count_label, rate_label
-        self.started.append((stage_key, label))
-        self.progress.append(("start", stage_key, total, detail))
-
-    def progress_advanced(
-        self, stage_key: str, *, advance: float = 1.0, detail: str | None = None
-    ) -> None:
-        self.progress.append(("advance", stage_key, advance, detail))
-
-    def stage_finished(self, stage_key: str, label: str, *, detail: str | None = None) -> None:
-        del label
-        self.finished.append((stage_key, detail or ""))
-
-    def warn(self, message: str) -> None:
-        self.warnings.append(message)
-
-    def complete_run(self, artifacts: ProcessArtifacts) -> None:
-        self.completed = artifacts
 
 
 class FakeTranscriber(WhisperCppTranscriber):
@@ -334,8 +300,7 @@ def install_pipeline_runtime(
     def fake_detect_speech_regions(*_args, progress_callback=None, **_kwargs):
         if progress_callback is not None:
             progress_callback(
-                len(runtime.audio_samples) / runtime.sample_rate,
-                len(runtime.speech_regions),
+                len(runtime.audio_samples) / runtime.sample_rate, len(runtime.speech_regions)
             )
         return runtime.speech_regions, list(runtime.vad_warnings or [])
 
@@ -344,16 +309,14 @@ def install_pipeline_runtime(
         fake_prepared_transcription_audio,
     )
     monkeypatch.setattr(
-        "webinar_transcriber.processor.probe_media",
-        lambda _input_path: runtime.media_asset,
+        "webinar_transcriber.processor.probe_media", lambda _input_path: runtime.media_asset
     )
     monkeypatch.setattr(
-        "webinar_transcriber.processor.asr_pipeline.load_normalized_audio",
+        "webinar_transcriber.processor.load_normalized_audio",
         lambda _path: (runtime.audio_samples, runtime.sample_rate),
     )
     monkeypatch.setattr(
-        "webinar_transcriber.processor.asr_pipeline.detect_speech_regions",
-        fake_detect_speech_regions,
+        "webinar_transcriber.processor.detect_speech_regions", fake_detect_speech_regions
     )
 
 
@@ -384,9 +347,9 @@ def install_video_scene_runtime(
                 progress_callback(index)
         return extracted_frames
 
-    monkeypatch.setattr("webinar_transcriber.video.detect_scenes", fake_detect_scenes)
+    monkeypatch.setattr("webinar_transcriber.processor.detect_scenes", fake_detect_scenes)
     monkeypatch.setattr(
-        "webinar_transcriber.video.extract_representative_frames", fake_extract_frames
+        "webinar_transcriber.processor.extract_representative_frames", fake_extract_frames
     )
 
 

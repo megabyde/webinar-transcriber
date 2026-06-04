@@ -9,16 +9,16 @@ import click
 from webinar_transcriber import __version__
 from webinar_transcriber.asr import (
     WHISPER_CPP_MODEL_FILENAME,
-    ASRProcessingError,
+    AsrProcessingError,
     default_asr_threads,
 )
 from webinar_transcriber.diarization import DiarizationProcessingError, SherpaOnnxDiarizer
 from webinar_transcriber.llm import build_llm_processor_from_env
-from webinar_transcriber.llm.contracts import LLMConfigurationError, LLMProcessingError
+from webinar_transcriber.llm.contracts import LlmConfigurationError, LlmProcessingError
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.processor import TranscriptionConfig, process_input
-from webinar_transcriber.ui import RichStageReporter
+from webinar_transcriber.ui import StageReporter
 
 _THREADS_DEFAULT = default_asr_threads()
 
@@ -72,11 +72,7 @@ def _resolve_threads(_ctx: click.Context, _param: click.Parameter, value: int | 
     show_default=True,
     help="Number of local audio-processing threads. Defaults to the host CPU count, capped at 8.",
 )
-@click.option(
-    "--keep-audio",
-    is_flag=True,
-    help="Keep normalized transcription audio as mp3.",
-)
+@click.option("--keep-audio", is_flag=True, help="Keep normalized transcription audio as mp3.")
 @click.option("--llm", is_flag=True, help="Enable optional provider-backed report enhancement.")
 @click.option(
     "--diarize/--no-diarize",
@@ -107,12 +103,9 @@ def main(
         raise CLIError("--output-dir can only be used with one input file.")
 
     transcription_config = TranscriptionConfig(
-        threads=threads,
-        asr_model=asr_model,
-        language=language,
-        keep_audio=keep_audio,
+        threads=threads, asr_model=asr_model, language=language, keep_audio=keep_audio
     )
-    reporter = RichStageReporter()
+    reporter = StageReporter()
 
     try:
         llm_processor = build_llm_processor_from_env(threads=threads) if llm else None
@@ -131,10 +124,10 @@ def main(
         reporter.interrupted()
         raise click.exceptions.Exit(130) from None
     except (
-        ASRProcessingError,
+        AsrProcessingError,
         DiarizationProcessingError,
-        LLMConfigurationError,
-        LLMProcessingError,
+        LlmConfigurationError,
+        LlmProcessingError,
         MediaProcessingError,
         OutputDirectoryExistsError,
     ) as error:

@@ -249,11 +249,7 @@ class TestBuildReport:
                         speaker="S1",
                     ),
                     TranscriptSegment(
-                        id="segment-3",
-                        text="Next steps.",
-                        start_sec=4.0,
-                        end_sec=6.0,
-                        speaker="S2",
+                        id="segment-3", text="Next steps.", start_sec=4.0, end_sec=6.0, speaker="S2"
                     ),
                 ]
             ),

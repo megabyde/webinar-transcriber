@@ -124,7 +124,7 @@ def _output_fds() -> list[int]:
     return fds
 
 
-class ASRProcessingError(RuntimeError):
+class AsrProcessingError(RuntimeError):
     """Raised when the whisper.cpp ASR adapter cannot prepare or run."""
 
 
@@ -183,7 +183,7 @@ class WhisperCppTranscriber:
         """Resolve the model and initialize one pywhispercpp model instance.
 
         Raises:
-            ASRProcessingError: If model resolution or model creation fails.
+            AsrProcessingError: If model resolution or model creation fails.
         """
         self._model_name = self._resolve_model_name()
         self.close()
@@ -203,9 +203,9 @@ class WhisperCppTranscriber:
                 model_cls = cast("Any", _model_cls())
                 model = cast("Model", model_cls(self._model_name, **model_kwargs))
         except Exception as error:
-            raise ASRProcessingError(_model_prepare_error_message(self._model_name)) from error
+            raise AsrProcessingError(_model_prepare_error_message(self._model_name)) from error
         if getattr(model, "_ctx", True) is None:
-            raise ASRProcessingError(_model_prepare_error_message(self._model_name))
+            raise AsrProcessingError(_model_prepare_error_message(self._model_name))
         self._model = model
 
     def transcribe_inference_windows(
@@ -224,8 +224,7 @@ class WhisperCppTranscriber:
         """
         model = self._ensure_model()
         ordered_windows = sorted(
-            windows,
-            key=lambda item: (item.start_sec, item.end_sec, item.region_index, item.id),
+            windows, key=lambda item: (item.start_sec, item.end_sec, item.region_index, item.id)
         )
         forced_language = language.strip() if language else self._language
         language_hint: str | None = forced_language
@@ -279,7 +278,7 @@ class WhisperCppTranscriber:
         if self._model is None:
             self.prepare_model()
         if self._model is None:
-            raise ASRProcessingError(
+            raise AsrProcessingError(
                 "pywhispercpp model was not initialized during model preparation."
             )
         return self._model
@@ -291,7 +290,7 @@ class WhisperCppTranscriber:
             return self._requested_model_name
         configured_model_path = Path(self._requested_model_name).expanduser()
         if not configured_model_path.exists():
-            raise ASRProcessingError(_missing_model_error_message(configured_model_path))
+            raise AsrProcessingError(_missing_model_error_message(configured_model_path))
         return str(configured_model_path)
 
     def _transcribe_window(
@@ -336,7 +335,7 @@ class WhisperCppTranscriber:
                 window_samples, **transcribe_kwargs
             )
         except Exception as error:
-            raise ASRProcessingError(f"whisper.cpp inference failed for {window.id}.") from error
+            raise AsrProcessingError(f"whisper.cpp inference failed for {window.id}.") from error
 
         segments: list[TranscriptSegment] = []
         for segment_index, raw_segment in enumerate(raw_segments):
@@ -348,7 +347,7 @@ class WhisperCppTranscriber:
                     text=str(raw_segment.text).strip(),
                     start_sec=max(window.start_sec, seg_start),
                     end_sec=min(window.end_sec, max(seg_start, seg_end)),
-                ),
+                )
             )
         return DecodedWindow(
             window=window,

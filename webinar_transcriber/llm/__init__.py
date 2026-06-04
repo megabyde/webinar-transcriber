@@ -10,12 +10,12 @@ from typing import TYPE_CHECKING, Any, cast
 from webinar_transcriber._env import llm_provider_name
 
 from .contracts import (
-    LLMConfigurationError,
-    LLMProcessingError,
-    LLMProcessor,
-    LLMReportMetadataResult,
-    LLMReportPolishPlan,
-    LLMSectionPolishResult,
+    LlmConfigurationError,
+    LlmProcessingError,
+    LlmProcessor,
+    LlmReportMetadataResult,
+    LlmReportPolishPlan,
+    LlmSectionPolishResult,
 )
 from .prompts import ACTION_ITEM_LIMIT, REPORT_POLISH_TOTAL_CHAR_BUDGET
 from .utils import required_provider_env
@@ -41,10 +41,7 @@ class ProviderSpec:
 
 PROVIDERS = {
     "openai": ProviderSpec(
-        label="OpenAI",
-        module_name="openai",
-        api_key_env="OPENAI_API_KEY",
-        model_env="OPENAI_MODEL",
+        label="OpenAI", module_name="openai", api_key_env="OPENAI_API_KEY", model_env="OPENAI_MODEL"
     ),
     "anthropic": ProviderSpec(
         label="Anthropic",
@@ -60,27 +57,27 @@ def _required_llm_module(module_name: str, *, provider_label: str) -> object:
     try:
         return importlib.import_module(module_name)
     except ImportError as error:
-        raise LLMConfigurationError(
+        raise LlmConfigurationError(
             f"The {provider_label} provider requires the 'llm' extra. Install it with: "
             'uv tool install --reinstall ".[llm]"'
         ) from error
 
 
-def build_llm_processor_from_env(*, threads: int) -> LLMProcessor:
+def build_llm_processor_from_env(*, threads: int) -> LlmProcessor:
     """Build a configured LLM processor from environment variables.
 
     Returns:
-        LLMProcessor: The configured provider-backed processor.
+        LlmProcessor: The configured provider-backed processor.
 
     Raises:
-        LLMConfigurationError: If the provider selection or required environment is invalid.
+        LlmConfigurationError: If the provider selection or required environment is invalid.
     """
     from .processor import InstructorLLMProcessor  # noqa: PLC0415
 
     provider_name = llm_provider_name()
     spec = PROVIDERS.get(provider_name)
     if spec is None:
-        raise LLMConfigurationError(
+        raise LlmConfigurationError(
             "Unsupported LLM provider. Set LLM_PROVIDER to 'openai' or 'anthropic'."
         )
 
@@ -121,12 +118,12 @@ __all__ = [
     "ACTION_ITEM_LIMIT",
     "REPORT_POLISH_TOTAL_CHAR_BUDGET",
     "InstructorLLMProcessor",
-    "LLMConfigurationError",
-    "LLMProcessingError",
-    "LLMProcessor",
-    "LLMReportMetadataResult",
-    "LLMReportPolishPlan",
-    "LLMSectionPolishResult",
+    "LlmConfigurationError",
+    "LlmProcessingError",
+    "LlmProcessor",
+    "LlmReportMetadataResult",
+    "LlmReportPolishPlan",
+    "LlmSectionPolishResult",
     "ReportPolishResponse",
     "ReportSectionUpdate",
     "SectionTextResponse",
