@@ -8,9 +8,9 @@ import pytest
 from click.testing import CliRunner
 
 from webinar_transcriber import __version__
-from webinar_transcriber.asr import ASRProcessingError, default_asr_threads
+from webinar_transcriber.asr import AsrProcessingError, default_asr_threads
 from webinar_transcriber.cli import main
-from webinar_transcriber.llm.contracts import LLMConfigurationError, LLMProcessingError
+from webinar_transcriber.llm.contracts import LlmConfigurationError, LlmProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.processor import TranscriptionConfig
 from webinar_transcriber.tests.conftest import process_artifacts
@@ -63,8 +63,7 @@ class TestCli:
             input_path=input_path,
             output_dir=None,
             transcription_config=TranscriptionConfig(
-                threads=default_asr_threads(),
-                asr_model="large-v3-turbo",
+                threads=default_asr_threads(), asr_model="large-v3-turbo"
             ),
             llm_processor=None,
             diarizer=None,
@@ -72,7 +71,7 @@ class TestCli:
             reporter=ANY,
         )
         assert process_input_mock.call_args.kwargs["reporter"].__class__.__name__ == (
-            "RichStageReporter"
+            "StageReporter"
         )
 
     def test_runs_multiple_inputs_sequentially(self, tmp_path) -> None:
@@ -111,8 +110,7 @@ class TestCli:
                 return_value=process_artifacts(input_path, run_dir),
             ) as process_input_mock,
             patch(
-                "webinar_transcriber.cli.build_llm_processor_from_env",
-                return_value=llm_processor,
+                "webinar_transcriber.cli.build_llm_processor_from_env", return_value=llm_processor
             ) as build_llm_processor_mock,
             patch(
                 "webinar_transcriber.cli.SherpaOnnxDiarizer", return_value=diarizer
@@ -141,10 +139,7 @@ class TestCli:
             input_path=input_path,
             output_dir=None,
             transcription_config=TranscriptionConfig(
-                threads=3,
-                asr_model="models/whisper-cpp/custom.bin",
-                language="en",
-                keep_audio=True,
+                threads=3, asr_model="models/whisper-cpp/custom.bin", language="en", keep_audio=True
             ),
             llm_processor=llm_processor,
             diarizer=diarizer,
@@ -212,13 +207,7 @@ class TestCli:
 
         with patch("webinar_transcriber.cli.process_input") as process_input_mock:
             result = runner.invoke(
-                main,
-                [
-                    str(first_input),
-                    str(second_input),
-                    "--output-dir",
-                    str(tmp_path / "run"),
-                ],
+                main, [str(first_input), str(second_input), "--output-dir", str(tmp_path / "run")]
             )
 
         assert result.exit_code != 0
@@ -246,9 +235,9 @@ class TestCli:
     @pytest.mark.parametrize(
         ("error", "message"),
         [
-            (ASRProcessingError("missing ASR model"), "missing ASR model"),
-            (LLMConfigurationError("missing LLM config"), "missing LLM config"),
-            (LLMProcessingError("LLM request failed"), "LLM request failed"),
+            (AsrProcessingError("missing ASR model"), "missing ASR model"),
+            (LlmConfigurationError("missing LLM config"), "missing LLM config"),
+            (LlmProcessingError("LLM request failed"), "LLM request failed"),
         ],
     )
     def test_reports_expected_runtime_errors_as_cli_errors(
@@ -272,7 +261,7 @@ class TestCli:
         with (
             patch(
                 "webinar_transcriber.cli.build_llm_processor_from_env",
-                side_effect=LLMConfigurationError("missing LLM config"),
+                side_effect=LlmConfigurationError("missing LLM config"),
             ),
             patch("webinar_transcriber.cli.process_input") as process_input_mock,
         ):
@@ -292,7 +281,7 @@ class TestCli:
                 "webinar_transcriber.cli.process_input",
                 side_effect=OutputDirectoryExistsError("Output directory already exists: demo"),
             ),
-            patch("webinar_transcriber.cli.RichStageReporter.reset_active_display") as reset_mock,
+            patch("webinar_transcriber.cli.StageReporter.reset_active_display") as reset_mock,
         ):
             result = runner.invoke(main, [str(input_path)])
 
@@ -311,7 +300,7 @@ class TestCli:
 
         with (
             patch("webinar_transcriber.cli.process_input", side_effect=KeyboardInterrupt),
-            patch("webinar_transcriber.cli.RichStageReporter", return_value=FakeReporter()),
+            patch("webinar_transcriber.cli.StageReporter", return_value=FakeReporter()),
         ):
             result = runner.invoke(main, [str(input_path)])
 

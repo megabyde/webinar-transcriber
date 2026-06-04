@@ -10,10 +10,10 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Protocol
 
 from .contracts import (
-    LLMProcessingError,
-    LLMReportMetadataResult,
-    LLMReportPolishPlan,
-    LLMSectionPolishResult,
+    LlmProcessingError,
+    LlmReportMetadataResult,
+    LlmReportPolishPlan,
+    LlmSectionPolishResult,
     PolishedSection,
     SectionPolishOutputs,
 )
@@ -98,13 +98,11 @@ class InstructorLLMProcessor:
 
     def polish_report_sections_with_progress(
         self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
-    ) -> LLMSectionPolishResult:
+    ) -> LlmSectionPolishResult:
         """Return polished section text with per-section progress updates."""
         warnings: list[str] = []
         polished_section_texts = self._polish_section_texts(
-            report,
-            progress_callback=progress_callback,
-            warnings=warnings,
+            report, progress_callback=progress_callback, warnings=warnings
         )
         section_tldrs = {
             section_id: section.tldr
@@ -115,7 +113,7 @@ class InstructorLLMProcessor:
             section_id: section.transcript
             for section_id, section in polished_section_texts.sections.items()
         }
-        return LLMSectionPolishResult(
+        return LlmSectionPolishResult(
             section_tldrs=section_tldrs,
             section_transcripts=section_transcripts,
             response_metadata=polished_section_texts.response_metadata,
@@ -124,7 +122,7 @@ class InstructorLLMProcessor:
 
     def polish_report_metadata(
         self, report: ReportDocument, *, section_transcripts: dict[str, str]
-    ) -> LLMReportMetadataResult:
+    ) -> LlmReportMetadataResult:
         """Return polished summary, action items, and section titles."""
         payload = build_report_polish_payload(
             report,
@@ -138,16 +136,16 @@ class InstructorLLMProcessor:
             error_prefix="Report polishing failed",
         )
 
-        return LLMReportMetadataResult(
+        return LlmReportMetadataResult(
             summary=normalize_report_lines(parsed.summary, limit=SUMMARY_ITEM_LIMIT),
             action_items=normalize_report_lines(parsed.action_items, limit=ACTION_ITEM_LIMIT),
             section_titles=validated_section_titles(report, parsed.section_updates),
             response_metadata=[{"stage": "report_polish", **response_metadata}],
         )
 
-    def report_polish_plan(self, report: ReportDocument) -> LLMReportPolishPlan:
+    def report_polish_plan(self, report: ReportDocument) -> LlmReportPolishPlan:
         """Return concurrency details for report polishing."""
-        return LLMReportPolishPlan(
+        return LlmReportPolishPlan(
             section_count=len(report.sections),
             worker_count=min(self._threads, max(len(report.sections), 1)),
         )
@@ -188,30 +186,22 @@ class InstructorLLMProcessor:
         for index in range(len(report.sections)):
             result = section_results[index]
             polished_sections[result.section_id] = PolishedSection(
-                id=result.section_id,
-                transcript=result.transcript_text,
-                tldr=result.tldr,
+                id=result.section_id, transcript=result.transcript_text, tldr=result.tldr
             )
             response_metadata.append(result.response_metadata)
             warnings.extend(result.warnings)
 
-        return SectionPolishOutputs(
-            sections=polished_sections,
-            response_metadata=response_metadata,
-        )
+        return SectionPolishOutputs(sections=polished_sections, response_metadata=response_metadata)
 
     def _polish_section(self, section: ReportSection) -> SectionPolishResult:
         try:
             return self._polish_section_text(section)
-        except LLMProcessingError as error:
+        except LlmProcessingError as error:
             return SectionPolishResult(
                 section_id=section.id,
                 transcript_text=section.transcript_text,
                 tldr=section.tldr or "",
-                response_metadata={
-                    "stage": "section_polish",
-                    "section_id": section.id,
-                },
+                response_metadata={"stage": "section_polish", "section_id": section.id},
                 warnings=[str(error)],
             )
 
@@ -231,8 +221,7 @@ class InstructorLLMProcessor:
         )
 
         transcript_text = normalize_polished_section_text(
-            original_text=section.transcript_text,
-            polished_text=parsed.transcript_text,
+            original_text=section.transcript_text, polished_text=parsed.transcript_text
         )
         tldr = normalize_polished_section_tldr(parsed.tldr)
         warnings: list[str] = []
@@ -273,10 +262,10 @@ class InstructorLLMProcessor:
                 **self._request_kwargs,
             )
         except Exception as error:  # pragma: no cover - backend-specific SDK errors
-            raise LLMProcessingError(f"{error_prefix}: {error}") from error
+            raise LlmProcessingError(f"{error_prefix}: {error}") from error
 
         if not isinstance(parsed, response_model):
-            raise LLMProcessingError(
+            raise LlmProcessingError(
                 f"{schema_label(response_model)} response did not match the schema."
             )
         return parsed, extract_response_metadata(completion)

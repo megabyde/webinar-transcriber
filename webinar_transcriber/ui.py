@@ -1,8 +1,9 @@
-"""Rich-based terminal progress reporting."""
+"""Terminal progress reporting."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from time import perf_counter
 from typing import TYPE_CHECKING
 
@@ -11,6 +12,7 @@ from rich.panel import Panel
 from rich.progress import (
     BarColumn,
     Progress,
+    ProgressColumn,
     SpinnerColumn,
     TaskID,
     TaskProgressColumn,
@@ -22,171 +24,117 @@ from rich.table import Table
 from rich.text import Text
 
 from webinar_transcriber.export.formatting import format_duration
-from webinar_transcriber.reporter import BaseStageReporter
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
-
-    from rich.status import Status
 
     from webinar_transcriber.processor import ProcessArtifacts
 
 
-@dataclass(frozen=True)
-class _ActiveStage:
+@dataclass
+class StageHandle:
+    """State for one in-progress stage."""
+
     key: str
     label: str
     started_at: float
+    total: float | None
+    detail: str | None = None
+    completed: float = 0.0
+    _progress: Progress | None = field(default=None, repr=False)
+    _task_id: TaskID | None = field(default=None, repr=False)
+
+    def elapsed_sec(self) -> float:
+        """Return seconds since the stage started."""
+        return perf_counter() - self.started_at
+
+    def update(
+        self,
+        *,
+        advance: float | None = None,
+        completed: float | None = None,
+        detail: str | None = None,
+    ) -> None:
+        """Advance the stage and/or update its detail string."""
+        if completed is not None:
+            advance = max(0.0, completed - self.completed)
+        applied_advance = advance if advance is not None and advance > 0 else 0.0
+        if applied_advance > 0:
+            self.completed += applied_advance
+        if detail is not None:
+            self.detail = detail
+        if self._progress is not None and self._task_id is not None:
+            description = f"{self.label} - {self.detail}" if self.detail else self.label
+            self._progress.update(self._task_id, advance=applied_advance, description=description)
 
 
-@dataclass(frozen=True)
-class _ActiveStatusDisplay:
-    status: Status
-
-
-@dataclass(frozen=True)
-class _ActiveProgressDisplay:
-    progress: Progress
-    task_id: TaskID
-
-
-class RichStageReporter(BaseStageReporter):
-    """Terminal reporter using Rich status spinners and summaries."""
+class StageReporter:
+    """Terminal reporter using Rich progress displays."""
 
     def __init__(self, console: Console | None = None) -> None:
-        """Initialize the Rich-backed terminal reporter."""
+        """Initialize the reporter with an optional Rich console."""
         self._console = console or Console()
-        self._active_display: _ActiveStatusDisplay | _ActiveProgressDisplay | None = None
-        self._active_stage: _ActiveStage | None = None
-        self._stage_count = 0
+        self._active_progress: Progress | None = None
+        self._active_handle: StageHandle | None = None
 
     def begin_run(self, input_path: Path) -> None:
         """Render the start of a processing run."""
         self._console.print(f"[bold cyan]Starting[/] {input_path.name}")
 
-    def stage_started(self, stage_key: str, label: str) -> None:
-        """Start an indeterminate stage spinner."""
-        self._stop_active_display()
-        self._stage_count += 1
-        self._set_active_stage(stage_key, label)
-        status = self._console.status(self._stage_status_text(label), spinner="dots")
-        self._active_display = _ActiveStatusDisplay(status=status)
-        status.start()
-
-    def stage_detail_updated(self, stage_key: str, label: str, *, detail: str) -> None:
-        """Update an active indeterminate stage spinner."""
-        active_stage = self._active_stage
-        active_display = self._active_display
-        if (
-            active_stage is None
-            or active_stage.key != stage_key
-            or not isinstance(active_display, _ActiveStatusDisplay)
-        ):
-            return
-        active_display.status.update(self._stage_status_text(label, detail=detail))
-
-    def progress_started(
-        self,
-        stage_key: str,
-        label: str,
-        *,
-        total: float,
-        count_label: str | None = None,
-        rate_label: str | None = None,
-        detail: str | None = None,
-    ) -> None:
-        """Start a determinate progress display for a stage."""
-        self._stop_active_display()
-        self._stage_count += 1
-        self._set_active_stage(stage_key, label)
+    @contextmanager
+    def track(
+        self, key: str, label: str, *, total: float | None = None, detail: str | None = None
+    ) -> Iterator[StageHandle]:
+        """Open a stage display and yield a handle for progress updates."""
         progress = Progress(
-            SpinnerColumn(),
-            TextColumn(f"[bold blue][{self._stage_count}][/bold blue] {label}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            TextColumn("{task.fields[count_text]}", style="progress.data.speed"),
-            TextColumn("{task.fields[rate_text]}", style="progress.data.speed"),
-            TextColumn("{task.fields[detail_text]}", style="dim"),
-            TextColumn("ETA"),
-            TimeRemainingColumn(compact=True),
-            TimeElapsedColumn(),
-            console=self._console,
-            transient=True,
+            *self._columns(determinate=total is not None), console=self._console, transient=True
         )
+        description = f"{label} - {detail}" if detail else label
         progress.start()
-        task_id = progress.add_task(
-            label,
-            total=max(total, 1.0),
-            count_label=count_label,
-            count_text=_count_text(
-                completed=0.0,
-                total=max(total, 1.0),
-                count_label=count_label,
-            )
-            or "",
-            rate_label=rate_label,
-            rate_text="",
-            detail_text=detail or "",
+        task_id = progress.add_task(description, total=total)
+        handle = StageHandle(
+            key=key,
+            label=label,
+            started_at=perf_counter(),
+            total=total,
+            detail=detail,
+            _progress=progress,
+            _task_id=task_id,
         )
-        self._active_display = _ActiveProgressDisplay(progress=progress, task_id=task_id)
-
-    def progress_advanced(
-        self, stage_key: str, *, advance: float = 1.0, detail: str | None = None
-    ) -> None:
-        """Advance the active determinate progress display."""
-        active_stage = self._active_stage
-        if active_stage is None or active_stage.key != stage_key:
-            return
-        active_display = self._active_display
-        if not isinstance(active_display, _ActiveProgressDisplay):
-            return
-        active_display.progress.update(
-            active_display.task_id, advance=advance, detail_text=detail or ""
-        )
-        task = active_display.progress.tasks[active_display.task_id]
-        active_display.progress.update(
-            active_display.task_id,
-            count_text=_count_text(
-                completed=task.completed,
-                total=task.total,
-                count_label=task.fields.get("count_label"),
-            )
-            or "",
-            rate_text=_rate_text(
-                completed=task.completed,
-                elapsed_sec=perf_counter() - active_stage.started_at,
-                rate_label=task.fields.get("rate_label"),
-            )
-            or "",
-        )
-
-    def stage_finished(self, stage_key: str, label: str, *, detail: str | None = None) -> None:
-        """Stop the active display and render a finished-stage line."""
-        self._stop_active_display()
-        elapsed = 0.0
-        if self._active_stage is not None and self._active_stage.key == stage_key:
-            elapsed = perf_counter() - self._active_stage.started_at
-
-        detail_suffix = f" - {detail}" if detail else ""
-        self._console.print(f"[green]\u2713[/] {label}{detail_suffix} [dim]({elapsed:.2f}s)[/]")
-        self._clear_active_stage()
+        self._active_progress = progress
+        self._active_handle = handle
+        completed_normally = False
+        try:
+            yield handle
+            completed_normally = True
+        finally:
+            self._stop_active_progress()
+            if completed_normally:
+                elapsed = handle.elapsed_sec()
+                detail_suffix = f" - {handle.detail}" if handle.detail else ""
+                self._console.print(
+                    f"[green]✓[/] {handle.label}{detail_suffix} [dim]({elapsed:.2f}s)[/]"
+                )
+                self._clear_active()
 
     def warn(self, message: str) -> None:
         """Render a warning message."""
-        self._stop_active_display()
         self._console.print(f"[yellow]![/] {message}")
 
     def interrupted(self) -> None:
-        """Render an interrupted-run message."""
-        stage_suffix = ""
-        if self._active_stage is not None:
-            stage_suffix = f" during {self._active_stage.label.lower()}"
-        self._clear_active_display()
-        self._console.print(f"[red]\u2717[/] Interrupted{stage_suffix}.")
+        """Render an interrupted-run message referencing the active stage if any."""
+        suffix = ""
+        if self._active_handle is not None:
+            suffix = f" during {self._active_handle.label.lower()}"
+        self._stop_active_progress()
+        self._clear_active()
+        self._console.print(f"[red]✗[/] Interrupted{suffix}.")
 
     def reset_active_display(self) -> None:
-        """Clear any active spinner or progress bar."""
-        self._clear_active_display()
+        """Stop any active progress display and clear active-stage state."""
+        self._stop_active_progress()
+        self._clear_active()
 
     def complete_run(self, artifacts: ProcessArtifacts) -> None:
         """Render the completion summary panel."""
@@ -199,66 +147,38 @@ class RichStageReporter(BaseStageReporter):
         table.add_row("Diagnostics", Text(str(artifacts.layout.diagnostics_path), style="cyan"))
         table.add_row("Language", Text(artifacts.report.detected_language or "unknown"))
         table.add_row("Sections", Text(str(len(artifacts.report.sections))))
-        if processing_detail := _processing_detail(artifacts):
-            table.add_row("Processing", Text(processing_detail))
+        table.add_row("Processing", Text(_processing_detail(artifacts)))
         table.add_row("Warnings", warning_text)
         self._console.print()
         self._console.print(
             Panel.fit(table, title="[bold green]Completed[/]", border_style="green")
         )
 
-    def _stop_active_display(self) -> None:
-        active_display = self._active_display
-        if isinstance(active_display, _ActiveStatusDisplay):
-            active_display.status.stop()
-        elif isinstance(active_display, _ActiveProgressDisplay):
-            active_display.progress.stop()
-        self._active_display = None
+    def _stop_active_progress(self) -> None:
+        if self._active_progress is not None:
+            self._active_progress.stop()
+        self._active_progress = None
 
-    def _clear_active_display(self) -> None:
-        self._stop_active_display()
-        self._clear_active_stage()
+    def _clear_active(self) -> None:
+        self._active_handle = None
 
-    def _set_active_stage(self, stage_key: str, label: str) -> None:
-        self._active_stage = _ActiveStage(key=stage_key, label=label, started_at=perf_counter())
-
-    def _clear_active_stage(self) -> None:
-        self._active_stage = None
-
-    def _stage_status_text(self, label: str, *, detail: str | None = None) -> str:
-        detail_suffix = f" - {detail}" if detail else ""
-        return f"[bold blue][{self._stage_count}][/bold blue] {label}{detail_suffix}"
-
-
-def _count_text(*, completed: float, total: float | None, count_label: object) -> str | None:
-    if total is None or not count_label:
-        return None
-
-    completed_count = int(completed)
-    total_count = int(total)
-    sep = "" if count_label in {"s", "ms", "%"} else " "
-    return f"{completed_count}/{total_count}{sep}{count_label}"
+    @staticmethod
+    def _columns(*, determinate: bool) -> tuple[ProgressColumn, ...]:
+        middle: tuple[ProgressColumn, ...] = (
+            (
+                BarColumn(),
+                TaskProgressColumn(),
+                TextColumn("ETA"),
+                TimeRemainingColumn(compact=True),
+            )
+            if determinate
+            else ()
+        )
+        return (SpinnerColumn(), TextColumn("{task.description}"), *middle, TimeElapsedColumn())
 
 
-def _rate_text(*, completed: float, elapsed_sec: float, rate_label: object) -> str | None:
-    if not rate_label or completed <= 0:
-        return None
-    if elapsed_sec <= 0:
-        return None
-
-    rate = completed / elapsed_sec
-    display_rate = f"{rate:.0f}" if rate >= 100 else f"{rate:.1f}"
-    return f"{display_rate} {rate_label}"
-
-
-def _processing_detail(artifacts: ProcessArtifacts) -> str | None:
+def _processing_detail(artifacts: ProcessArtifacts) -> str:
     total_sec = sum(artifacts.diagnostics.stage_durations_sec.values())
-    if total_sec <= 0:  # pragma: no cover - defensive fallback for malformed diagnostics
-        return None
-
     media_duration_sec = artifacts.media_asset.duration_sec
-    if media_duration_sec <= 0:  # pragma: no cover - media probing guarantees duration
-        return format_duration(total_sec)
-
     rtf = format(round(media_duration_sec / total_sec, 2), "g")
     return f"{format_duration(total_sec)} | RTF {rtf}x"

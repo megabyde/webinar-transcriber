@@ -27,9 +27,6 @@ class Diarizer(Protocol):
         """Prepare models for one diarization run."""
 
     def diarize(
-        self,
-        samples: np.ndarray,
-        *,
-        progress_callback: Callable[[int, int], None] | None = None,
+        self, samples: np.ndarray, *, progress_callback: Callable[[int, int], None] | None = None
     ) -> list[SpeakerTurn]:
         """Return speaker turns for normalized audio samples."""

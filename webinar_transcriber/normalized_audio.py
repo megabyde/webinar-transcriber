@@ -38,10 +38,7 @@ class _AudioOutputSpec:
 
 
 _AUDIO_OUTPUT_SPECS = {
-    "wav": _AudioOutputSpec(
-        output_codec=NORMALIZED_AUDIO_CODEC,
-        resample_format="s16",
-    ),
+    "wav": _AudioOutputSpec(output_codec=NORMALIZED_AUDIO_CODEC, resample_format="s16"),
     "mp3": _AudioOutputSpec(output_codec="mp3", resample_format="fltp"),
 }
 
@@ -77,8 +74,7 @@ def _transcode_audio_with_pyav(
         open_output_media_container(output_path) as output_container,
     ):
         output_stream = cast(
-            "AudioStream",
-            output_container.add_stream(output_codec, rate=NORMALIZED_SAMPLE_RATE),
+            "AudioStream", output_container.add_stream(output_codec, rate=NORMALIZED_SAMPLE_RATE)
         )
         output_stream.layout = "mono"
         resampler = av.AudioResampler(
@@ -134,10 +130,7 @@ def prepared_transcription_audio(
 
 
 def preserve_transcription_audio(
-    audio_path: Path,
-    output_path: Path,
-    *,
-    progress_callback: Callable[[float], None] | None = None,
+    audio_path: Path, output_path: Path, *, progress_callback: Callable[[float], None] | None = None
 ) -> Path:
     """Persist prepared transcription audio as an MP3 run artifact.
 
@@ -145,10 +138,7 @@ def preserve_transcription_audio(
         Path: The written artifact path.
     """
     return write_transcription_audio(
-        audio_path,
-        output_path,
-        audio_format="mp3",
-        progress_callback=progress_callback,
+        audio_path, output_path, audio_format="mp3", progress_callback=progress_callback
     )
 
 

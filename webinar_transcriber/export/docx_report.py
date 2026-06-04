@@ -58,10 +58,7 @@ def write_docx_report(
     document.add_heading("Sections", level=1)
     for section in report.sections:
         _add_section(
-            document,
-            section,
-            image_base_dir=output_path.parent,
-            warning_callback=warning_callback,
+            document, section, image_base_dir=output_path.parent, warning_callback=warning_callback
         )
 
     document.save(str(output_path))

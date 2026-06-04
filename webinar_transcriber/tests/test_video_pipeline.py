@@ -212,10 +212,7 @@ class TestFrameExtraction:
         progress_ticks: list[int] = []
         warnings: list[str] = []
         scenes = [_scene(1, 0.0, 2.0), _scene(2, 2.0, 4.0)]
-        container = FakeFrameContainer([
-            [FakeFrame(None)],
-            [FakeFrame(3.0)],
-        ])
+        container = FakeFrameContainer([[FakeFrame(None)], [FakeFrame(3.0)]])
 
         monkeypatch.setattr(
             "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: container
@@ -264,10 +261,7 @@ class TestFrameExtraction:
         progress_ticks: list[int] = []
         warnings: list[str] = []
         scenes = [_scene(1, 0.0, 2.0), _scene(2, 2.0, 4.0)]
-        container = FakeFrameContainer([
-            [FakeFrame(1.0)],
-            [FakeFrame(3.0, save_output=False)],
-        ])
+        container = FakeFrameContainer([[FakeFrame(1.0)], [FakeFrame(3.0, save_output=False)]])
 
         monkeypatch.setattr(
             "webinar_transcriber.video.frames.av.open", lambda *_args, **_kwargs: container
@@ -311,8 +305,7 @@ class TestFrameExtraction:
         warnings: list[str] = []
         scenes = [_scene(1, 0.0, 2.0), _scene(2, 2.0, 4.0)]
         monkeypatch.setattr(
-            "webinar_transcriber.video.frames.av.open",
-            Mock(side_effect=OSError("bad open")),
+            "webinar_transcriber.video.frames.av.open", Mock(side_effect=OSError("bad open"))
         )
 
         frames = extract_representative_frames(

@@ -10,9 +10,9 @@ from pydantic import BaseModel
 
 from webinar_transcriber.llm import (
     InstructorLLMProcessor,
-    LLMConfigurationError,
-    LLMProcessingError,
-    LLMReportPolishPlan,
+    LlmConfigurationError,
+    LlmProcessingError,
+    LlmReportPolishPlan,
     build_llm_processor_from_env,
 )
 from webinar_transcriber.llm import processor as llm_processor
@@ -61,14 +61,7 @@ class TestBuildLlmProcessorFromEnv:
             "provider_model",
         ),
         [
-            (
-                None,
-                "OPENAI_API_KEY",
-                "OPENAI_MODEL",
-                "openai",
-                "openai",
-                "openai/gpt-test",
-            ),
+            (None, "OPENAI_API_KEY", "OPENAI_MODEL", "openai", "openai", "openai/gpt-test"),
             (
                 "anthropic",
                 "ANTHROPIC_API_KEY",
@@ -107,10 +100,7 @@ class TestBuildLlmProcessorFromEnv:
         assert processor.provider_name == provider_name
         assert processor.model_name == provider_model.rsplit("/", 1)[1]
         assert fake_instructor.calls == [
-            (
-                provider_model,
-                {"api_key": "test-key", "mode": FakeInstructorModule.Mode.TOOLS},
-            )
+            (provider_model, {"api_key": "test-key", "mode": FakeInstructorModule.Mode.TOOLS})
         ]
 
     def test_requires_api_key_and_model(self, monkeypatch) -> None:
@@ -122,7 +112,7 @@ class TestBuildLlmProcessorFromEnv:
             fake_import_module({"instructor": FakeInstructorModule(object()), "openai": object()}),
         )
 
-        with pytest.raises(LLMConfigurationError):
+        with pytest.raises(LlmConfigurationError):
             build_llm_processor_from_env(threads=6)
 
     def test_requires_llm_extra_for_openai(self, monkeypatch) -> None:
@@ -132,7 +122,7 @@ class TestBuildLlmProcessorFromEnv:
         )
 
         with pytest.raises(
-            LLMConfigurationError,
+            LlmConfigurationError,
             match=rf"The OpenAI provider requires the 'llm' extra\..*{LLM_EXTRA_INSTALL_RE}",
         ):
             build_llm_processor_from_env(threads=6)
@@ -144,7 +134,7 @@ class TestBuildLlmProcessorFromEnv:
         )
 
         with pytest.raises(
-            LLMConfigurationError,
+            LlmConfigurationError,
             match=rf"The Anthropic provider requires the 'llm' extra\..*{LLM_EXTRA_INSTALL_RE}",
         ):
             build_llm_processor_from_env(threads=6)
@@ -152,7 +142,7 @@ class TestBuildLlmProcessorFromEnv:
     def test_rejects_unknown_provider(self, monkeypatch) -> None:
         monkeypatch.setenv("LLM_PROVIDER", "unknown")
 
-        with pytest.raises(LLMConfigurationError, match="Unsupported LLM provider"):
+        with pytest.raises(LlmConfigurationError, match="Unsupported LLM provider"):
             build_llm_processor_from_env(threads=6)
 
 
@@ -236,9 +226,7 @@ class TestInstructorLlmProcessor:
                     tldr="Short recap of the section.",
                     transcript_text="Agenda review and project status update.\n\nPlease listen.",
                 ),
-                self.FakeCompletion(
-                    finish_reason="stop",
-                ),
+                self.FakeCompletion(finish_reason="stop"),
             ),
             (
                 ReportPolishResponse(
@@ -402,18 +390,13 @@ class TestInstructorLlmProcessor:
 
         section_result = processor.polish_report_sections_with_progress(report)
 
-        with pytest.raises(LLMProcessingError):
+        with pytest.raises(LlmProcessingError):
             processor.polish_report_metadata(
                 report, section_transcripts=section_result.section_transcripts
             )
 
     def test_rejects_non_matching_schema(self) -> None:
-        fake_client = self.FakeClient([
-            (
-                object(),
-                self.FakeCompletion(),
-            )
-        ])
+        fake_client = self.FakeClient([(object(), self.FakeCompletion())])
 
         processor = InstructorLLMProcessor(
             client=fake_client, provider_name="openai", model_name="gpt-test", threads=6
@@ -433,7 +416,7 @@ class TestInstructorLlmProcessor:
             ],
         )
 
-        with pytest.raises(LLMProcessingError, match="Report polish response did not match"):
+        with pytest.raises(LlmProcessingError, match="Report polish response did not match"):
             processor.polish_report_metadata(
                 report,
                 section_transcripts={"section-1": "Agenda review and project status update."},
@@ -446,7 +429,7 @@ class TestInstructorLlmProcessor:
         )
         report = ReportDocument(title="Demo", source_file="demo.wav", media_type=MediaType.AUDIO)
 
-        with pytest.raises(LLMProcessingError, match="Report polishing failed: boom"):
+        with pytest.raises(LlmProcessingError, match="Report polishing failed: boom"):
             processor.polish_report_metadata(report, section_transcripts={})
 
     def test_polishes_each_section_text(self) -> None:
@@ -517,12 +500,7 @@ class TestInstructorLlmProcessor:
         assert progress_updates == [1, 1]
 
     def test_passes_request_kwargs_to_client(self) -> None:
-        fake_client = self.FakeClient([
-            (
-                ReportPolishResponse(),
-                self.FakeCompletion(),
-            )
-        ])
+        fake_client = self.FakeClient([(ReportPolishResponse(), self.FakeCompletion())])
         processor = InstructorLLMProcessor(
             client=fake_client,
             provider_name="anthropic",
@@ -556,10 +534,7 @@ class TestInstructorLlmProcessor:
             ),
         ])
         processor = InstructorLLMProcessor(
-            client=fake_client,
-            provider_name="openai",
-            model_name="gpt-test",
-            threads=6,
+            client=fake_client, provider_name="openai", model_name="gpt-test", threads=6
         )
         report = ReportDocument(
             title="Demo",
@@ -591,24 +566,19 @@ class TestInstructorLlmProcessor:
         )
         fake_client = self.RetryingFakeClient([self.ResponseProviderStatusError(400)])
         processor = InstructorLLMProcessor(
-            client=fake_client,
-            provider_name="openai",
-            model_name="gpt-test",
-            threads=6,
+            client=fake_client, provider_name="openai", model_name="gpt-test", threads=6
         )
         report = ReportDocument(title="Demo", source_file="demo.wav", media_type=MediaType.AUDIO)
 
         with pytest.raises(
-            LLMProcessingError, match="Report polishing failed: provider status 400"
+            LlmProcessingError, match="Report polishing failed: provider status 400"
         ):
             processor.polish_report_metadata(report, section_transcripts={})
 
         assert fake_client.retry_delays == []
         assert fake_client.attempt_count == 1
 
-    def test_reports_section_progress_in_completion_order_but_preserves_output_order(
-        self,
-    ) -> None:
+    def test_reports_section_progress_in_completion_order_but_preserves_output_order(self) -> None:
         section_2_done = Event()
         completions: list[str] = []
         progress_updates: list[int] = []
@@ -626,17 +596,13 @@ class TestInstructorLlmProcessor:
                 completions.append(section_id)
                 return (
                     SectionTextResponse(
-                        tldr=f"{section_id} recap.",
-                        transcript_text=f"{section_id} transcript.",
+                        tldr=f"{section_id} recap.", transcript_text=f"{section_id} transcript."
                     ),
                     fake_completion_cls(),
                 )
 
         processor = InstructorLLMProcessor(
-            client=CompletionOrderClient(),
-            provider_name="openai",
-            model_name="gpt-test",
-            threads=2,
+            client=CompletionOrderClient(), provider_name="openai", model_name="gpt-test", threads=2
         )
         report = ReportDocument(
             title="Demo",
@@ -773,7 +739,7 @@ class TestInstructorProcessorFlow:
             ],
         )
 
-        assert processor.report_polish_plan(report) == LLMReportPolishPlan(
+        assert processor.report_polish_plan(report) == LlmReportPolishPlan(
             section_count=2, worker_count=2
         )
 
@@ -807,10 +773,7 @@ class TestInstructorProcessorFlow:
 
     def test_warns_when_section_polish_returns_empty_transcript(self) -> None:
         processor = self.processor({
-            "section-1": (
-                SectionTextResponse(tldr="Recap.", transcript_text="   "),
-                object(),
-            )
+            "section-1": (SectionTextResponse(tldr="Recap.", transcript_text="   "), object())
         })
         report = ReportDocument(
             title="Demo",
@@ -848,8 +811,7 @@ class TestLlmNormalization:
 
     def test_normalize_polished_section_text_preserves_ellipsis_for_incomplete_source(self) -> None:
         normalized = normalize_polished_section_text(
-            original_text="Original sentence...",
-            polished_text="Rewritten sentence...",
+            original_text="Original sentence...", polished_text="Rewritten sentence..."
         )
 
         assert normalized == "Rewritten sentence..."
@@ -865,8 +827,7 @@ class TestLlmNormalization:
 
     def test_normalize_polished_section_text_accepts_concise_output(self) -> None:
         normalized = normalize_polished_section_text(
-            original_text="Long original text. " * 8,
-            polished_text="Too short.",
+            original_text="Long original text. " * 8, polished_text="Too short."
         )
 
         assert normalized == "Too short."
@@ -915,12 +876,12 @@ class TestLlmNormalization:
             ],
         )
 
-        with pytest.raises(LLMProcessingError, match="unknown section ID"):
+        with pytest.raises(LlmProcessingError, match="unknown section ID"):
             validated_section_titles(
                 report, [ReportSectionUpdate(id="section-x", title="Unexpected title")]
             )
 
-        with pytest.raises(LLMProcessingError, match="duplicate section IDs"):
+        with pytest.raises(LlmProcessingError, match="duplicate section IDs"):
             validated_section_titles(
                 report,
                 [
@@ -929,7 +890,7 @@ class TestLlmNormalization:
                 ],
             )
 
-        with pytest.raises(LLMProcessingError, match="empty section title"):
+        with pytest.raises(LlmProcessingError, match="empty section title"):
             validated_section_titles(report, [ReportSectionUpdate(id="section-1", title="   ")])
 
     def test_schema_label_covers_known_and_fallback_models(self) -> None:

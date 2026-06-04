@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from itertools import groupby
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from webinar_transcriber.models import (
     AlignmentBlock,
@@ -17,9 +16,6 @@ from webinar_transcriber.models import (
     TranscriptSegment,
     VideoAssetRef,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 AUDIO_SECTION_BREAK_GAP_SEC = 5.0
 TITLE_WORD_LIMIT = 6
@@ -66,7 +62,6 @@ def build_report(
     *,
     alignment_blocks: list[AlignmentBlock] | None = None,
     warnings: list[str] | None = None,
-    progress_callback: Callable[[int, int], None] | None = None,
 ) -> ReportDocument:
     """Build a report document from media metadata and transcript segments.
 
@@ -76,12 +71,10 @@ def build_report(
     transcript_segments = transcription.segments
     if alignment_blocks is not None:
         sections = build_sections_from_blocks(
-            alignment_blocks,
-            transcript_segments=transcript_segments,
-            progress_callback=progress_callback,
+            alignment_blocks, transcript_segments=transcript_segments
         )
     else:
-        sections = build_audio_sections(transcript_segments, progress_callback=progress_callback)
+        sections = build_audio_sections(transcript_segments)
     return ReportDocument(
         title=title_from_path(media_asset.path),
         source_file=media_asset.path,
@@ -95,16 +88,13 @@ def build_report(
 
 
 def build_sections_from_blocks(
-    blocks: list[AlignmentBlock],
-    *,
-    transcript_segments: list[TranscriptSegment],
-    progress_callback: Callable[[int, int], None] | None = None,
+    blocks: list[AlignmentBlock], *, transcript_segments: list[TranscriptSegment]
 ) -> list[ReportSection]:
     """Build report sections from scene-aligned transcript blocks."""
     segment_by_id = {segment.id: segment for segment in transcript_segments}
     sections: list[ReportSection] = []
 
-    for index, block in enumerate(blocks, start=1):
+    for block in blocks:
         block_segments = [
             segment_by_id[segment_id]
             for segment_id in block.transcript_segment_ids
@@ -115,17 +105,11 @@ def build_sections_from_blocks(
                 block, block_segments=block_segments, next_section_index=len(sections) + 1
             )
         )
-        if progress_callback is not None:
-            progress_callback(index, len(sections))
 
     return sections
 
 
-def build_audio_sections(
-    segments: list[TranscriptSegment],
-    *,
-    progress_callback: Callable[[int, int], None] | None = None,
-) -> list[ReportSection]:
+def build_audio_sections(segments: list[TranscriptSegment]) -> list[ReportSection]:
     """Build best-effort audio-only report sections from transcript timing gaps."""
     meaningful_segments = [seg for seg in segments if seg.text.strip()]
     if not meaningful_segments:
@@ -134,13 +118,11 @@ def build_audio_sections(
     sections: list[ReportSection] = []
     current_segments: list[TranscriptSegment] = []
 
-    for index, segment in enumerate(meaningful_segments, start=1):
+    for segment in meaningful_segments:
         if should_start_new_audio_section(current_segments, segment):
             sections.append(_audio_section_from_segments(current_segments, len(sections) + 1))
             current_segments = []
         current_segments.append(segment)
-        if progress_callback is not None:
-            progress_callback(index, len(sections) + 1)
 
     if current_segments:
         sections.append(_audio_section_from_segments(current_segments, len(sections) + 1))

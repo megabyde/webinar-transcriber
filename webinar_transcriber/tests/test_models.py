@@ -121,7 +121,7 @@ class TestCoreModels:
                 TranscriptSegment(
                     id="segment-2", text="world", start_sec=1.0, end_sec=2.0, speaker="S1"
                 ),
-            ],
+            ]
         )
 
         payload = transcription.to_json()
@@ -145,8 +145,7 @@ class TestCoreModels:
         window_ids = [
             window.id
             for window in sorted(
-                windows,
-                key=lambda item: (item.start_sec, item.end_sec, item.region_index, item.id),
+                windows, key=lambda item: (item.start_sec, item.end_sec, item.region_index, item.id)
             )
         ]
 

@@ -16,12 +16,7 @@ class OutputDirectoryExistsError(FileExistsError):
 def _slugify_stem(path: Path) -> str:
     stem = (
         re
-        .sub(
-            r"[^\w]+",
-            "-",
-            unicodedata.normalize("NFKC", path.stem),
-            flags=re.UNICODE,
-        )
+        .sub(r"[^\w]+", "-", unicodedata.normalize("NFKC", path.stem), flags=re.UNICODE)
         .strip("_-")
         .lower()
     )
