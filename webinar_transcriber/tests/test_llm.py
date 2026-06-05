@@ -16,7 +16,7 @@ from webinar_transcriber.llm import (
     build_llm_processor_from_env,
 )
 from webinar_transcriber.llm import processor as llm_processor
-from webinar_transcriber.llm.processor import (
+from webinar_transcriber.llm.utils import (
     ReportPolishResponse,
     ReportSectionUpdate,
     SectionTextResponse,

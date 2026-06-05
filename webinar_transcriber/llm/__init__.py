@@ -15,12 +15,8 @@ from .prompts import ACTION_ITEM_LIMIT, REPORT_POLISH_TOTAL_CHAR_BUDGET
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from .processor import (
-        InstructorLLMProcessor,
-        ReportPolishResponse,
-        ReportSectionUpdate,
-        SectionTextResponse,
-    )
+    from .processor import InstructorLLMProcessor
+    from .utils import ReportPolishResponse, ReportSectionUpdate, SectionTextResponse
 
 
 # ---------------------------------------------------------------------------
@@ -172,9 +168,9 @@ def build_llm_processor_from_env(*, threads: int) -> InstructorLLMProcessor:
 
 _LAZY_EXPORTS = {
     "InstructorLLMProcessor": ("webinar_transcriber.llm.processor", "InstructorLLMProcessor"),
-    "ReportPolishResponse": ("webinar_transcriber.llm.processor", "ReportPolishResponse"),
-    "ReportSectionUpdate": ("webinar_transcriber.llm.processor", "ReportSectionUpdate"),
-    "SectionTextResponse": ("webinar_transcriber.llm.processor", "SectionTextResponse"),
+    "ReportPolishResponse": ("webinar_transcriber.llm.utils", "ReportPolishResponse"),
+    "ReportSectionUpdate": ("webinar_transcriber.llm.utils", "ReportSectionUpdate"),
+    "SectionTextResponse": ("webinar_transcriber.llm.utils", "SectionTextResponse"),
 }
 
 
