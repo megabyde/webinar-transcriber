@@ -6,7 +6,7 @@ import json
 import os
 import re
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from webinar_transcriber.text_utils import split_paragraph_blocks
 
@@ -38,7 +38,7 @@ def required_provider_env(*, api_key_env: str, model_env: str) -> tuple[str, str
     if missing_vars:
         missing = ", ".join(missing_vars)
         raise LlmConfigurationError(f"Missing required LLM environment variables: {missing}.")
-    return cast("tuple[str, str]", (api_key, model_name))
+    return os.environ[api_key_env], os.environ[model_env]
 
 
 def build_report_polish_payload(

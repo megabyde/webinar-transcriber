@@ -2,7 +2,7 @@
 
 import wave
 from pathlib import Path
-from typing import Self, cast
+from typing import Self
 from unittest.mock import Mock, patch
 
 import av
@@ -75,16 +75,8 @@ class TestNormalizedAudio:
             def mux(self, packet: str) -> None:
                 muxed_packets.append(packet)
 
-        _mux_audio_frames(
-            cast("av.container.OutputContainer", FakeOutputContainer()),
-            cast("av.audio.stream.AudioStream", FakeOutputStream()),
-            None,
-        )
-        _mux_audio_frames(
-            cast("av.container.OutputContainer", FakeOutputContainer()),
-            cast("av.audio.stream.AudioStream", FakeOutputStream()),
-            [frame],
-        )
+        _mux_audio_frames(FakeOutputContainer(), FakeOutputStream(), None)
+        _mux_audio_frames(FakeOutputContainer(), FakeOutputStream(), [frame])
 
         assert encoded_frames == [frame]
         assert muxed_packets == ["packet"]

@@ -1,7 +1,5 @@
 """Tests for typed pipeline models."""
 
-from typing import cast
-
 import pytest
 
 from webinar_transcriber.models import (
@@ -36,7 +34,7 @@ class TestCoreModels:
         assert asset.channels == 2
 
     def test_transcript_segment_accepts_timing_fields(self) -> None:
-        segment = TranscriptSegment("seg-1", 0.0, 1.2, "hello world")
+        segment = TranscriptSegment(id="seg-1", start_sec=0.0, end_sec=1.2, text="hello world")
 
         assert segment.id == "seg-1"
         assert segment.start_sec == 0.0
@@ -49,9 +47,8 @@ class TestCoreModels:
 
         assert segment.midpoint == 1.6
         assert segment.duration_sec == pytest.approx(1.2)
-        assert segment.gap_before(TranscriptSegment("seg-2", 3.0, 4.0, "next")) == pytest.approx(
-            0.8
-        )
+        next_seg = TranscriptSegment(id="seg-2", start_sec=3.0, end_sec=4.0, text="next")
+        assert segment.gap_before(next_seg) == pytest.approx(0.8)
 
     def test_report_document_defaults_optional_collections(self) -> None:
         report = ReportDocument(
@@ -73,7 +70,6 @@ class TestCoreModels:
         assert report.action_items == []
         assert report.sections[0].title == "Overview"
         assert report.sections[0].tldr is None
-        assert report.sections[0].speakers == []
 
     def test_video_asset_refs_expose_scene_and_frame_ids(self) -> None:
         video = VideoAssetRef(scene_id="scene-1", frame_id="frame-1")
@@ -106,7 +102,6 @@ class TestCoreModels:
     def test_diagnostics_defaults_empty_maps(self) -> None:
         diagnostics = Diagnostics()
 
-        assert not diagnostics.llm.enabled
         assert diagnostics.llm.report_status == "disabled"
         assert diagnostics.stage_durations_sec == {}
         assert diagnostics.item_counts == {}
@@ -128,12 +123,12 @@ class TestCoreModels:
 
         segments = payload["segments"]
         assert isinstance(segments, list)
-        assert isinstance(segments[0], dict)
-        assert isinstance(segments[1], dict)
-        first_segment = cast("dict[str, object]", segments[0])
-        second_segment = cast("dict[str, object]", segments[1])
+        first_segment = segments[0]
+        second_segment = segments[1]
+        assert isinstance(first_segment, dict)
+        assert isinstance(second_segment, dict)
         assert "speaker" not in first_segment
-        assert second_segment["speaker"] == "S1"
+        assert second_segment["speaker"] == "S1"  # type: ignore
 
     def test_inference_window_is_ordered_by_timeline(self) -> None:
         windows = [

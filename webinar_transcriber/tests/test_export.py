@@ -207,7 +207,6 @@ class TestDocxReport:
                     end_sec=5.0,
                     tldr="**S1:** Summary paragraph.",
                     transcript_text="**S1:** First paragraph.\n\n**S2:** Second paragraph.",
-                    speakers=["S1", "S2"],
                 )
             ],
         )
@@ -338,7 +337,6 @@ class TestMarkdownReport:
                     start_sec=0.0,
                     end_sec=5.0,
                     transcript_text="**S1:** First paragraph.\n\n**S2:** Second paragraph.",
-                    speakers=["S1", "S2"],
                 )
             ],
         )
@@ -391,26 +389,3 @@ class TestJsonReport:
                 "image_path": None,
             }
         ]
-
-    def test_includes_nonempty_section_speakers(self, tmp_path: Path) -> None:
-        report = ReportDocument(
-            title="Demo",
-            source_file="demo.wav",
-            media_type=MediaType.AUDIO,
-            sections=[
-                ReportSection(
-                    id="section-1",
-                    title="Section 1",
-                    start_sec=0.0,
-                    end_sec=5.0,
-                    transcript_text="**S1:** Paragraph one.",
-                    speakers=["S1"],
-                )
-            ],
-        )
-
-        output_path = tmp_path / "report.json"
-        write_json_report(report, output_path)
-
-        payload = json.loads(output_path.read_text(encoding="utf-8"))
-        assert payload["sections"][0]["speakers"] == ["S1"]

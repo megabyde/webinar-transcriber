@@ -3,7 +3,7 @@
 import json
 from threading import Event, Lock
 from types import SimpleNamespace
-from typing import cast
+from typing import Any
 
 import pytest
 from pydantic import BaseModel
@@ -43,7 +43,7 @@ class FakeInstructorModule:
 
     def __init__(self, client: object) -> None:
         self._client = client
-        self.calls: list[tuple[str, dict[str, object]]] = []
+        self.calls: list[tuple[str, dict[str, Any]]] = []
 
     def from_provider(self, provider_model: str, **kwargs: object) -> object:
         self.calls.append((provider_model, kwargs))
@@ -166,7 +166,7 @@ class TestInstructorLlmProcessor:
 
     class FakeClient:
         def __init__(self, responses) -> None:
-            self.calls: list[dict[str, object]] = []
+            self.calls: list[dict[str, Any]] = []
             self._responses = list(responses)
 
         def create_with_completion(self, **kwargs):
@@ -282,8 +282,8 @@ class TestInstructorLlmProcessor:
         assert fake_client.calls[0]["timeout"] == 120
         assert fake_client.calls[0]["response_model"] is SectionTextResponse
         assert fake_client.calls[1]["response_model"] is ReportPolishResponse
-        messages = cast("list[dict[str, object]]", fake_client.calls[0]["messages"])
-        assert json.loads(cast("str", messages[1]["content"])) == {
+        messages = fake_client.calls[0]["messages"]
+        assert json.loads(messages[1]["content"]) == {
             "id": "section-1",
             "title": "Old title",
             "start_sec": 0.0,
@@ -312,9 +312,9 @@ class TestInstructorLlmProcessor:
             total_char_budget=1_000,
             section_transcripts={"section-1": "Overridden transcript text."},
         )
-        sections = cast("list[dict[str, object]]", payload["sections"])
+        sections = payload["sections"]
 
-        assert sections[0]["transcript_excerpt"] == "Overridden transcript text."
+        assert sections[0]["transcript_excerpt"] == "Overridden transcript text."  # type: ignore
         assert report.sections[0].transcript_text == "Original transcript text."
 
     def test_extract_response_metadata_returns_provider_finish_and_safety_fields(self) -> None:
@@ -437,13 +437,13 @@ class TestInstructorLlmProcessor:
 
         class SectionAwareClient:
             def __init__(self) -> None:
-                self.calls: list[dict[str, object]] = []
+                self.calls: list[dict[str, Any]] = []
                 self._lock = Lock()
 
             def create_with_completion(self, **kwargs):
                 with self._lock:
                     self.calls.append(kwargs)
-                messages = cast("list[dict[str, str]]", kwargs["messages"])
+                messages = kwargs["messages"]
                 payload = json.loads(messages[1]["content"])
                 if payload["id"] == "section-1":
                     return (
@@ -517,7 +517,7 @@ class TestInstructorLlmProcessor:
         assert "max_retries" in fake_client.calls[0]
         assert fake_client.calls[0]["timeout"] == 120
         assert fake_client.calls[0]["max_tokens"] == 4096
-        messages = cast("list[dict[str, object]]", fake_client.calls[0]["messages"])
+        messages = fake_client.calls[0]["messages"]
         assert messages[0]["role"] == "system"
         assert messages[1]["role"] == "user"
 
@@ -586,8 +586,8 @@ class TestInstructorLlmProcessor:
 
         class CompletionOrderClient:
             def create_with_completion(self, **kwargs):
-                messages = cast("list[dict[str, object]]", kwargs["messages"])
-                payload = json.loads(cast("str", messages[1]["content"]))
+                messages = kwargs["messages"]
+                payload = json.loads(messages[1]["content"])
                 section_id = payload["id"]
                 if section_id == "section-1":
                     assert section_2_done.wait(timeout=1)
@@ -670,8 +670,8 @@ class TestInstructorLlmProcessor:
 
         processor.polish_report_sections_with_progress(report)
 
-        messages = cast("list[dict[str, object]]", fake_client.calls[0]["messages"])
-        system_prompt = cast("str", messages[0]["content"])
+        messages = fake_client.calls[0]["messages"]
+        system_prompt = messages[0]["content"]
         compact_prompt = " ".join(system_prompt.split())
         assert "do not reproduce or rewrite the lyrics" in compact_prompt
         assert "Do not quote song lyrics in the TL;DR" in compact_prompt
@@ -687,9 +687,9 @@ class TestInstructorProcessorFlow:
             self._responses = responses
 
         def create_with_completion(self, **kwargs):
-            messages = cast("list[dict[str, object]]", kwargs["messages"])
-            payload = json.loads(cast("str", messages[1]["content"]))
-            response_key = cast("str", payload.get("id", "__metadata__"))
+            messages = kwargs["messages"]
+            payload = json.loads(messages[1]["content"])
+            response_key = payload.get("id", "__metadata__")
             response = self._responses[response_key]
             if isinstance(response, Exception):
                 raise response

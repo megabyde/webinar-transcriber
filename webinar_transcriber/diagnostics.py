@@ -18,13 +18,16 @@ if TYPE_CHECKING:
         SceneFrame,
         TranscriptionResult,
     )
+    from webinar_transcriber.paths import RunLayout
     from webinar_transcriber.processor import RunContext
 
 
-def build_diagnostics(
+def write_run_diagnostics(
+    layout: RunLayout,
     ctx: RunContext,
     *,
-    llm_enabled: bool,
+    llm: LlmDiagnostics,
+    status: Literal["succeeded", "failed"],
     transcription: TranscriptionResult | None = None,
     normalized_transcription: TranscriptionResult | None = None,
     asr_pipeline: AsrPipelineDiagnostics | None = None,
@@ -32,28 +35,18 @@ def build_diagnostics(
     report: ReportDocument | None = None,
     scenes: Sequence[Scene] = (),
     scene_frames: Sequence[SceneFrame] = (),
-    status: Literal["succeeded", "failed"] = "succeeded",
     failed_stage: str | None = None,
     error: str | None = None,
+    suppress_errors: bool = False,
 ) -> Diagnostics:
-    """Build the final diagnostics payload for one processing run.
-
-    Returns:
-        Diagnostics: The final diagnostics payload.
-    """
+    """Write diagnostics for the current processor context."""
     vad_region_count = asr_pipeline.vad_region_count if asr_pipeline is not None else 0
     window_count = asr_pipeline.window_count if asr_pipeline is not None else 0
-    return Diagnostics(
+    diagnostics = Diagnostics(
         status=status,
         failed_stage=failed_stage,
         error=error,
-        llm=LlmDiagnostics(
-            enabled=llm_enabled,
-            model=ctx.llm_runtime.model_name,
-            report_status=ctx.llm_runtime.report_status,
-            report_latency_sec=ctx.llm_runtime.report_latency_sec,
-            response_metadata=ctx.llm_runtime.response_metadata,
-        ),
+        llm=llm,
         stage_durations_sec={key: round(value, 6) for key, value in ctx.stage_timings.items()},
         item_counts={
             "transcript_segments": len(transcription.segments) if transcription else 0,
@@ -70,44 +63,8 @@ def build_diagnostics(
         diarization=diarization,
         warnings=ctx.warnings,
     )
-
-
-def write_run_diagnostics(
-    ctx: RunContext,
-    *,
-    status: Literal["succeeded", "failed"],
-    llm_enabled: bool,
-    transcription: TranscriptionResult | None = None,
-    normalized_transcription: TranscriptionResult | None = None,
-    asr_pipeline: AsrPipelineDiagnostics | None = None,
-    diarization: DiarizationDiagnostics | None = None,
-    report: ReportDocument | None = None,
-    scenes: Sequence[Scene] = (),
-    scene_frames: Sequence[SceneFrame] = (),
-    failed_stage: str | None = None,
-    error: str | None = None,
-    suppress_errors: bool = False,
-) -> Diagnostics | None:
-    """Write diagnostics for the current processor context."""
-    if ctx.layout is None:
-        return None
-
-    diagnostics = build_diagnostics(
-        ctx,
-        llm_enabled=llm_enabled,
-        transcription=transcription,
-        normalized_transcription=normalized_transcription,
-        asr_pipeline=asr_pipeline,
-        diarization=diarization,
-        report=report,
-        scenes=scenes,
-        scene_frames=scene_frames,
-        status=status,
-        failed_stage=failed_stage,
-        error=error,
-    )
     try:
-        write_json(ctx.layout.diagnostics_path, asdict(diagnostics))
+        write_json(layout.diagnostics_path, asdict(diagnostics))
     except Exception:  # pragma: no cover - best-effort failed-run diagnostics
         if not suppress_errors:
             raise

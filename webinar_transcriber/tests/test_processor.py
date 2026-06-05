@@ -22,6 +22,7 @@ from webinar_transcriber.llm.contracts import (
 from webinar_transcriber.models import (
     DecodedWindow,
     InferenceWindow,
+    LlmDiagnostics,
     ReportDocument,
     Scene,
     SceneFrame,
@@ -235,7 +236,7 @@ class TestProcessInput:
 
         assert metadata_payload["media_type"] == "audio"
         assert metadata_payload["duration_sec"] == 6.0
-        assert not diagnostics_payload["llm"]["enabled"]
+        assert diagnostics_payload["llm"]["report_status"] == "disabled"
         assert diagnostics_payload["asr_pipeline"]["backend"] == "whisper.cpp"
         assert diagnostics_payload["asr_pipeline"]["model"] == "test-model"
         assert diagnostics_payload["item_counts"]["windows"] == 1
@@ -283,7 +284,6 @@ class TestProcessInput:
         )
 
         transcript_payload = read_json(artifacts.layout.transcript_path)
-        report_payload = read_json(artifacts.layout.json_report_path)
         diarization_payload = read_json(artifacts.layout.diarization_path)
 
         assert diarizer.calls == [16_000]
@@ -299,7 +299,6 @@ class TestProcessInput:
         )
         markdown = artifacts.layout.markdown_report_path.read_text(encoding="utf-8")
         assert "**S2:** Next step please send the draft by Friday." in markdown
-        assert report_payload["sections"][0]["speakers"] == ["S1", "S2"]
         assert artifacts.diagnostics.diarization is not None
         assert artifacts.diagnostics.diarization.speaker_count == 2
         assert artifacts.diagnostics.diarization.turn_count == 2
@@ -811,19 +810,11 @@ class TestProcessInput:
 
 
 class TestProcessorSupport:
-    def test_write_run_diagnostics_returns_none_without_layout(self) -> None:
-        ctx = RunContext(reporter=silent_reporter())
-
-        diagnostics = write_run_diagnostics(
-            ctx, status="failed", failed_stage="probe_media", error="boom", llm_enabled=False
-        )
-
-        assert diagnostics is None
-
     def test_write_run_diagnostics_can_suppress_write_errors(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        ctx = RunContext(reporter=silent_reporter(), layout=RunLayout(run_dir=tmp_path))
+        layout = RunLayout(run_dir=tmp_path)
+        ctx = RunContext(reporter=silent_reporter())
 
         def fail_write_text(self, *args, **kwargs):
             del self, args, kwargs
@@ -832,22 +823,27 @@ class TestProcessorSupport:
         monkeypatch.setattr(Path, "write_text", fail_write_text)
 
         diagnostics = write_run_diagnostics(
+            layout,
             ctx,
+            llm=LlmDiagnostics(),
             status="failed",
             failed_stage="probe_media",
             error="boom",
-            llm_enabled=False,
             suppress_errors=True,
         )
 
-        assert diagnostics is not None
         assert diagnostics.error == "boom"
         assert diagnostics.asr_pipeline is None
         assert diagnostics.item_counts["vad_regions"] == 0
         assert diagnostics.item_counts["windows"] == 0
         with pytest.raises(OSError, match="readonly"):
             write_run_diagnostics(
-                ctx, status="failed", failed_stage="probe_media", error="boom", llm_enabled=False
+                layout,
+                ctx,
+                llm=LlmDiagnostics(),
+                status="failed",
+                failed_stage="probe_media",
+                error="boom",
             )
 
     def test_stage_records_timing_on_failure_without_finish_event(self) -> None:
@@ -918,7 +914,6 @@ class TestProcessInputLlm:
         assert artifacts.report.sections[0].transcript_text == EXPECTED_LLM_SECTION_TEXT
         assert artifacts.report.warnings == [EXPECTED_LLM_WARNING]
         assert reporter.warnings == [EXPECTED_LLM_WARNING]
-        assert artifacts.diagnostics.llm.enabled
         assert artifacts.diagnostics.llm.model == "test-llm-model"
         assert artifacts.diagnostics.llm.report_status == "applied"
         assert artifacts.diagnostics.llm.response_metadata == [

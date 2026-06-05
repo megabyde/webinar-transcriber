@@ -331,6 +331,12 @@ class TestSherpaOnnxDiarizer:
                 num_clusters=-1,
             )
 
+    def test_diarize_raises_when_not_prepared(self) -> None:
+        diarizer = sherpa_runtime.SherpaOnnxDiarizer(threads=1)
+
+        with pytest.raises(DiarizationProcessingError, match="not prepared"):
+            diarizer.diarize(np.zeros(16, dtype=np.float32))
+
     def test_run_diarization_wraps_runtime_error(self) -> None:
         diarizer = sherpa_runtime.SherpaOnnxDiarizer(threads=1)
         fake_sherpa = FakeSherpaModule(runtime_error=RuntimeError("native failure"))
