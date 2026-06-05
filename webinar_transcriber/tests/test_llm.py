@@ -16,12 +16,10 @@ from webinar_transcriber.llm import (
     build_llm_processor_from_env,
 )
 from webinar_transcriber.llm import processor as llm_processor
-from webinar_transcriber.llm.schemas import (
+from webinar_transcriber.llm.processor import (
     ReportPolishResponse,
     ReportSectionUpdate,
     SectionTextResponse,
-)
-from webinar_transcriber.llm.utils import (
     build_report_polish_payload,
     extract_response_metadata,
     normalize_polished_section_text,

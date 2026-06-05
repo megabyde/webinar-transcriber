@@ -13,8 +13,11 @@ from webinar_transcriber.asr import (
     default_asr_threads,
 )
 from webinar_transcriber.diarization import DiarizationProcessingError, SherpaOnnxDiarizer
-from webinar_transcriber.llm import build_llm_processor_from_env
-from webinar_transcriber.llm.contracts import LlmConfigurationError, LlmProcessingError
+from webinar_transcriber.llm import (
+    LlmConfigurationError,
+    LlmProcessingError,
+    build_llm_processor_from_env,
+)
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.processor import TranscriptionConfig, process_input

@@ -13,7 +13,7 @@ from webinar_transcriber.asr import ASR_BACKEND_NAME, WhisperCppTranscriber
 from webinar_transcriber.diagnostics import write_run_diagnostics
 from webinar_transcriber.diarization import DIARIZATION_MODEL, assign_speakers
 from webinar_transcriber.export import write_docx_report, write_json_report, write_markdown_report
-from webinar_transcriber.llm.contracts import LlmProcessingError, LlmReportMetadataResult
+from webinar_transcriber.llm import LlmProcessingError, LlmReportMetadataResult
 from webinar_transcriber.media import probe_media
 from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
@@ -51,7 +51,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from webinar_transcriber.diarization import Diarizer
-    from webinar_transcriber.llm.contracts import LlmProcessor
+    from webinar_transcriber.llm.processor import InstructorLLMProcessor
     from webinar_transcriber.models import (
         Diagnostics,
         MediaAsset,
@@ -116,7 +116,7 @@ def process_input(
     *,
     output_dir: Path | None = None,
     transcription_config: TranscriptionConfig,
-    llm_processor: LlmProcessor | None = None,
+    llm_processor: InstructorLLMProcessor | None = None,
     diarizer: Diarizer | None = None,
     diarization_speaker_count: int | None = None,
     transcriber: WhisperCppTranscriber | None = None,
@@ -379,7 +379,7 @@ def _run_report_phase(
     layout: RunLayout,
     media_asset: MediaAsset,
     normalized_transcription: TranscriptionResult,
-    llm_processor: LlmProcessor | None,
+    llm_processor: InstructorLLMProcessor | None,
     ctx: RunContext,
 ) -> _ReportResult:
     scenes: list[Scene] = []
@@ -466,7 +466,7 @@ def _section_image_path(frame: SceneFrame, run_dir: Path) -> str:
 def _maybe_polish_report(
     report: ReportDocument,
     *,
-    llm_processor: LlmProcessor | None,
+    llm_processor: InstructorLLMProcessor | None,
     ctx: RunContext,
 ) -> tuple[ReportDocument, LlmDiagnostics]:
     if llm_processor is None:

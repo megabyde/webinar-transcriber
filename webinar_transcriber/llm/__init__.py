@@ -3,29 +3,75 @@
 from __future__ import annotations
 
 import importlib
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from webinar_transcriber._env import llm_provider_name
 
-from .contracts import (
-    LlmConfigurationError,
-    LlmProcessingError,
-    LlmProcessor,
-    LlmReportMetadataResult,
-    LlmReportPolishPlan,
-    LlmSectionPolishResult,
-)
 from .prompts import ACTION_ITEM_LIMIT, REPORT_POLISH_TOTAL_CHAR_BUDGET
-from .utils import required_provider_env
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from .processor import InstructorLLMProcessor
-    from .schemas import ReportPolishResponse, ReportSectionUpdate, SectionTextResponse
+    from .processor import (
+        InstructorLLMProcessor,
+        ReportPolishResponse,
+        ReportSectionUpdate,
+        SectionTextResponse,
+    )
 
+
+# ---------------------------------------------------------------------------
+# Error types
+# ---------------------------------------------------------------------------
+
+
+class LlmConfigurationError(RuntimeError):
+    """Raised when required LLM configuration is missing."""
+
+
+class LlmProcessingError(RuntimeError):
+    """Raised when the LLM response cannot be validated or applied."""
+
+
+# ---------------------------------------------------------------------------
+# Result types
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class LlmSectionPolishResult:
+    """Validated result from the section-text polishing phase."""
+
+    section_tldrs: dict[str, str]
+    section_transcripts: dict[str, str]
+    response_metadata: list[dict[str, object]] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class LlmReportMetadataResult:
+    """Validated result from the final report metadata polishing phase."""
+
+    summary: list[str]
+    action_items: list[str]
+    section_titles: dict[str, str]
+    response_metadata: list[dict[str, object]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class LlmReportPolishPlan:
+    """Execution plan for report polishing progress/reporting."""
+
+    section_count: int
+    worker_count: int
+
+
+# ---------------------------------------------------------------------------
+# Provider config
+# ---------------------------------------------------------------------------
 
 _EMPTY_REQUEST_KWARGS = MappingProxyType({})
 
@@ -53,6 +99,28 @@ PROVIDERS = {
 }
 
 
+def required_provider_env(*, api_key_env: str, model_env: str) -> tuple[str, str]:
+    """Return the required API key and model name for one provider.
+
+    Returns:
+        tuple[str, str]: The configured API key and model name.
+
+    Raises:
+        LlmConfigurationError: If either required environment variable is missing.
+    """
+    api_key = os.environ.get(api_key_env)
+    model_name = os.environ.get(model_env)
+    missing_vars = [
+        env_name
+        for env_name, value in ((api_key_env, api_key), (model_env, model_name))
+        if not value
+    ]
+    if missing_vars:
+        missing = ", ".join(missing_vars)
+        raise LlmConfigurationError(f"Missing required LLM environment variables: {missing}.")
+    return os.environ[api_key_env], os.environ[model_env]
+
+
 def _required_llm_module(module_name: str, *, provider_label: str) -> object:
     try:
         return importlib.import_module(module_name)
@@ -63,11 +131,11 @@ def _required_llm_module(module_name: str, *, provider_label: str) -> object:
         ) from error
 
 
-def build_llm_processor_from_env(*, threads: int) -> LlmProcessor:
+def build_llm_processor_from_env(*, threads: int) -> InstructorLLMProcessor:
     """Build a configured LLM processor from environment variables.
 
     Returns:
-        LlmProcessor: The configured provider-backed processor.
+        InstructorLLMProcessor: The configured provider-backed processor.
 
     Raises:
         LlmConfigurationError: If the provider selection or required environment is invalid.
@@ -98,11 +166,15 @@ def build_llm_processor_from_env(*, threads: int) -> LlmProcessor:
     )
 
 
+# ---------------------------------------------------------------------------
+# Lazy exports (provider-specific types require the llm extra)
+# ---------------------------------------------------------------------------
+
 _LAZY_EXPORTS = {
     "InstructorLLMProcessor": ("webinar_transcriber.llm.processor", "InstructorLLMProcessor"),
-    "ReportPolishResponse": ("webinar_transcriber.llm.schemas", "ReportPolishResponse"),
-    "ReportSectionUpdate": ("webinar_transcriber.llm.schemas", "ReportSectionUpdate"),
-    "SectionTextResponse": ("webinar_transcriber.llm.schemas", "SectionTextResponse"),
+    "ReportPolishResponse": ("webinar_transcriber.llm.processor", "ReportPolishResponse"),
+    "ReportSectionUpdate": ("webinar_transcriber.llm.processor", "ReportSectionUpdate"),
+    "SectionTextResponse": ("webinar_transcriber.llm.processor", "SectionTextResponse"),
 }
 
 
@@ -120,7 +192,6 @@ __all__ = [
     "InstructorLLMProcessor",
     "LlmConfigurationError",
     "LlmProcessingError",
-    "LlmProcessor",
     "LlmReportMetadataResult",
     "LlmReportPolishPlan",
     "LlmSectionPolishResult",
