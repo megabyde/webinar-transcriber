@@ -22,6 +22,9 @@ Keep README and Makefile setup targets in sync. If you add, rename, or remove a 
 `make install*` target, update README in the same change so local checkout setup remains
 discoverable.
 
+Use `make test` for quick iteration (fast subset, skips slow tests, no coverage gate). Run
+`make format` then `make check` before committing — `make check` is the full coverage-gated gate.
+
 GitHub Actions intentionally runs the equivalent `uv` commands directly instead of `make` so the
 same validation works on Linux, macOS, and Windows runners.
 
@@ -32,26 +35,28 @@ cache-permission failures.
 
 The package intentionally avoids deep nesting.
 
-- `webinar_transcriber/cli.py`: Click CLI entrypoints
-- `webinar_transcriber/processor/__init__.py`: pipeline orchestration, run-context dataclasses, and
-  stage-level helpers (`_run_asr_pipeline`, `_run_report_phase`, `_maybe_polish_report`)
-- `webinar_transcriber/processor/stages.py`: pure helpers (inference-window planning, JSON writer,
-  duration averaging)
-- `webinar_transcriber/asr/`: ASR backend selection, carryover policy, and the `pywhispercpp`
-  wrapper
-- `webinar_transcriber/diarization/`: optional local speaker diarization through `sherpa-onnx`
-- `webinar_transcriber/llm/`: optional cloud LLM integrations
-- `webinar_transcriber/media.py`: probing helpers and shared media error types
-- `webinar_transcriber/normalized_audio.py`: deterministic transcription-audio preparation
-- `webinar_transcriber/segmentation.py`: speech-region detection and normalized-audio duration
-  helpers
-- `webinar_transcriber/transcript/`: transcript normalization and window reconciliation
-- `webinar_transcriber/structure.py`: transcript-scene alignment and report heuristics
-- `webinar_transcriber/ui.py`: `StageReporter` Rich-backed progress reporter (single `track()`
-  context for both indeterminate and determinate stages)
-- `webinar_transcriber/video/`: scene detection and frame extraction
-- `webinar_transcriber/export/`: Markdown, DOCX, and JSON writers
-- `webinar_transcriber/tests/`: flat test suite with tiny committed fixtures under `fixtures/`
+```text
+webinar_transcriber/
+├── cli.py                  Click CLI entrypoints
+├── processor/
+│   ├── __init__.py         pipeline orchestration and RunContext dataclasses
+│   └── stages.py           pure helpers (window planning, duration averaging)
+├── asr/                    backend selection, carryover policy, pywhispercpp wrapper
+├── diarization/            optional local speaker diarization via sherpa-onnx
+├── llm/                    optional cloud LLM integrations
+├── transcript/             normalization and window reconciliation
+├── video/                  scene detection and frame extraction
+├── export/                 Markdown, DOCX, and JSON writers
+├── diagnostics.py          run-diagnostics assembly and persistence
+├── paths.py                RunLayout — deterministic run-directory construction
+├── media.py                probing helpers and shared media error types
+├── models.py               shared dataclasses and domain types
+├── normalized_audio.py     deterministic transcription-audio preparation
+├── segmentation.py         speech-region detection and duration helpers
+├── structure.py            transcript-scene alignment and report heuristics
+├── ui.py                   StageReporter — Rich-backed progress (track() context manager)
+└── tests/                  flat test suite; committed fixtures under tests/fixtures/
+```
 
 ## Runtime Contracts
 
@@ -98,6 +103,17 @@ The package intentionally avoids deep nesting.
 
 ## Style Notes
 
+- `cast()` is a runtime no-op and a smell when used purely to satisfy the type checker. Prefer
+  `isinstance()` checks for narrowing. Reserve `cast()` for genuine third-party stub gaps and always
+  add a comment explaining which stub is missing and why.
+- `# type: ignore` is the same smell. Only use it for genuine stub gaps, bare (no bracket error
+  codes — `ty` does not use mypy's `[attr-defined]` syntax), with a comment on the same or preceding
+  line.
+- When adapting third-party types that don't stub well, define a private `Protocol`. If `Any` is
+  unavoidable in a Protocol method signature due to stub-level invariance constraints, suppress ruff
+  with `# noqa: ANN401` and add a comment.
+- Replace `assert x is not None` guards in production code with explicit `if x is None: raise`.
+  `assert` is stripped by optimised builds and banned by ruff S101.
 - Use the walrus operator selectively when it removes repeated work without making the code harder
   to read.
 - Prefer short loop and comprehension variable names when the surrounding context already makes the
@@ -106,11 +122,3 @@ The package intentionally avoids deep nesting.
   decode units; avoid `chunk` for ASR concepts.
 - Treat acronyms as words in PascalCase identifiers: `LlmProcessor`, `AsrPipelineDiagnostics`,
   `WhisperCppTranscriber`. Constants stay SCREAMING_SNAKE: `ASR_BACKEND_NAME`, `LLM_PROVIDER_ENV`.
-
-## Open Work
-
-The main remaining product items are:
-
-- improve scene detection quality without making it expensive
-- tighten the remaining artifact and behavior edges
-- consider later-stage concurrency in the processor if profiling shows it is worth the complexity

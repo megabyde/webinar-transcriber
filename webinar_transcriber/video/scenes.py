@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING
 
 import av
 from av.filter import Graph
@@ -16,6 +16,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
+    from av.container import InputContainer
+    from av.video.frame import VideoFrame
     from av.video.stream import VideoStream
 
     ProgressCallback = Callable[[float, int], None]
@@ -131,7 +133,7 @@ def _build_scene_filter_graph(
 
 
 def _sample_count_for_frame(
-    frame: object, *, settings: SceneDetectionSettings, fallback: int
+    frame: VideoFrame, *, settings: SceneDetectionSettings, fallback: int
 ) -> int:
     frame_time_sec = _frame_time_sec(frame)
     if frame_time_sec is None:
@@ -141,7 +143,7 @@ def _sample_count_for_frame(
 
 def _report_scene_progress(
     progress_callback: ProgressCallback,
-    frame: object,
+    frame: VideoFrame,
     *,
     settings: SceneDetectionSettings,
     processed_sample_count: int,
@@ -184,25 +186,21 @@ def estimated_scene_sample_count(
     return max(1, math.ceil(duration_sec * settings.scan_fps))
 
 
-def _frame_time_sec(frame: object) -> float | None:
-    timed_frame = cast("Any", frame)
-    if timed_frame.time is None:  # pragma: no cover - fallback for frames without direct time
-        pts = timed_frame.pts
-        time_base = timed_frame.time_base
+def _frame_time_sec(frame: VideoFrame) -> float | None:
+    if frame.time is None:  # pragma: no cover - fallback for frames without direct time
+        pts = frame.pts
+        time_base = frame.time_base
         if pts is None or time_base is None:
             return None
         return float(pts * time_base)
-    time = timed_frame.time
-    return float(time)
+    return float(frame.time)
 
 
-def _video_duration_sec(input_container: object, video_stream: object) -> float:
-    typed_container = cast("Any", input_container)
-    typed_stream = cast("Any", video_stream)
-    container_duration = typed_container.duration
+def _video_duration_sec(input_container: InputContainer, video_stream: VideoStream) -> float:
+    container_duration = input_container.duration
     if container_duration is None:  # pragma: no cover - fallback for missing container duration
-        stream_duration = typed_stream.duration
-        stream_time_base = typed_stream.time_base
+        stream_duration = video_stream.duration
+        stream_time_base = video_stream.time_base
         if stream_duration is None or stream_time_base is None:
             return 0.0
         return float(stream_duration * stream_time_base)

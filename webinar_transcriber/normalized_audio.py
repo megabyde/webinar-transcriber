@@ -7,7 +7,7 @@ import wave
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import av
 import numpy as np
@@ -23,7 +23,15 @@ if TYPE_CHECKING:
 
     from av.audio.frame import AudioFrame
     from av.audio.stream import AudioStream
-    from av.container import OutputContainer
+
+
+class _MuxContainer(Protocol):
+    def mux(self, packet: Any, /) -> None: ...  # noqa: ANN401
+
+
+class _EncodesFrames(Protocol):
+    def encode(self, frame: Any = None, /) -> list[Any]: ...  # noqa: ANN401
+
 
 NORMALIZED_SAMPLE_RATE = 16_000
 NORMALIZED_CHANNELS = 1
@@ -49,8 +57,8 @@ def sample_index_for_time(time_sec: float) -> int:
 
 
 def _mux_audio_frames(
-    output_container: OutputContainer,
-    output_stream: AudioStream,
+    output_container: _MuxContainer,
+    output_stream: _EncodesFrames,
     audio_frames: Iterable[AudioFrame] | None,
 ) -> None:
     if audio_frames is None:
@@ -75,7 +83,7 @@ def _transcode_audio_with_pyav(
     ):
         output_stream = cast(
             "AudioStream", output_container.add_stream(output_codec, rate=NORMALIZED_SAMPLE_RATE)
-        )
+        )  # av stubs type add_stream() as base Stream regardless of codec argument
         output_stream.layout = "mono"
         resampler = av.AudioResampler(
             format=resample_format, layout="mono", rate=NORMALIZED_SAMPLE_RATE

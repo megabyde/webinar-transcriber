@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from rich.console import Console
 
 from webinar_transcriber.asr import ASR_BACKEND_NAME, WhisperCppTranscriber
-from webinar_transcriber.diagnostics import build_diagnostics, write_run_diagnostics
+from webinar_transcriber.diagnostics import write_run_diagnostics
 from webinar_transcriber.diarization import DIARIZATION_MODEL, assign_speakers
 from webinar_transcriber.export import write_docx_report, write_json_report, write_markdown_report
 from webinar_transcriber.llm.contracts import LlmProcessingError, LlmReportMetadataResult
@@ -18,7 +18,7 @@ from webinar_transcriber.media import probe_media
 from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
     DiarizationDiagnostics,
-    ReportStatus,
+    LlmDiagnostics,
     TranscriptionResult,
     VideoAsset,
 )
@@ -85,17 +85,6 @@ class ProcessArtifacts:
 
 
 @dataclass
-class LlmRuntimeState:
-    """Observed state for the optional LLM report stage."""
-
-    provider_name: str | None = None
-    model_name: str | None = None
-    report_status: ReportStatus = "disabled"
-    report_latency_sec: float | None = None
-    response_metadata: list[dict[str, object]] = field(default_factory=list)
-
-
-@dataclass
 class RunContext:
     """Mutable state for one processing run."""
 
@@ -103,8 +92,6 @@ class RunContext:
     stage_timings: dict[str, float] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     current_stage: str | None = None
-    layout: RunLayout | None = None
-    llm_runtime: LlmRuntimeState = field(default_factory=LlmRuntimeState)
 
     def record_warning(self, message: str) -> None:
         """Record and report one run warning."""
@@ -148,14 +135,12 @@ def process_input(
     )
 
     with transcriber as active_transcriber:
+        layout = create_run_layout(input_path=input_path, output_dir=output_dir)
+        active_transcriber.set_log_path(layout.run_dir / "whisper-cpp.log")
         asr_result: _AsrResult | None = None
         report_result: _ReportResult | None = None
         ctx.reporter.begin_run(input_path)
         try:
-            layout = create_run_layout(input_path=input_path, output_dir=output_dir)
-            ctx.layout = layout
-            active_transcriber.set_log_path(layout.run_dir / "whisper-cpp.log")
-
             with ctx.stage("probe_media", "Probing media") as st:
                 media_asset = probe_media(input_path)
                 write_json(layout.metadata_path, asdict(media_asset))
@@ -202,10 +187,11 @@ def process_input(
                 ctx=ctx,
             )
 
-            diagnostics = build_diagnostics(
+            diagnostics = write_run_diagnostics(
+                layout,
                 ctx,
+                llm=report_result.llm,
                 status="succeeded",
-                llm_enabled=llm_processor is not None,
                 transcription=asr_result.transcription,
                 normalized_transcription=asr_result.normalized_transcription,
                 asr_pipeline=asr_result.asr_pipeline,
@@ -214,7 +200,6 @@ def process_input(
                 scenes=report_result.scenes,
                 scene_frames=report_result.scene_frames,
             )
-            write_json(layout.diagnostics_path, asdict(diagnostics))
             artifacts = ProcessArtifacts(
                 layout=layout,
                 media_asset=media_asset,
@@ -226,11 +211,12 @@ def process_input(
             return artifacts
         except Exception as ex:
             write_run_diagnostics(
+                layout,
                 ctx,
+                llm=LlmDiagnostics(),
                 status="failed",
                 failed_stage=ctx.current_stage,
                 error=str(ex),
-                llm_enabled=llm_processor is not None,
                 transcription=asr_result.transcription if asr_result else None,
                 normalized_transcription=(
                     asr_result.normalized_transcription if asr_result else None
@@ -258,6 +244,7 @@ class _ReportResult:
     report: ReportDocument
     scenes: list[Scene]
     scene_frames: list[SceneFrame]
+    llm: LlmDiagnostics = field(default_factory=LlmDiagnostics)
 
 
 def _run_asr_pipeline(
@@ -364,10 +351,8 @@ def _run_asr_pipeline(
     asr_pipeline = AsrPipelineDiagnostics(
         backend=ASR_BACKEND_NAME,
         model=transcriber.model_name,
-        vad_enabled=True,
         threads=transcription_config.threads,
         vad_region_count=len(speech_regions),
-        carryover_enabled=True,
         window_count=len(windows),
         average_window_duration_sec=average_duration_sec(windows),
         normalized_audio_duration_sec=audio_duration_sec,
@@ -439,9 +424,7 @@ def _run_report_phase(
     if scene_frames:
         report = _attach_section_images(report, scene_frames, layout.run_dir)
 
-    report = _maybe_polish_report(
-        report, llm_processor=llm_processor, ctx=ctx, llm_runtime=ctx.llm_runtime
-    )
+    report, llm = _maybe_polish_report(report, llm_processor=llm_processor, ctx=ctx)
     report = replace(report, warnings=list(ctx.warnings))
 
     with ctx.stage("export", "Writing artifacts") as st:
@@ -451,7 +434,7 @@ def _run_report_phase(
         write_json_report(report, layout.json_report_path)
         st.update(detail="report.md | report.docx | report.json")
 
-    return _ReportResult(report=report, scenes=scenes, scene_frames=scene_frames)
+    return _ReportResult(report=report, scenes=scenes, scene_frames=scene_frames, llm=llm)
 
 
 def _attach_section_images(
@@ -485,15 +468,14 @@ def _maybe_polish_report(
     *,
     llm_processor: LlmProcessor | None,
     ctx: RunContext,
-    llm_runtime: LlmRuntimeState,
-) -> ReportDocument:
+) -> tuple[ReportDocument, LlmDiagnostics]:
     if llm_processor is None:
-        return report
+        return report, LlmDiagnostics()
 
-    llm_runtime.provider_name = llm_processor.provider_name
-    llm_runtime.model_name = llm_processor.model_name
+    provider_name = llm_processor.provider_name
+    model_name = llm_processor.model_name
     polish_plan = llm_processor.report_polish_plan(report)
-    runtime_detail = _join_detail(llm_runtime.provider_name, llm_runtime.model_name)
+    runtime_detail = _join_detail(provider_name, model_name)
 
     with ctx.stage(
         "llm_report_sections",
@@ -512,9 +494,11 @@ def _maybe_polish_report(
         except LlmProcessingError as error:
             ctx.record_warning(str(error))
             st.update(detail=_join_detail(runtime_detail, "fallback"))
-            llm_runtime.report_status = "fallback"
-            llm_runtime.report_latency_sec = st.elapsed_sec()
-            return report
+            return report, LlmDiagnostics(
+                model=model_name,
+                report_status="fallback",
+                report_latency_sec=st.elapsed_sec(),
+            )
         section_elapsed_sec = st.elapsed_sec()
         st.update(detail=_count(polish_plan.section_count, "section"))
     for warning in section_result.warnings:
@@ -531,10 +515,12 @@ def _maybe_polish_report(
             ctx.record_warning(str(error))
             st.update(detail=_join_detail(runtime_detail, "fallback"))
             metadata_elapsed_sec = st.elapsed_sec()
-            llm_runtime.report_status = "fallback"
-            llm_runtime.report_latency_sec = section_elapsed_sec + metadata_elapsed_sec
-            llm_runtime.response_metadata = section_result.response_metadata
-            return report
+            return report, LlmDiagnostics(
+                model=model_name,
+                report_status="fallback",
+                report_latency_sec=section_elapsed_sec + metadata_elapsed_sec,
+                response_metadata=section_result.response_metadata,
+            )
         metadata_elapsed_sec = st.elapsed_sec()
         st.update(detail=_metadata_detail(metadata_result, section_count=polish_plan.section_count))
 
@@ -554,13 +540,15 @@ def _maybe_polish_report(
             for section in report.sections
         ],
     )
-    llm_runtime.report_status = "applied"
-    llm_runtime.report_latency_sec = section_elapsed_sec + metadata_elapsed_sec
-    llm_runtime.response_metadata = [
-        *section_result.response_metadata,
-        *metadata_result.response_metadata,
-    ]
-    return polished_report
+    return polished_report, LlmDiagnostics(
+        model=model_name,
+        report_status="applied",
+        report_latency_sec=section_elapsed_sec + metadata_elapsed_sec,
+        response_metadata=[
+            *section_result.response_metadata,
+            *metadata_result.response_metadata,
+        ],
+    )
 
 
 def _metadata_detail(metadata_result: LlmReportMetadataResult, *, section_count: int) -> str | None:
@@ -598,7 +586,6 @@ def _silent_reporter() -> StageReporter:
 __all__ = [
     "INFERENCE_WINDOW_DURATION_SEC",
     "INFERENCE_WINDOW_OVERLAP_SEC",
-    "LlmRuntimeState",
     "ProcessArtifacts",
     "RunContext",
     "TranscriptionConfig",

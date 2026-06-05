@@ -165,7 +165,6 @@ def _section_from_segments(
         end_sec=segments[-1].end_sec,
         transcript_text=transcript_text,
         video=video,
-        speakers=list(dict.fromkeys(segment.speaker for segment in segments if segment.speaker)),
     )
 
 
@@ -185,7 +184,6 @@ def sections_from_block(
                 end_sec=block.end_sec,
                 transcript_text=block.transcript_text,
                 video=block.video,
-                speakers=[],
             )
         ]
 

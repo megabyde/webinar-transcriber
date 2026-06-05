@@ -2,15 +2,11 @@
 
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, cast
 
 import pytest
 from rich.console import Console
 
 from webinar_transcriber.ui import StageReporter
-
-if TYPE_CHECKING:
-    from webinar_transcriber.processor import ProcessArtifacts
 
 
 class TestStageReporter:
@@ -25,23 +21,18 @@ class TestStageReporter:
     def test_complete_run_renders_completion_panel(self) -> None:
         console = Console(record=True, width=100)
         reporter = StageReporter(console=console)
-        artifacts = cast(
-            "ProcessArtifacts",
-            SimpleNamespace(
-                layout=SimpleNamespace(
-                    run_dir="runs/example", diagnostics_path="runs/example/diagnostics.json"
-                ),
-                report=SimpleNamespace(
-                    detected_language="ru", sections=[object(), object()], warnings=["warning one"]
-                ),
-                diagnostics=SimpleNamespace(
-                    stage_durations_sec={"prepare": 1.0, "transcribe": 9.0}
-                ),
-                media_asset=SimpleNamespace(duration_sec=50.0),
+        artifacts = SimpleNamespace(
+            layout=SimpleNamespace(
+                run_dir="runs/example", diagnostics_path="runs/example/diagnostics.json"
             ),
+            report=SimpleNamespace(
+                detected_language="ru", sections=[object(), object()], warnings=["warning one"]
+            ),
+            diagnostics=SimpleNamespace(stage_durations_sec={"prepare": 1.0, "transcribe": 9.0}),
+            media_asset=SimpleNamespace(duration_sec=50.0),
         )
 
-        reporter.complete_run(artifacts)
+        reporter.complete_run(artifacts)  # type: ignore
 
         output = console.export_text()
         assert "Completed" in output

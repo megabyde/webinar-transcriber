@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from webinar_transcriber._env import llm_provider_name
 
@@ -81,7 +81,7 @@ def build_llm_processor_from_env(*, threads: int) -> LlmProcessor:
             "Unsupported LLM provider. Set LLM_PROVIDER to 'openai' or 'anthropic'."
         )
 
-    instructor = cast("Any", _required_llm_module("instructor", provider_label=spec.label))
+    instructor: Any = _required_llm_module("instructor", provider_label=spec.label)
     _required_llm_module(spec.module_name, provider_label=spec.label)
     api_key, model_name = required_provider_env(
         api_key_env=spec.api_key_env, model_env=spec.model_env

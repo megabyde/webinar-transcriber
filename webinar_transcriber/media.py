@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import av
 
@@ -15,7 +15,13 @@ if TYPE_CHECKING:
 
     from av.audio.stream import AudioStream
     from av.container import InputContainer, OutputContainer
+    from av.stream import Stream
     from av.video.stream import VideoStream
+
+
+class _HasDuration(Protocol):
+    duration: Any
+    time_base: Any
 
 
 class MediaProcessingError(RuntimeError):
@@ -24,11 +30,13 @@ class MediaProcessingError(RuntimeError):
 
 def _first_audio_stream(input_container: InputContainer) -> AudioStream | None:
     stream = next((stream for stream in input_container.streams if stream.type == "audio"), None)
+    # av stubs type .streams as base Stream; .type filter doesn't narrow the subtype
     return cast("AudioStream | None", stream)
 
 
 def _first_video_stream(input_container: InputContainer) -> VideoStream | None:
     stream = next((stream for stream in input_container.streams if stream.type == "video"), None)
+    # av stubs type .streams as base Stream; .type filter doesn't narrow the subtype
     return cast("VideoStream | None", stream)
 
 
@@ -76,16 +84,15 @@ def open_output_media_container(path: Path) -> Iterator[OutputContainer]:
         yield container
 
 
-def _pyav_stream_has_attached_picture(stream: object) -> bool:  # pragma: no cover
-    typed_stream = cast("Any", stream)
-    return bool(typed_stream.disposition & typed_stream.disposition.attached_pic)
+def _pyav_stream_has_attached_picture(stream: Stream) -> bool:  # pragma: no cover
+    # av stubs omit disposition.attached_pic flag
+    return bool(stream.disposition & stream.disposition.attached_pic)
 
 
-def _stream_duration_sec(stream: object) -> float | None:
-    timed_stream = cast("Any", stream)
-    if timed_stream.duration is None or timed_stream.time_base is None:
+def _stream_duration_sec(stream: _HasDuration) -> float | None:
+    if stream.duration is None or stream.time_base is None:
         return None
-    return float(timed_stream.duration * timed_stream.time_base)
+    return float(stream.duration * stream.time_base)
 
 
 def probe_media(input_path: Path) -> MediaAsset:
@@ -140,9 +147,9 @@ def probe_media(input_path: Path) -> MediaAsset:
                 channels=parsed_channels,
             )
 
-        video_codec_context = cast("Any", video_stream.codec_context)
-        width = video_codec_context.width
-        height = video_codec_context.height
+        video_codec_context = video_stream.codec_context
+        width = video_codec_context.width  # type: ignore  # av stubs type codec_context as CodecContext; width/height live on VideoCodecContext
+        height = video_codec_context.height  # type: ignore  # same as above
         return VideoAsset(
             path=str(input_path),
             duration_sec=duration_sec,

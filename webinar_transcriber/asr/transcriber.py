@@ -187,7 +187,7 @@ class WhisperCppTranscriber:
         """
         self._model_name = self._resolve_model_name()
         self.close()
-        model_kwargs: dict[str, object] = {
+        model_kwargs: dict[str, Any] = {
             "n_threads": self._threads,
             "print_realtime": False,
             "print_progress": False,
@@ -200,8 +200,7 @@ class WhisperCppTranscriber:
         }
         try:
             with _redirect_native_output(self._log_path), _disable_tqdm_progress():
-                model_cls = cast("Any", _model_cls())
-                model = cast("Model", model_cls(self._model_name, **model_kwargs))
+                model = _model_cls()(self._model_name, **model_kwargs)
         except Exception as error:
             raise AsrProcessingError(_model_prepare_error_message(self._model_name)) from error
         if getattr(model, "_ctx", True) is None:
@@ -331,6 +330,7 @@ class WhisperCppTranscriber:
         if detected_language is not None:
             transcribe_kwargs["language"] = detected_language
         try:
+            # pywhispercpp stubs don't expose Model.transcribe()
             raw_segments: list[Any] = cast("Any", model).transcribe(
                 window_samples, **transcribe_kwargs
             )

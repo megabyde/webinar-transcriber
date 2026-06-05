@@ -47,25 +47,11 @@ MediaAsset = AudioAsset | VideoAsset
 ReportStatus = Literal["disabled", "applied", "fallback"]
 
 
-def compact_speaker_fields(value: object) -> object:
-    """Return a JSON payload without empty speaker fields."""
-    if isinstance(value, list):
-        return [compact_speaker_fields(item) for item in value]
-    if not isinstance(value, dict):
-        return value
-
-    compacted: dict[str, object] = {}
-    for key, item in value.items():
-        if not isinstance(key, str):  # pragma: no cover - report dataclasses produce string keys
-            continue
-        if key == "speaker" and item is None:
-            continue
-        if key == "speakers" and item == []:
-            continue
-        compacted[key] = compact_speaker_fields(item)
-    return compacted
+def _compact_dict_factory(items: list[tuple[str, object]]) -> dict[str, object]:
+    return {k: v for k, v in items if not (k == "speaker" and v is None)}
 
 
+@dataclass(slots=True, frozen=True)
 class TimelineSpan:
     """Timeline-bounded model."""
 
@@ -92,8 +78,6 @@ class TimelineItem(TimelineSpan):
     """Timeline-bounded model with a stable identifier."""
 
     id: str
-    start_sec: float
-    end_sec: float
 
 
 @dataclass(slots=True, frozen=True)
@@ -115,16 +99,15 @@ class TranscriptionResult:
         """Return the transcript JSON artifact payload."""
         return {
             "detected_language": self.detected_language,
-            "segments": [compact_speaker_fields(asdict(segment)) for segment in self.segments],
+            "segments": [
+                asdict(segment, dict_factory=_compact_dict_factory) for segment in self.segments
+            ],
         }
 
 
 @dataclass(slots=True, frozen=True)
 class SpeechRegion(TimelineSpan):
     """Speech-bearing region on the normalized audio timeline."""
-
-    start_sec: float
-    end_sec: float
 
 
 @dataclass(slots=True, frozen=True)
@@ -150,7 +133,9 @@ class DecodedWindow:
             "window": asdict(self.window),
             "input_prompt": self.input_prompt,
             "text": self.text,
-            "segments": [compact_speaker_fields(asdict(segment)) for segment in self.segments],
+            "segments": [
+                asdict(segment, dict_factory=_compact_dict_factory) for segment in self.segments
+            ],
             "detected_language": self.detected_language,
         }
 
@@ -206,7 +191,6 @@ class ReportSection(TimelineItem):
     tldr: str | None = None
     video: VideoAssetRef | None = None
     image_path: str | None = None
-    speakers: list[str] = dataclass_field(default_factory=list)
 
     @property
     def scene_id(self) -> str | None:
@@ -223,8 +207,6 @@ class ReportSection(TimelineItem):
 class SpeakerTurn(TimelineSpan):
     """Time-bounded speaker turn returned by diarization."""
 
-    start_sec: float
-    end_sec: float
     speaker: str
 
 
@@ -248,11 +230,9 @@ class AsrPipelineDiagnostics:
 
     backend: str | None
     model: str | None
-    vad_enabled: bool
     threads: int
     normalized_audio_duration_sec: float | None = None
     vad_region_count: int = 0
-    carryover_enabled: bool = False
     window_count: int = 0
     average_window_duration_sec: float | None = None
     system_info: str | None = None
@@ -273,7 +253,6 @@ class DiarizationDiagnostics:
 class LlmDiagnostics:
     """Collected optional LLM diagnostics for one processing run."""
 
-    enabled: bool = False
     model: str | None = None
     report_status: ReportStatus = "disabled"
     report_latency_sec: float | None = None

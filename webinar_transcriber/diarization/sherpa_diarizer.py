@@ -11,7 +11,7 @@ from dataclasses import dataclass, replace
 from importlib import metadata
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from webinar_transcriber._env import diarization_cache_dir
 from webinar_transcriber.models import SpeakerTurn
@@ -104,7 +104,9 @@ class SherpaOnnxDiarizer:
         self, samples: np.ndarray, *, progress_callback: Callable[[int, int], None] | None = None
     ) -> list[SpeakerTurn]:
         """Return speaker turns for normalized audio samples."""
-        diarizer = cast("_NativeDiarizer", self._prepared_diarizer)
+        if self._prepared_diarizer is None:
+            raise DiarizationProcessingError("Diarizer not prepared; call prepare() first.")
+        diarizer = self._prepared_diarizer
 
         turns = self._run_diarization(diarizer, samples, progress_callback=progress_callback)
         return normalize_speaker_labels(turns)
