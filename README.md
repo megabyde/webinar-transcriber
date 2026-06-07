@@ -57,7 +57,7 @@ From the repository root, run the target that matches the runtime you need:
 environment activation is needed. Re-run the install target after pulling changes when the installed
 command should track the checkout.
 
-On Windows, or anywhere without `make`, use uv directly:
+Without `make`, use uv directly:
 
 ```bash
 uv tool install --reinstall .
@@ -229,7 +229,7 @@ The provider SDKs are not installed. Reinstall the CLI with the LLM extra:
 make install-llm
 ```
 
-On Windows:
+Without `make`:
 
 ```bash
 uv tool install --reinstall ".[llm]"
@@ -304,9 +304,9 @@ Install Python 3.12+ and `uv`, then sync the checkout environment you need:
 - `make sync-llm`: development dependencies plus optional LLM SDKs.
 - `make sync-cuda`: development environment with CUDA-built `pywhispercpp`.
 
-On Windows:
+Without `make`:
 
-```powershell
+```bash
 uv sync
 uv sync --extra llm
 ```
@@ -345,8 +345,9 @@ make format
 make check
 ```
 
-`make check` runs Markdown checks, Ruff, `ty`, and the full coverage-gated pytest suite. On Windows,
-or anywhere without `make`, run the equivalent `uv run ...` commands from the `Makefile`.
+`make check` runs Markdown checks, Ruff, `ty`, and the full coverage-gated pytest suite. Without
+`make`, run the equivalent `uv run ...` commands; the `Makefile` is the source of truth for each
+target's exact recipe.
 
 Contributor and agent-specific guidance, including coding conventions, testing notes, and the
 Definition of Done, lives in [AGENTS.md](AGENTS.md).

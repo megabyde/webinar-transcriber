@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -30,17 +30,7 @@ jobs:
         run: uv run webinar-transcriber --help
       - name: Smoke whisper runtime
         run: uv run python -c "from pywhispercpp.model import Model; assert Model.system_info().strip()"
-      - name: Check Markdown formatting
-        run: uv run mdformat --check AGENTS.md LICENSE-3RDPARTY.md README.md docs/pipeline.md
-      - name: Lint Markdown
-        run: uv run pymarkdown scan AGENTS.md LICENSE-3RDPARTY.md README.md docs/pipeline.md
-      - name: Check Python formatting
-        run: uv run ruff format --check .
-      - name: Lint Python
-        run: uv run ruff check .
-      - name: Type check
-        run: uv run ty check webinar_transcriber
-      - name: Run tests
-        run: uv run pytest --cov-report=xml
-      - name: Run LLM tests
-        run: uv run pytest --no-cov webinar_transcriber/tests/test_llm.py
+      - name: Lint
+        run: make lint
+      - name: Test
+        run: make test-all
