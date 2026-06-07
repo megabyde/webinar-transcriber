@@ -7,7 +7,7 @@ import wave
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, cast
 
 import av
 import numpy as np
@@ -23,14 +23,7 @@ if TYPE_CHECKING:
 
     from av.audio.frame import AudioFrame
     from av.audio.stream import AudioStream
-
-
-class _MuxContainer(Protocol):
-    def mux(self, packet: Any, /) -> None: ...  # noqa: ANN401
-
-
-class _EncodesFrames(Protocol):
-    def encode(self, frame: Any = None, /) -> list[Any]: ...  # noqa: ANN401
+    from av.container import OutputContainer
 
 
 NORMALIZED_SAMPLE_RATE = 16_000
@@ -57,8 +50,8 @@ def sample_index_for_time(time_sec: float) -> int:
 
 
 def _mux_audio_frames(
-    output_container: _MuxContainer,
-    output_stream: _EncodesFrames,
+    output_container: OutputContainer,
+    output_stream: AudioStream,
     audio_frames: Iterable[AudioFrame] | None,
 ) -> None:
     if audio_frames is None:

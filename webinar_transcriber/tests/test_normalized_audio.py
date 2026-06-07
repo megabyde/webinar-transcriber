@@ -75,8 +75,8 @@ class TestNormalizedAudio:
             def mux(self, packet: str) -> None:
                 muxed_packets.append(packet)
 
-        _mux_audio_frames(FakeOutputContainer(), FakeOutputStream(), None)
-        _mux_audio_frames(FakeOutputContainer(), FakeOutputStream(), [frame])
+        _mux_audio_frames(FakeOutputContainer(), FakeOutputStream(), None)  # type: ignore
+        _mux_audio_frames(FakeOutputContainer(), FakeOutputStream(), [frame])  # type: ignore
 
         assert encoded_frames == [frame]
         assert muxed_packets == ["packet"]
