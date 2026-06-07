@@ -19,51 +19,32 @@
 
 ## Overview
 
-`webinar-transcriber` is a local-first CLI for turning webinar recordings into transcripts,
-structured notes, diagnostics, and machine-readable report artifacts. It handles both audio-only
-input and slide-based video, detects scenes for video runs, and keeps the core pipeline local with
-PyAV, Silero VAD through `sherpa-onnx`, and `whisper.cpp`.
+`webinar-transcriber` turns webinar recordings into transcripts, structured notes, diagnostics, and
+machine-readable report artifacts. It accepts audio-only files and slide-based video. Video runs add
+scene detection and representative frames; audio-only runs keep the same transcript and report
+contract without visual context.
 
-The default flow is deterministic: normalize the media, detect speech regions, transcribe locally,
-reconcile overlapping windows, and build report sections with local heuristics. Optional
-provider-backed LLM refinement can polish section text and add summary bullets, action items,
-section titles, and section TL;DRs on top of that local output, but it does not replace the base
-pipeline.
+The useful constraint is locality. The default pipeline normalizes the media, detects speech regions
+with the bundled Silero VAD ONNX model, transcribes windows with `whisper.cpp`, reconciles window
+overlap, and builds report sections with local heuristics. Optional LLM refinement runs only after
+that deterministic report exists. It can polish section text and refine titles, summaries, action
+items, and section TL;DRs, but it does not replace the base pipeline.
 
 > [!NOTE]
-> The core pipeline runs locally. Cloud access is used only when you explicitly pass `--llm`.
+> The core pipeline runs locally. Cloud access is used only when you pass `--llm`.
 
 ## Install
 
 ### Prerequisites
 
-- Python 3.12+ and `uv`.
-- CUDA source builds also require a C/C++ compiler, `cmake`, and a working CUDA toolkit (`nvcc` on
-  `PATH`, `CUDA_HOME` set).
+- Python 3.12+
+- `uv`
+- For CUDA source builds: a C/C++ compiler, `cmake`, and a working CUDA toolkit with `nvcc` on
+  `PATH` and `CUDA_HOME` set
 
-### Install The CLI From This Checkout
+### Install the CLI from this checkout
 
-From the repository root:
-
-```bash
-make install
-```
-
-That installs the `webinar-transcriber` command as a uv tool from the local source tree. You do not
-need to activate a virtual environment to use the installed CLI. Re-run `make install` after pulling
-changes when you want the installed command to use the current checkout.
-
-On Windows, or anywhere without `make`, use uv directly:
-
-```bash
-uv tool install --reinstall .
-```
-
-```bash
-webinar-transcriber --help
-```
-
-Use the matching Make target for the install you need:
+From the repository root, run the target that matches the runtime you need:
 
 | Command             | Installs                                                |
 | ------------------- | ------------------------------------------------------- |
@@ -72,53 +53,57 @@ Use the matching Make target for the install you need:
 | `make install-cuda` | CLI with `pywhispercpp` rebuilt from source for NVIDIA. |
 | `make uninstall`    | Removes the installed `webinar-transcriber` uv tool.    |
 
-The standard and LLM install targets pull the published `pywhispercpp` wheels from PyPI. On Linux
-and Windows, those wheels use the CPU backend. On macOS, the Apple Silicon wheels include Metal
-support. Speech-region detection uses the bundled Silero ONNX model through `sherpa-onnx`, so the
-base install does not pull PyTorch or another large deep-learning framework. The default
-`large-v3-turbo` model is downloaded on first transcription run, not during installation. To verify
-the active backend after a run, inspect `diagnostics.json` → `asr_pipeline.system_info`. Native
-whisper.cpp initialization and teardown logs are written to `whisper-cpp.log` in the run directory.
+`make install` registers `webinar-transcriber` as a uv tool from the local source tree. No virtual
+environment activation is needed. Re-run the install target after pulling changes when the installed
+command should track the checkout.
 
-> [!TIP]
-> The base install does not pull PyTorch. VAD uses the bundled Silero ONNX model through
-> `sherpa-onnx`, and Whisper inference runs through `whisper.cpp`.
-
-To inspect all available project commands:
+On Windows, or anywhere without `make`, use uv directly:
 
 ```bash
-make help
+uv tool install --reinstall .
 ```
 
-### NVIDIA (CUDA on Linux or Windows)
+Run `make help` to list every project target.
+
+The standard install uses prebuilt `pywhispercpp` wheels: CPU wheels on Linux and Windows, Metal on
+Apple Silicon where the wheel supports it. It does not install PyTorch. Speech-region detection uses
+the bundled Silero ONNX model through `sherpa-onnx`.
+
+The default `large-v3-turbo` Whisper model is downloaded by `pywhispercpp` on the first
+transcription run, not during installation. Each run records the active ASR backend in
+`diagnostics.json` under `asr_pipeline.system_info`; native whisper.cpp logs are written to
+`whisper-cpp.log` in the run directory.
+
+### NVIDIA CUDA
 
 > [!CAUTION]
-> CUDA installs rebuild `pywhispercpp` locally and depend on your system CUDA toolkit. Use the
-> standard install unless you specifically need NVIDIA acceleration.
+> CUDA installs rebuild `pywhispercpp` locally and depend on the host CUDA toolkit. Use the standard
+> install unless you specifically need NVIDIA acceleration.
 
-CUDA is the only supported path that builds `pywhispercpp` from source. Use the CUDA target that
-matches your workflow:
+CUDA is the only supported path that builds `pywhispercpp` from source:
 
-- `make install-cuda` for the installed CLI tool
-- `make sync-cuda` for the checkout development environment
+- `make install-cuda` installs the CLI tool with CUDA support.
+- `make sync-cuda` prepares the checkout development environment with CUDA support.
 
-All usage examples below assume `webinar-transcriber` is available on your `PATH`.
+If the build fails, see [CUDA install fails](#cuda-install-fails).
+
+All examples below assume `webinar-transcriber` is available on `PATH`.
 
 ## Usage
 
-### Quick Start
+### Quick start
 
-`webinar-transcriber` is a single root command, not a subcommand CLI. By default, it writes a fresh
-run directory under `runs/`. Pass multiple inputs to process them sequentially. Use `--output-dir`
-with a single input to choose a specific location.
+`webinar-transcriber` is a single root command. There are no subcommands. By default, each input
+gets a fresh run directory under `runs/`. Multiple inputs are processed sequentially. `--output-dir`
+is allowed only with one input.
 
-Any container PyAV can decode is accepted, including common formats like `.mp4`, `.mkv`, `.mov`,
-`.webm`, `.mp3`, `.wav`, and `.m4a`. The first pipeline stage normalizes the audio track to a
-deterministic mono `16 kHz` `16-bit PCM WAV` regardless of the input container.
+Any container PyAV can decode is accepted, including common formats such as `.mp4`, `.mkv`, `.mov`,
+`.webm`, `.mp3`, `.wav`, and `.m4a`. The first pipeline stage normalizes the audio track to mono
+`16 kHz` `16-bit PCM WAV`, independent of the input container.
 
 > [!TIP]
-> Use a fresh `--output-dir` for reproducible comparisons. Existing output directories are not
-> overwritten.
+> Use a fresh `--output-dir` for reproducible comparisons. Existing output directories are refused,
+> not overwritten.
 
 ```bash
 webinar-transcriber INPUT
@@ -129,42 +114,25 @@ webinar-transcriber INPUT --output-dir runs/custom-demo
 
 ### Cloud LLM
 
-The optional `--llm` flag enables provider-backed report refinement after deterministic sectioning.
-It can:
+`--llm` enables provider-backed report refinement after deterministic sectioning. The LLM step can
+polish section transcript text with light cleanup and paragraphing, and refine summary bullets,
+action items, section titles, and section TL;DRs. Supported providers are `openai` and `anthropic`;
+OpenAI is the default.
 
-- polish section transcript text with light cleanup and paragraphing
-- refine summary bullets, action items, section titles, and section TL;DRs
-
-Supported providers:
-
-- `openai` (default)
-- `anthropic`
-
-#### Install the LLM extra
-
-The base install does not include the optional provider SDKs. If you want to use `--llm`, reinstall
-the CLI from this checkout with the `llm` extra:
-
-> [!IMPORTANT]
-> `--llm` requires the LLM extra. Install it first with `make install-llm`.
+The base install does not include provider SDKs. Install the LLM extra first:
 
 ```bash
 make install-llm
 ```
 
-LLM configuration comes only from environment variables. Substitute any model identifier the
-provider currently offers; the CLI does not pin a default. Check the provider's documentation for
-current model names.
-
-#### OpenAI
+Configuration comes from environment variables. The CLI does not pin a model name; pass a model
+identifier supported by the provider you are using.
 
 ```bash
 OPENAI_API_KEY=... \
     OPENAI_MODEL=<openai-model> \
     webinar-transcriber INPUT --llm
 ```
-
-#### Anthropic
 
 ```bash
 LLM_PROVIDER=anthropic \
@@ -173,7 +141,10 @@ LLM_PROVIDER=anthropic \
     webinar-transcriber INPUT --llm
 ```
 
-### Speaker Diarization
+For missing environment variables, missing extras, or unsupported provider names, see
+[Troubleshooting](#troubleshooting).
+
+### Speaker diarization
 
 Pass `--diarize` to label transcript segments with anonymous local speaker IDs:
 
@@ -184,38 +155,33 @@ webinar-transcriber INPUT --diarize --diarize-speakers 4
 
 > [!WARNING]
 > Pass `--diarize-speakers` only when the exact speaker count is known. A wrong count can force poor
-> speaker labels; omit the option to let Sherpa estimate the count.
+> speaker labels. Omit the option to let Sherpa estimate the count.
 
-Diarization runs entirely locally through `sherpa-onnx`; it does not use an API key. The first
-diarized run downloads the segmentation and speaker-embedding models into
+Diarization runs locally through `sherpa-onnx` and does not use an API key. The first diarized run
+downloads the segmentation and speaker-embedding models into
 `~/.cache/webinar-transcriber/diarization`.
 
-> [!NOTE]
-> Speaker labels are anonymous and stable within a run: `S1`, `S2`, and so on, ordered by first
-> appearance in the timeline.
+When diarization is enabled, reports prefix transcript paragraphs with stable anonymous labels
+ordered by first appearance in the timeline: `S1`, `S2`, and so on. JSON artifacts include a
+`speaker` field on transcript segments and a separate `diarization.json` file with raw speaker
+turns. If labels look wrong, see [Poor diarization labels](#poor-diarization-labels).
 
-When enabled, reports prefix transcript paragraphs with stable labels such as `S1` and `S2`, ordered
-by first appearance. The JSON artifacts include a `speaker` field on transcript segments and a
-separate `diarization.json` file with raw speaker turns.
+### How it works
 
-### How It Works
+The CLI runs this local pipeline: media probe, normalized transcription audio, Silero VAD, ASR
+window planning, `whisper.cpp` transcription, overlap reconciliation, optional speaker diarization,
+transcript normalization, optional scene detection and frame extraction, local report assembly,
+optional LLM polish, and final artifact and diagnostics write-out.
 
-The CLI runs a deterministic local pipeline: media probe, normalized transcription audio, Silero
-VAD, ASR window planning, `whisper.cpp` transcription, overlap reconciliation, optional speaker
-diarization, transcript normalization, optional scene detection and frame extraction, local report
-assembly, optional LLM polish, and final artifact and diagnostics write-out. For per-stage detail
-and the artifact each stage produces, see [docs/pipeline.md](docs/pipeline.md).
+For per-stage detail and the artifact each stage produces, see [docs/pipeline.md](docs/pipeline.md).
 
 ## Advanced Usage
 
-### ASR Model
+### ASR model
 
-`webinar-transcriber` uses `pywhispercpp` to resolve whisper.cpp models. By default, it uses the
-built-in `large-v3-turbo` model identifier for fast, high-quality local transcription, which
-`pywhispercpp` downloads into its cache on first use. You can also pass another model identifier or
-a local GGML model path with `--asr-model`.
-
-For example:
+`webinar-transcriber` uses `pywhispercpp` to resolve whisper.cpp models. By default, it uses
+`large-v3-turbo`, which `pywhispercpp` downloads into its cache on first use. You can pass another
+model identifier or a local GGML model path with `--asr-model`.
 
 ```bash
 webinar-transcriber INPUT --asr-model large-v3-turbo
@@ -223,7 +189,7 @@ webinar-transcriber INPUT --asr-model large-v3
 webinar-transcriber INPUT --asr-model models/whisper-cpp/ggml-large-v3-turbo.bin
 ```
 
-To manage the file yourself, download it directly:
+To manage the model file yourself, download it directly:
 
 ```bash
 mkdir -p models/whisper-cpp
@@ -232,79 +198,90 @@ curl -L \
     https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin
 ```
 
-Use `--asr-model large-v3` when maximum transcription accuracy is more important than local runtime.
+Use `--asr-model large-v3` when transcription accuracy matters more than local runtime.
 
-### ASR Controls
+### ASR controls
 
 The default ASR path uses the selected `whisper.cpp` model, automatic language detection, and an
 automatically selected thread count.
 
 - `--language CODE`: force a Whisper language code such as `en` or `ru`.
-- `--threads N`: set the CPU worker count passed to `whisper.cpp`. GPU-enabled builds can offload
-  supported model work to the GPU, but `whisper.cpp` still uses CPU threads for non-offloaded work,
-  scheduling, and language detection. The same value is also used by local VAD, local diarization,
-  and concurrent LLM section polishing. By default, the CLI uses the host CPU count capped at 8;
-  lower this when you need to leave CPU capacity for other work.
+- `--threads N`: set the CPU worker count passed to `whisper.cpp`.
+
+GPU-enabled builds can offload supported model work to the GPU, but `whisper.cpp` still uses CPU
+threads for scheduling, language detection, and non-offloaded work. The same `--threads` value is
+also used by local VAD, local diarization, and concurrent LLM section polishing. By default, the CLI
+uses the host CPU count capped at 8. Lower it when the machine needs CPU capacity for other work.
 
 ## Troubleshooting
 
 ### `Missing required LLM environment variables`
 
 `--llm` was passed without the required provider environment variables. Set `OPENAI_API_KEY` and
-`OPENAI_MODEL` for the default OpenAI provider, or `LLM_PROVIDER=anthropic` plus `ANTHROPIC_API_KEY`
-and `ANTHROPIC_MODEL` for Anthropic. See [Cloud LLM](#cloud-llm) for full examples.
+`OPENAI_MODEL` for OpenAI, or set `LLM_PROVIDER=anthropic` plus `ANTHROPIC_API_KEY` and
+`ANTHROPIC_MODEL` for Anthropic.
 
 ### `requires the 'llm' extra`
 
-The provider SDKs are not installed. Reinstall the CLI with the `llm` extra: `make install-llm` (or
-`uv tool install --reinstall ".[llm]"` on Windows). Re-run after the install completes.
+The provider SDKs are not installed. Reinstall the CLI with the LLM extra:
+
+```bash
+make install-llm
+```
+
+On Windows:
+
+```bash
+uv tool install --reinstall ".[llm]"
+```
 
 ### `Unsupported LLM provider`
 
-`LLM_PROVIDER` is set to a value other than `openai` or `anthropic`. Unset it to use the default
-OpenAI provider or set it to `anthropic`.
+`LLM_PROVIDER` is set to a value other than `openai` or `anthropic`. Unset it to use OpenAI, or set
+it to `anthropic`.
 
 ### `Output directory already exists`
 
-The CLI refuses to overwrite existing run directories. Either pass a new `--output-dir`, delete the
-existing one, or omit `--output-dir` so the CLI creates a fresh timestamped directory under `runs/`.
+The CLI refuses to overwrite existing run directories. Pass a new `--output-dir`, remove the
+existing directory, or omit `--output-dir` so the CLI creates a fresh timestamped directory under
+`runs/`.
 
 ### `Could not prepare whisper.cpp model`
 
-`pywhispercpp` could not load the requested model. Check that `--asr-model` matches a known
-identifier such as `large-v3-turbo` or `large-v3`, or that any local path points to a valid GGML
-file. The native `whisper-cpp.log` inside the run directory has the underlying error.
+`pywhispercpp` could not load the requested model. Check that `--asr-model` is a known identifier
+such as `large-v3-turbo` or `large-v3`, or that a local path points to a valid GGML file. The native
+`whisper-cpp.log` inside the run directory has the underlying error.
 
 ### Wrong language detected
 
-Whisper sometimes mis-detects the language for short, multilingual, or noisy audio. Pass
-`--language CODE` (for example `--language en` or `--language ru`) to force the language hint.
+Whisper can mis-detect language for short, multilingual, or noisy audio. Pass `--language CODE`, for
+example `--language en` or `--language ru`, to force the language hint.
 
 ### Poor diarization labels
 
-`--diarize-speakers COUNT` forces an exact speaker count. If the count is wrong the labels degrade.
-Omit the flag to let `sherpa-onnx` estimate the count, or pass the correct number.
+`--diarize-speakers COUNT` forces an exact speaker count. If the count is wrong, labels degrade.
+Omit the flag to let `sherpa-onnx` estimate the count, or pass the correct count.
 
 ### CUDA install fails
 
 `make install-cuda` rebuilds `pywhispercpp` from source and needs `nvcc` on `PATH` and `CUDA_HOME`
-set. If you do not need NVIDIA acceleration, use `make install` instead — it pulls prebuilt wheels
-and skips the C/C++/CUDA toolchain entirely.
+set. If you do not need NVIDIA acceleration, use `make install`; it pulls prebuilt wheels and skips
+the C/C++/CUDA toolchain.
 
 ## Reference
 
-### Output Layout
+### Output layout
 
 Successful runs can write:
 
 ```text
 runs/<timestamp>_<basename>/
 ├─ metadata.json             # probed media type, duration, streams
-├─ transcript.json           # reconciled transcript with timestamps + optional speakers
+├─ transcript.json           # reconciled transcript with timestamps and optional speakers
 ├─ report.md
 ├─ report.docx
 ├─ report.json               # final report in markdown, docx, and json
-├─ diagnostics.json          # stage timings, counts, warnings, ASR + optional LLM info
+├─ diagnostics.json          # stage timings, counts, warnings, ASR and optional LLM info
 ├─ asr/
 │  ├─ speech_regions.json    # VAD ranges
 │  └─ decoded_windows.json   # per-window decode output
@@ -315,31 +292,29 @@ runs/<timestamp>_<basename>/
 ```
 
 Failed runs still write `diagnostics.json` with the failed stage and any partial intermediate
-artifacts already produced.
+artifacts already produced, as long as the run directory exists.
 
 ## Development
 
-### Local Setup
+### Local setup
 
-1. Install Python 3.12+ and `uv`.
+Install Python 3.12+ and `uv`, then sync the checkout environment you need:
 
-1. Sync the checkout environment you need:
+- `make sync`: standard development and test dependencies.
+- `make sync-llm`: development dependencies plus optional LLM SDKs.
+- `make sync-cuda`: development environment with CUDA-built `pywhispercpp`.
 
-   - `make sync`: standard development and test dependencies.
-   - `make sync-llm`: development dependencies plus optional LLM SDKs.
-   - `make sync-cuda`: development environment with CUDA-built `pywhispercpp`.
-
-On Windows, use uv directly:
+On Windows:
 
 ```powershell
 uv sync
 uv sync --extra llm
 ```
 
-### Running from a Checkout
+### Running from a checkout
 
-If you are developing inside the repository and do not want to install the CLI as a tool, run it
-through the checkout environment:
+If you are developing in the repository and do not want to install the CLI as a uv tool, run through
+the checkout environment:
 
 ```bash
 uv run webinar-transcriber --help
@@ -355,31 +330,23 @@ uv run webinar-transcriber INPUT
 - `pytest`
 - `pytest-cov`
 
-### Quality Gates
+### Quality gates
 
-Every logical implementation step is expected to pass the full verification cycle before it is
-committed:
+Use the fast test target for iteration:
+
+```bash
+make test
+```
+
+Before committing, run the full gate:
 
 ```bash
 make format
-make lint
 make check
 ```
 
-On Windows, run the same checks through uv:
+`make check` runs Markdown checks, Ruff, `ty`, and the full coverage-gated pytest suite. On Windows,
+or anywhere without `make`, run the equivalent `uv run ...` commands from the `Makefile`.
 
-```powershell
-uv run mdformat --check AGENTS.md LICENSE-3RDPARTY.md README.md
-uv run pymarkdown scan AGENTS.md LICENSE-3RDPARTY.md README.md
-uv run ruff format --check .
-uv run ruff check .
-uv run ty check webinar_transcriber
-uv run pytest
-```
-
-For quick local iteration, `make test` skips tests marked `slow`. Use `make check` to run the full
-coverage-gated suite.
-
-The repository keeps tiny committed media fixtures so pipeline tests can run without network fetches
-or large binary blobs. Contributor and agent-specific repository guidance lives in
-[AGENTS.md](AGENTS.md).
+Contributor and agent-specific guidance, including coding conventions, testing notes, and the
+Definition of Done, lives in [AGENTS.md](AGENTS.md).
