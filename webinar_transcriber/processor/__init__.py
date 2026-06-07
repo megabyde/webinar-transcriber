@@ -50,7 +50,7 @@ from .stages import (
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from webinar_transcriber.diarization import Diarizer
+    from webinar_transcriber.diarization import SherpaOnnxDiarizer
     from webinar_transcriber.llm.processor import InstructorLLMProcessor
     from webinar_transcriber.models import (
         Diagnostics,
@@ -110,7 +110,7 @@ def process_input(
     language: str | None = None,
     keep_audio: bool = False,
     llm_processor: InstructorLLMProcessor | None = None,
-    diarizer: Diarizer | None = None,
+    diarizer: SherpaOnnxDiarizer | None = None,
     diarization_speaker_count: int | None = None,
     transcriber: WhisperCppTranscriber | None = None,
     reporter: StageReporter | None = None,
@@ -248,7 +248,7 @@ def _run_asr_pipeline(
     ctx: RunContext,
     threads: int,
     language: str | None,
-    diarizer: Diarizer | None,
+    diarizer: SherpaOnnxDiarizer | None,
     diarization_speaker_count: int | None,
 ) -> _AsrResult:
     with ctx.stage("prepare_asr", "Preparing ASR model", detail=transcriber.model_name) as st:
