@@ -20,7 +20,7 @@ from webinar_transcriber.llm import (
 )
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
-from webinar_transcriber.processor import TranscriptionConfig, process_input
+from webinar_transcriber.processor import process_input
 from webinar_transcriber.ui import StageReporter
 
 _THREADS_DEFAULT = default_asr_threads()
@@ -105,9 +105,6 @@ def main(
     if output_dir is not None and len(input_paths) > 1:
         raise CLIError("--output-dir can only be used with one input file.")
 
-    transcription_config = TranscriptionConfig(
-        threads=threads, asr_model=asr_model, language=language, keep_audio=keep_audio
-    )
     reporter = StageReporter()
 
     try:
@@ -117,7 +114,10 @@ def main(
             process_input(
                 input_path=input_path,
                 output_dir=output_dir,
-                transcription_config=transcription_config,
+                threads=threads,
+                asr_model=asr_model,
+                language=language,
+                keep_audio=keep_audio,
                 llm_processor=llm_processor,
                 diarizer=diarizer,
                 diarization_speaker_count=diarize_speakers,
