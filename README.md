@@ -298,7 +298,7 @@ artifacts already produced, as long as the run directory exists.
 
 ### Local setup
 
-Install Python 3.12+ and `uv`, then sync the checkout environment you need:
+Sync the checkout environment you need:
 
 - `make sync`: standard development and test dependencies.
 - `make sync-llm`: development dependencies plus optional LLM SDKs.
@@ -313,22 +313,12 @@ uv sync --extra llm
 
 ### Running from a checkout
 
-If you are developing in the repository and do not want to install the CLI as a uv tool, run through
-the checkout environment:
+To run the CLI without installing it as a uv tool, use the checkout environment:
 
 ```bash
 uv run webinar-transcriber --help
 uv run webinar-transcriber INPUT
 ```
-
-### Toolchain
-
-- Python 3.12+
-- `uv`
-- `ruff`
-- `ty`
-- `pytest`
-- `pytest-cov`
 
 ### Quality gates
 
