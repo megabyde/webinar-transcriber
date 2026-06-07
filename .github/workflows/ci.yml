@@ -31,9 +31,9 @@ jobs:
       - name: Smoke whisper runtime
         run: uv run python -c "from pywhispercpp.model import Model; assert Model.system_info().strip()"
       - name: Check Markdown formatting
-        run: uv run mdformat --check AGENTS.md LICENSE-3RDPARTY.md README.md
+        run: uv run mdformat --check AGENTS.md LICENSE-3RDPARTY.md README.md docs/pipeline.md
       - name: Lint Markdown
-        run: uv run pymarkdown scan AGENTS.md LICENSE-3RDPARTY.md README.md
+        run: uv run pymarkdown scan AGENTS.md LICENSE-3RDPARTY.md README.md docs/pipeline.md
       - name: Check Python formatting
         run: uv run ruff format --check .
       - name: Lint Python

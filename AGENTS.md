@@ -8,9 +8,12 @@ Keep repository documentation consolidated in:
 
 - `README.md` for user-facing usage, behavior, and artifact contracts
 - `AGENTS.md` for contributor and implementation guidance
+- `docs/` for reference-style internals that would bloat `README.md` without helping a typical user
+  (currently: `docs/pipeline.md` — per-stage pipeline detail)
 
-Do not add new standalone documentation files under `docs/` unless there is a strong reason. If
-repository assets are needed, keep them under `docs/assets/`.
+Prefer extending `README.md` first. Add a new file under `docs/` only when a section is long enough
+to obscure the user-facing flow and self-contained enough to read on its own. Repository assets stay
+under `docs/assets/`.
 
 ## Tooling
 
