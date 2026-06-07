@@ -54,6 +54,7 @@ webinar_transcriber/
 ├── normalized_audio.py     deterministic transcription-audio preparation
 ├── segmentation.py         speech-region detection and duration helpers
 ├── structure.py            transcript-scene alignment and report heuristics
+├── text_utils.py           paragraph splitting and sentence terminator helpers
 ├── ui.py                   StageReporter — Rich-backed progress (track() context manager)
 └── tests/                  flat test suite; committed fixtures under tests/fixtures/
 ```
@@ -70,7 +71,9 @@ webinar_transcriber/
 ## Testing Notes
 
 - Keep tests under `webinar_transcriber/tests/`, mirroring the package hierarchy in filenames and
-  grouping where it helps scanability.
+  grouping where it helps scanability. Split a test file into a sibling when it crosses roughly 800
+  lines or when the production-side module it covers has already split — for example, `llm/utils.py`
+  and `llm/processor.py` map to `test_llm_utils.py` and `test_llm.py`.
 - Prefer tiny deterministic fixtures committed to the repo.
 - Prefer `pytest` `monkeypatch` for simple state replacement and `unittest.mock.patch` when a test
   needs mock semantics such as `side_effect`, `return_value`, or call assertions.

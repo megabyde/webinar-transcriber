@@ -7,6 +7,16 @@
 [![uv](https://img.shields.io/badge/package-uv-5C5CFF?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
 [![License MIT](https://img.shields.io/badge/license-MIT-2F855A)](LICENSE)
 
+## Contents
+
+- [Overview](#overview)
+- [Install](#install)
+- [Usage](#usage)
+- [Advanced Usage](#advanced-usage)
+- [Troubleshooting](#troubleshooting)
+- [Reference](#reference)
+- [Development](#development)
+
 ## Overview
 
 `webinar-transcriber` is a local-first CLI for turning webinar recordings into transcripts,
@@ -138,13 +148,15 @@ the CLI from this checkout with the `llm` extra:
 make install-llm
 ```
 
-LLM configuration comes only from environment variables.
+LLM configuration comes only from environment variables. Substitute any model identifier the
+provider currently offers; the CLI does not pin a default. Check the provider's documentation for
+current model names.
 
 #### OpenAI
 
 ```bash
 OPENAI_API_KEY=... \
-    OPENAI_MODEL=gpt-5-mini \
+    OPENAI_MODEL=<openai-model> \
     webinar-transcriber INPUT --llm
 ```
 
@@ -153,7 +165,7 @@ OPENAI_API_KEY=... \
 ```bash
 LLM_PROVIDER=anthropic \
     ANTHROPIC_API_KEY=... \
-    ANTHROPIC_MODEL=claude-sonnet-4-20250514 \
+    ANTHROPIC_MODEL=<anthropic-model> \
     webinar-transcriber INPUT --llm
 ```
 
@@ -314,6 +326,51 @@ automatically selected thread count.
   scheduling, and language detection. The same value is also used by local VAD, local diarization,
   and concurrent LLM section polishing. By default, the CLI uses the host CPU count capped at 8;
   lower this when you need to leave CPU capacity for other work.
+
+## Troubleshooting
+
+### `Missing required LLM environment variables`
+
+`--llm` was passed without the required provider environment variables. Set `OPENAI_API_KEY` and
+`OPENAI_MODEL` for the default OpenAI provider, or `LLM_PROVIDER=anthropic` plus `ANTHROPIC_API_KEY`
+and `ANTHROPIC_MODEL` for Anthropic. See [Cloud LLM](#cloud-llm) for full examples.
+
+### `requires the 'llm' extra`
+
+The provider SDKs are not installed. Reinstall the CLI with the `llm` extra: `make install-llm` (or
+`uv tool install --reinstall ".[llm]"` on Windows). Re-run after the install completes.
+
+### `Unsupported LLM provider`
+
+`LLM_PROVIDER` is set to a value other than `openai` or `anthropic`. Unset it to use the default
+OpenAI provider or set it to `anthropic`.
+
+### `Output directory already exists`
+
+The CLI refuses to overwrite existing run directories. Either pass a new `--output-dir`, delete the
+existing one, or omit `--output-dir` so the CLI creates a fresh timestamped directory under `runs/`.
+
+### `Could not prepare whisper.cpp model`
+
+`pywhispercpp` could not load the requested model. Check that `--asr-model` matches a known
+identifier such as `large-v3-turbo` or `large-v3`, or that any local path points to a valid GGML
+file. The native `whisper-cpp.log` inside the run directory has the underlying error.
+
+### Wrong language detected
+
+Whisper sometimes mis-detects the language for short, multilingual, or noisy audio. Pass
+`--language CODE` (for example `--language en` or `--language ru`) to force the language hint.
+
+### Poor diarization labels
+
+`--diarize-speakers COUNT` forces an exact speaker count. If the count is wrong the labels degrade.
+Omit the flag to let `sherpa-onnx` estimate the count, or pass the correct number.
+
+### CUDA install fails
+
+`make install-cuda` rebuilds `pywhispercpp` from source and needs `nvcc` on `PATH` and `CUDA_HOME`
+set. If you do not need NVIDIA acceleration, use `make install` instead — it pulls prebuilt wheels
+and skips the C/C++/CUDA toolchain entirely.
 
 ## Reference
 
