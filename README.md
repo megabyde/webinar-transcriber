@@ -299,33 +299,23 @@ Successful runs can write:
 
 ```text
 runs/<timestamp>_<basename>/
-├─ asr/
-│  ├─ decoded_windows.json
-│  └─ speech_regions.json
-├─ diarization.json         # optional via --diarize
-├─ frames/                  # video only
-├─ diagnostics.json
-├─ metadata.json
-├─ report.docx
-├─ report.json
+├─ metadata.json             # probed media type, duration, streams
+├─ transcript.json           # reconciled transcript with timestamps + optional speakers
 ├─ report.md
-├─ scenes.json              # video only
-├─ transcript.json
-└─ transcription-audio.mp3  # optional via --keep-audio
+├─ report.docx
+├─ report.json               # final report in markdown, docx, and json
+├─ diagnostics.json          # stage timings, counts, warnings, ASR + optional LLM info
+├─ asr/
+│  ├─ speech_regions.json    # VAD ranges
+│  └─ decoded_windows.json   # per-window decode output
+├─ diarization.json          # anonymous speaker turns; --diarize only
+├─ scenes.json               # scene boundaries; video only
+├─ frames/                   # representative frames; video only
+└─ transcription-audio.mp3   # normalized audio copy; --keep-audio only
 ```
 
-- `metadata.json` — probed media type, duration, and stream summary.
-- `transcript.json` — reconciled transcript with timestamps and optional speaker labels.
-- `report.md` / `report.docx` / `report.json` — final report in three formats.
-- `diagnostics.json` — stage timings, item counts, warnings, ASR pipeline details, and optional LLM
-  metadata. Failed runs still write this once the run directory exists, including the failed stage
-  and any partial intermediate artifacts already produced.
-- `asr/speech_regions.json` and `asr/decoded_windows.json` — VAD ranges and per-window decode
-  output, useful when debugging boundary behavior.
-- `diarization.json` — anonymous speaker turns (`S1`, `S2`, …) when `--diarize` is set.
-- `scenes.json` and `frames/` — scene boundaries and representative frames for video input.
-- `transcription-audio.mp3` — compressed copy of the normalized transcription audio when
-  `--keep-audio` is set.
+Failed runs still write `diagnostics.json` with the failed stage and any partial intermediate
+artifacts already produced.
 
 ## Development
 
