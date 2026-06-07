@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib
 import os
 from dataclasses import dataclass, field
-from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from webinar_transcriber._env import llm_provider_name
@@ -69,8 +68,6 @@ class LlmReportPolishPlan:
 # Provider config
 # ---------------------------------------------------------------------------
 
-_EMPTY_REQUEST_KWARGS = MappingProxyType({})
-
 
 @dataclass(frozen=True, slots=True)
 class ProviderSpec:
@@ -78,7 +75,7 @@ class ProviderSpec:
     module_name: str
     api_key_env: str
     model_env: str
-    request_kwargs: Mapping[str, object] = _EMPTY_REQUEST_KWARGS
+    request_kwargs: Mapping[str, object] = field(default_factory=dict)
 
 
 PROVIDERS = {

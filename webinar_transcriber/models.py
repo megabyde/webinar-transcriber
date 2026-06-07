@@ -223,6 +223,10 @@ class ReportDocument:
     sections: list[ReportSection] = dataclass_field(default_factory=list)
     warnings: list[str] = dataclass_field(default_factory=list)
 
+    def to_json(self) -> dict[str, object]:
+        """Return the report JSON artifact payload."""
+        return asdict(self, dict_factory=_compact_dict_factory)
+
 
 @dataclass(slots=True, frozen=True)
 class AsrPipelineDiagnostics:
