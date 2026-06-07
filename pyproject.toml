@@ -31,7 +31,7 @@ dependencies = [
     "pywhispercpp>=1.5.0,<2.0.0",
     "python-docx>=1.2.0,<2.0.0",
     "rich>=14.3.3,<15.0.0",
-    "av>=17.0.1,<18.0.0",
+    "av>=17.1.0,<18.0.0",
     "sherpa-onnx>=1.13.2,<1.14.0",
     "sherpa-onnx-core>=1.13.2,<1.14.0",
 ]
@@ -47,7 +47,7 @@ llm = [
 webinar-transcriber = "webinar_transcriber.cli:main"
 
 [build-system]
-requires = ["hatch-vcs>=0.5.0,<1.0.0", "hatchling>=1.29.0,<2.0.0"]
+requires = ["hatch-vcs>=0.5.0,<1.0.0", "hatchling>=1.30.1,<2.0.0"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
@@ -58,8 +58,8 @@ dev = [
     "pydantic>=2.13.4,<3.0.0",
     "pytest>=9.0.3,<10.0.0",
     "pytest-cov>=7.1.0,<8.0.0",
-    "ruff>=0.15.15,<1.0.0",
-    "ty>=0.0.40,<1.0.0",
+    "ruff>=0.15.16,<1.0.0",
+    "ty>=0.0.44,<1.0.0",
     "mdformat-gfm>=1.0.0,<2.0.0",
     "mdformat-gfm-alerts>=2.0.0,<3.0.0",
 ]
