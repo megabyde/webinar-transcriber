@@ -31,6 +31,24 @@ same validation works on Linux, macOS, and Windows runners.
 In sandboxed Codex runs, prefer `UV_CACHE_DIR=/tmp/uv-cache` for `uv` and `make` commands to avoid
 cache-permission failures.
 
+## Definition of Done
+
+A change is ready to merge when all of the following hold:
+
+- **Quality gates pass.** `make format && make check` runs cleanly — the full coverage-gated test
+  suite, `ruff`, `ty`, and the markdown linters.
+- **100% coverage stays.** Add `# pragma: no cover` to genuinely unreachable defensive branches
+  rather than lowering the threshold.
+- **Docs stay in sync.** If the change affects CLI flags, output artifacts, install targets, package
+  layout, or runtime contracts, update `README.md` and `AGENTS.md` in the same PR.
+- **No dead code.** Remove unused imports, helpers with no callers, and `# TODO` comments that will
+  not be addressed in this PR.
+- **PR has a summary and a test plan.** Each pull request description includes a brief summary and
+  an explicit test-plan checklist.
+- **Commits follow Conventional Commits.** Prefix commit messages with `refactor:`, `docs:`, `ci:`,
+  `style:`, `feat:`, `fix:`, `test:`, `build:`, or `chore:`. Use an optional scope when it adds
+  clarity, for example `build(deps):`.
+
 ## Package Layout
 
 The package intentionally avoids deep nesting.
