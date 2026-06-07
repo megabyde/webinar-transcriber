@@ -1,44 +1,59 @@
-"""Utility helpers for optional cloud LLM integrations."""
+"""Utility helpers and wire schemas for optional cloud LLM integrations."""
 
 from __future__ import annotations
 
 import json
-import os
 import re
-from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, TypeVar
+
+from pydantic import BaseModel, Field
 
 from webinar_transcriber.text_utils import split_paragraph_blocks
 
-from .contracts import LlmConfigurationError, LlmProcessingError
+from . import LlmProcessingError
 from .prompts import REPORT_SECTION_EXCERPT_LIMIT
 
-_SCHEMA_LABELS = {"SectionTextResponse": "Section polish", "ReportPolishResponse": "Report polish"}
 if TYPE_CHECKING:
-    from webinar_transcriber.llm.schemas import ReportSectionUpdate
+    from collections.abc import Mapping
+
     from webinar_transcriber.models import ReportDocument
 
 
-def required_provider_env(*, api_key_env: str, model_env: str) -> tuple[str, str]:
-    """Return the required API key and model name for one provider.
+# ---------------------------------------------------------------------------
+# Pydantic wire schemas (Instructor boundary)
+# ---------------------------------------------------------------------------
 
-    Returns:
-        tuple[str, str]: The configured API key and model name.
+SchemaModelT = TypeVar("SchemaModelT", bound=BaseModel)
 
-    Raises:
-        LlmConfigurationError: If either required environment variable is missing.
-    """
-    api_key = os.environ.get(api_key_env)
-    model_name = os.environ.get(model_env)
-    missing_vars = [
-        env_name
-        for env_name, value in ((api_key_env, api_key), (model_env, model_name))
-        if not value
-    ]
-    if missing_vars:
-        missing = ", ".join(missing_vars)
-        raise LlmConfigurationError(f"Missing required LLM environment variables: {missing}.")
-    return os.environ[api_key_env], os.environ[model_env]
+
+class SectionTextResponse(BaseModel):
+    """Structured LLM response for one polished section body."""
+
+    tldr: str = ""
+    transcript_text: str = ""
+
+
+class ReportSectionUpdate(BaseModel):
+    """Replacement content for one report section."""
+
+    id: str
+    title: str
+
+
+class ReportPolishResponse(BaseModel):
+    """Structured LLM response for report polishing."""
+
+    summary: list[str] = Field(default_factory=list)
+    action_items: list[str] = Field(default_factory=list)
+    section_updates: list[ReportSectionUpdate] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Utility helpers
+# ---------------------------------------------------------------------------
+
+_SCHEMA_LABELS = {"SectionTextResponse": "Section polish", "ReportPolishResponse": "Report polish"}
 
 
 def build_report_polish_payload(
@@ -187,11 +202,6 @@ def _normalize_tldr_blocks(text: str) -> str:
 
 
 def _normalize_llm_paragraphs(text: str) -> str:
-    """Normalize LLM paragraph blocks into stable spacing.
-
-    Returns:
-        str: The normalized paragraph text.
-    """
     return "\n\n".join(
         split_paragraph_blocks(text, flexible_blank_lines=True, normalize_inline_whitespace=True)
     )

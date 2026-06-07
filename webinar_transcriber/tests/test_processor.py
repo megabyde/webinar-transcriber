@@ -12,9 +12,8 @@ import pytest
 from rich.console import Console
 
 from webinar_transcriber.diagnostics import write_run_diagnostics
-from webinar_transcriber.llm.contracts import (
+from webinar_transcriber.llm import (
     LlmProcessingError,
-    LlmProcessor,
     LlmReportMetadataResult,
     LlmReportPolishPlan,
     LlmSectionPolishResult,
@@ -52,6 +51,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from webinar_transcriber.diarization import Diarizer
+    from webinar_transcriber.llm.processor import InstructorLLMProcessor
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 EXPECTED_LLM_WARNING = (
@@ -76,7 +76,7 @@ def process_input(
     asr_model: str | None = None,
     language: str | None = None,
     keep_audio: bool = False,
-    llm_processor: LlmProcessor | None = None,
+    llm_processor: InstructorLLMProcessor | None = None,
     diarize_speakers: int | None = None,
     diarizer: Diarizer | None = None,
     **kwargs: Any,
@@ -93,7 +93,7 @@ def process_input(
     )
 
 
-class ConfigurableLLMProcessor(LlmProcessor):
+class ConfigurableLLMProcessor:
     provider_name = "openai"
     model_name = "test-llm-model"
 
@@ -885,7 +885,7 @@ def llm_success_result(
         input_path,
         output_dir=tmp_path / "llm-run",
         transcriber=FakeTranscriber(),
-        llm_processor=ConfigurableLLMProcessor(
+        llm_processor=ConfigurableLLMProcessor(  # type: ignore
             section_result=LlmSectionPolishResult(
                 section_tldrs={"section-1": "Updated section TL;DR."},
                 section_transcripts={"section-1": EXPECTED_LLM_SECTION_TEXT},
@@ -1005,7 +1005,7 @@ class TestProcessInputLlm:
             input_path,
             output_dir=tmp_path / "llm-two-section-run",
             transcriber=TwoSectionTranscriber(),
-            llm_processor=ConfigurableLLMProcessor(
+            llm_processor=ConfigurableLLMProcessor(  # type: ignore
                 section_result=section_polish,
                 metadata_result=metadata_polish,
                 section_progress=[1, 1],
@@ -1046,7 +1046,7 @@ class TestProcessInputLlm:
             input_path,
             output_dir=tmp_path / "section-fallback-run",
             transcriber=FakeTranscriber(),
-            llm_processor=ConfigurableLLMProcessor(
+            llm_processor=ConfigurableLLMProcessor(  # type: ignore
                 section_result=LlmSectionPolishResult(section_tldrs={}, section_transcripts={}),
                 section_error=LlmProcessingError("section polish failed"),
             ),
@@ -1079,7 +1079,7 @@ class TestProcessInputLlm:
             input_path,
             output_dir=tmp_path / "metadata-fallback-run",
             transcriber=FakeTranscriber(),
-            llm_processor=ConfigurableLLMProcessor(
+            llm_processor=ConfigurableLLMProcessor(  # type: ignore
                 section_result=section_polish, metadata_error=LlmProcessingError("metadata failed")
             ),
             reporter=reporter,

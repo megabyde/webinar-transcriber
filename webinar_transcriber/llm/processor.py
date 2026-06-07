@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-import importlib
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Protocol
 
-from .contracts import (
+import tenacity
+
+from . import (
     LlmProcessingError,
     LlmReportMetadataResult,
     LlmReportPolishPlan,
     LlmSectionPolishResult,
-    PolishedSection,
-    SectionPolishOutputs,
 )
 from .prompts import (
     ACTION_ITEM_LIMIT,
@@ -24,8 +23,11 @@ from .prompts import (
     SECTION_POLISH_SYSTEM_PROMPT,
     SUMMARY_ITEM_LIMIT,
 )
-from .schemas import ReportPolishResponse, SchemaModelT, SectionTextResponse
 from .utils import (
+    ReportPolishResponse,
+    ReportSectionUpdate,
+    SchemaModelT,
+    SectionTextResponse,
     build_report_polish_payload,
     extract_response_metadata,
     normalize_polished_section_text,
@@ -35,8 +37,38 @@ from .utils import (
     validated_section_titles,
 )
 
-LLM_RATE_LIMIT_RETRY_ATTEMPTS = 3
-_DEFAULT_REQUEST_TIMEOUT_SEC = 120
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+
+    from webinar_transcriber.models import ReportDocument, ReportSection
+
+__all__ = [
+    "InstructorLLMProcessor",
+    "ReportPolishResponse",
+    "ReportSectionUpdate",
+    "SectionTextResponse",
+]
+
+# ---------------------------------------------------------------------------
+# Internal types
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PolishedSection:
+    """Polished section transcript and TL;DR payload."""
+
+    id: str
+    transcript: str
+    tldr: str
+
+
+@dataclass(frozen=True)
+class SectionPolishOutputs:
+    """Polished section payloads keyed by section id."""
+
+    sections: dict[str, PolishedSection]
+    response_metadata: list[dict[str, object]] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,11 +82,12 @@ class SectionPolishResult:
     warnings: list[str] = field(default_factory=list)
 
 
-if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+# ---------------------------------------------------------------------------
+# InstructorLLMProcessor
+# ---------------------------------------------------------------------------
 
-    from webinar_transcriber.models import ReportDocument, ReportSection
-
+LLM_RATE_LIMIT_RETRY_ATTEMPTS = 3
+_DEFAULT_REQUEST_TIMEOUT_SEC = 120
 _EMPTY_REQUEST_KWARGS = MappingProxyType({})
 
 
@@ -271,11 +304,7 @@ class InstructorLLMProcessor:
         return parsed, extract_response_metadata(completion)
 
 
-def _structured_response_retries() -> object:  # pragma: no cover - optional llm extra wrapper
-    try:
-        tenacity = importlib.import_module("tenacity")
-    except ImportError:
-        return 1
+def _structured_response_retries() -> object:  # pragma: no cover - optional llm extra only
     return tenacity.Retrying(
         retry=tenacity.retry_if_exception(_is_transient_provider_error),
         stop=tenacity.stop_after_attempt(LLM_RATE_LIMIT_RETRY_ATTEMPTS),

@@ -25,7 +25,7 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@v7
       - name: Sync dependencies
-        run: uv sync
+        run: uv sync --extra llm --group dev
       - name: Smoke CLI help
         run: uv run webinar-transcriber --help
       - name: Smoke whisper runtime
@@ -42,7 +42,5 @@ jobs:
         run: uv run ty check webinar_transcriber
       - name: Run tests
         run: uv run pytest --cov-report=xml
-      - name: Install LLM extra
-        run: uv sync --extra llm --group dev
       - name: Run LLM tests
         run: uv run pytest --no-cov webinar_transcriber/tests/test_llm.py

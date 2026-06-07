@@ -10,7 +10,7 @@ from click.testing import CliRunner
 from webinar_transcriber import __version__
 from webinar_transcriber.asr import AsrProcessingError, default_asr_threads
 from webinar_transcriber.cli import main
-from webinar_transcriber.llm.contracts import LlmConfigurationError, LlmProcessingError
+from webinar_transcriber.llm import LlmConfigurationError, LlmProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.processor import TranscriptionConfig
 from webinar_transcriber.tests.conftest import process_artifacts
