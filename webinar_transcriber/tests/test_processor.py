@@ -30,12 +30,7 @@ from webinar_transcriber.models import (
     TranscriptSegment,
 )
 from webinar_transcriber.paths import RunLayout
-from webinar_transcriber.processor import (
-    ProcessArtifacts,
-    RunContext,
-    TranscriptionConfig,
-    plan_inference_windows,
-)
+from webinar_transcriber.processor import ProcessArtifacts, RunContext, plan_inference_windows
 from webinar_transcriber.processor import process_input as _process_input
 from webinar_transcriber.tests.conftest import (
     FakeTranscriber,
@@ -83,9 +78,10 @@ def process_input(
 ) -> ProcessArtifacts:
     return _process_input(
         *args,
-        transcription_config=TranscriptionConfig(
-            threads=threads, asr_model=asr_model, language=language, keep_audio=keep_audio
-        ),
+        threads=threads,
+        asr_model=asr_model,
+        language=language,
+        keep_audio=keep_audio,
         llm_processor=llm_processor,
         diarizer=diarizer,
         diarization_speaker_count=diarize_speakers,

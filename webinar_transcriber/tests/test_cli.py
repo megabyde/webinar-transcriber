@@ -12,7 +12,6 @@ from webinar_transcriber.asr import AsrProcessingError, default_asr_threads
 from webinar_transcriber.cli import main
 from webinar_transcriber.llm import LlmConfigurationError, LlmProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
-from webinar_transcriber.processor import TranscriptionConfig
 from webinar_transcriber.tests.conftest import process_artifacts
 
 
@@ -62,9 +61,10 @@ class TestCli:
         process_input_mock.assert_called_once_with(
             input_path=input_path,
             output_dir=None,
-            transcription_config=TranscriptionConfig(
-                threads=default_asr_threads(), asr_model="large-v3-turbo"
-            ),
+            threads=default_asr_threads(),
+            asr_model="large-v3-turbo",
+            language=None,
+            keep_audio=False,
             llm_processor=None,
             diarizer=None,
             diarization_speaker_count=None,
@@ -138,9 +138,10 @@ class TestCli:
         process_input_mock.assert_called_once_with(
             input_path=input_path,
             output_dir=None,
-            transcription_config=TranscriptionConfig(
-                threads=3, asr_model="models/whisper-cpp/custom.bin", language="en", keep_audio=True
-            ),
+            threads=3,
+            asr_model="models/whisper-cpp/custom.bin",
+            language="en",
+            keep_audio=True,
             llm_processor=llm_processor,
             diarizer=diarizer,
             diarization_speaker_count=4,
@@ -162,7 +163,7 @@ class TestCli:
             result = runner.invoke(main, [str(input_path), "--keep-audio"])
 
         assert result.exit_code == 0
-        assert process_input_mock.call_args.kwargs["transcription_config"].keep_audio
+        assert process_input_mock.call_args.kwargs["keep_audio"]
 
     def test_help_describes_processing_options(self) -> None:
         runner = CliRunner()

@@ -64,16 +64,6 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class TranscriptionConfig:
-    """Audio preparation and ASR options for one processing run."""
-
-    threads: int
-    asr_model: str | None = None
-    language: str | None = None
-    keep_audio: bool = False
-
-
-@dataclass(frozen=True)
 class ProcessArtifacts:
     """Runtime artifacts returned from a processing run."""
 
@@ -114,8 +104,11 @@ class RunContext:
 def process_input(
     input_path: Path,
     *,
+    threads: int,
     output_dir: Path | None = None,
-    transcription_config: TranscriptionConfig,
+    asr_model: str | None = None,
+    language: str | None = None,
+    keep_audio: bool = False,
     llm_processor: InstructorLLMProcessor | None = None,
     diarizer: Diarizer | None = None,
     diarization_speaker_count: int | None = None,
@@ -129,9 +122,7 @@ def process_input(
     """
     ctx = RunContext(reporter=reporter or _silent_reporter())
     transcriber = transcriber or WhisperCppTranscriber(
-        model_name=transcription_config.asr_model,
-        threads=transcription_config.threads,
-        language=transcription_config.language,
+        model_name=asr_model, threads=threads, language=language
     )
 
     with transcriber as active_transcriber:
@@ -167,12 +158,13 @@ def process_input(
                     transcriber=active_transcriber,
                     layout=layout,
                     ctx=ctx,
-                    transcription_config=transcription_config,
+                    threads=threads,
+                    language=language,
                     diarizer=diarizer,
                     diarization_speaker_count=diarization_speaker_count,
                 )
 
-                if transcription_config.keep_audio:
+                if keep_audio:
                     with ctx.stage("save_transcription_audio", "Saving transcription audio") as st:
                         preserved_audio_path = layout.transcription_audio_path()
                         preserve_transcription_audio(audio_path, preserved_audio_path)
@@ -254,7 +246,8 @@ def _run_asr_pipeline(
     transcriber: WhisperCppTranscriber,
     layout: RunLayout,
     ctx: RunContext,
-    transcription_config: TranscriptionConfig,
+    threads: int,
+    language: str | None,
     diarizer: Diarizer | None,
     diarization_speaker_count: int | None,
 ) -> _AsrResult:
@@ -273,7 +266,7 @@ def _run_asr_pipeline(
             st.update(completed=completed, detail=_count(count, "region"))
 
         speech_regions, vad_warnings = detect_speech_regions(
-            audio_samples, threads=transcription_config.threads, progress_callback=on_vad_progress
+            audio_samples, threads=threads, progress_callback=on_vad_progress
         )
         st.update(
             completed=audio_duration_sec,
@@ -297,7 +290,7 @@ def _run_asr_pipeline(
         decoded_windows = transcriber.transcribe_inference_windows(
             audio_samples,
             windows,
-            language=transcription_config.language,
+            language=language,
             progress_callback=on_transcribe_progress,
             warning_callback=ctx.record_warning,
         )
@@ -351,7 +344,7 @@ def _run_asr_pipeline(
     asr_pipeline = AsrPipelineDiagnostics(
         backend=ASR_BACKEND_NAME,
         model=transcriber.model_name,
-        threads=transcription_config.threads,
+        threads=threads,
         vad_region_count=len(speech_regions),
         window_count=len(windows),
         average_window_duration_sec=average_duration_sec(windows),
@@ -588,7 +581,6 @@ __all__ = [
     "INFERENCE_WINDOW_OVERLAP_SEC",
     "ProcessArtifacts",
     "RunContext",
-    "TranscriptionConfig",
     "plan_inference_windows",
     "process_input",
 ]

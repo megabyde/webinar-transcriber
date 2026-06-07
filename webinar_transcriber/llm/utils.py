@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 from pydantic import BaseModel, Field
 
-from webinar_transcriber.text_utils import split_paragraph_blocks
+from webinar_transcriber.text_utils import split_llm_paragraph_blocks
 
 from . import LlmProcessingError
 from .prompts import REPORT_SECTION_EXCERPT_LIMIT
@@ -202,9 +202,7 @@ def _normalize_tldr_blocks(text: str) -> str:
 
 
 def _normalize_llm_paragraphs(text: str) -> str:
-    return "\n\n".join(
-        split_paragraph_blocks(text, flexible_blank_lines=True, normalize_inline_whitespace=True)
-    )
+    return "\n\n".join(split_llm_paragraph_blocks(text))
 
 
 def extract_response_metadata(response: object) -> dict[str, object]:
