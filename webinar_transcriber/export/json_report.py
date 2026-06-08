@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.processor.stages import write_json
+from webinar_transcriber.io import write_json
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -13,6 +13,7 @@ from webinar_transcriber.asr import ASR_BACKEND_NAME, WhisperCppTranscriber
 from webinar_transcriber.diagnostics import write_run_diagnostics
 from webinar_transcriber.diarization import DIARIZATION_MODEL, assign_speakers
 from webinar_transcriber.export import write_docx_report, write_json_report, write_markdown_report
+from webinar_transcriber.io import write_json
 from webinar_transcriber.llm import LlmProcessingError, LlmReportMetadataResult
 from webinar_transcriber.media import probe_media
 from webinar_transcriber.models import (
@@ -44,7 +45,6 @@ from .stages import (
     INFERENCE_WINDOW_OVERLAP_SEC,
     average_duration_sec,
     plan_inference_windows,
-    write_json,
 )
 
 if TYPE_CHECKING:

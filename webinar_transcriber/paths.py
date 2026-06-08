@@ -94,13 +94,13 @@ class RunLayout:
         return self.run_dir / "frames"
 
 
-def build_run_layout(
+def create_run_layout(
     input_path: Path, output_dir: Path | None = None, *, now: datetime | None = None
 ) -> RunLayout:
-    """Return the run layout without touching the filesystem.
+    """Create the run directory and return its layout.
 
     Returns:
-        RunLayout: The computed run layout.
+        RunLayout: The created run layout.
 
     Raises:
         OutputDirectoryExistsError: If the target run directory already exists.
@@ -115,17 +115,5 @@ def build_run_layout(
     if run_dir.exists():
         raise OutputDirectoryExistsError(f"Output directory already exists: {run_dir}")
 
+    run_dir.mkdir(parents=True)
     return RunLayout(run_dir=run_dir)
-
-
-def create_run_layout(
-    input_path: Path, output_dir: Path | None = None, *, now: datetime | None = None
-) -> RunLayout:
-    """Create the run directory and return its layout.
-
-    Returns:
-        RunLayout: The created run layout.
-    """
-    layout = build_run_layout(input_path=input_path, output_dir=output_dir, now=now)
-    layout.run_dir.mkdir(parents=True)
-    return layout

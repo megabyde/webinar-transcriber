@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Literal
 
+from webinar_transcriber.io import write_json
 from webinar_transcriber.models import AsrPipelineDiagnostics, Diagnostics, LlmDiagnostics
-from webinar_transcriber.processor.stages import write_json
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
