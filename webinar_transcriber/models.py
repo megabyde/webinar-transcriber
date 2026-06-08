@@ -8,6 +8,49 @@ from enum import StrEnum
 from typing import Literal
 
 
+def _compact_dict_factory(items: list[tuple[str, object]]) -> dict[str, object]:
+    return {k: v for k, v in items if not (k == "speaker" and v is None)}
+
+
+# ---------------------------------------------------------------------------
+# Timeline primitives
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True, frozen=True)
+class TimelineSpan:
+    """Timeline-bounded model."""
+
+    start_sec: float
+    end_sec: float
+
+    @property
+    def midpoint(self) -> float:
+        """Return the midpoint on the timeline."""
+        return (self.start_sec + self.end_sec) / 2.0
+
+    @property
+    def duration_sec(self) -> float:
+        """Return the non-negative duration of the item."""
+        return max(0.0, self.end_sec - self.start_sec)
+
+    def gap_before(self, other: TimelineSpan) -> float:
+        """Return the non-negative gap before another timeline item."""
+        return max(0.0, other.start_sec - self.end_sec)
+
+
+@dataclass(slots=True, frozen=True)
+class TimelineItem(TimelineSpan):
+    """Timeline-bounded model with a stable identifier."""
+
+    id: str
+
+
+# ---------------------------------------------------------------------------
+# Media assets
+# ---------------------------------------------------------------------------
+
+
 class MediaType(StrEnum):
     """Supported top-level media types."""
 
@@ -44,40 +87,10 @@ class VideoAsset(BaseMediaAsset):
 
 MediaAsset = AudioAsset | VideoAsset
 
-ReportStatus = Literal["disabled", "applied", "fallback"]
 
-
-def _compact_dict_factory(items: list[tuple[str, object]]) -> dict[str, object]:
-    return {k: v for k, v in items if not (k == "speaker" and v is None)}
-
-
-@dataclass(slots=True, frozen=True)
-class TimelineSpan:
-    """Timeline-bounded model."""
-
-    start_sec: float
-    end_sec: float
-
-    @property
-    def midpoint(self) -> float:
-        """Return the midpoint on the timeline."""
-        return (self.start_sec + self.end_sec) / 2.0
-
-    @property
-    def duration_sec(self) -> float:
-        """Return the non-negative duration of the item."""
-        return max(0.0, self.end_sec - self.start_sec)
-
-    def gap_before(self, other: TimelineSpan) -> float:
-        """Return the non-negative gap before another timeline item."""
-        return max(0.0, other.start_sec - self.end_sec)
-
-
-@dataclass(slots=True, frozen=True)
-class TimelineItem(TimelineSpan):
-    """Timeline-bounded model with a stable identifier."""
-
-    id: str
+# ---------------------------------------------------------------------------
+# Transcript
+# ---------------------------------------------------------------------------
 
 
 @dataclass(slots=True, frozen=True)
@@ -103,6 +116,11 @@ class TranscriptionResult:
                 asdict(segment, dict_factory=_compact_dict_factory) for segment in self.segments
             ],
         }
+
+
+# ---------------------------------------------------------------------------
+# ASR planning and decode
+# ---------------------------------------------------------------------------
 
 
 @dataclass(slots=True, frozen=True)
@@ -140,6 +158,11 @@ class DecodedWindow:
         }
 
 
+# ---------------------------------------------------------------------------
+# Video
+# ---------------------------------------------------------------------------
+
+
 @dataclass(slots=True, frozen=True)
 class Scene(TimelineItem):
     """Time-bounded scene for video processing."""
@@ -161,6 +184,23 @@ class VideoAssetRef:
 
     scene_id: str
     frame_id: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Diarization
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True, frozen=True)
+class SpeakerTurn(TimelineSpan):
+    """Time-bounded speaker turn returned by diarization."""
+
+    speaker: str
+
+
+# ---------------------------------------------------------------------------
+# Report
+# ---------------------------------------------------------------------------
 
 
 @dataclass(slots=True, frozen=True)
@@ -204,13 +244,6 @@ class ReportSection(TimelineItem):
 
 
 @dataclass(slots=True, frozen=True)
-class SpeakerTurn(TimelineSpan):
-    """Time-bounded speaker turn returned by diarization."""
-
-    speaker: str
-
-
-@dataclass(slots=True, frozen=True)
 class ReportDocument:
     """Top-level structured report returned by the pipeline."""
 
@@ -226,6 +259,13 @@ class ReportDocument:
     def to_json(self) -> dict[str, object]:
         """Return the report JSON artifact payload."""
         return asdict(self, dict_factory=_compact_dict_factory)
+
+
+# ---------------------------------------------------------------------------
+# Diagnostics
+# ---------------------------------------------------------------------------
+
+ReportStatus = Literal["disabled", "applied", "fallback"]
 
 
 @dataclass(slots=True, frozen=True)
