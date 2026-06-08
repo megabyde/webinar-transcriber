@@ -15,6 +15,7 @@
 - [Advanced Usage](#advanced-usage)
 - [Troubleshooting](#troubleshooting)
 - [Reference](#reference)
+- [Stability](#stability)
 - [Development](#development)
 
 ## Overview
@@ -293,6 +294,38 @@ runs/<timestamp>_<basename>/
 
 Failed runs still write `diagnostics.json` with the failed stage and any partial intermediate
 artifacts already produced, as long as the run directory exists.
+
+### Environment variables
+
+LLM provider configuration (read only when `--llm` is passed):
+
+- `LLM_PROVIDER` — `openai` (default) or `anthropic`.
+- `OPENAI_API_KEY` / `OPENAI_MODEL` — API key and model identifier for the OpenAI provider.
+- `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` — API key and model identifier for the Anthropic provider.
+
+The CLI does not pin a default model name for either provider; pass any model the provider supports.
+
+Diarization (read only when `--diarize` is passed):
+
+- `WEBINAR_DIARIZATION_CACHE_DIR` — override the cache directory for downloaded `sherpa-onnx`
+  diarization models. Defaults to `~/.cache/webinar-transcriber/diarization`.
+
+## Stability
+
+The 1.0 public contract is:
+
+- **CLI flags** — names, semantics, and default behavior.
+- **Environment variable names** — listed above.
+- **JSON artifact shapes** — `transcript.json`, `report.json`, `diagnostics.json`, `metadata.json`,
+  `scenes.json`, `diarization.json`, `asr/speech_regions.json`, and `asr/decoded_windows.json` keep
+  their current schemas.
+- **Run directory layout** — file names and locations under `runs/<timestamp>_<basename>/`.
+
+Breaking changes to anything above require a major version bump.
+
+Anything else is internal and may change in any release. In particular, importing
+`webinar_transcriber` modules from Python (including `process_input`) is not part of the contract;
+the CLI is the supported entry point.
 
 ## Development
 
