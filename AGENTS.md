@@ -35,10 +35,6 @@ best-effort.
 In sandboxed Codex runs, prefer `UV_CACHE_DIR=/tmp/uv-cache` for `uv` and `make` commands to avoid
 cache-permission failures.
 
-Post-1.0 stability scope is defined in README "Stability": CLI flags, environment variable names,
-JSON artifact shapes, and run-directory layout. Internal Python module reorganizations and renames
-are not breaking changes and do not bump the major version.
-
 ## Definition of Done
 
 A change is ready to merge when all of the following hold:

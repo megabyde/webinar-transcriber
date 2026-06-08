@@ -117,9 +117,6 @@ def process_input(
 ) -> ProcessArtifacts:
     """Process a single audio or video file into report artifacts.
 
-    Internal entry point used by the CLI; not part of the public Python API.
-    See README "Stability" for the post-1.0 contract.
-
     Returns:
         ProcessArtifacts: The completed processing artifacts.
     """

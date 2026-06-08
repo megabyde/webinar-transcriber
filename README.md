@@ -15,7 +15,6 @@
 - [Advanced Usage](#advanced-usage)
 - [Troubleshooting](#troubleshooting)
 - [Reference](#reference)
-- [Stability](#stability)
 - [Development](#development)
 
 ## Overview
@@ -309,23 +308,6 @@ Diarization (read only when `--diarize` is passed):
 
 - `WEBINAR_DIARIZATION_CACHE_DIR` — override the cache directory for downloaded `sherpa-onnx`
   diarization models. Defaults to `~/.cache/webinar-transcriber/diarization`.
-
-## Stability
-
-The 1.0 public contract is:
-
-- **CLI flags** — names, semantics, and default behavior.
-- **Environment variable names** — listed above.
-- **JSON artifact shapes** — `transcript.json`, `report.json`, `diagnostics.json`, `metadata.json`,
-  `scenes.json`, `diarization.json`, `asr/speech_regions.json`, and `asr/decoded_windows.json` keep
-  their current schemas.
-- **Run directory layout** — file names and locations under `runs/<timestamp>_<basename>/`.
-
-Breaking changes to anything above require a major version bump.
-
-Anything else is internal and may change in any release. In particular, importing
-`webinar_transcriber` modules from Python (including `process_input`) is not part of the contract;
-the CLI is the supported entry point.
 
 ## Development
 
