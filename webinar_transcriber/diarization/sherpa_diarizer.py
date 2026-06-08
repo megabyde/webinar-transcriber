@@ -16,12 +16,14 @@ from typing import TYPE_CHECKING
 from webinar_transcriber._env import diarization_cache_dir
 from webinar_transcriber.models import SpeakerTurn
 
-from .contracts import DiarizationProcessingError
-
 CLUSTER_THRESHOLD = 0.5
 MIN_DURATION_ON_SEC = 0.3
 MIN_DURATION_OFF_SEC = 0.5
 DIARIZATION_MODEL = "pyannote-segmentation-3.0-fp32+nemo-titanet-small"
+
+
+class DiarizationProcessingError(RuntimeError):
+    """Raised when local speaker diarization cannot complete."""
 
 
 @dataclass(frozen=True)

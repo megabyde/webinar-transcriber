@@ -45,7 +45,7 @@ from webinar_transcriber.ui import StageReporter
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from webinar_transcriber.diarization import Diarizer
+    from webinar_transcriber.diarization import SherpaOnnxDiarizer
     from webinar_transcriber.llm.processor import InstructorLLMProcessor
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
@@ -73,7 +73,7 @@ def process_input(
     keep_audio: bool = False,
     llm_processor: InstructorLLMProcessor | None = None,
     diarize_speakers: int | None = None,
-    diarizer: Diarizer | None = None,
+    diarizer: SherpaOnnxDiarizer | None = None,
     **kwargs: Any,
 ) -> ProcessArtifacts:
     return _process_input(
@@ -275,7 +275,7 @@ class TestProcessInput:
             output_dir=tmp_path / "diarized-run",
             transcriber=transcriber,
             diarize_speakers=4,
-            diarizer=diarizer,
+            diarizer=diarizer,  # type: ignore
             reporter=reporter,
         )
 
@@ -354,7 +354,7 @@ class TestProcessInput:
             output_dir=tmp_path / "diarized-default-run",
             transcriber=transcriber,
             diarize_speakers=1,
-            diarizer=diarizer,
+            diarizer=diarizer,  # type: ignore
             reporter=reporter,
         )
 

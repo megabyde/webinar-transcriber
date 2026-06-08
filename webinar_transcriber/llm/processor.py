@@ -86,7 +86,7 @@ class SectionPolishResult:
 # InstructorLLMProcessor
 # ---------------------------------------------------------------------------
 
-LLM_RATE_LIMIT_RETRY_ATTEMPTS = 3
+_LLM_RATE_LIMIT_RETRY_ATTEMPTS = 3
 _DEFAULT_REQUEST_TIMEOUT_SEC = 120
 _EMPTY_REQUEST_KWARGS = MappingProxyType({})
 
@@ -307,7 +307,7 @@ class InstructorLLMProcessor:
 def _structured_response_retries() -> object:  # pragma: no cover - optional llm extra only
     return tenacity.Retrying(
         retry=tenacity.retry_if_exception(_is_transient_provider_error),
-        stop=tenacity.stop_after_attempt(LLM_RATE_LIMIT_RETRY_ATTEMPTS),
+        stop=tenacity.stop_after_attempt(_LLM_RATE_LIMIT_RETRY_ATTEMPTS),
         wait=tenacity.wait_exponential(multiplier=1),
         reraise=True,
     )

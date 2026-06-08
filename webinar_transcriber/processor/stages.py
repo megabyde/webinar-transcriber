@@ -1,15 +1,13 @@
-"""Pure helpers used by the processor orchestrator."""
+"""ASR window planning and timeline helpers."""
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 
 from webinar_transcriber.models import InferenceWindow
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from pathlib import Path
 
     from webinar_transcriber.models import SpeechRegion, TimelineSpan
 
@@ -50,9 +48,3 @@ def plan_inference_windows(speech_regions: list[SpeechRegion]) -> list[Inference
 def average_duration_sec(items: Sequence[TimelineSpan]) -> float | None:
     """Return the average duration for timeline-bounded items."""
     return sum(item.duration_sec for item in items) / len(items) if items else None
-
-
-def write_json(output_path: Path, payload: object) -> None:
-    """Write one JSON payload with stable UTF-8 formatting."""
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")

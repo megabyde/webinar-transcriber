@@ -14,8 +14,7 @@ import numpy as np
 import pytest
 
 import webinar_transcriber.diarization.sherpa_diarizer as sherpa_runtime
-from webinar_transcriber.diarization import assign_speakers
-from webinar_transcriber.diarization.contracts import DiarizationProcessingError
+from webinar_transcriber.diarization import DiarizationProcessingError, assign_speakers
 from webinar_transcriber.diarization.sherpa_diarizer import (
     SEGMENTATION_MODEL,
     default_cache_dir,

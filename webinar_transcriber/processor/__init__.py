@@ -13,6 +13,7 @@ from webinar_transcriber.asr import ASR_BACKEND_NAME, WhisperCppTranscriber
 from webinar_transcriber.diagnostics import write_run_diagnostics
 from webinar_transcriber.diarization import DIARIZATION_MODEL, assign_speakers
 from webinar_transcriber.export import write_docx_report, write_json_report, write_markdown_report
+from webinar_transcriber.io import write_json
 from webinar_transcriber.llm import LlmProcessingError, LlmReportMetadataResult
 from webinar_transcriber.media import probe_media
 from webinar_transcriber.models import (
@@ -44,13 +45,12 @@ from .stages import (
     INFERENCE_WINDOW_OVERLAP_SEC,
     average_duration_sec,
     plan_inference_windows,
-    write_json,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from webinar_transcriber.diarization import Diarizer
+    from webinar_transcriber.diarization import SherpaOnnxDiarizer
     from webinar_transcriber.llm.processor import InstructorLLMProcessor
     from webinar_transcriber.models import (
         Diagnostics,
@@ -110,7 +110,7 @@ def process_input(
     language: str | None = None,
     keep_audio: bool = False,
     llm_processor: InstructorLLMProcessor | None = None,
-    diarizer: Diarizer | None = None,
+    diarizer: SherpaOnnxDiarizer | None = None,
     diarization_speaker_count: int | None = None,
     transcriber: WhisperCppTranscriber | None = None,
     reporter: StageReporter | None = None,
@@ -248,7 +248,7 @@ def _run_asr_pipeline(
     ctx: RunContext,
     threads: int,
     language: str | None,
-    diarizer: Diarizer | None,
+    diarizer: SherpaOnnxDiarizer | None,
     diarization_speaker_count: int | None,
 ) -> _AsrResult:
     with ctx.stage("prepare_asr", "Preparing ASR model", detail=transcriber.model_name) as st:
