@@ -9,13 +9,13 @@ import pytest
 from pydantic import BaseModel
 
 from webinar_transcriber.llm import (
-    InstructorLLMProcessor,
     LlmConfigurationError,
     LlmProcessingError,
     LlmReportPolishPlan,
     build_llm_processor_from_env,
 )
 from webinar_transcriber.llm import processor as llm_processor
+from webinar_transcriber.llm.processor import InstructorLLMProcessor
 from webinar_transcriber.llm.utils import (
     ReportPolishResponse,
     ReportSectionUpdate,

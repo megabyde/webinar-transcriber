@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from .processor import InstructorLLMProcessor
-    from .utils import ReportPolishResponse, ReportSectionUpdate, SectionTextResponse
 
 
 # ---------------------------------------------------------------------------
@@ -159,37 +158,13 @@ def build_llm_processor_from_env(*, threads: int) -> InstructorLLMProcessor:
     )
 
 
-# ---------------------------------------------------------------------------
-# Lazy exports (provider-specific types require the llm extra)
-# ---------------------------------------------------------------------------
-
-_LAZY_EXPORTS = {
-    "InstructorLLMProcessor": ("webinar_transcriber.llm.processor", "InstructorLLMProcessor"),
-    "ReportPolishResponse": ("webinar_transcriber.llm.utils", "ReportPolishResponse"),
-    "ReportSectionUpdate": ("webinar_transcriber.llm.utils", "ReportSectionUpdate"),
-    "SectionTextResponse": ("webinar_transcriber.llm.utils", "SectionTextResponse"),
-}
-
-
-def __getattr__(name: str) -> object:
-    """Import provider-specific LLM helpers only when requested."""
-    if name not in _LAZY_EXPORTS:  # pragma: no cover - Python module protocol fallback
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    module_name, attribute_name = _LAZY_EXPORTS[name]
-    return getattr(importlib.import_module(module_name), attribute_name)
-
-
 __all__ = [
     "ACTION_ITEM_LIMIT",
     "REPORT_POLISH_TOTAL_CHAR_BUDGET",
-    "InstructorLLMProcessor",
     "LlmConfigurationError",
     "LlmProcessingError",
     "LlmReportMetadataResult",
     "LlmReportPolishPlan",
     "LlmSectionPolishResult",
-    "ReportPolishResponse",
-    "ReportSectionUpdate",
-    "SectionTextResponse",
     "build_llm_processor_from_env",
 ]
