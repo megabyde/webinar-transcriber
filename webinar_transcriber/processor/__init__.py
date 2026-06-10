@@ -14,7 +14,7 @@ from webinar_transcriber.diagnostics import write_run_diagnostics
 from webinar_transcriber.diarization import DIARIZATION_MODEL, assign_speakers
 from webinar_transcriber.export import write_docx_report, write_json_report, write_markdown_report
 from webinar_transcriber.io import write_json
-from webinar_transcriber.llm import LlmProcessingError, LlmReportMetadataResult
+from webinar_transcriber.llm import LlmProcessingError
 from webinar_transcriber.media import probe_media
 from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from webinar_transcriber.diarization import SherpaOnnxDiarizer
+    from webinar_transcriber.llm import LlmReportMetadataResult
     from webinar_transcriber.llm.processor import InstructorLLMProcessor
     from webinar_transcriber.models import (
         Diagnostics,
@@ -76,12 +77,16 @@ class ProcessArtifacts:
 
 @dataclass
 class RunContext:
-    """Mutable state for one processing run."""
+    """Mutable state and recorded diagnostics for one processing run."""
 
     reporter: StageReporter
     stage_timings: dict[str, float] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     current_stage: str | None = None
+    item_counts: dict[str, int] = field(default_factory=dict)
+    asr_pipeline: AsrPipelineDiagnostics | None = None
+    diarization: DiarizationDiagnostics | None = None
+    llm: LlmDiagnostics = field(default_factory=LlmDiagnostics)
 
     def record_warning(self, message: str) -> None:
         """Record and report one run warning."""
@@ -128,8 +133,6 @@ def process_input(
     with transcriber as active_transcriber:
         layout = create_run_layout(input_path=input_path, output_dir=output_dir)
         active_transcriber.set_log_path(layout.run_dir / "whisper-cpp.log")
-        asr_result: _AsrResult | None = None
-        report_result: _ReportResult | None = None
         ctx.reporter.begin_run(input_path)
         try:
             with ctx.stage("probe_media", "Probing media") as st:
@@ -152,7 +155,7 @@ def process_input(
                     )
                     st.update(completed=audio_total, detail=audio_path.name)
 
-                asr_result = _run_asr_pipeline(
+                transcription, normalized_transcription = _run_asr_pipeline(
                     audio_path=audio_path,
                     media_asset=media_asset,
                     transcriber=active_transcriber,
@@ -170,33 +173,21 @@ def process_input(
                         preserve_transcription_audio(audio_path, preserved_audio_path)
                         st.update(detail=preserved_audio_path.name)
 
-            report_result = _run_report_phase(
+            report = _run_report_phase(
                 input_path=input_path,
                 layout=layout,
                 media_asset=media_asset,
-                normalized_transcription=asr_result.normalized_transcription,
+                normalized_transcription=normalized_transcription,
                 llm_processor=llm_processor,
                 ctx=ctx,
             )
 
-            diagnostics = write_run_diagnostics(
-                layout,
-                ctx,
-                llm=report_result.llm,
-                status="succeeded",
-                transcription=asr_result.transcription,
-                normalized_transcription=asr_result.normalized_transcription,
-                asr_pipeline=asr_result.asr_pipeline,
-                diarization=asr_result.diarization,
-                report=report_result.report,
-                scenes=report_result.scenes,
-                scene_frames=report_result.scene_frames,
-            )
+            diagnostics = write_run_diagnostics(layout, ctx, status="succeeded")
             artifacts = ProcessArtifacts(
                 layout=layout,
                 media_asset=media_asset,
-                transcription=asr_result.transcription,
-                report=report_result.report,
+                transcription=transcription,
+                report=report,
                 diagnostics=diagnostics,
             )
             ctx.reporter.complete_run(artifacts)
@@ -205,38 +196,12 @@ def process_input(
             write_run_diagnostics(
                 layout,
                 ctx,
-                llm=LlmDiagnostics(),
                 status="failed",
                 failed_stage=ctx.current_stage,
                 error=str(ex),
-                transcription=asr_result.transcription if asr_result else None,
-                normalized_transcription=(
-                    asr_result.normalized_transcription if asr_result else None
-                ),
-                asr_pipeline=asr_result.asr_pipeline if asr_result else None,
-                diarization=asr_result.diarization if asr_result else None,
-                report=report_result.report if report_result else None,
-                scenes=report_result.scenes if report_result else (),
-                scene_frames=report_result.scene_frames if report_result else (),
                 suppress_errors=True,
             )
             raise
-
-
-@dataclass(frozen=True)
-class _AsrResult:
-    transcription: TranscriptionResult
-    normalized_transcription: TranscriptionResult
-    asr_pipeline: AsrPipelineDiagnostics
-    diarization: DiarizationDiagnostics | None = None
-
-
-@dataclass(frozen=True)
-class _ReportResult:
-    report: ReportDocument
-    scenes: list[Scene]
-    scene_frames: list[SceneFrame]
-    llm: LlmDiagnostics = field(default_factory=LlmDiagnostics)
 
 
 def _run_asr_pipeline(
@@ -250,7 +215,13 @@ def _run_asr_pipeline(
     language: str | None,
     diarizer: SherpaOnnxDiarizer | None,
     diarization_speaker_count: int | None,
-) -> _AsrResult:
+) -> tuple[TranscriptionResult, TranscriptionResult]:
+    """Run ASR and optional diarization, recording diagnostics on the context.
+
+    Returns:
+        tuple[TranscriptionResult, TranscriptionResult]: The reconciled and the
+        normalized transcription.
+    """
     with ctx.stage("prepare_asr", "Preparing ASR model", detail=transcriber.model_name) as st:
         transcriber.prepare_model()
         st.update(detail=f"{transcriber.model_name} | {transcriber.device_name}")
@@ -277,8 +248,10 @@ def _run_asr_pipeline(
     for warning in vad_warnings:
         ctx.record_warning(warning)
     write_json(layout.speech_regions_path, [asdict(region) for region in speech_regions])
+    ctx.item_counts["vad_regions"] = len(speech_regions)
 
     windows = plan_inference_windows(speech_regions)
+    ctx.item_counts["windows"] = len(windows)
 
     with ctx.stage(
         "transcribe", "Transcribing audio", total=float(len(windows)), detail="0 segments"
@@ -303,8 +276,8 @@ def _run_asr_pipeline(
             ),
         )
     transcription = reconcile_decoded_windows(decoded_windows)
+    ctx.item_counts["transcript_segments"] = len(transcription.segments)
 
-    diarization: DiarizationDiagnostics | None = None
     if diarizer is not None:
         with ctx.stage(
             "diarize", "Diarizing speakers", total=100.0, detail="preparing model"
@@ -330,7 +303,7 @@ def _run_asr_pipeline(
                     _rtf(audio_duration_sec, st.elapsed_sec()),
                 ),
             )
-        diarization = DiarizationDiagnostics(
+        ctx.diarization = DiarizationDiagnostics(
             speaker_count=speaker_count,
             turn_count=len(speaker_turns),
             average_turn_duration_sec=average_duration_sec(speaker_turns),
@@ -339,9 +312,10 @@ def _run_asr_pipeline(
         )
 
     normalized_transcription = normalize_transcription(transcription)
+    ctx.item_counts["normalized_transcript_segments"] = len(normalized_transcription.segments)
     write_json(layout.transcript_path, transcription.to_json())
 
-    asr_pipeline = AsrPipelineDiagnostics(
+    ctx.asr_pipeline = AsrPipelineDiagnostics(
         backend=ASR_BACKEND_NAME,
         model=transcriber.model_name,
         threads=threads,
@@ -351,12 +325,7 @@ def _run_asr_pipeline(
         normalized_audio_duration_sec=audio_duration_sec,
         system_info=transcriber.system_info,
     )
-    return _AsrResult(
-        transcription=transcription,
-        normalized_transcription=normalized_transcription,
-        asr_pipeline=asr_pipeline,
-        diarization=diarization,
-    )
+    return transcription, normalized_transcription
 
 
 def _assign_speakers(
@@ -374,7 +343,12 @@ def _run_report_phase(
     normalized_transcription: TranscriptionResult,
     llm_processor: InstructorLLMProcessor | None,
     ctx: RunContext,
-) -> _ReportResult:
+) -> ReportDocument:
+    """Build, polish, and export the report, recording diagnostics on the context.
+
+    Returns:
+        ReportDocument: The final exported report.
+    """
     scenes: list[Scene] = []
     scene_frames: list[SceneFrame] = []
     alignment_blocks = None
@@ -407,6 +381,8 @@ def _run_report_phase(
 
         alignment_blocks = align_by_time(normalized_transcription.segments, scenes, scene_frames)
 
+    ctx.item_counts["scenes"] = len(scenes)
+    ctx.item_counts["frames"] = len(scene_frames)
     report = build_report(
         media_asset,
         normalized_transcription,
@@ -417,8 +393,9 @@ def _run_report_phase(
     if scene_frames:
         report = _attach_section_images(report, scene_frames, layout.run_dir)
 
-    report, llm = _maybe_polish_report(report, llm_processor=llm_processor, ctx=ctx)
+    report = _maybe_polish_report(report, llm_processor=llm_processor, ctx=ctx)
     report = replace(report, warnings=list(ctx.warnings))
+    ctx.item_counts["report_sections"] = len(report.sections)
 
     with ctx.stage("export", "Writing artifacts") as st:
         write_markdown_report(report, layout.markdown_report_path)
@@ -427,7 +404,7 @@ def _run_report_phase(
         write_json_report(report, layout.json_report_path)
         st.update(detail="report.md | report.docx | report.json")
 
-    return _ReportResult(report=report, scenes=scenes, scene_frames=scene_frames, llm=llm)
+    return report
 
 
 def _attach_section_images(
@@ -461,9 +438,9 @@ def _maybe_polish_report(
     *,
     llm_processor: InstructorLLMProcessor | None,
     ctx: RunContext,
-) -> tuple[ReportDocument, LlmDiagnostics]:
+) -> ReportDocument:
     if llm_processor is None:
-        return report, LlmDiagnostics()
+        return report
 
     provider_name = llm_processor.provider_name
     model_name = llm_processor.model_name
@@ -487,11 +464,12 @@ def _maybe_polish_report(
         except LlmProcessingError as error:
             ctx.record_warning(str(error))
             st.update(detail=_join_detail(runtime_detail, "fallback"))
-            return report, LlmDiagnostics(
+            ctx.llm = LlmDiagnostics(
                 model=model_name,
                 report_status="fallback",
                 report_latency_sec=st.elapsed_sec(),
             )
+            return report
         section_elapsed_sec = st.elapsed_sec()
         st.update(detail=_count(polish_plan.section_count, "section"))
     for warning in section_result.warnings:
@@ -507,13 +485,13 @@ def _maybe_polish_report(
         except LlmProcessingError as error:
             ctx.record_warning(str(error))
             st.update(detail=_join_detail(runtime_detail, "fallback"))
-            metadata_elapsed_sec = st.elapsed_sec()
-            return report, LlmDiagnostics(
+            ctx.llm = LlmDiagnostics(
                 model=model_name,
                 report_status="fallback",
-                report_latency_sec=section_elapsed_sec + metadata_elapsed_sec,
+                report_latency_sec=section_elapsed_sec + st.elapsed_sec(),
                 response_metadata=section_result.response_metadata,
             )
+            return report
         metadata_elapsed_sec = st.elapsed_sec()
         st.update(detail=_metadata_detail(metadata_result, section_count=polish_plan.section_count))
 
@@ -533,7 +511,7 @@ def _maybe_polish_report(
             for section in report.sections
         ],
     )
-    return polished_report, LlmDiagnostics(
+    ctx.llm = LlmDiagnostics(
         model=model_name,
         report_status="applied",
         report_latency_sec=section_elapsed_sec + metadata_elapsed_sec,
@@ -542,6 +520,7 @@ def _maybe_polish_report(
             *metadata_result.response_metadata,
         ],
     )
+    return polished_report
 
 
 def _metadata_detail(metadata_result: LlmReportMetadataResult, *, section_count: int) -> str | None:

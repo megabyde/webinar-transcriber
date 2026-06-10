@@ -21,7 +21,6 @@ from webinar_transcriber.llm import (
 from webinar_transcriber.models import (
     DecodedWindow,
     InferenceWindow,
-    LlmDiagnostics,
     ReportDocument,
     Scene,
     SceneFrame,
@@ -821,7 +820,6 @@ class TestProcessorSupport:
         diagnostics = write_run_diagnostics(
             layout,
             ctx,
-            llm=LlmDiagnostics(),
             status="failed",
             failed_stage="probe_media",
             error="boom",
@@ -836,7 +834,6 @@ class TestProcessorSupport:
             write_run_diagnostics(
                 layout,
                 ctx,
-                llm=LlmDiagnostics(),
                 status="failed",
                 failed_stage="probe_media",
                 error="boom",
