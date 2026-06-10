@@ -140,7 +140,6 @@ class WhisperCppTranscriber:
         log_path: Path | None = None,
     ) -> None:
         """Initialize the whisper.cpp transcriber wrapper."""
-        self._requested_model_name = model_name
         self._model_name = model_name or WHISPER_CPP_MODEL_FILENAME
         self._threads = threads
         self._language = language.strip() if language else None
@@ -162,11 +161,6 @@ class WhisperCppTranscriber:
     def __str__(self) -> str:
         """Return the model and runtime device description."""
         return f"{self.model_name} | {self.device_name}"
-
-    @property
-    def threads(self) -> int:
-        """Return the configured whisper.cpp thread count."""
-        return self._threads
 
     @property
     def system_info(self) -> str | None:
@@ -287,11 +281,9 @@ class WhisperCppTranscriber:
         return self._model
 
     def _resolve_model_name(self) -> str:
-        if self._requested_model_name is None:
-            return WHISPER_CPP_MODEL_FILENAME
-        if not _looks_like_model_path(self._requested_model_name):
-            return self._requested_model_name
-        configured_model_path = Path(self._requested_model_name).expanduser()
+        if not _looks_like_model_path(self._model_name):
+            return self._model_name
+        configured_model_path = Path(self._model_name).expanduser()
         if not configured_model_path.exists():
             raise AsrProcessingError(_missing_model_error_message(configured_model_path))
         return str(configured_model_path)

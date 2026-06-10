@@ -462,7 +462,6 @@ class TestWhisperCppTranscriber:
     def test_transcriber_properties_are_safe_before_runtime_is_prepared(self) -> None:
         transcriber = WhisperCppTranscriber(threads=4)
 
-        assert transcriber.threads == 4
         assert transcriber.system_info is None
 
     def test_ensure_model_raises_when_prepare_model_does_not_initialize_model(self) -> None:

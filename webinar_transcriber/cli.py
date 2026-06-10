@@ -23,17 +23,9 @@ from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.processor import process_input
 from webinar_transcriber.ui import StageReporter
 
-_THREADS_DEFAULT = default_asr_threads()
-
 
 class CLIError(click.ClickException):
     """CLI error for actionable user-facing failures."""
-
-
-def _resolve_threads(_ctx: click.Context, _param: click.Parameter, value: int | None) -> int:
-    if value is not None and value < 1:
-        raise click.BadParameter("must be greater than or equal to 1")
-    return value or default_asr_threads()
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -68,10 +60,9 @@ def _resolve_threads(_ctx: click.Context, _param: click.Parameter, value: int | 
 )
 @click.option(
     "--threads",
-    type=int,
+    type=click.IntRange(min=1),
     metavar="INTEGER",
-    default=_THREADS_DEFAULT,
-    callback=_resolve_threads,
+    default=default_asr_threads(),
     show_default=True,
     help="Number of local audio-processing threads. Defaults to the host CPU count, capped at 8.",
 )

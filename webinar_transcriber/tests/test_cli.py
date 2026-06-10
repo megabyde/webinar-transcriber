@@ -176,7 +176,7 @@ class TestCli:
         assert "--language" in result.output
         assert "--threads" in result.output
         assert "Defaults to the host CPU count, capped at 8" in normalized_output
-        assert f"[default: {default_asr_threads()}]" in normalized_output
+        assert f"[default: {default_asr_threads()}; x>=1]" in normalized_output
         assert "--keep-audio" in result.output
         assert "Keep normalized transcription audio as mp3" in result.output
         assert "--llm" in result.output
