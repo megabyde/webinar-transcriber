@@ -25,7 +25,6 @@ from .prompts import (
 )
 from .utils import (
     ReportPolishResponse,
-    ReportSectionUpdate,
     SchemaModelT,
     SectionTextResponse,
     build_report_polish_payload,
@@ -42,12 +41,7 @@ if TYPE_CHECKING:
 
     from webinar_transcriber.models import ReportDocument, ReportSection
 
-__all__ = [
-    "InstructorLLMProcessor",
-    "ReportPolishResponse",
-    "ReportSectionUpdate",
-    "SectionTextResponse",
-]
+__all__ = ["InstructorLLMProcessor"]
 
 # ---------------------------------------------------------------------------
 # Internal types
