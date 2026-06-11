@@ -13,7 +13,7 @@ from webinar_transcriber.media import MediaProcessingError, open_video_input_con
 from webinar_transcriber.models import Scene
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
     from pathlib import Path
 
     from av.container import InputContainer
@@ -82,39 +82,44 @@ def _select_scene_starts(
 
             for decoded_frame in input_container.decode(video_stream):
                 scene_filter.vpush(decoded_frame)
-                while True:
-                    try:
-                        filtered_frame = scene_filter.vpull()
-                    except av.BlockingIOError:
-                        break
-                    current_time = _frame_time_sec(filtered_frame)
-                    if current_time is None:  # pragma: no cover - PyAV frames normally carry time
-                        continue
+                for current_time in _filtered_frame_times(scene_filter):
                     if (current_time - scene_starts[-1]) >= settings.min_scene_length_sec:
                         scene_starts.append(current_time)
                 if progress_callback is not None:
-                    processed_sample_count, reported_scene_count = _report_scene_progress(
-                        progress_callback,
-                        decoded_frame,
-                        settings=settings,
-                        processed_sample_count=processed_sample_count,
-                        reported_scene_count=reported_scene_count,
-                        scene_count=len(scene_starts),
+                    sample_count = _sample_count_for_frame(
+                        decoded_frame, settings=settings, fallback=processed_sample_count + 1
                     )
+                    if sample_count > processed_sample_count:
+                        progress_callback(sample_count, len(scene_starts))
+                        processed_sample_count = sample_count
+                        reported_scene_count = len(scene_starts)
 
             duration_sec = _video_duration_sec(input_container, video_stream)
             if progress_callback is not None:
-                _report_final_scene_progress(
-                    progress_callback,
-                    duration_sec=duration_sec,
-                    settings=settings,
-                    processed_sample_count=processed_sample_count,
-                    reported_scene_count=reported_scene_count,
-                    scene_count=len(scene_starts),
+                final_sample_count = max(
+                    processed_sample_count,
+                    estimated_scene_sample_count(duration_sec, settings=settings),
                 )
+                if (  # pragma: no cover - backend-dependent final progress reconciliation
+                    final_sample_count != processed_sample_count
+                    or reported_scene_count != len(scene_starts)
+                ):
+                    progress_callback(final_sample_count, len(scene_starts))
             return scene_starts, duration_sec
     except (OSError, av.FFmpegError) as error:  # pragma: no cover - defensive FFmpeg boundary
         raise MediaProcessingError(f"Could not detect scenes in {video_path}: {error}") from error
+
+
+def _filtered_frame_times(scene_filter: Graph) -> Iterator[float]:
+    """Yield timestamps of scene-change frames currently buffered in the filter graph."""
+    while True:
+        try:
+            filtered_frame = scene_filter.vpull()
+        except av.BlockingIOError:
+            return
+        current_time = _frame_time_sec(filtered_frame)
+        if current_time is not None:
+            yield current_time
 
 
 def _build_scene_filter_graph(
@@ -139,42 +144,6 @@ def _sample_count_for_frame(
     if frame_time_sec is None:
         return fallback  # pragma: no cover - PyAV decoded frames normally carry time
     return max(1, int(frame_time_sec * settings.scan_fps) + 1)
-
-
-def _report_scene_progress(
-    progress_callback: ProgressCallback,
-    frame: VideoFrame,
-    *,
-    settings: SceneDetectionSettings,
-    processed_sample_count: int,
-    reported_scene_count: int,
-    scene_count: int,
-) -> tuple[int, int]:
-    sample_count = _sample_count_for_frame(
-        frame, settings=settings, fallback=processed_sample_count + 1
-    )
-    if sample_count <= processed_sample_count:
-        return processed_sample_count, reported_scene_count
-    progress_callback(sample_count, scene_count)
-    return sample_count, scene_count
-
-
-def _report_final_scene_progress(
-    progress_callback: ProgressCallback,
-    *,
-    duration_sec: float,
-    settings: SceneDetectionSettings,
-    processed_sample_count: int,
-    reported_scene_count: int,
-    scene_count: int,
-) -> None:
-    final_sample_count = max(
-        processed_sample_count, estimated_scene_sample_count(duration_sec, settings=settings)
-    )
-    if (  # pragma: no cover - backend-dependent final progress reconciliation
-        final_sample_count != processed_sample_count or reported_scene_count != scene_count
-    ):
-        progress_callback(final_sample_count, scene_count)
 
 
 def estimated_scene_sample_count(
