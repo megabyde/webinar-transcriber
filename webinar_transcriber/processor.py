@@ -479,7 +479,7 @@ def _polish_report(
             )
             return report
         metadata_elapsed_sec = st.elapsed_sec()
-        st.update(detail=_metadata_detail(metadata_result, section_count=section_count))
+        st.update(detail=_metadata_detail(metadata_result))
 
     polished_report = replace(
         report,
@@ -509,19 +509,14 @@ def _polish_report(
     return polished_report
 
 
-def _metadata_detail(metadata_result: LlmReportMetadataResult, *, section_count: int) -> str | None:
-    summary_count = len(metadata_result.summary)
-    action_item_count = len(metadata_result.action_items)
-    title_count = len(metadata_result.section_titles)
-    title_update_count = title_count if title_count > 0 and title_count != section_count else 0
+def _metadata_detail(metadata_result: LlmReportMetadataResult) -> str | None:
     parts = []
-    if summary_count > 0:
-        parts.append(_count(summary_count, "summary bullet"))
-    if action_item_count > 0:
-        parts.append(_count(action_item_count, "action item"))
-    if title_update_count > 0:
-        noun = "title" if title_update_count == 1 else "titles"
-        parts.append(f"{title_update_count} {noun} updated")
+    if metadata_result.summary:
+        parts.append(_count(len(metadata_result.summary), "summary bullet"))
+    if metadata_result.action_items:
+        parts.append(_count(len(metadata_result.action_items), "action item"))
+    if metadata_result.section_titles:
+        parts.append(f"{_count(len(metadata_result.section_titles), 'title')} updated")
     return _join_detail(*parts) or None
 
 
