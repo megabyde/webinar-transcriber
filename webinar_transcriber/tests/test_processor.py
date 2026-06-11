@@ -325,8 +325,7 @@ class TestProcessInput:
         class PreparingDiarizer:
             system_info = "fake sherpa"
 
-            def __init__(self, *, threads: int | None = None) -> None:
-                self.threads = threads
+            def __init__(self) -> None:
                 self.prepare_calls: list[int | None] = []
 
             def prepare(self, *, speaker_count: int | None) -> None:
@@ -343,7 +342,7 @@ class TestProcessInput:
                     progress_callback(2, 2)
                 return [SpeakerTurn(start_sec=0.0, end_sec=2.0, speaker="S1")]
 
-        diarizer = PreparingDiarizer(threads=transcriber.threads)
+        diarizer = PreparingDiarizer()
         install_pipeline_runtime(
             monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime(duration_sec=6.0)
         )
@@ -357,7 +356,6 @@ class TestProcessInput:
             reporter=reporter,
         )
 
-        assert diarizer.threads == transcriber.threads
         assert diarizer.prepare_calls == [1]
         assert any(key == "diarize" for key, _ in reporter.finished)
 
@@ -639,7 +637,7 @@ class TestProcessInput:
             patch("webinar_transcriber.processor.build_report", side_effect=RuntimeError("boom")),
             patch(
                 "webinar_transcriber.processor.load_normalized_audio",
-                return_value=(np.zeros(16_000, dtype=np.float32), 16_000),
+                return_value=np.zeros(16_000, dtype=np.float32),
             ),
             patch(
                 "webinar_transcriber.processor.detect_speech_regions",

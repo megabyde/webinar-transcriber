@@ -313,7 +313,7 @@ def install_pipeline_runtime(
     )
     monkeypatch.setattr(
         "webinar_transcriber.processor.load_normalized_audio",
-        lambda _path: (runtime.audio_samples, runtime.sample_rate),
+        lambda _path: runtime.audio_samples,
     )
     monkeypatch.setattr(
         "webinar_transcriber.processor.detect_speech_regions", fake_detect_speech_regions

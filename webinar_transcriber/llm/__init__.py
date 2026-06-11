@@ -102,15 +102,14 @@ def required_provider_env(*, api_key_env: str, model_env: str) -> tuple[str, str
     """
     api_key = os.environ.get(api_key_env)
     model_name = os.environ.get(model_env)
-    missing_vars = [
-        env_name
-        for env_name, value in ((api_key_env, api_key), (model_env, model_name))
-        if not value
-    ]
-    if missing_vars:
-        missing = ", ".join(missing_vars)
+    if not api_key or not model_name:
+        missing = ", ".join(
+            env_name
+            for env_name, value in ((api_key_env, api_key), (model_env, model_name))
+            if not value
+        )
         raise LlmConfigurationError(f"Missing required LLM environment variables: {missing}.")
-    return os.environ[api_key_env], os.environ[model_env]
+    return api_key, model_name
 
 
 def _required_llm_module(module_name: str, *, provider_label: str) -> object:

@@ -176,9 +176,8 @@ class TestNormalizedAudio:
 
     def test_load_normalized_audio_returns_mono_float32_samples(self) -> None:
         with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
-            samples, sample_rate = load_normalized_audio(audio_path)
+            samples = load_normalized_audio(audio_path)
 
-        assert sample_rate == 16_000
         assert samples.dtype == np.float32
         assert samples.ndim == 1
         assert samples.size > 0
@@ -395,7 +394,7 @@ class TestNormalizedAudio:
 
     @pytest.mark.slow
     def test_silero_speech_regions_detects_speech_with_real_sherpa_model(self) -> None:
-        samples, _ = load_normalized_audio(FIXTURE_DIR / "speech-sample.wav")
+        samples = load_normalized_audio(FIXTURE_DIR / "speech-sample.wav")
 
         regions = _silero_speech_regions(samples, threads=1)
 

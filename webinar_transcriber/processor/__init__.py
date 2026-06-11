@@ -20,7 +20,6 @@ from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
     DiarizationDiagnostics,
     LlmDiagnostics,
-    TranscriptionResult,
     VideoAsset,
 )
 from webinar_transcriber.normalized_audio import (
@@ -59,6 +58,7 @@ if TYPE_CHECKING:
         ReportDocument,
         Scene,
         SceneFrame,
+        TranscriptionResult,
     )
     from webinar_transcriber.paths import RunLayout
     from webinar_transcriber.ui import StageHandle
@@ -225,7 +225,7 @@ def _run_asr_pipeline(
         transcriber.prepare_model()
         st.update(detail=str(transcriber))
 
-    audio_samples, _ = load_normalized_audio(audio_path)
+    audio_samples = load_normalized_audio(audio_path)
     audio_duration_sec = normalized_audio_duration(audio_samples)
 
     with ctx.stage(
@@ -293,7 +293,9 @@ def _run_asr_pipeline(
             speaker_turns = diarizer.diarize(audio_samples, progress_callback=on_diarize_progress)
             write_json(layout.diarization_path, [asdict(turn) for turn in speaker_turns])
             speaker_count = len({turn.speaker for turn in speaker_turns})
-            transcription = _assign_speakers(transcription, speaker_turns)
+            transcription = replace(
+                transcription, segments=assign_speakers(transcription.segments, speaker_turns)
+            )
             st.update(
                 completed=100.0,
                 detail=_join_detail(
@@ -322,13 +324,6 @@ def _run_asr_pipeline(
         system_info=transcriber.system_info,
     )
     return transcription
-
-
-def _assign_speakers(
-    transcription: TranscriptionResult, speaker_turns: list
-) -> TranscriptionResult:
-    segments = assign_speakers(transcription.segments, speaker_turns)
-    return TranscriptionResult(detected_language=transcription.detected_language, segments=segments)
 
 
 def _run_report_phase(
@@ -394,7 +389,6 @@ def _run_report_phase(
 
     if llm_processor is not None:
         report = _polish_report(report, llm_processor=llm_processor, ctx=ctx)
-    report = replace(report, warnings=list(ctx.warnings))
     ctx.item_counts["report_sections"] = len(report.sections)
 
     with ctx.stage("export", "Writing artifacts") as st:

@@ -143,11 +143,11 @@ def preserve_transcription_audio(
     )
 
 
-def load_normalized_audio(audio_path: Path) -> tuple[np.ndarray, int]:
+def load_normalized_audio(audio_path: Path) -> np.ndarray:
     """Return mono float32 PCM audio samples from a normalized WAV file.
 
     Returns:
-        tuple[np.ndarray, int]: The float32 PCM samples and their sample rate.
+        np.ndarray: The float32 PCM samples at the normalized sample rate.
 
     Raises:
         MediaProcessingError: If the WAV does not match the normalized audio contract.
@@ -169,5 +169,4 @@ def load_normalized_audio(audio_path: Path) -> tuple[np.ndarray, int]:
             f"Expected 16-bit PCM transcription audio, got {sample_width * 8}-bit."
         )
 
-    samples = np.frombuffer(raw_frames, dtype=np.int16).astype(np.float32) / 32768.0
-    return samples, sample_rate
+    return np.frombuffer(raw_frames, dtype=np.int16).astype(np.float32) / 32768.0

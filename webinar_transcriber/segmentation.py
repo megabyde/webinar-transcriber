@@ -130,8 +130,9 @@ def _silero_speech_regions(
             completed_samples >= next_report_sample or completed_samples == len(samples)
         ):
             progress_callback(completed_samples / NORMALIZED_SAMPLE_RATE, len(regions))
-            while next_report_sample <= completed_samples:
-                next_report_sample += NORMALIZED_SAMPLE_RATE
+            next_report_sample = (
+                completed_samples // NORMALIZED_SAMPLE_RATE + 1
+            ) * NORMALIZED_SAMPLE_RATE
     detector.flush()
     collect_ready_segments()
 

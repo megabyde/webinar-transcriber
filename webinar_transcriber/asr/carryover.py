@@ -16,18 +16,10 @@ _CARRYOVER_WHITESPACE = re.compile(r"\s+")
 def build_prompt_carryover(
     decoded_window: DecodedWindow, *, max_chars: int = CARRYOVER_MAX_CHARS
 ) -> str | None:
-    """Return a bounded prompt suffix for the next window, or `None` when confidence is weak."""
-    return _tail_text(decoded_window.text, max_chars=max_chars)
-
-
-def _tail_text(text: str, *, max_chars: int) -> str | None:
-    if not text:
-        return None
-
-    cleaned = _CARRYOVER_WHITESPACE.sub(" ", text.strip())
+    """Return a bounded prompt suffix for the next window, or `None` when the text is empty."""
+    cleaned = _CARRYOVER_WHITESPACE.sub(" ", decoded_window.text.strip())
     if not cleaned or max_chars <= 0:
         return None
     if len(cleaned) <= max_chars:
         return cleaned
-
     return cleaned[-max_chars:].lstrip()
