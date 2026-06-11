@@ -54,23 +54,6 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
-class PolishedSection:
-    """Polished section transcript and TL;DR payload."""
-
-    id: str
-    transcript: str
-    tldr: str
-
-
-@dataclass(frozen=True)
-class SectionPolishOutputs:
-    """Polished section payloads keyed by section id."""
-
-    sections: dict[str, PolishedSection]
-    response_metadata: list[dict[str, object]] = field(default_factory=list)
-
-
 @dataclass(frozen=True, slots=True)
 class SectionPolishResult:
     """Result from polishing one report section."""
@@ -133,24 +116,12 @@ class InstructorLLMProcessor:
         self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
     ) -> LlmSectionPolishResult:
         """Return polished section text with per-section progress updates."""
-        warnings: list[str] = []
-        polished_section_texts = self._polish_section_texts(
-            report, progress_callback=progress_callback, warnings=warnings
-        )
-        section_tldrs = {
-            section_id: section.tldr
-            for section_id, section in polished_section_texts.sections.items()
-            if section.tldr
-        }
-        section_transcripts = {
-            section_id: section.transcript
-            for section_id, section in polished_section_texts.sections.items()
-        }
+        results = self._polish_section_texts(report, progress_callback=progress_callback)
         return LlmSectionPolishResult(
-            section_tldrs=section_tldrs,
-            section_transcripts=section_transcripts,
-            response_metadata=polished_section_texts.response_metadata,
-            warnings=warnings,
+            section_tldrs={r.section_id: r.tldr for r in results if r.tldr},
+            section_transcripts={r.section_id: r.transcript_text for r in results},
+            response_metadata=[r.response_metadata for r in results],
+            warnings=[warning for r in results for warning in r.warnings],
         )
 
     def polish_report_metadata(
@@ -184,16 +155,12 @@ class InstructorLLMProcessor:
         )
 
     def _polish_section_texts(
-        self,
-        report: ReportDocument,
-        *,
-        progress_callback: Callable[[int], None] | None,
-        warnings: list[str],
-    ) -> SectionPolishOutputs:
-        plan = self.report_polish_plan(report)
+        self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None
+    ) -> list[SectionPolishResult]:
         if not report.sections:
-            return SectionPolishOutputs(sections={})
+            return []
 
+        plan = self.report_polish_plan(report)
         section_results: dict[int, SectionPolishResult] = {}
 
         executor = ThreadPoolExecutor(max_workers=plan.worker_count)
@@ -214,17 +181,7 @@ class InstructorLLMProcessor:
         else:
             executor.shutdown(wait=True)
 
-        polished_sections: dict[str, PolishedSection] = {}
-        response_metadata: list[dict[str, object]] = []
-        for index in range(len(report.sections)):
-            result = section_results[index]
-            polished_sections[result.section_id] = PolishedSection(
-                id=result.section_id, transcript=result.transcript_text, tldr=result.tldr
-            )
-            response_metadata.append(result.response_metadata)
-            warnings.extend(result.warnings)
-
-        return SectionPolishOutputs(sections=polished_sections, response_metadata=response_metadata)
+        return [section_results[index] for index in range(len(report.sections))]
 
     def _polish_section(self, section: ReportSection) -> SectionPolishResult:
         try:
