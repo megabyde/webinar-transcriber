@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from rich.console import Console
 
-from webinar_transcriber.asr import ASR_BACKEND_NAME, WhisperCppTranscriber
+from webinar_transcriber.asr import ASR_BACKEND_NAME, WhisperCppTranscriber, plan_inference_windows
 from webinar_transcriber.diagnostics import write_run_diagnostics
 from webinar_transcriber.diarization import DIARIZATION_MODEL, assign_speakers
 from webinar_transcriber.export import write_docx_report, write_json_report, write_markdown_report
@@ -21,6 +21,7 @@ from webinar_transcriber.models import (
     DiarizationDiagnostics,
     LlmDiagnostics,
     VideoAsset,
+    average_duration_sec,
 )
 from webinar_transcriber.normalized_audio import (
     load_normalized_audio,
@@ -37,13 +38,6 @@ from webinar_transcriber.video import (
     detect_scenes,
     estimated_scene_sample_count,
     extract_representative_frames,
-)
-
-from .stages import (
-    INFERENCE_WINDOW_DURATION_SEC,
-    INFERENCE_WINDOW_OVERLAP_SEC,
-    average_duration_sec,
-    plan_inference_windows,
 )
 
 if TYPE_CHECKING:
@@ -157,7 +151,7 @@ def process_input(
 
                 transcription = _run_asr_pipeline(
                     audio_path=audio_path,
-                    media_asset=media_asset,
+                    media_duration_sec=media_asset.duration_sec,
                     transcriber=active_transcriber,
                     layout=layout,
                     ctx=ctx,
@@ -207,7 +201,7 @@ def process_input(
 def _run_asr_pipeline(
     *,
     audio_path: Path,
-    media_asset: MediaAsset,
+    media_duration_sec: float,
     transcriber: WhisperCppTranscriber,
     layout: RunLayout,
     ctx: RunContext,
@@ -271,7 +265,7 @@ def _run_asr_pipeline(
         st.update(
             completed=float(len(windows)),
             detail=_join_detail(
-                _count(segment_count, "segment"), _rtf(media_asset.duration_sec, st.elapsed_sec())
+                _count(segment_count, "segment"), _rtf(media_duration_sec, st.elapsed_sec())
             ),
         )
     transcription = reconcile_decoded_windows(decoded_windows)
@@ -435,14 +429,15 @@ def _polish_report(
 ) -> ReportDocument:
     provider_name = llm_processor.provider_name
     model_name = llm_processor.model_name
-    polish_plan = llm_processor.report_polish_plan(report)
+    section_count = len(report.sections)
+    worker_count = llm_processor.polish_worker_count(section_count)
     runtime_detail = _join_detail(provider_name, model_name)
 
     with ctx.stage(
         "llm_report_sections",
         "Polishing sections with LLM",
-        total=max(float(polish_plan.section_count), 1.0),
-        detail=_join_detail(runtime_detail, _count(polish_plan.worker_count, "worker")),
+        total=max(float(section_count), 1.0),
+        detail=_join_detail(runtime_detail, _count(worker_count, "worker")),
     ) as st:
 
         def on_section_progress(advance: int) -> None:
@@ -462,7 +457,7 @@ def _polish_report(
             )
             return report
         section_elapsed_sec = st.elapsed_sec()
-        st.update(detail=_count(polish_plan.section_count, "section"))
+        st.update(detail=_count(section_count, "section"))
     for warning in section_result.warnings:
         ctx.record_warning(warning)
 
@@ -484,7 +479,7 @@ def _polish_report(
             )
             return report
         metadata_elapsed_sec = st.elapsed_sec()
-        st.update(detail=_metadata_detail(metadata_result, section_count=polish_plan.section_count))
+        st.update(detail=_metadata_detail(metadata_result, section_count=section_count))
 
     polished_report = replace(
         report,
@@ -547,10 +542,7 @@ def _silent_reporter() -> StageReporter:
 
 
 __all__ = [
-    "INFERENCE_WINDOW_DURATION_SEC",
-    "INFERENCE_WINDOW_OVERLAP_SEC",
     "ProcessArtifacts",
     "RunContext",
-    "plan_inference_windows",
     "process_input",
 ]

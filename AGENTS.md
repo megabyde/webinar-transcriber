@@ -60,10 +60,8 @@ The package intentionally avoids deep nesting.
 ```text
 webinar_transcriber/
 ├── cli.py                  Click CLI entrypoints
-├── processor/
-│   ├── __init__.py         pipeline orchestration and RunContext dataclasses
-│   └── stages.py           pure helpers (window planning, duration averaging)
-├── asr/                    backend selection, carryover policy, pywhispercpp wrapper
+├── processor.py            pipeline orchestration and RunContext dataclasses
+├── asr/                    window planning, carryover policy, pywhispercpp wrapper
 ├── diarization/            optional local speaker diarization via sherpa-onnx
 ├── llm/                    optional cloud LLM integrations
 ├── transcript/             normalization and window reconciliation

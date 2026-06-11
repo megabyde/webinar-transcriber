@@ -11,7 +11,6 @@ from pydantic import BaseModel
 from webinar_transcriber.llm import (
     LlmConfigurationError,
     LlmProcessingError,
-    LlmReportPolishPlan,
     build_llm_processor_from_env,
 )
 from webinar_transcriber.llm import processor as llm_processor
@@ -707,33 +706,16 @@ class TestInstructorProcessorFlow:
         assert result.section_tldrs == {}
         assert result.warnings == []
 
-    def test_report_polish_plan_counts_all_sections(self) -> None:
+    @pytest.mark.parametrize(
+        ("section_count", "expected_worker_count"),
+        [(0, 1), (2, 2), (16, 6)],
+    )
+    def test_polish_worker_count_is_bounded_by_threads(
+        self, section_count: int, expected_worker_count: int
+    ) -> None:
         processor = self.processor({})
-        report = ReportDocument(
-            title="Demo",
-            source_file="demo.wav",
-            media_type=MediaType.AUDIO,
-            sections=[
-                ReportSection(
-                    id="section-1",
-                    title="Intro",
-                    start_sec=0.0,
-                    end_sec=5.0,
-                    transcript_text="Intro review.",
-                ),
-                ReportSection(
-                    id="section-2",
-                    title="Agenda",
-                    start_sec=5.0,
-                    end_sec=12.0,
-                    transcript_text="Agenda review.",
-                ),
-            ],
-        )
 
-        assert processor.report_polish_plan(report) == LlmReportPolishPlan(
-            section_count=2, worker_count=2
-        )
+        assert processor.polish_worker_count(section_count) == expected_worker_count
 
     def test_turns_section_polish_errors_into_warnings(self) -> None:
         processor = self.processor({"section-1": RuntimeError("bad section")})

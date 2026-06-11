@@ -10,6 +10,7 @@ from .config import (
     default_asr_threads,
 )
 from .transcriber import AsrProcessingError, WhisperCppTranscriber, device_name_from_system_info
+from .windows import plan_inference_windows
 
 __all__ = [
     "ASR_BACKEND_NAME",
@@ -20,4 +21,5 @@ __all__ = [
     "build_prompt_carryover",
     "default_asr_threads",
     "device_name_from_system_info",
+    "plan_inference_windows",
 ]

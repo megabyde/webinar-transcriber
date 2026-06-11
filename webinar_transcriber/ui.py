@@ -127,8 +127,7 @@ class StageReporter:
         suffix = ""
         if self._active_handle is not None:
             suffix = f" during {self._active_handle.label.lower()}"
-        self._stop_active_progress()
-        self._clear_active()
+        self.reset_active_display()
         self._console.print(f"[red]✗[/] Interrupted{suffix}.")
 
     def reset_active_display(self) -> None:

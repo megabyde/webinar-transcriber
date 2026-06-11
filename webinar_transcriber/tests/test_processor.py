@@ -11,11 +11,11 @@ import numpy as np
 import pytest
 from rich.console import Console
 
+from webinar_transcriber.asr import plan_inference_windows
 from webinar_transcriber.diagnostics import write_run_diagnostics
 from webinar_transcriber.llm import (
     LlmProcessingError,
     LlmReportMetadataResult,
-    LlmReportPolishPlan,
     LlmSectionPolishResult,
 )
 from webinar_transcriber.models import (
@@ -29,7 +29,7 @@ from webinar_transcriber.models import (
     TranscriptSegment,
 )
 from webinar_transcriber.paths import RunLayout
-from webinar_transcriber.processor import ProcessArtifacts, RunContext, plan_inference_windows
+from webinar_transcriber.processor import ProcessArtifacts, RunContext
 from webinar_transcriber.processor import process_input as _process_input
 from webinar_transcriber.tests.conftest import (
     FakeTranscriber,
@@ -122,10 +122,9 @@ class ConfigurableLLMProcessor:
         self._section_progress = section_progress
         self._worker_count = worker_count
 
-    def report_polish_plan(self, report: ReportDocument) -> LlmReportPolishPlan:
-        return LlmReportPolishPlan(
-            section_count=len(report.sections), worker_count=self._worker_count
-        )
+    def polish_worker_count(self, section_count: int) -> int:
+        del section_count
+        return self._worker_count
 
     def polish_report_sections_with_progress(
         self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
