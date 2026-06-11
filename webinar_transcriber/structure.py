@@ -94,16 +94,14 @@ def build_sections_from_blocks(
     segment_by_id = {segment.id: segment for segment in transcript_segments}
     sections: list[ReportSection] = []
 
-    for block in blocks:
+    for index, block in enumerate(blocks, start=1):
         block_segments = [
             segment_by_id[segment_id]
             for segment_id in block.transcript_segment_ids
             if segment_id in segment_by_id and segment_by_id[segment_id].text.strip()
         ]
-        sections.extend(
-            sections_from_block(
-                block, block_segments=block_segments, next_section_index=len(sections) + 1
-            )
+        sections.append(
+            section_from_block(block, block_segments=block_segments, section_index=index)
         )
 
     return sections
@@ -168,30 +166,26 @@ def _section_from_segments(
     )
 
 
-def sections_from_block(
-    block: AlignmentBlock, *, block_segments: list[TranscriptSegment], next_section_index: int
-) -> list[ReportSection]:
+def section_from_block(
+    block: AlignmentBlock, *, block_segments: list[TranscriptSegment], section_index: int
+) -> ReportSection:
     """Build one report section from one scene-alignment block."""
-    title = derive_title(block.transcript_text, fallback=f"Slide {next_section_index}")
+    title = derive_title(block.transcript_text, fallback=f"Slide {section_index}")
     if not block_segments:
         # Keep scene-backed sections even when no transcript segments aligned, so frame/title
         # context is preserved for scene-only blocks.
-        return [
-            ReportSection(
-                id=f"section-{next_section_index}",
-                title=title,
-                start_sec=block.start_sec,
-                end_sec=block.end_sec,
-                transcript_text=block.transcript_text,
-                video=block.video,
-            )
-        ]
-
-    return [
-        _section_from_segments(
-            block_segments, section_index=next_section_index, title=title, video=block.video
+        return ReportSection(
+            id=f"section-{section_index}",
+            title=title,
+            start_sec=block.start_sec,
+            end_sec=block.end_sec,
+            transcript_text=block.transcript_text,
+            video=block.video,
         )
-    ]
+
+    return _section_from_segments(
+        block_segments, section_index=section_index, title=title, video=block.video
+    )
 
 
 def derive_title(
@@ -236,7 +230,7 @@ __all__ = [
     "build_report",
     "build_sections_from_blocks",
     "derive_title",
-    "sections_from_block",
+    "section_from_block",
     "should_start_new_audio_section",
     "title_from_path",
 ]

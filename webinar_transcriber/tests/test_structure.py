@@ -17,7 +17,7 @@ from webinar_transcriber.structure import (
     build_audio_sections,
     build_report,
     derive_title,
-    sections_from_block,
+    section_from_block,
     should_start_new_audio_section,
     title_from_path,
 )
@@ -297,7 +297,7 @@ class TestAudioSectionHeuristics:
 
         assert not should_start_new_audio_section(current_segments, next_segment)
 
-    def test_sections_from_block_uses_block_text_when_segment_ids_are_missing(self) -> None:
+    def test_section_from_block_uses_block_text_when_segment_ids_are_missing(self) -> None:
         block = AlignmentBlock(
             id="block-1",
             start_sec=0.0,
@@ -307,11 +307,10 @@ class TestAudioSectionHeuristics:
             video=VideoAssetRef(scene_id="scene-1", frame_id="frame-1"),
         )
 
-        sections = sections_from_block(block, block_segments=[], next_section_index=1)
+        section = section_from_block(block, block_segments=[], section_index=1)
 
-        assert len(sections) == 1
-        assert sections[0].title == "Fallback block text"
-        assert sections[0].frame_id == "frame-1"
+        assert section.title == "Fallback block text"
+        assert section.frame_id == "frame-1"
 
     @pytest.mark.parametrize(
         ("segments", "fallback", "expected"),
