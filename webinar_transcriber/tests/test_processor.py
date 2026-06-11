@@ -160,7 +160,6 @@ class FakeDiarizer:
     ) -> list[SpeakerTurn]:
         self.calls.append(len(samples))
         if progress_callback is not None:
-            progress_callback(1, 0)
             progress_callback(1, 2)
             progress_callback(2, 2)
         return self.turns
@@ -769,7 +768,8 @@ class TestProcessInput:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         input_path = FIXTURE_DIR / "sample-video.mp4"
-        missing_image_path = tmp_path / "missing-frame.png"
+        run_dir = tmp_path / "docx-warning-run"
+        missing_image_path = run_dir / "frames" / "missing-frame.png"
         install_pipeline_runtime(
             monkeypatch, tmp_path, input_path=input_path, runtime=video_runtime()
         )
@@ -789,9 +789,7 @@ class TestProcessInput:
             ],
         )
 
-        artifacts = process_input(
-            input_path, output_dir=tmp_path / "docx-warning-run", transcriber=FakeTranscriber()
-        )
+        artifacts = process_input(input_path, output_dir=run_dir, transcriber=FakeTranscriber())
 
         expected_warning = f"Section image does not exist: {missing_image_path}"
         report_payload = read_json(artifacts.layout.json_report_path)
