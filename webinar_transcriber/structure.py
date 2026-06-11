@@ -14,7 +14,6 @@ from webinar_transcriber.models import (
     SceneFrame,
     TranscriptionResult,
     TranscriptSegment,
-    VideoAssetRef,
 )
 
 AUDIO_SECTION_BREAK_GAP_SEC = 5.0
@@ -49,7 +48,8 @@ def align_by_time(
                 end_sec=scene.end_sec,
                 transcript_segment_ids=[segment.id for segment in scene_segments],
                 transcript_text=transcript_text,
-                video=VideoAssetRef(scene_id=scene.id, frame_id=frame.id if frame else None),
+                scene_id=scene.id,
+                frame_id=frame.id if frame else None,
             )
         )
 
@@ -153,7 +153,8 @@ def _section_from_segments(
     *,
     section_index: int,
     title: str,
-    video: VideoAssetRef | None = None,
+    scene_id: str | None = None,
+    frame_id: str | None = None,
 ) -> ReportSection:
     transcript_text = _transcript_text_from_segments(segments)
     return ReportSection(
@@ -162,7 +163,8 @@ def _section_from_segments(
         start_sec=segments[0].start_sec,
         end_sec=segments[-1].end_sec,
         transcript_text=transcript_text,
-        video=video,
+        scene_id=scene_id,
+        frame_id=frame_id,
     )
 
 
@@ -180,11 +182,16 @@ def section_from_block(
             start_sec=block.start_sec,
             end_sec=block.end_sec,
             transcript_text=block.transcript_text,
-            video=block.video,
+            scene_id=block.scene_id,
+            frame_id=block.frame_id,
         )
 
     return _section_from_segments(
-        block_segments, section_index=section_index, title=title, video=block.video
+        block_segments,
+        section_index=section_index,
+        title=title,
+        scene_id=block.scene_id,
+        frame_id=block.frame_id,
     )
 
 
