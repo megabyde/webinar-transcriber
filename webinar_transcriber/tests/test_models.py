@@ -102,7 +102,7 @@ class TestCoreModels:
     def test_diagnostics_defaults_empty_maps(self) -> None:
         diagnostics = Diagnostics()
 
-        assert diagnostics.llm.report_status == "disabled"
+        assert diagnostics.llm is None
         assert diagnostics.stage_durations_sec == {}
         assert diagnostics.item_counts == {}
         assert diagnostics.asr_pipeline is None

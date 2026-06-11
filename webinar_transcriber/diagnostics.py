@@ -43,7 +43,7 @@ def write_run_diagnostics(
         error=error,
         llm=ctx.llm,
         stage_durations_sec={key: round(value, 6) for key, value in ctx.stage_timings.items()},
-        item_counts={**_ZERO_ITEM_COUNTS, **ctx.item_counts},
+        item_counts=_ZERO_ITEM_COUNTS | ctx.item_counts,
         asr_pipeline=ctx.asr_pipeline,
         diarization=ctx.diarization,
         warnings=ctx.warnings,

@@ -86,7 +86,7 @@ class RunContext:
     item_counts: dict[str, int] = field(default_factory=dict)
     asr_pipeline: AsrPipelineDiagnostics | None = None
     diarization: DiarizationDiagnostics | None = None
-    llm: LlmDiagnostics = field(default_factory=LlmDiagnostics)
+    llm: LlmDiagnostics | None = None
 
     def record_warning(self, message: str) -> None:
         """Record and report one run warning."""
@@ -155,7 +155,7 @@ def process_input(
                     )
                     st.update(completed=audio_total, detail=audio_path.name)
 
-                transcription, normalized_transcription = _run_asr_pipeline(
+                transcription = _run_asr_pipeline(
                     audio_path=audio_path,
                     media_asset=media_asset,
                     transcriber=active_transcriber,
@@ -177,7 +177,7 @@ def process_input(
                 input_path=input_path,
                 layout=layout,
                 media_asset=media_asset,
-                normalized_transcription=normalized_transcription,
+                transcription=transcription,
                 llm_processor=llm_processor,
                 ctx=ctx,
             )
@@ -215,16 +215,15 @@ def _run_asr_pipeline(
     language: str | None,
     diarizer: SherpaOnnxDiarizer | None,
     diarization_speaker_count: int | None,
-) -> tuple[TranscriptionResult, TranscriptionResult]:
+) -> TranscriptionResult:
     """Run ASR and optional diarization, recording diagnostics on the context.
 
     Returns:
-        tuple[TranscriptionResult, TranscriptionResult]: The reconciled and the
-        normalized transcription.
+        TranscriptionResult: The reconciled transcription.
     """
     with ctx.stage("prepare_asr", "Preparing ASR model", detail=transcriber.model_name) as st:
         transcriber.prepare_model()
-        st.update(detail=f"{transcriber.model_name} | {transcriber.device_name}")
+        st.update(detail=str(transcriber))
 
     audio_samples, _ = load_normalized_audio(audio_path)
     audio_duration_sec = normalized_audio_duration(audio_samples)
@@ -306,13 +305,10 @@ def _run_asr_pipeline(
         ctx.diarization = DiarizationDiagnostics(
             speaker_count=speaker_count,
             turn_count=len(speaker_turns),
-            average_turn_duration_sec=average_duration_sec(speaker_turns),
             model=DIARIZATION_MODEL,
             system_info=diarizer.system_info,
         )
 
-    normalized_transcription = normalize_transcription(transcription)
-    ctx.item_counts["normalized_transcript_segments"] = len(normalized_transcription.segments)
     write_json(layout.transcript_path, transcription.to_json())
 
     ctx.asr_pipeline = AsrPipelineDiagnostics(
@@ -325,7 +321,7 @@ def _run_asr_pipeline(
         normalized_audio_duration_sec=audio_duration_sec,
         system_info=transcriber.system_info,
     )
-    return transcription, normalized_transcription
+    return transcription
 
 
 def _assign_speakers(
@@ -340,7 +336,7 @@ def _run_report_phase(
     input_path: Path,
     layout: RunLayout,
     media_asset: MediaAsset,
-    normalized_transcription: TranscriptionResult,
+    transcription: TranscriptionResult,
     llm_processor: InstructorLLMProcessor | None,
     ctx: RunContext,
 ) -> ReportDocument:
@@ -349,6 +345,9 @@ def _run_report_phase(
     Returns:
         ReportDocument: The final exported report.
     """
+    normalized_transcription = normalize_transcription(transcription)
+    ctx.item_counts["normalized_transcript_segments"] = len(normalized_transcription.segments)
+
     scenes: list[Scene] = []
     scene_frames: list[SceneFrame] = []
     alignment_blocks = None
@@ -368,7 +367,7 @@ def _run_report_phase(
                 progress_callback=on_scene_progress,
             )
             st.update(completed=scene_sample_total, detail=_count(len(scenes), "scene"))
-        write_json(layout.scenes_path, {"scenes": [asdict(scene) for scene in scenes]})
+        write_json(layout.scenes_path, [asdict(scene) for scene in scenes])
 
         with ctx.stage("extract_frames", "Extracting scene frames", total=float(len(scenes))) as st:
             scene_frames = extract_representative_frames(
@@ -393,7 +392,8 @@ def _run_report_phase(
     if scene_frames:
         report = _attach_section_images(report, scene_frames, layout.run_dir)
 
-    report = _maybe_polish_report(report, llm_processor=llm_processor, ctx=ctx)
+    if llm_processor is not None:
+        report = _polish_report(report, llm_processor=llm_processor, ctx=ctx)
     report = replace(report, warnings=list(ctx.warnings))
     ctx.item_counts["report_sections"] = len(report.sections)
 
@@ -433,15 +433,12 @@ def _section_image_path(frame: SceneFrame, run_dir: Path) -> str:
             return frame.image_path
 
 
-def _maybe_polish_report(
+def _polish_report(
     report: ReportDocument,
     *,
-    llm_processor: InstructorLLMProcessor | None,
+    llm_processor: InstructorLLMProcessor,
     ctx: RunContext,
 ) -> ReportDocument:
-    if llm_processor is None:
-        return report
-
     provider_name = llm_processor.provider_name
     model_name = llm_processor.model_name
     polish_plan = llm_processor.report_polish_plan(report)

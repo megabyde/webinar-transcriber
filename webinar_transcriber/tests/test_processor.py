@@ -231,7 +231,7 @@ class TestProcessInput:
 
         assert metadata_payload["media_type"] == "audio"
         assert metadata_payload["duration_sec"] == 6.0
-        assert diagnostics_payload["llm"]["report_status"] == "disabled"
+        assert diagnostics_payload["llm"] is None
         assert diagnostics_payload["asr_pipeline"]["backend"] == "whisper.cpp"
         assert diagnostics_payload["asr_pipeline"]["model"] == "test-model"
         assert diagnostics_payload["item_counts"]["windows"] == 1
@@ -734,7 +734,7 @@ class TestProcessInput:
         scenes_payload = read_json(artifacts.layout.scenes_path)
         report_payload = read_json(artifacts.layout.json_report_path)
 
-        assert scenes_payload["scenes"] == [
+        assert scenes_payload == [
             {"id": "scene-1", "start_sec": 0.0, "end_sec": 0.9},
             {"id": "scene-2", "start_sec": 0.9, "end_sec": 1.8},
         ]
@@ -907,6 +907,7 @@ class TestProcessInputLlm:
         assert artifacts.report.sections[0].transcript_text == EXPECTED_LLM_SECTION_TEXT
         assert artifacts.report.warnings == [EXPECTED_LLM_WARNING]
         assert reporter.warnings == [EXPECTED_LLM_WARNING]
+        assert artifacts.diagnostics.llm is not None
         assert artifacts.diagnostics.llm.model == "test-llm-model"
         assert artifacts.diagnostics.llm.report_status == "applied"
         assert artifacts.diagnostics.llm.response_metadata == [
@@ -1047,6 +1048,7 @@ class TestProcessInputLlm:
         )
 
         assert reporter.warnings == ["section polish failed"]
+        assert artifacts.diagnostics.llm is not None
         assert artifacts.diagnostics.llm.report_status == "fallback"
         assert artifacts.report.summary == []
         assert artifacts.report.action_items == []
@@ -1079,6 +1081,7 @@ class TestProcessInputLlm:
         )
 
         assert reporter.warnings == ["metadata failed"]
+        assert artifacts.diagnostics.llm is not None
         assert artifacts.diagnostics.llm.report_status == "fallback"
         assert "llm_report_sections" in artifacts.diagnostics.stage_durations_sec
         assert "llm_report_metadata" in artifacts.diagnostics.stage_durations_sec
