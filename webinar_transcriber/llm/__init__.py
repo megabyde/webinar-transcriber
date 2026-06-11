@@ -55,14 +55,6 @@ class LlmReportMetadataResult:
     response_metadata: list[dict[str, object]] = field(default_factory=list)
 
 
-@dataclass(frozen=True)
-class LlmReportPolishPlan:
-    """Execution plan for report polishing progress/reporting."""
-
-    section_count: int
-    worker_count: int
-
-
 # ---------------------------------------------------------------------------
 # Provider config
 # ---------------------------------------------------------------------------
@@ -163,7 +155,6 @@ __all__ = [
     "LlmConfigurationError",
     "LlmProcessingError",
     "LlmReportMetadataResult",
-    "LlmReportPolishPlan",
     "LlmSectionPolishResult",
     "build_llm_processor_from_env",
 ]

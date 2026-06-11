@@ -1,4 +1,4 @@
-"""ASR window planning and timeline helpers."""
+"""Whisper inference-window planning over detected speech regions."""
 
 from __future__ import annotations
 
@@ -7,9 +7,7 @@ from typing import TYPE_CHECKING
 from webinar_transcriber.models import InferenceWindow
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
-    from webinar_transcriber.models import SpeechRegion, TimelineSpan
+    from webinar_transcriber.models import SpeechRegion
 
 INFERENCE_WINDOW_DURATION_SEC = 28.0
 INFERENCE_WINDOW_OVERLAP_SEC = 2.0
@@ -43,8 +41,3 @@ def plan_inference_windows(speech_regions: list[SpeechRegion]) -> list[Inference
             window_start_sec = max(window_start_sec, window_end_sec - INFERENCE_WINDOW_OVERLAP_SEC)
 
     return windows
-
-
-def average_duration_sec(items: Sequence[TimelineSpan]) -> float | None:
-    """Return the average duration for timeline-bounded items."""
-    return sum(item.duration_sec for item in items) / len(items) if items else None

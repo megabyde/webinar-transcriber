@@ -13,7 +13,6 @@ import tenacity
 from . import (
     LlmProcessingError,
     LlmReportMetadataResult,
-    LlmReportPolishPlan,
     LlmSectionPolishResult,
 )
 from .prompts import (
@@ -141,12 +140,9 @@ class InstructorLLMProcessor:
             response_metadata=[{"stage": "report_polish", **response_metadata}],
         )
 
-    def report_polish_plan(self, report: ReportDocument) -> LlmReportPolishPlan:
-        """Return concurrency details for report polishing."""
-        return LlmReportPolishPlan(
-            section_count=len(report.sections),
-            worker_count=min(self._threads, max(len(report.sections), 1)),
-        )
+    def polish_worker_count(self, section_count: int) -> int:
+        """Return the worker-pool size for polishing the given number of sections."""
+        return min(self._threads, max(section_count, 1))
 
     def _polish_section_texts(
         self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None
@@ -154,10 +150,9 @@ class InstructorLLMProcessor:
         if not report.sections:
             return []
 
-        plan = self.report_polish_plan(report)
         section_results: dict[int, SectionPolishResult] = {}
 
-        executor = ThreadPoolExecutor(max_workers=plan.worker_count)
+        executor = ThreadPoolExecutor(max_workers=self.polish_worker_count(len(report.sections)))
         futures = {
             executor.submit(self._polish_section, section): index
             for index, section in enumerate(report.sections)

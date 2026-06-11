@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from dataclasses import field as dataclass_field
 from enum import StrEnum
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def _compact_dict_factory(items: list[tuple[str, object]]) -> dict[str, object]:
@@ -44,6 +47,11 @@ class TimelineItem(TimelineSpan):
     """Timeline-bounded model with a stable identifier."""
 
     id: str
+
+
+def average_duration_sec(items: Sequence[TimelineSpan]) -> float | None:
+    """Return the average duration for timeline-bounded items."""
+    return sum(item.duration_sec for item in items) / len(items) if items else None
 
 
 # ---------------------------------------------------------------------------
