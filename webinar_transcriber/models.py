@@ -265,7 +265,7 @@ class ReportDocument:
 # Diagnostics
 # ---------------------------------------------------------------------------
 
-ReportStatus = Literal["disabled", "applied", "fallback"]
+ReportStatus = Literal["applied", "fallback"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -288,18 +288,17 @@ class DiarizationDiagnostics:
 
     speaker_count: int
     turn_count: int
-    average_turn_duration_sec: float | None
     model: str
     system_info: str | None = None
 
 
 @dataclass(slots=True, frozen=True)
 class LlmDiagnostics:
-    """Collected optional LLM diagnostics for one processing run."""
+    """Collected LLM diagnostics for one LLM-enabled processing run."""
 
-    model: str | None = None
-    report_status: ReportStatus = "disabled"
-    report_latency_sec: float | None = None
+    model: str
+    report_status: ReportStatus
+    report_latency_sec: float
     response_metadata: list[dict[str, object]] = dataclass_field(default_factory=list)
 
 
@@ -310,7 +309,7 @@ class Diagnostics:
     status: Literal["succeeded", "failed"] = "succeeded"
     failed_stage: str | None = None
     error: str | None = None
-    llm: LlmDiagnostics = dataclass_field(default_factory=LlmDiagnostics)
+    llm: LlmDiagnostics | None = None
     stage_durations_sec: dict[str, float] = dataclass_field(default_factory=dict)
     item_counts: dict[str, int] = dataclass_field(default_factory=dict)
     asr_pipeline: AsrPipelineDiagnostics | None = None

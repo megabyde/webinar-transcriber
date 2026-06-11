@@ -159,6 +159,10 @@ class WhisperCppTranscriber:
             return "auto"
         return device_name_from_system_info(system_info)
 
+    def __str__(self) -> str:
+        """Return the model and runtime device description."""
+        return f"{self.model_name} | {self.device_name}"
+
     @property
     def threads(self) -> int:
         """Return the configured whisper.cpp thread count."""
