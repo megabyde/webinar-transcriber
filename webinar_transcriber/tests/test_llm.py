@@ -4,8 +4,10 @@ import json
 from threading import Event, Lock
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
+import tenacity
 from pydantic import BaseModel
 
 from webinar_transcriber.llm import (
@@ -155,50 +157,37 @@ class TestInstructorLlmProcessor:
                     )
                 ]
 
-    class FakeClient:
-        def __init__(self, responses) -> None:
-            self.calls: list[dict[str, Any]] = []
-            self._responses = list(responses)
+    @staticmethod
+    def fake_client(*responses: object) -> Mock:
+        """Client double returning (or raising) the queued responses in order."""
+        client = Mock(spec=["create_with_completion"])
+        client.create_with_completion.side_effect = list(responses)
+        return client
 
-        def create_with_completion(self, **kwargs):
-            self.calls.append(kwargs)
-            response = self._responses.pop(0)
-            if isinstance(response, Exception):
-                raise response
-            return response
+    @staticmethod
+    def retry_executing_client(*responses: object) -> Mock:
+        """Client double that runs the real tenacity policy received via max_retries."""
+        attempts = Mock(side_effect=list(responses))
+        client = Mock(attempts=attempts)
+        client.create_with_completion.side_effect = lambda *, max_retries, **kwargs: max_retries(
+            lambda: attempts(**kwargs)
+        )
+        return client
 
-    class FakeRetryPolicy:
-        def __init__(self, *, delays: list[float]) -> None:
-            self._delays = delays
-            self._attempt_index = 0
-
-        def next_delay_for(self, error: BaseException) -> float | None:
-            transient_error = llm_processor._is_transient_provider_error  # noqa: SLF001
-            if not transient_error(error) or self._attempt_index >= len(self._delays):
-                return None
-            delay = self._delays[self._attempt_index]
-            self._attempt_index += 1
-            return delay
-
-    class RetryingFakeClient(FakeClient):
-        def __init__(self, responses) -> None:
-            super().__init__(responses)
-            self.attempt_count = 0
-            self.retry_delays: list[float] = []
-
-        def create_with_completion(self, **kwargs):
-            self.calls.append(kwargs)
-            max_retries = kwargs["max_retries"]
-            assert isinstance(max_retries, TestInstructorLlmProcessor.FakeRetryPolicy)
-            while True:
-                self.attempt_count += 1
-                response = self._responses.pop(0)
-                if not isinstance(response, Exception):
-                    return response
-                delay = max_retries.next_delay_for(response)
-                if delay is None:
-                    raise response
-                self.retry_delays.append(delay)
+    @staticmethod
+    def install_waitless_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+        """Use the production retry policy with the exponential wait removed."""
+        monkeypatch.setattr(
+            "webinar_transcriber.llm.processor._structured_response_retries",
+            lambda: tenacity.Retrying(
+                retry=tenacity.retry_if_exception(
+                    llm_processor._is_transient_provider_error  # noqa: SLF001
+                ),
+                stop=tenacity.stop_after_attempt(3),
+                wait=tenacity.wait_none(),
+                reraise=True,
+            ),
+        )
 
     class ProviderStatusError(Exception):
         def __init__(self, status_code: int) -> None:
@@ -211,7 +200,7 @@ class TestInstructorLlmProcessor:
             self.response = SimpleNamespace(status_code=status_code, headers={})
 
     def test_polishes_report(self) -> None:
-        fake_client = self.FakeClient([
+        fake_client = self.fake_client(
             (
                 SectionTextResponse(
                     tldr="Short recap of the section.",
@@ -229,7 +218,7 @@ class TestInstructorLlmProcessor:
                 ),
                 self.FakeCompletion(),
             ),
-        ])
+        )
 
         processor = InstructorLLMProcessor(
             client=fake_client, provider_name="openai", model_name="gpt-test", threads=6
@@ -268,12 +257,13 @@ class TestInstructorLlmProcessor:
         ]
         assert metadata_result.response_metadata == [{"stage": "report_polish"}]
         assert report.sections[0].transcript_text == "Agenda review and project status update."
-        assert len(fake_client.calls) == 2
-        assert "max_retries" in fake_client.calls[0]
-        assert fake_client.calls[0]["timeout"] == 120
-        assert fake_client.calls[0]["response_model"] is SectionTextResponse
-        assert fake_client.calls[1]["response_model"] is ReportPolishResponse
-        messages = fake_client.calls[0]["messages"]
+        calls = fake_client.create_with_completion.call_args_list
+        assert len(calls) == 2
+        assert "max_retries" in calls[0].kwargs
+        assert calls[0].kwargs["timeout"] == 120
+        assert calls[0].kwargs["response_model"] is SectionTextResponse
+        assert calls[1].kwargs["response_model"] is ReportPolishResponse
+        messages = calls[0].kwargs["messages"]
         assert json.loads(messages[1]["content"]) == {
             "id": "section-1",
             "title": "Old title",
@@ -346,7 +336,7 @@ class TestInstructorLlmProcessor:
         }
 
     def test_rejects_unknown_report_section_id(self) -> None:
-        fake_client = self.FakeClient([
+        fake_client = self.fake_client(
             (
                 SectionTextResponse(
                     tldr="Agenda recap.", transcript_text="Agenda review and project status update."
@@ -359,7 +349,7 @@ class TestInstructorLlmProcessor:
                 ),
                 self.FakeCompletion(),
             ),
-        ])
+        )
 
         processor = InstructorLLMProcessor(
             client=fake_client, provider_name="openai", model_name="gpt-test", threads=6
@@ -387,7 +377,7 @@ class TestInstructorLlmProcessor:
             )
 
     def test_rejects_non_matching_schema(self) -> None:
-        fake_client = self.FakeClient([(object(), self.FakeCompletion())])
+        fake_client = self.fake_client((object(), self.FakeCompletion()))
 
         processor = InstructorLLMProcessor(
             client=fake_client, provider_name="openai", model_name="gpt-test", threads=6
@@ -414,7 +404,7 @@ class TestInstructorLlmProcessor:
             )
 
     def test_wraps_client_errors(self) -> None:
-        fake_client = self.FakeClient([RuntimeError("boom")])
+        fake_client = self.fake_client(RuntimeError("boom"))
         processor = InstructorLLMProcessor(
             client=fake_client, provider_name="openai", model_name="gpt-test", threads=6
         )
@@ -491,7 +481,7 @@ class TestInstructorLlmProcessor:
         assert progress_updates == [1, 1]
 
     def test_passes_request_kwargs_to_client(self) -> None:
-        fake_client = self.FakeClient([(ReportPolishResponse(), self.FakeCompletion())])
+        fake_client = self.fake_client((ReportPolishResponse(), self.FakeCompletion()))
         processor = InstructorLLMProcessor(
             client=fake_client,
             provider_name="anthropic",
@@ -503,27 +493,25 @@ class TestInstructorLlmProcessor:
 
         processor.polish_report_metadata(report, section_transcripts={})
 
-        assert len(fake_client.calls) == 1
-        assert fake_client.calls[0]["response_model"] is ReportPolishResponse
-        assert "max_retries" in fake_client.calls[0]
-        assert fake_client.calls[0]["timeout"] == 120
-        assert fake_client.calls[0]["max_tokens"] == 4096
-        messages = fake_client.calls[0]["messages"]
+        fake_client.create_with_completion.assert_called_once()
+        call_kwargs = fake_client.create_with_completion.call_args.kwargs
+        assert call_kwargs["response_model"] is ReportPolishResponse
+        assert "max_retries" in call_kwargs
+        assert call_kwargs["timeout"] == 120
+        assert call_kwargs["max_tokens"] == 4096
+        messages = call_kwargs["messages"]
         assert messages[0]["role"] == "system"
         assert messages[1]["role"] == "user"
 
-    def test_retries_section_transient_provider_error_with_backoff(self, monkeypatch) -> None:
-        monkeypatch.setattr(
-            "webinar_transcriber.llm.processor._structured_response_retries",
-            lambda: self.FakeRetryPolicy(delays=[1.0, 2.0]),
-        )
-        fake_client = self.RetryingFakeClient([
+    def test_retries_section_transient_provider_error(self, monkeypatch) -> None:
+        self.install_waitless_retries(monkeypatch)
+        fake_client = self.retry_executing_client(
             self.ProviderStatusError(429),
             (
                 SectionTextResponse(tldr="Agenda recap.", transcript_text="Agenda review."),
                 self.FakeCompletion(),
             ),
-        ])
+        )
         processor = InstructorLLMProcessor(
             client=fake_client, provider_name="openai", model_name="gpt-test", threads=6
         )
@@ -544,18 +532,14 @@ class TestInstructorLlmProcessor:
 
         result = processor.polish_report_sections_with_progress(report)
 
-        assert fake_client.retry_delays == [1.0]
-        assert len(fake_client.calls) == 1
-        assert fake_client.attempt_count == 2
+        assert fake_client.create_with_completion.call_count == 1
+        assert fake_client.attempts.call_count == 2
         assert result.section_transcripts == {"section-1": "Agenda review."}
         assert result.warnings == []
 
     def test_does_not_retry_non_transient_provider_error(self, monkeypatch) -> None:
-        monkeypatch.setattr(
-            "webinar_transcriber.llm.processor._structured_response_retries",
-            lambda: self.FakeRetryPolicy(delays=[1.0, 2.0]),
-        )
-        fake_client = self.RetryingFakeClient([self.ResponseProviderStatusError(400)])
+        self.install_waitless_retries(monkeypatch)
+        fake_client = self.retry_executing_client(self.ResponseProviderStatusError(400))
         processor = InstructorLLMProcessor(
             client=fake_client, provider_name="openai", model_name="gpt-test", threads=6
         )
@@ -566,8 +550,7 @@ class TestInstructorLlmProcessor:
         ):
             processor.polish_report_metadata(report, section_transcripts={})
 
-        assert fake_client.retry_delays == []
-        assert fake_client.attempt_count == 1
+        assert fake_client.attempts.call_count == 1
 
     def test_reports_section_progress_in_completion_order_but_preserves_output_order(self) -> None:
         section_2_done = Event()
@@ -630,15 +613,13 @@ class TestInstructorLlmProcessor:
         }
 
     def test_section_prompt_instructs_model_not_to_reproduce_song_lyrics(self) -> None:
-        fake_client = self.FakeClient([
-            (
-                SectionTextResponse(
-                    tldr="The speaker pauses for a music break.",
-                    transcript_text="The speaker pauses.\n\n[music break]\n\nThe session resumes.",
-                ),
-                self.FakeCompletion(),
-            )
-        ])
+        fake_client = self.fake_client((
+            SectionTextResponse(
+                tldr="The speaker pauses for a music break.",
+                transcript_text="The speaker pauses.\n\n[music break]\n\nThe session resumes.",
+            ),
+            self.FakeCompletion(),
+        ))
         processor = InstructorLLMProcessor(
             client=fake_client, provider_name="openai", model_name="gpt-test", threads=6
         )
@@ -661,7 +642,7 @@ class TestInstructorLlmProcessor:
 
         processor.polish_report_sections_with_progress(report)
 
-        messages = fake_client.calls[0]["messages"]
+        messages = fake_client.create_with_completion.call_args.kwargs["messages"]
         system_prompt = messages[0]["content"]
         compact_prompt = " ".join(system_prompt.split())
         assert "do not reproduce or rewrite the lyrics" in compact_prompt
