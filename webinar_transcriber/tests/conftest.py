@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import perf_counter
+from types import SimpleNamespace
 from typing import Self
 
 import numpy as np
@@ -135,26 +136,10 @@ class FakeContextContainer:
         return None
 
 
-class FakeSherpaSileroVadConfig:
-    def __init__(self, *, window_size: int) -> None:
-        self.model = ""
-        self.threshold = 0.5
-        self.min_speech_duration = 0.25
-        self.min_silence_duration = 0.5
-        self.window_size = window_size
-
-
-class FakeSherpaVadModelConfig:
-    def __init__(self, *, window_size: int) -> None:
-        self.silero_vad = FakeSherpaSileroVadConfig(window_size=window_size)
-        self.sample_rate = 16_000
-        self.num_threads = 1
-
-
 class FakeSherpaVoiceActivityDetector:
     def __init__(
         self,
-        config: FakeSherpaVadModelConfig,
+        config: SimpleNamespace,
         *,
         buffer_size_in_seconds: int,
         segments: list[object],
@@ -188,11 +173,12 @@ class FakeSherpaModule:
         self._window_size = window_size
         self.detectors: list[FakeSherpaVoiceActivityDetector] = []
 
-    def VadModelConfig(self) -> FakeSherpaVadModelConfig:  # noqa: N802
-        return FakeSherpaVadModelConfig(window_size=self._window_size)
+    def VadModelConfig(self) -> SimpleNamespace:  # noqa: N802
+        # Production sets every config field it reads; only window_size needs a fake value.
+        return SimpleNamespace(silero_vad=SimpleNamespace(window_size=self._window_size))
 
     def VoiceActivityDetector(  # noqa: N802
-        self, config: FakeSherpaVadModelConfig, *, buffer_size_in_seconds: int
+        self, config: SimpleNamespace, *, buffer_size_in_seconds: int
     ) -> FakeSherpaVoiceActivityDetector:
         detector = FakeSherpaVoiceActivityDetector(
             config, buffer_size_in_seconds=buffer_size_in_seconds, segments=self._segments
