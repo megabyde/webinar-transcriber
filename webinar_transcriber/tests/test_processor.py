@@ -207,7 +207,7 @@ class TestProcessInput:
         assert artifacts.layout.json_report_path.exists()
         assert artifacts.layout.speech_regions_path.exists()
         assert artifacts.layout.decoded_windows_path.exists()
-        assert not artifacts.layout.transcription_audio_path().exists()
+        assert not artifacts.layout.transcription_audio_path.exists()
         assert not artifacts.layout.diarization_path.exists()
 
         markdown = artifacts.layout.markdown_report_path.read_text(encoding="utf-8")
@@ -477,7 +477,7 @@ class TestProcessInput:
             input_path, output_dir=tmp_path / "run", transcriber=FakeTranscriber(), keep_audio=True
         )
 
-        kept_audio_path = artifacts.layout.transcription_audio_path()
+        kept_audio_path = artifacts.layout.transcription_audio_path
         assert kept_audio_path.exists()
         assert kept_audio_path.suffix == ".mp3"
         assert len(preserve_calls) == 1
@@ -495,7 +495,7 @@ class TestProcessInput:
             keep_audio=True,
         )
 
-        kept_audio_path = artifacts.layout.transcription_audio_path()
+        kept_audio_path = artifacts.layout.transcription_audio_path
         assert kept_audio_path.exists()
         assert kept_audio_path.suffix == ".mp3"
         assert artifacts.media_asset.path.endswith("sample-audio.mp3")

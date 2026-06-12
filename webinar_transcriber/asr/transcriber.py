@@ -224,7 +224,7 @@ class WhisperCppTranscriber:
         )
         forced_language = self._language
         language_hint: str | None = forced_language
-        carryover_prompt: str | None = None
+        carryover_prompt = ""
         decoded_windows: list[DecodedWindow] = []
         decoded_segment_count = 0
         previous_region_index: int | None = None
@@ -240,7 +240,7 @@ class WhisperCppTranscriber:
                 language_hint=language_hint,
                 warning_callback=warning_callback,
             )
-            decoded_windows.append(replace(decoded_window, input_prompt=carryover_prompt))
+            decoded_windows.append(replace(decoded_window, input_prompt=carryover_prompt or None))
             decoded_segment_count += len(decoded_window.segments)
             next_carryover = build_prompt_carryover(decoded_window)
             if forced_language is None:
@@ -293,7 +293,7 @@ class WhisperCppTranscriber:
         audio_samples: np.ndarray,
         window: InferenceWindow,
         *,
-        prompt: str | None,
+        prompt: str,
         language_hint: str | None,
         warning_callback: Callable[[str], None] | None,
     ) -> DecodedWindow:
@@ -320,7 +320,7 @@ class WhisperCppTranscriber:
                     )
 
         transcribe_kwargs: dict[str, str] = {}
-        if prompt is not None:
+        if prompt:
             transcribe_kwargs["initial_prompt"] = prompt
         if detected_language is not None:
             transcribe_kwargs["language"] = detected_language

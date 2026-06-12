@@ -85,14 +85,12 @@ class InstructorLLMProcessor:
         model_name: str,
         threads: int,
         request_kwargs: Mapping[str, object] = _EMPTY_REQUEST_KWARGS,
-        report_char_budget: int = REPORT_POLISH_TOTAL_CHAR_BUDGET,
     ) -> None:
         """Initialize one provider-backed Instructor processor."""
         self._client = client
         self._provider_name = provider_name
         self._model_name = model_name
         self._request_kwargs = {"timeout": _DEFAULT_REQUEST_TIMEOUT_SEC, **request_kwargs}
-        self._report_char_budget = report_char_budget
         self._threads = threads
 
     @property
@@ -123,7 +121,7 @@ class InstructorLLMProcessor:
         """Return polished summary, action items, and section titles."""
         payload = build_report_polish_payload(
             report,
-            total_char_budget=self._report_char_budget,
+            total_char_budget=REPORT_POLISH_TOTAL_CHAR_BUDGET,
             section_transcripts=section_transcripts,
         )
         parsed, response_metadata = self._create_structured_response(
