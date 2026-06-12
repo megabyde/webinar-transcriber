@@ -84,17 +84,13 @@ def _trim_duplicate_prefix(previous_text: str, text: str) -> str | None:
     for overlap_word_count in range(max_overlap, _MIN_DUPLICATE_OVERLAP_WORDS - 1, -1):
         previous_suffix = previous_words[-overlap_word_count:]
         current_prefix = current_words[:overlap_word_count]
-        if _extract_words(previous_suffix) != _extract_words(current_prefix):
+        if [w for w, _, _ in previous_suffix] != [w for w, _, _ in current_prefix]:
             continue
         if overlap_word_count == len(current_words):
             return None
         trim_end = current_prefix[-1][2]
         return text[trim_end:].lstrip(" \t\r\n,.;:!?-")
     return text
-
-
-def _extract_words(spans: list[tuple[str, int, int]]) -> list[str]:
-    return [word for word, _start, _end in spans]
 
 
 def _word_spans(text: str) -> list[tuple[str, int, int]]:

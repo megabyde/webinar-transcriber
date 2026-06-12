@@ -22,11 +22,7 @@ from webinar_transcriber.models import (
     VideoAsset,
     average_duration_sec,
 )
-from webinar_transcriber.normalized_audio import (
-    load_normalized_audio,
-    preserve_transcription_audio,
-    write_transcription_audio,
-)
+from webinar_transcriber.normalized_audio import load_normalized_audio, write_transcription_audio
 from webinar_transcriber.paths import create_run_layout
 from webinar_transcriber.segmentation import detect_speech_regions, normalized_audio_duration
 from webinar_transcriber.structure import align_by_time, build_report
@@ -156,7 +152,9 @@ def process_input(
                 if keep_audio:
                     with ctx.stage("save_transcription_audio", "Saving transcription audio") as st:
                         preserved_audio_path = layout.transcription_audio_path
-                        preserve_transcription_audio(audio_path, preserved_audio_path)
+                        write_transcription_audio(
+                            audio_path, preserved_audio_path, audio_format="mp3"
+                        )
                         st.update(detail=preserved_audio_path.name)
 
             report = _run_report_phase(

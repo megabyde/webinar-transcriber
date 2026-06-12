@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from .carryover import build_prompt_carryover
 from .config import (
     ASR_BACKEND_NAME,
     WHISPER_CPP_MODEL_EXAMPLE,
     WHISPER_CPP_MODEL_FILENAME,
     default_asr_threads,
 )
-from .transcriber import AsrProcessingError, WhisperCppTranscriber, device_name_from_system_info
+from .transcriber import AsrProcessingError, WhisperCppTranscriber
 from .windows import plan_inference_windows
 
 __all__ = [
@@ -18,8 +17,6 @@ __all__ = [
     "WHISPER_CPP_MODEL_FILENAME",
     "AsrProcessingError",
     "WhisperCppTranscriber",
-    "build_prompt_carryover",
     "default_asr_threads",
-    "device_name_from_system_info",
     "plan_inference_windows",
 ]
