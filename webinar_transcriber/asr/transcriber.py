@@ -210,7 +210,6 @@ class WhisperCppTranscriber:
         audio_samples: np.ndarray,
         windows: list[InferenceWindow],
         *,
-        language: str | None = None,
         progress_callback: Callable[[int, int], None] | None = None,
         warning_callback: Callable[[str], None] | None = None,
     ) -> list[DecodedWindow]:
@@ -223,7 +222,7 @@ class WhisperCppTranscriber:
         ordered_windows = sorted(
             windows, key=lambda item: (item.start_sec, item.end_sec, item.region_index, item.id)
         )
-        forced_language = language.strip() if language else self._language
+        forced_language = self._language
         language_hint: str | None = forced_language
         carryover_prompt: str | None = None
         decoded_windows: list[DecodedWindow] = []

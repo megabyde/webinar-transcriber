@@ -227,7 +227,6 @@ class FakeTranscriber(WhisperCppTranscriber):
     ) -> None:
         super().__init__(model_name="test-model", threads=4)
         self._detected_language = detected_language
-        self.language_hints: list[str | None] = []
         self.windows_seen: list[InferenceWindow] = []
         self._segments = segments or [
             TranscriptSegment(
@@ -260,12 +259,10 @@ class FakeTranscriber(WhisperCppTranscriber):
         audio_samples: np.ndarray,
         windows: list[InferenceWindow],
         *,
-        language: str | None = None,
         progress_callback: Callable[[int, int], None] | None = None,
         warning_callback: Callable[[str], None] | None = None,
     ) -> list[DecodedWindow]:
         del audio_samples, warning_callback
-        self.language_hints.append(language)
         self.windows_seen = list(windows)
         if progress_callback is not None:
             for index, _window in enumerate(windows, start=1):

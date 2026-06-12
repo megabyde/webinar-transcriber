@@ -8,8 +8,6 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from rich.console import Console
-
 from webinar_transcriber.asr import ASR_BACKEND_NAME, WhisperCppTranscriber, plan_inference_windows
 from webinar_transcriber.diagnostics import write_run_diagnostics
 from webinar_transcriber.diarization import DIARIZATION_MODEL, assign_speakers
@@ -34,7 +32,6 @@ from webinar_transcriber.segmentation import detect_speech_regions, normalized_a
 from webinar_transcriber.structure import align_by_time, build_report
 from webinar_transcriber.transcript.normalize import normalize_transcription
 from webinar_transcriber.transcript.reconcile import reconcile_decoded_windows
-from webinar_transcriber.ui import StageReporter
 from webinar_transcriber.video import (
     detect_scenes,
     estimated_scene_sample_count,
@@ -57,7 +54,7 @@ if TYPE_CHECKING:
         TranscriptionResult,
     )
     from webinar_transcriber.paths import RunLayout
-    from webinar_transcriber.ui import StageHandle
+    from webinar_transcriber.ui import StageHandle, StageReporter
 
 
 @dataclass(frozen=True)
@@ -106,25 +103,20 @@ def process_input(
     input_path: Path,
     *,
     threads: int,
+    transcriber: WhisperCppTranscriber,
+    reporter: StageReporter,
     output_dir: Path | None = None,
-    asr_model: str | None = None,
-    language: str | None = None,
     keep_audio: bool = False,
     llm_processor: InstructorLLMProcessor | None = None,
     diarizer: SherpaOnnxDiarizer | None = None,
     diarization_speaker_count: int | None = None,
-    transcriber: WhisperCppTranscriber | None = None,
-    reporter: StageReporter | None = None,
 ) -> ProcessArtifacts:
     """Process a single audio or video file into report artifacts.
 
     Returns:
         ProcessArtifacts: The completed processing artifacts.
     """
-    ctx = RunContext(reporter=reporter or _silent_reporter())
-    transcriber = transcriber or WhisperCppTranscriber(
-        model_name=asr_model, threads=threads, language=language
-    )
+    ctx = RunContext(reporter=reporter)
 
     with transcriber as active_transcriber:
         layout = create_run_layout(input_path=input_path, output_dir=output_dir)
@@ -157,7 +149,6 @@ def process_input(
                     layout=layout,
                     ctx=ctx,
                     threads=threads,
-                    language=language,
                     diarizer=diarizer,
                     diarization_speaker_count=diarization_speaker_count,
                 )
@@ -204,7 +195,6 @@ def _run_asr_pipeline(
     layout: RunLayout,
     ctx: RunContext,
     threads: int,
-    language: str | None,
     diarizer: SherpaOnnxDiarizer | None,
     diarization_speaker_count: int | None,
 ) -> TranscriptionResult:
@@ -254,7 +244,6 @@ def _run_asr_pipeline(
         decoded_windows = transcriber.transcribe_inference_windows(
             audio_samples,
             windows,
-            language=language,
             progress_callback=on_transcribe_progress,
             warning_callback=ctx.record_warning,
         )
@@ -516,10 +505,6 @@ def _rtf(audio_sec: float, elapsed_sec: float) -> str:
 
 def _join_detail(*parts: str | None) -> str:
     return " | ".join(part for part in parts if part)
-
-
-def _silent_reporter() -> StageReporter:
-    return StageReporter(console=Console(quiet=True))
 
 
 __all__ = [
