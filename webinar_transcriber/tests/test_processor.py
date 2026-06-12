@@ -227,7 +227,7 @@ class TestProcessInput:
             output_dir=tmp_path / "diarized-run",
             transcriber=transcriber,
             diarization_speaker_count=4,
-            diarizer=diarizer,  # type: ignore
+            diarizer=diarizer,
             reporter=reporter,
         )
 
@@ -305,7 +305,7 @@ class TestProcessInput:
             output_dir=tmp_path / "diarized-default-run",
             transcriber=transcriber,
             diarization_speaker_count=1,
-            diarizer=diarizer,  # type: ignore
+            diarizer=diarizer,
             reporter=reporter,
         )
 

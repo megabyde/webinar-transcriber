@@ -14,13 +14,9 @@ class OutputDirectoryExistsError(FileExistsError):
 
 
 def _slugify_stem(path: Path) -> str:
-    stem = (
-        re
-        .sub(r"[^\w]+", "-", unicodedata.normalize("NFKC", path.stem), flags=re.UNICODE)
-        .strip("_-")
-        .lower()
-    )
-    return stem or "input"
+    normalized_stem = unicodedata.normalize("NFKC", path.stem)
+    slug = re.sub(r"[^\w]+", "-", normalized_stem).strip("_-").lower()
+    return slug or "input"
 
 
 @dataclass(slots=True, frozen=True)
