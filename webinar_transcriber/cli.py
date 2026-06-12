@@ -10,6 +10,7 @@ from webinar_transcriber import __version__
 from webinar_transcriber.asr import (
     WHISPER_CPP_MODEL_FILENAME,
     AsrProcessingError,
+    WhisperCppTranscriber,
     default_asr_threads,
 )
 from webinar_transcriber.diarization import DiarizationProcessingError, SherpaOnnxDiarizer
@@ -102,16 +103,18 @@ def main(
         llm_processor = build_llm_processor_from_env(threads=threads) if llm else None
         for input_path in input_paths:
             diarizer = SherpaOnnxDiarizer(threads=threads) if diarize else None
+            transcriber = WhisperCppTranscriber(
+                model_name=asr_model, threads=threads, language=language
+            )
             process_input(
                 input_path=input_path,
                 output_dir=output_dir,
                 threads=threads,
-                asr_model=asr_model,
-                language=language,
                 keep_audio=keep_audio,
                 llm_processor=llm_processor,
                 diarizer=diarizer,
                 diarization_speaker_count=diarize_speakers,
+                transcriber=transcriber,
                 reporter=reporter,
             )
     except KeyboardInterrupt:

@@ -62,17 +62,17 @@ class TestCli:
             input_path=input_path,
             output_dir=None,
             threads=default_asr_threads(),
-            asr_model="large-v3-turbo",
-            language=None,
             keep_audio=False,
             llm_processor=None,
             diarizer=None,
             diarization_speaker_count=None,
+            transcriber=ANY,
             reporter=ANY,
         )
         assert process_input_mock.call_args.kwargs["reporter"].__class__.__name__ == (
             "StageReporter"
         )
+        assert process_input_mock.call_args.kwargs["transcriber"].model_name == "large-v3-turbo"
 
     def test_runs_multiple_inputs_sequentially(self, tmp_path) -> None:
         runner = CliRunner()
@@ -115,6 +115,9 @@ class TestCli:
             patch(
                 "webinar_transcriber.cli.SherpaOnnxDiarizer", return_value=diarizer
             ) as diarizer_mock,
+            patch(
+                "webinar_transcriber.cli.WhisperCppTranscriber", return_value=object()
+            ) as transcriber_mock,
         ):
             result = runner.invoke(
                 main,
@@ -139,13 +142,15 @@ class TestCli:
             input_path=input_path,
             output_dir=None,
             threads=3,
-            asr_model="models/whisper-cpp/custom.bin",
-            language="en",
             keep_audio=True,
             llm_processor=llm_processor,
             diarizer=diarizer,
             diarization_speaker_count=4,
+            transcriber=ANY,
             reporter=ANY,
+        )
+        transcriber_mock.assert_called_once_with(
+            model_name="models/whisper-cpp/custom.bin", threads=3, language="en"
         )
         build_llm_processor_mock.assert_called_once_with(threads=3)
         diarizer_mock.assert_called_once_with(threads=3)

@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from rich.console import Console
 
-from webinar_transcriber.asr import plan_inference_windows
+from webinar_transcriber.asr import WhisperCppTranscriber, plan_inference_windows
 from webinar_transcriber.diagnostics import write_run_diagnostics
 from webinar_transcriber.llm import (
     LlmProcessingError,
@@ -67,23 +67,23 @@ def silent_reporter() -> StageReporter:
 def process_input(
     *args: Any,
     threads: int = 4,
-    asr_model: str | None = None,
-    language: str | None = None,
     keep_audio: bool = False,
     llm_processor: InstructorLLMProcessor | None = None,
     diarize_speakers: int | None = None,
     diarizer: SherpaOnnxDiarizer | None = None,
+    transcriber: WhisperCppTranscriber | None = None,
+    reporter: StageReporter | None = None,
     **kwargs: Any,
 ) -> ProcessArtifacts:
     return _process_input(
         *args,
         threads=threads,
-        asr_model=asr_model,
-        language=language,
         keep_audio=keep_audio,
         llm_processor=llm_processor,
         diarizer=diarizer,
         diarization_speaker_count=diarize_speakers,
+        transcriber=transcriber or FakeTranscriber(),
+        reporter=reporter or silent_reporter(),
         **kwargs,
     )
 
@@ -174,11 +174,7 @@ def run_basic_audio_pipeline(
     install_pipeline_runtime(monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime())
 
     artifacts = process_input(
-        input_path,
-        output_dir=tmp_path / "run",
-        language="en",
-        transcriber=transcriber,
-        reporter=reporter,
+        input_path, output_dir=tmp_path / "run", transcriber=transcriber, reporter=reporter
     )
     return artifacts, reporter, transcriber
 
@@ -187,9 +183,8 @@ class TestProcessInput:
     def test_processes_audio_into_report_sections(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        artifacts, reporter, transcriber = run_basic_audio_pipeline(tmp_path, monkeypatch)
+        artifacts, reporter, _transcriber = run_basic_audio_pipeline(tmp_path, monkeypatch)
 
-        assert transcriber.language_hints == ["en"]
         assert reporter.completed is artifacts
         assert artifacts.report.detected_language == "en"
         assert artifacts.report.summary == []
@@ -569,40 +564,18 @@ class TestProcessInput:
 
         transcriber = CloseTrackingTranscriber()
         monkeypatch.setattr(
-            "webinar_transcriber.processor.WhisperCppTranscriber",
-            lambda *args, **kwargs: transcriber,
-        )
-        monkeypatch.setattr(
             "webinar_transcriber.processor._run_asr_pipeline",
             Mock(side_effect=RuntimeError("asr failed")),
         )
 
         with pytest.raises(RuntimeError, match="asr failed"):
-            process_input(FIXTURE_DIR / "sample-audio.mp3", output_dir=tmp_path / "run")
+            process_input(
+                FIXTURE_DIR / "sample-audio.mp3",
+                output_dir=tmp_path / "run",
+                transcriber=transcriber,
+            )
 
         assert transcriber.close_calls == 1
-
-    def test_passes_threads_to_owned_transcriber(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        input_path = FIXTURE_DIR / "sample-audio.mp3"
-        install_pipeline_runtime(
-            monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime()
-        )
-        transcriber = FakeTranscriber()
-        transcriber_kwargs: dict[str, object] = {}
-
-        def transcriber_factory(*_args: object, **kwargs: object) -> FakeTranscriber:
-            transcriber_kwargs.update(kwargs)
-            return transcriber
-
-        monkeypatch.setattr(
-            "webinar_transcriber.processor.WhisperCppTranscriber", transcriber_factory
-        )
-
-        process_input(input_path, output_dir=tmp_path / "run", threads=3)
-
-        assert transcriber_kwargs["threads"] == 3
 
     def test_persists_intermediate_artifacts_on_failure(self, tmp_path: Path) -> None:
         class OneWindowTranscriber(FakeTranscriber):
