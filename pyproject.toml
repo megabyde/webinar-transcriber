@@ -198,6 +198,9 @@ select = [
     "RUF",
 ]
 ignore = [
+    # Docstring presence is a judgment call; write docstrings where they add information
+    # beyond the signature, not to satisfy a checker
+    "D1",
     # Public CLI/protocol/orchestration APIs intentionally take structured inputs
     "PLR0913",
     # The processor waterfall is intentionally one orchestrator function
