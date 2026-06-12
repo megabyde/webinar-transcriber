@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from itertools import groupby
 from pathlib import Path
 
 from webinar_transcriber.models import (
-    AlignmentBlock,
     MediaAsset,
     ReportDocument,
     ReportSection,
@@ -14,53 +14,19 @@ from webinar_transcriber.models import (
     SceneFrame,
     TranscriptionResult,
     TranscriptSegment,
+    VideoAsset,
 )
 
 AUDIO_SECTION_BREAK_GAP_SEC = 5.0
 TITLE_WORD_LIMIT = 6
 
 
-def align_by_time(
-    transcript_segments: list[TranscriptSegment],
-    scenes: list[Scene],
-    scene_frames: list[SceneFrame],
-) -> list[AlignmentBlock]:
-    """Assign transcript segments to scenes using midpoint inclusion.
-
-    Returns:
-        list[AlignmentBlock]: The scene-aligned transcript blocks.
-    """
-    frame_by_scene = {frame.scene_id: frame for frame in scene_frames}
-    blocks: list[AlignmentBlock] = []
-
-    for index, scene in enumerate(scenes, start=1):
-        scene_segments = [
-            segment
-            for segment in transcript_segments
-            if scene.start_sec <= segment.midpoint < scene.end_sec
-        ]
-        transcript_text = " ".join(segment.text for segment in scene_segments).strip()
-        frame = frame_by_scene.get(scene.id)
-        blocks.append(
-            AlignmentBlock(
-                id=f"block-{index}",
-                start_sec=scene.start_sec,
-                end_sec=scene.end_sec,
-                transcript_segment_ids=[segment.id for segment in scene_segments],
-                transcript_text=transcript_text,
-                scene_id=scene.id,
-                frame_id=frame.id if frame else None,
-            )
-        )
-
-    return blocks
-
-
 def build_report(
     media_asset: MediaAsset,
     transcription: TranscriptionResult,
     *,
-    alignment_blocks: list[AlignmentBlock] | None = None,
+    scenes: list[Scene] | None = None,
+    scene_frames: list[SceneFrame] | None = None,
     warnings: list[str] | None = None,
 ) -> ReportDocument:
     """Build a report document from media metadata and transcript segments.
@@ -68,13 +34,10 @@ def build_report(
     Returns:
         ReportDocument: The structured report document.
     """
-    transcript_segments = transcription.segments
-    if alignment_blocks is not None:
-        sections = build_sections_from_blocks(
-            alignment_blocks, transcript_segments=transcript_segments
-        )
+    if isinstance(media_asset, VideoAsset):
+        sections = build_video_sections(transcription.segments, scenes or [], scene_frames or [])
     else:
-        sections = build_audio_sections(transcript_segments)
+        sections = build_audio_sections(transcription.segments)
     return ReportDocument(
         title=title_from_path(media_asset.path),
         source_file=media_asset.path,
@@ -87,24 +50,52 @@ def build_report(
     )
 
 
-def build_sections_from_blocks(
-    blocks: list[AlignmentBlock], *, transcript_segments: list[TranscriptSegment]
+def build_video_sections(
+    segments: list[TranscriptSegment],
+    scenes: list[Scene],
+    scene_frames: list[SceneFrame],
 ) -> list[ReportSection]:
-    """Build report sections from scene-aligned transcript blocks."""
-    segment_by_id = {segment.id: segment for segment in transcript_segments}
+    """Build report sections by assigning transcript segments to scenes via midpoint inclusion.
+
+    Returns:
+        list[ReportSection]: One scene-aligned section per scene, in timeline order.
+    """
+    frame_by_scene = {frame.scene_id: frame for frame in scene_frames}
     sections: list[ReportSection] = []
 
-    for index, block in enumerate(blocks, start=1):
-        block_segments = [
-            segment_by_id[segment_id]
-            for segment_id in block.transcript_segment_ids
-            if segment_id in segment_by_id and segment_by_id[segment_id].text.strip()
+    for scene in scenes:
+        scene_segments = [
+            segment for segment in segments if scene.start_sec <= segment.midpoint < scene.end_sec
         ]
+        transcript_text = " ".join(segment.text for segment in scene_segments).strip()
+        meaningful_segments = [segment for segment in scene_segments if segment.text.strip()]
+        frame = frame_by_scene.get(scene.id)
+        title = derive_title(transcript_text, fallback="")
+        if meaningful_segments:
+            sections.append(
+                _draft_section(
+                    meaningful_segments,
+                    title=title,
+                    scene_id=scene.id,
+                    frame_id=frame.id if frame else None,
+                )
+            )
+            continue
+        # Keep scene-backed sections even when no transcript segments aligned, so frame/title
+        # context is preserved for scene-only blocks.
         sections.append(
-            section_from_block(block, block_segments=block_segments, section_index=index)
+            ReportSection(
+                id="",
+                title=title,
+                start_sec=scene.start_sec,
+                end_sec=scene.end_sec,
+                transcript_text=transcript_text,
+                scene_id=scene.id,
+                frame_id=frame.id if frame else None,
+            )
         )
 
-    return sections
+    return _number_sections(sections, fallback_title_prefix="Slide")
 
 
 def build_audio_sections(segments: list[TranscriptSegment]) -> list[ReportSection]:
@@ -118,14 +109,14 @@ def build_audio_sections(segments: list[TranscriptSegment]) -> list[ReportSectio
 
     for segment in meaningful_segments:
         if should_start_new_audio_section(current_segments, segment):
-            sections.append(_audio_section_from_segments(current_segments, len(sections) + 1))
+            sections.append(_audio_draft_section(current_segments))
             current_segments = []
         current_segments.append(segment)
 
     if current_segments:
-        sections.append(_audio_section_from_segments(current_segments, len(sections) + 1))
+        sections.append(_audio_draft_section(current_segments))
 
-    return sections
+    return _number_sections(sections, fallback_title_prefix="Section")
 
 
 def should_start_new_audio_section(
@@ -140,59 +131,42 @@ def should_start_new_audio_section(
     return gap_duration >= AUDIO_SECTION_BREAK_GAP_SEC
 
 
-def _audio_section_from_segments(
-    segments: list[TranscriptSegment], section_index: int
-) -> ReportSection:
+def _audio_draft_section(segments: list[TranscriptSegment]) -> ReportSection:
     text = next((segment.text for segment in segments if segment.text.strip()), "")
-    title = derive_title(text, fallback=f"Section {section_index}", ellipsis=True)
-    return _section_from_segments(segments, section_index=section_index, title=title)
+    title = derive_title(text, fallback="", ellipsis=True)
+    return _draft_section(segments, title=title)
 
 
-def _section_from_segments(
+def _draft_section(
     segments: list[TranscriptSegment],
     *,
-    section_index: int,
     title: str,
     scene_id: str | None = None,
     frame_id: str | None = None,
 ) -> ReportSection:
-    transcript_text = _transcript_text_from_segments(segments)
     return ReportSection(
-        id=f"section-{section_index}",
+        id="",
         title=title,
         start_sec=segments[0].start_sec,
         end_sec=segments[-1].end_sec,
-        transcript_text=transcript_text,
+        transcript_text=_transcript_text_from_segments(segments),
         scene_id=scene_id,
         frame_id=frame_id,
     )
 
 
-def section_from_block(
-    block: AlignmentBlock, *, block_segments: list[TranscriptSegment], section_index: int
-) -> ReportSection:
-    """Build one report section from one scene-alignment block."""
-    title = derive_title(block.transcript_text, fallback=f"Slide {section_index}")
-    if not block_segments:
-        # Keep scene-backed sections even when no transcript segments aligned, so frame/title
-        # context is preserved for scene-only blocks.
-        return ReportSection(
-            id=f"section-{section_index}",
-            title=title,
-            start_sec=block.start_sec,
-            end_sec=block.end_sec,
-            transcript_text=block.transcript_text,
-            scene_id=block.scene_id,
-            frame_id=block.frame_id,
+def _number_sections(
+    sections: list[ReportSection], *, fallback_title_prefix: str
+) -> list[ReportSection]:
+    """Assign positional ids and fallback titles to draft sections in one pass."""
+    return [
+        replace(
+            section,
+            id=f"section-{index}",
+            title=section.title or f"{fallback_title_prefix} {index}",
         )
-
-    return _section_from_segments(
-        block_segments,
-        section_index=section_index,
-        title=title,
-        scene_id=block.scene_id,
-        frame_id=block.frame_id,
-    )
+        for index, section in enumerate(sections, start=1)
+    ]
 
 
 def derive_title(
@@ -232,12 +206,10 @@ def _speaker_paragraph(speaker: str | None, texts: list[str]) -> str:
 
 
 __all__ = [
-    "align_by_time",
     "build_audio_sections",
     "build_report",
-    "build_sections_from_blocks",
+    "build_video_sections",
     "derive_title",
-    "section_from_block",
     "should_start_new_audio_section",
     "title_from_path",
 ]

@@ -25,7 +25,7 @@ from webinar_transcriber.models import (
 from webinar_transcriber.normalized_audio import load_normalized_audio, write_transcription_audio
 from webinar_transcriber.paths import create_run_layout
 from webinar_transcriber.segmentation import detect_speech_regions, normalized_audio_duration
-from webinar_transcriber.structure import align_by_time, build_report
+from webinar_transcriber.structure import build_report
 from webinar_transcriber.transcript.normalize import normalize_transcription
 from webinar_transcriber.transcript.reconcile import reconcile_decoded_windows
 from webinar_transcriber.video import (
@@ -322,7 +322,6 @@ def _run_report_phase(
 
     scenes: list[Scene] = []
     scene_frames: list[SceneFrame] = []
-    alignment_blocks = None
 
     if isinstance(media_asset, VideoAsset):
         scene_sample_total = estimated_scene_sample_count(media_asset.duration_sec)
@@ -350,14 +349,13 @@ def _run_report_phase(
                 warning_callback=ctx.record_warning,
             )
 
-        alignment_blocks = align_by_time(normalized_transcription.segments, scenes, scene_frames)
-
     ctx.item_counts["scenes"] = len(scenes)
     ctx.item_counts["frames"] = len(scene_frames)
     report = build_report(
         media_asset,
         normalized_transcription,
-        alignment_blocks=alignment_blocks,
+        scenes=scenes,
+        scene_frames=scene_frames,
         warnings=ctx.warnings,
     )
 
