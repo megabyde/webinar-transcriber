@@ -157,30 +157,13 @@ def validated_section_titles(
     return polished_titles
 
 
-def normalize_polished_text(*, polished_text: str) -> str:
-    """Normalize multi-paragraph LLM text.
-
-    Returns:
-        str: The normalized polished text.
-    """
-    cleaned = polished_text.strip()
-    if not cleaned:
-        return ""
-
-    cleaned = _normalize_llm_paragraphs(cleaned)
-    return re.sub(r"[ \t]+\n", "\n", cleaned)
-
-
 def normalize_polished_section_text(*, original_text: str, polished_text: str) -> str:
     """Normalize polished section text.
 
     Returns:
         str: The accepted polished section text, or the original text when empty.
     """
-    cleaned = normalize_polished_text(polished_text=polished_text)
-    if not cleaned:
-        return original_text
-    return cleaned
+    return _joined_llm_paragraphs(polished_text) or original_text
 
 
 def normalize_polished_section_tldr(tldr: str) -> str:
@@ -189,19 +172,11 @@ def normalize_polished_section_tldr(tldr: str) -> str:
     Returns:
         str: The normalized TL;DR text.
     """
-    cleaned = tldr.strip()
-    if not cleaned:
-        return ""
-
-    return _normalize_tldr_blocks(cleaned)
+    cleaned = _joined_llm_paragraphs(tldr)
+    return re.sub(r"(?<=\S)[ \t]+(?=(?:[-*]|\d+[.)])\s+)", "\n", cleaned)
 
 
-def _normalize_tldr_blocks(text: str) -> str:
-    normalized = _normalize_llm_paragraphs(text)
-    return re.sub(r"(?<=\S)[ \t]+(?=(?:[-*]|\d+[.)])\s+)", "\n", normalized)
-
-
-def _normalize_llm_paragraphs(text: str) -> str:
+def _joined_llm_paragraphs(text: str) -> str:
     return "\n\n".join(split_llm_paragraph_blocks(text))
 
 

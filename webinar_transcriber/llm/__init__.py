@@ -9,8 +9,6 @@ from typing import TYPE_CHECKING, Any
 
 from webinar_transcriber._env import llm_provider_name
 
-from .prompts import ACTION_ITEM_LIMIT, REPORT_POLISH_TOTAL_CHAR_BUDGET
-
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -150,8 +148,6 @@ def build_llm_processor_from_env(*, threads: int) -> InstructorLLMProcessor:
 
 
 __all__ = [
-    "ACTION_ITEM_LIMIT",
-    "REPORT_POLISH_TOTAL_CHAR_BUDGET",
     "LlmConfigurationError",
     "LlmProcessingError",
     "LlmReportMetadataResult",
