@@ -27,67 +27,54 @@ class RunLayout:
 
     @property
     def metadata_path(self) -> Path:
-        """Return the metadata artifact path."""
         return self.run_dir / "metadata.json"
 
     @property
     def transcript_path(self) -> Path:
-        """Return the transcript JSON artifact path."""
         return self.run_dir / "transcript.json"
 
     @property
     def scenes_path(self) -> Path:
-        """Return the scene metadata artifact path."""
         return self.run_dir / "scenes.json"
 
     @property
     def diagnostics_path(self) -> Path:
-        """Return the diagnostics artifact path."""
         return self.run_dir / "diagnostics.json"
 
     @property
     def asr_dir(self) -> Path:
-        """Return the ASR intermediate artifact directory."""
         return self.run_dir / "asr"
 
     @property
     def speech_regions_path(self) -> Path:
-        """Return the speech-region artifact path."""
         return self.asr_dir / "speech_regions.json"
 
     @property
     def decoded_windows_path(self) -> Path:
-        """Return the decoded-window artifact path."""
         return self.asr_dir / "decoded_windows.json"
 
     @property
     def diarization_path(self) -> Path:
-        """Return the diarization artifact path."""
         return self.run_dir / "diarization.json"
 
     @property
     def markdown_report_path(self) -> Path:
-        """Return the Markdown report path."""
         return self.run_dir / "report.md"
 
     @property
     def docx_report_path(self) -> Path:
-        """Return the DOCX report path."""
         return self.run_dir / "report.docx"
 
     @property
     def json_report_path(self) -> Path:
-        """Return the JSON report path."""
         return self.run_dir / "report.json"
 
     @property
     def transcription_audio_path(self) -> Path:
-        """Return the kept transcription-audio artifact path."""
         return self.run_dir / "transcription-audio.mp3"
 
     @property
     def frames_dir(self) -> Path:
-        """Return the extracted-frame artifact directory."""
         return self.run_dir / "frames"
 
 
