@@ -45,8 +45,8 @@ def open_input_media_container(path: Path) -> Iterator[InputContainer]:
     """Open a PyAV input container and normalize open-time failures."""
     try:
         input_container = av.open(str(path), mode="r")
-    except (FileNotFoundError, OSError, av.FFmpegError) as error:
-        raise MediaProcessingError(f"Could not open {path} with PyAV: {error}") from error
+    except (FileNotFoundError, OSError, av.FFmpegError) as ex:
+        raise MediaProcessingError(f"Could not open {path} with PyAV: {ex}") from ex
     with input_container as container:
         yield container
 
@@ -76,10 +76,8 @@ def open_output_media_container(path: Path) -> Iterator[OutputContainer]:
     """Open a PyAV output container and normalize open-time failures."""
     try:
         output_container = av.open(str(path), mode="w")
-    except (FileNotFoundError, OSError, av.FFmpegError) as error:
-        raise MediaProcessingError(
-            f"Could not open {path} for writing with PyAV: {error}"
-        ) from error
+    except (FileNotFoundError, OSError, av.FFmpegError) as ex:
+        raise MediaProcessingError(f"Could not open {path} for writing with PyAV: {ex}") from ex
     with output_container as container:
         yield container
 

@@ -95,22 +95,22 @@ class TestWhisperCppTranscriber:
         assert transcriber.model_name == WHISPER_CPP_MODEL_FILENAME
 
     def test_prepare_model_requires_model_file(self, tmp_path) -> None:
-        with pytest.raises(AsrProcessingError, match="model file does not exist") as error:
+        with pytest.raises(AsrProcessingError, match="model file does not exist") as ex:
             WhisperCppTranscriber(
                 model_name=str(tmp_path / "missing.bin"), threads=4
             ).prepare_model()
 
-        message = str(error.value)
+        message = str(ex.value)
         assert "--asr-model" in message
         assert "README.md" in message
 
     def test_prepare_model_missing_default_model_is_actionable(self, tmp_path) -> None:
-        with pytest.raises(AsrProcessingError, match="model file does not exist") as error:
+        with pytest.raises(AsrProcessingError, match="model file does not exist") as ex:
             WhisperCppTranscriber(
                 model_name=str(tmp_path / "missing-default-model.bin"), threads=4
             ).prepare_model()
 
-        message = str(error.value)
+        message = str(ex.value)
         assert "Download a whisper.cpp model there" in message
         assert WHISPER_CPP_MODEL_EXAMPLE in message
 

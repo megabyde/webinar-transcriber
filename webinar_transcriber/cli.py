@@ -127,6 +127,6 @@ def main(
         LlmProcessingError,
         MediaProcessingError,
         OutputDirectoryExistsError,
-    ) as error:
+    ) as ex:
         reporter.reset_active_display()
-        raise CLIError(str(error)) from error
+        raise CLIError(str(ex)) from ex

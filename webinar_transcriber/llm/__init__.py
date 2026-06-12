@@ -73,11 +73,11 @@ def required_provider_env(*, api_key_env: str, model_env: str) -> tuple[str, str
 def _required_llm_module(module_name: str, *, provider_label: str) -> object:
     try:
         return importlib.import_module(module_name)
-    except ImportError as error:
+    except ImportError as ex:
         raise LlmConfigurationError(
             f"The {provider_label} provider requires the 'llm' extra. Install it with: "
             'uv tool install --reinstall ".[llm]"'
-        ) from error
+        ) from ex
 
 
 def build_llm_processor_from_env(*, threads: int) -> InstructorLLMProcessor:

@@ -418,8 +418,8 @@ def _polish_report(
             section_result = llm_processor.polish_report_sections_with_progress(
                 report, progress_callback=on_section_progress
             )
-        except LlmProcessingError as error:
-            ctx.record_warning(str(error))
+        except LlmProcessingError as ex:
+            ctx.record_warning(str(ex))
             st.update(detail=_join_detail(runtime_detail, "fallback"))
             ctx.llm = LlmDiagnostics(
                 model=model_name,
@@ -439,8 +439,8 @@ def _polish_report(
             metadata_result = llm_processor.polish_report_metadata(
                 report, section_transcripts=section_result.section_transcripts
             )
-        except LlmProcessingError as error:
-            ctx.record_warning(str(error))
+        except LlmProcessingError as ex:
+            ctx.record_warning(str(ex))
             st.update(detail=_join_detail(runtime_detail, "fallback"))
             ctx.llm = LlmDiagnostics(
                 model=model_name,

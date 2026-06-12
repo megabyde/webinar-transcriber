@@ -149,8 +149,8 @@ class SherpaOnnxDiarizer:
 
         try:
             return sherpa_onnx.OfflineSpeakerDiarization(config)
-        except RuntimeError as error:
-            raise DiarizationProcessingError(str(error)) from error
+        except RuntimeError as ex:
+            raise DiarizationProcessingError(str(ex)) from ex
 
     def _run_diarization(
         self,
@@ -161,8 +161,8 @@ class SherpaOnnxDiarizer:
     ) -> list[SpeakerTurn]:
         try:
             result = diarizer.process(samples, callback=_sherpa_progress(progress_callback))
-        except RuntimeError as error:
-            raise DiarizationProcessingError(str(error)) from error
+        except RuntimeError as ex:
+            raise DiarizationProcessingError(str(ex)) from ex
 
         return [
             SpeakerTurn(
@@ -255,8 +255,8 @@ def _ensure_file(path: Path, *, url: str, expected_sha256: str) -> None:
             temp_path = Path(temp_file.name)
             while chunk := response.read(1024 * 1024):
                 temp_file.write(chunk)
-    except (OSError, urllib.error.URLError) as error:
-        raise DiarizationProcessingError(f"Failed to download diarization model: {url}") from error
+    except (OSError, urllib.error.URLError) as ex:
+        raise DiarizationProcessingError(f"Failed to download diarization model: {url}") from ex
 
     if not _verified(temp_path, expected_sha256):
         temp_path.unlink(missing_ok=True)

@@ -171,13 +171,13 @@ class InstructorLLMProcessor:
     def _polish_section(self, section: ReportSection) -> SectionPolishResult:
         try:
             return self._polish_section_text(section)
-        except LlmProcessingError as error:
+        except LlmProcessingError as ex:
             return SectionPolishResult(
                 section_id=section.id,
                 transcript_text=section.transcript_text,
                 tldr=section.tldr or "",
                 response_metadata={"stage": "section_polish", "section_id": section.id},
-                warnings=[str(error)],
+                warnings=[str(ex)],
             )
 
     def _polish_section_text(self, section: ReportSection) -> SectionPolishResult:
@@ -236,8 +236,8 @@ class InstructorLLMProcessor:
                 max_retries=_structured_response_retries(),
                 **self._request_kwargs,
             )
-        except Exception as error:  # pragma: no cover - backend-specific SDK errors
-            raise LlmProcessingError(f"{error_prefix}: {error}") from error
+        except Exception as ex:  # pragma: no cover - backend-specific SDK errors
+            raise LlmProcessingError(f"{error_prefix}: {ex}") from ex
 
         if not isinstance(parsed, response_model):
             raise LlmProcessingError(
@@ -255,9 +255,9 @@ def _structured_response_retries() -> object:  # pragma: no cover - optional llm
     )
 
 
-def _is_transient_provider_error(error: BaseException) -> bool:
-    response = getattr(error, "response", None)
-    status_code = getattr(error, "status_code", None) or getattr(response, "status_code", None)
+def _is_transient_provider_error(ex: BaseException) -> bool:
+    response = getattr(ex, "response", None)
+    status_code = getattr(ex, "status_code", None) or getattr(response, "status_code", None)
     if not isinstance(status_code, int):  # pragma: no cover - provider SDK shape fallback
         return False
     return status_code in {408, 429} or 500 <= status_code < 600
