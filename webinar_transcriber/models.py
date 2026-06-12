@@ -207,16 +207,6 @@ class SpeakerTurn(TimelineSpan):
 
 
 @dataclass(slots=True, frozen=True)
-class AlignmentBlock(TimelineItem):
-    """Alignment between transcript content and media sections."""
-
-    transcript_text: str
-    transcript_segment_ids: list[str] = dataclass_field(default_factory=list)
-    scene_id: str | None = None
-    frame_id: str | None = None
-
-
-@dataclass(slots=True, frozen=True)
 class ReportSection(TimelineItem):
     """Renderable section of the final report."""
 

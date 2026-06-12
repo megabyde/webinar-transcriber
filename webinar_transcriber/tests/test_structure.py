@@ -3,7 +3,6 @@
 import pytest
 
 from webinar_transcriber.models import (
-    AlignmentBlock,
     AudioAsset,
     Scene,
     SceneFrame,
@@ -12,20 +11,19 @@ from webinar_transcriber.models import (
     VideoAsset,
 )
 from webinar_transcriber.structure import (
-    align_by_time,
     build_audio_sections,
     build_report,
+    build_video_sections,
     derive_title,
-    section_from_block,
     should_start_new_audio_section,
     title_from_path,
 )
 
 
-class TestAlignByTime:
-    def test_assigns_segments_by_midpoint(self) -> None:
-        blocks = align_by_time(
-            transcript_segments=[
+class TestBuildVideoSections:
+    def test_assigns_segments_to_scenes_by_midpoint(self) -> None:
+        sections = build_video_sections(
+            segments=[
                 TranscriptSegment(id="seg-1", text="Intro", start_sec=0.0, end_sec=0.8),
                 TranscriptSegment(id="seg-2", text="Demo", start_sec=1.2, end_sec=1.8),
             ],
@@ -43,36 +41,55 @@ class TestAlignByTime:
             ],
         )
 
-        assert [block.transcript_text for block in blocks] == ["Intro", "Demo"]
-        assert blocks[0].frame_id == "frame-1"
-        assert blocks[1].frame_id == "frame-2"
+        assert [section.transcript_text for section in sections] == ["Intro", "Demo"]
+        assert [section.id for section in sections] == ["section-1", "section-2"]
+        assert sections[0].frame_id == "frame-1"
+        assert sections[1].frame_id == "frame-2"
 
     def test_returns_empty_list_when_there_are_no_scenes(self) -> None:
-        blocks = align_by_time(
-            transcript_segments=[
-                TranscriptSegment(id="seg-1", text="Intro", start_sec=0.0, end_sec=0.8)
-            ],
+        sections = build_video_sections(
+            segments=[TranscriptSegment(id="seg-1", text="Intro", start_sec=0.0, end_sec=0.8)],
             scenes=[],
             scene_frames=[],
         )
 
-        assert blocks == []
+        assert sections == []
 
-    def test_keeps_empty_blocks_for_scenes_without_matches(self) -> None:
-        blocks = align_by_time(
-            transcript_segments=[
-                TranscriptSegment(id="seg-1", text="Demo", start_sec=1.2, end_sec=1.8)
-            ],
+    def test_keeps_scene_only_sections_without_segments(self) -> None:
+        sections = build_video_sections(
+            segments=[TranscriptSegment(id="seg-1", text="Demo", start_sec=1.2, end_sec=1.8)],
             scenes=[
                 Scene(id="scene-1", start_sec=0.0, end_sec=1.0),
                 Scene(id="scene-2", start_sec=1.0, end_sec=2.0),
             ],
+            scene_frames=[
+                SceneFrame(
+                    id="frame-1", scene_id="scene-1", image_path="scene-1.png", timestamp_sec=0.5
+                )
+            ],
+        )
+
+        assert sections[0].id == "section-1"
+        assert sections[0].title == "Slide 1"
+        assert (sections[0].start_sec, sections[0].end_sec) == (0.0, 1.0)
+        assert sections[0].transcript_text == ""
+        assert sections[0].scene_id == "scene-1"
+        assert sections[0].frame_id == "frame-1"
+        assert sections[1].id == "section-2"
+        assert sections[1].title == "Demo"
+        assert (sections[1].start_sec, sections[1].end_sec) == (1.2, 1.8)
+
+    def test_blank_segments_fall_back_to_scene_bounds(self) -> None:
+        sections = build_video_sections(
+            segments=[TranscriptSegment(id="seg-1", text="   ", start_sec=0.2, end_sec=0.8)],
+            scenes=[Scene(id="scene-1", start_sec=0.0, end_sec=1.0)],
             scene_frames=[],
         )
 
-        assert blocks[0].transcript_segment_ids == []
-        assert blocks[0].transcript_text == ""
-        assert blocks[1].transcript_segment_ids == ["seg-1"]
+        assert len(sections) == 1
+        assert sections[0].title == "Slide 1"
+        assert (sections[0].start_sec, sections[0].end_sec) == (0.0, 1.0)
+        assert sections[0].transcript_text == ""
 
 
 class TestAudioSectionBoundaries:
@@ -96,7 +113,7 @@ class TestAudioSectionBoundaries:
 
 
 class TestBuildReport:
-    def test_uses_alignment_block_text_and_warnings(self) -> None:
+    def test_aligns_video_sections_and_keeps_warnings(self) -> None:
         report = build_report(
             VideoAsset(path="demo-file.mp4", duration_sec=12.0),
             TranscriptionResult(
@@ -107,15 +124,10 @@ class TestBuildReport:
                     )
                 ],
             ),
-            alignment_blocks=[
-                AlignmentBlock(
-                    id="block-1",
-                    start_sec=0.0,
-                    end_sec=12.0,
-                    transcript_segment_ids=["segment-1"],
-                    transcript_text="Agenda overview",
-                    scene_id="scene-1",
-                    frame_id="frame-1",
+            scenes=[Scene(id="scene-1", start_sec=0.0, end_sec=12.0)],
+            scene_frames=[
+                SceneFrame(
+                    id="frame-1", scene_id="scene-1", image_path="scene-1.png", timestamp_sec=1.0
                 )
             ],
             warnings=["low confidence"],
@@ -278,6 +290,7 @@ class TestAudioSectionHeuristics:
             (0.0, 140.0),
             (148.0, 320.0),
         ]
+        assert [section.id for section in sections] == ["section-1", "section-2"]
 
     def test_does_not_split_before_gap_threshold_is_reached(self) -> None:
         current_segments = [
@@ -297,21 +310,13 @@ class TestAudioSectionHeuristics:
 
         assert not should_start_new_audio_section(current_segments, next_segment)
 
-    def test_section_from_block_uses_block_text_when_segment_ids_are_missing(self) -> None:
-        block = AlignmentBlock(
-            id="block-1",
-            start_sec=0.0,
-            end_sec=10.0,
-            transcript_segment_ids=["missing-segment"],
-            transcript_text="Fallback block text",
-            scene_id="scene-1",
-            frame_id="frame-1",
-        )
+    def test_numbers_audio_fallback_titles_by_position(self) -> None:
+        sections = build_audio_sections([
+            TranscriptSegment(id="segment-1", text="...", start_sec=0.0, end_sec=10.0),
+            TranscriptSegment(id="segment-2", text="...", start_sec=20.0, end_sec=30.0),
+        ])
 
-        section = section_from_block(block, block_segments=[], section_index=1)
-
-        assert section.title == "Fallback block text"
-        assert section.frame_id == "frame-1"
+        assert [section.title for section in sections] == ["Section 1", "Section 2"]
 
     @pytest.mark.parametrize(
         ("segments", "fallback", "expected"),
