@@ -12,7 +12,6 @@ from PIL import Image
 from webinar_transcriber.models import Scene
 from webinar_transcriber.tests.conftest import FakeContextContainer
 from webinar_transcriber.video import (
-    SceneDetectionSettings,
     detect_scenes,
     estimated_scene_sample_count,
     extract_representative_frames,
@@ -24,6 +23,23 @@ SAMPLE_VIDEO_PATH = FIXTURE_DIR / "sample-video.mp4"
 
 def _scene(index: int, start_sec: float, end_sec: float) -> Scene:
     return Scene(id=f"scene-{index}", start_sec=start_sec, end_sec=end_sec)
+
+
+def _patch_scene_detection(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    scan_fps: float,
+    min_scene_length_sec: float,
+    score_threshold: float | None = None,
+) -> None:
+    monkeypatch.setattr("webinar_transcriber.video.scenes.SCENE_SCAN_FPS", scan_fps)
+    monkeypatch.setattr(
+        "webinar_transcriber.video.scenes.MIN_SCENE_LENGTH_SEC", min_scene_length_sec
+    )
+    if score_threshold is not None:
+        monkeypatch.setattr(
+            "webinar_transcriber.video.scenes.SCENE_SCORE_THRESHOLD", score_threshold
+        )
 
 
 class FakeImage:
@@ -100,19 +116,16 @@ def _write_synthetic_video(output_path: Path, frame_colors: list[int], *, fps: i
 
 class TestDetectScenes:
     @pytest.mark.slow
-    def test_detect_scenes_finds_multiple_segments(self) -> None:
+    def test_detect_scenes_finds_multiple_segments(self, monkeypatch: pytest.MonkeyPatch) -> None:
         progress_updates: list[tuple[float, int]] = []
 
         def on_progress(sample_count: float, scene_count: int) -> None:
             progress_updates.append((sample_count, scene_count))
 
-        scenes = detect_scenes(
-            SAMPLE_VIDEO_PATH,
-            settings=SceneDetectionSettings(
-                scan_fps=2.0, score_threshold=0.006, min_scene_length_sec=1.0
-            ),
-            progress_callback=on_progress,
+        _patch_scene_detection(
+            monkeypatch, scan_fps=2.0, min_scene_length_sec=1.0, score_threshold=0.006
         )
+        scenes = detect_scenes(SAMPLE_VIDEO_PATH, progress_callback=on_progress)
 
         assert len(scenes) >= 2
         assert scenes[0].start_sec == 0.0
@@ -126,30 +139,28 @@ class TestDetectScenes:
         assert scenes == [Scene(id="scene-1", start_sec=0.0, end_sec=2.0)]
 
     @pytest.mark.slow
-    def test_detect_scenes_keeps_blank_video_as_one_scene(self, tmp_path: Path) -> None:
+    def test_detect_scenes_keeps_blank_video_as_one_scene(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         video_path = tmp_path / "blank.mp4"
         _write_synthetic_video(video_path, [0] * 10)
 
-        scenes = detect_scenes(
-            video_path,
-            settings=SceneDetectionSettings(
-                scan_fps=10.0, score_threshold=0.05, min_scene_length_sec=0.1
-            ),
-        )
+        _patch_scene_detection(monkeypatch, scan_fps=10.0, min_scene_length_sec=0.1)
+        scenes = detect_scenes(video_path)
 
         assert scenes == [Scene(id="scene-1", start_sec=0.0, end_sec=1.0)]
 
     @pytest.mark.slow
-    def test_detect_scenes_finds_synthetic_alternating_color_scene(self, tmp_path: Path) -> None:
+    def test_detect_scenes_finds_synthetic_alternating_color_scene(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         video_path = tmp_path / "alternating-color.mp4"
         progress_updates: list[tuple[float, int]] = []
         _write_synthetic_video(video_path, [0, 255] * 5)
 
+        _patch_scene_detection(monkeypatch, scan_fps=10.0, min_scene_length_sec=0.1)
         scenes = detect_scenes(
             video_path,
-            settings=SceneDetectionSettings(
-                scan_fps=10.0, score_threshold=0.05, min_scene_length_sec=0.1
-            ),
             progress_callback=lambda sample_count, scene_count: progress_updates.append((
                 sample_count,
                 scene_count,
@@ -326,12 +337,8 @@ class TestFrameExtraction:
 
 
 class TestDetectScenesFallback:
-    def test_estimated_scene_sample_count_uses_detection_settings(self) -> None:
-        sample_count = estimated_scene_sample_count(
-            9.1, settings=SceneDetectionSettings(scan_fps=0.5)
-        )
-
-        assert sample_count == 5
+    def test_estimated_scene_sample_count_rounds_up(self) -> None:
+        assert estimated_scene_sample_count(9.1) == 5
 
     def test_estimated_scene_sample_count_keeps_zero_duration_visible(self) -> None:
         assert estimated_scene_sample_count(0.0) == 1
@@ -358,16 +365,13 @@ class TestDetectScenesFallback:
         ]
 
     @pytest.mark.slow
-    def test_detect_scenes_prefers_explicit_duration(self, tmp_path: Path) -> None:
+    def test_detect_scenes_prefers_explicit_duration(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         video_path = tmp_path / "blank.mp4"
         _write_synthetic_video(video_path, [0] * 10)
 
-        scenes = detect_scenes(
-            video_path,
-            duration_sec=2.0,
-            settings=SceneDetectionSettings(
-                scan_fps=10.0, score_threshold=0.05, min_scene_length_sec=0.1
-            ),
-        )
+        _patch_scene_detection(monkeypatch, scan_fps=10.0, min_scene_length_sec=0.1)
+        scenes = detect_scenes(video_path, duration_sec=2.0)
 
         assert scenes == [Scene(id="scene-1", start_sec=0.0, end_sec=2.0)]

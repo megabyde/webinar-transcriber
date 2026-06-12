@@ -478,28 +478,28 @@ class TestWhisperCppTranscriber:
 
 class TestPromptCarryover:
     def test_build_prompt_carryover_uses_bounded_suffix(self) -> None:
+        # 310 chars; the 300-char cut lands on the separator space, which is stripped.
         carryover = build_prompt_carryover(
             DecodedWindow(
                 window=InferenceWindow(id="window-2", region_index=0, start_sec=18.5, end_sec=35.0),
-                text="First sentence. Second sentence. Third sentence here.",
+                text="y" * 10 + " " + "z" * 299,
                 segments=[],
-            ),
-            max_chars=30,
+            )
         )
 
-        assert carryover == "sentence. Third sentence here."
+        assert carryover == "z" * 299
 
     def test_build_prompt_carryover_keeps_suffix_without_sentence_boundary(self) -> None:
+        # 310 chars in one token; the cut keeps the partial-word suffix.
         carryover = build_prompt_carryover(
             DecodedWindow(
                 window=InferenceWindow(id="window-2", region_index=0, start_sec=18.5, end_sec=35.0),
-                text="long unpunctuated carryover",
+                text="x" * 310,
                 segments=[],
-            ),
-            max_chars=9,
+            )
         )
 
-        assert carryover == "carryover"
+        assert carryover == "x" * 300
 
     def test_build_prompt_carryover_drops_empty_windows(self) -> None:
         carryover = build_prompt_carryover(
@@ -510,7 +510,7 @@ class TestPromptCarryover:
             )
         )
 
-        assert carryover is None
+        assert carryover == ""
 
     def test_device_name_from_system_info_prefers_enabled_backend(self) -> None:
         system_info = "WHISPER : MTL : EMBED_LIBRARY = 1 | CPU : NEON = 1 |"

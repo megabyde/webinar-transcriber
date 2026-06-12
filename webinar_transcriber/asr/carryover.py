@@ -13,13 +13,9 @@ if TYPE_CHECKING:
 _CARRYOVER_WHITESPACE = re.compile(r"\s+")
 
 
-def build_prompt_carryover(
-    decoded_window: DecodedWindow, *, max_chars: int = CARRYOVER_MAX_CHARS
-) -> str | None:
-    """Return a bounded prompt suffix for the next window, or `None` when the text is empty."""
+def build_prompt_carryover(decoded_window: DecodedWindow) -> str:
+    """Return a bounded prompt suffix for the next window; empty when the text is empty."""
     cleaned = _CARRYOVER_WHITESPACE.sub(" ", decoded_window.text.strip())
-    if not cleaned or max_chars <= 0:
-        return None
-    if len(cleaned) <= max_chars:
+    if len(cleaned) <= CARRYOVER_MAX_CHARS:
         return cleaned
-    return cleaned[-max_chars:].lstrip()
+    return cleaned[-CARRYOVER_MAX_CHARS:].lstrip()

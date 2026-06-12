@@ -3,14 +3,9 @@
 from __future__ import annotations
 
 from webinar_transcriber.video.frames import extract_representative_frames
-from webinar_transcriber.video.scenes import (
-    SceneDetectionSettings,
-    detect_scenes,
-    estimated_scene_sample_count,
-)
+from webinar_transcriber.video.scenes import detect_scenes, estimated_scene_sample_count
 
 __all__ = [
-    "SceneDetectionSettings",
     "detect_scenes",
     "estimated_scene_sample_count",
     "extract_representative_frames",

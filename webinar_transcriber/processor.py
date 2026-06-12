@@ -155,7 +155,7 @@ def process_input(
 
                 if keep_audio:
                     with ctx.stage("save_transcription_audio", "Saving transcription audio") as st:
-                        preserved_audio_path = layout.transcription_audio_path()
+                        preserved_audio_path = layout.transcription_audio_path
                         preserve_transcription_audio(audio_path, preserved_audio_path)
                         st.update(detail=preserved_audio_path.name)
 
