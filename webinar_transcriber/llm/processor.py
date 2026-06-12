@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from types import MappingProxyType
 from typing import TYPE_CHECKING, Protocol
 
 import tenacity
@@ -64,7 +63,6 @@ class SectionPolishResult:
 
 _LLM_RATE_LIMIT_RETRY_ATTEMPTS = 3
 _DEFAULT_REQUEST_TIMEOUT_SEC = 120
-_EMPTY_REQUEST_KWARGS = MappingProxyType({})
 
 
 class InstructorClient(Protocol):
@@ -84,13 +82,13 @@ class InstructorLLMProcessor:
         provider_name: str,
         model_name: str,
         threads: int,
-        request_kwargs: Mapping[str, object] = _EMPTY_REQUEST_KWARGS,
+        request_kwargs: Mapping[str, object] | None = None,
     ) -> None:
         """Initialize one provider-backed Instructor processor."""
         self._client = client
         self._provider_name = provider_name
         self._model_name = model_name
-        self._request_kwargs = {"timeout": _DEFAULT_REQUEST_TIMEOUT_SEC, **request_kwargs}
+        self._request_kwargs = {"timeout": _DEFAULT_REQUEST_TIMEOUT_SEC, **(request_kwargs or {})}
         self._threads = threads
 
     @property
