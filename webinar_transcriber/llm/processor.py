@@ -255,9 +255,16 @@ def _structured_response_retries() -> object:  # pragma: no cover - optional llm
     )
 
 
+_TRANSIENT_HTTP_STATUS_CODES = frozenset({408, 429})
+_SERVER_ERROR_HTTP_STATUS_CODES = range(500, 600)
+
+
 def _is_transient_provider_error(ex: BaseException) -> bool:
     response = getattr(ex, "response", None)
     status_code = getattr(ex, "status_code", None) or getattr(response, "status_code", None)
     if not isinstance(status_code, int):  # pragma: no cover - provider SDK shape fallback
         return False
-    return status_code in {408, 429} or 500 <= status_code < 600
+    return (
+        status_code in _TRANSIENT_HTTP_STATUS_CODES
+        or status_code in _SERVER_ERROR_HTTP_STATUS_CODES
+    )

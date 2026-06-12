@@ -1,10 +1,12 @@
 """Tests for run-directory path helpers."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
 from webinar_transcriber.paths import OutputDirectoryExistsError, create_run_layout
+
+FIXED_RUN_TIME = datetime(2026, 3, 18, 20, 30, 45, tzinfo=UTC)
 
 
 class TestRunLayout:
@@ -15,7 +17,7 @@ class TestRunLayout:
         input_path = tmp_path / "Weekly Webinar!.mp4"
         input_path.write_text("demo", encoding="utf-8")
 
-        layout = create_run_layout(input_path=input_path, now=datetime(2026, 3, 18, 20, 30, 45))
+        layout = create_run_layout(input_path=input_path, now=FIXED_RUN_TIME)
 
         assert layout.run_dir.name == "20260318-203045-000000_weekly-webinar"
         assert layout.run_dir.exists()
@@ -33,7 +35,7 @@ class TestRunLayout:
         input_path = tmp_path / "Вебинар-2026-итоги.mp4"
         input_path.write_text("demo", encoding="utf-8")
 
-        layout = create_run_layout(input_path=input_path, now=datetime(2026, 3, 18, 20, 30, 45))
+        layout = create_run_layout(input_path=input_path, now=FIXED_RUN_TIME)
 
         assert layout.run_dir.name == "20260318-203045-000000_вебинар-2026-итоги"
 
@@ -44,7 +46,7 @@ class TestRunLayout:
         input_path = tmp_path / "!!!.mp4"
         input_path.write_text("demo", encoding="utf-8")
 
-        layout = create_run_layout(input_path=input_path, now=datetime(2026, 3, 18, 20, 30, 45))
+        layout = create_run_layout(input_path=input_path, now=FIXED_RUN_TIME)
 
         assert layout.run_dir.name == "20260318-203045-000000_input"
 

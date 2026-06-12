@@ -11,6 +11,7 @@ from typing import Self
 
 import numpy as np
 import pytest
+from PIL import Image
 from rich.console import Console
 
 from webinar_transcriber.asr import WhisperCppTranscriber
@@ -264,11 +265,8 @@ class FakeTranscriber(WhisperCppTranscriber):
         ]
 
 
-def install_pipeline_runtime(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, input_path: Path, runtime: PipelineRuntime
-) -> None:
+def install_pipeline_runtime(monkeypatch: pytest.MonkeyPatch, runtime: PipelineRuntime) -> None:
     """Patch expensive processor seams while letting the real pipeline run."""
-    del tmp_path
 
     def fake_write_transcription_audio(
         _input_path: Path, output_path: Path, *, progress_callback=None, **_kwargs
@@ -315,8 +313,6 @@ def install_video_scene_runtime(
         return scenes
 
     def fake_extract_frames(*_args, progress_callback=None, warning_callback=None, **_kwargs):
-        from PIL import Image
-
         if frame_warning is not None:
             assert warning_callback is not None
             warning_callback(frame_warning)
