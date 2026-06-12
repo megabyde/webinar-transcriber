@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from .config import CARRYOVER_MAX_CHARS
+from webinar_transcriber.asr.config import CARRYOVER_MAX_CHARS
 
 if TYPE_CHECKING:
     from webinar_transcriber.models import DecodedWindow

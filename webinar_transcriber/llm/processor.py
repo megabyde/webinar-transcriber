@@ -9,19 +9,19 @@ from typing import TYPE_CHECKING, Protocol
 
 import tenacity
 
-from . import (
-    LlmProcessingError,
-    LlmReportMetadataResult,
-    LlmSectionPolishResult,
-)
-from .prompts import (
+from webinar_transcriber.llm.prompts import (
     ACTION_ITEM_LIMIT,
     REPORT_POLISH_SYSTEM_PROMPT,
     REPORT_POLISH_TOTAL_CHAR_BUDGET,
     SECTION_POLISH_SYSTEM_PROMPT,
     SUMMARY_ITEM_LIMIT,
 )
-from .utils import (
+from webinar_transcriber.llm.types import (
+    LlmProcessingError,
+    LlmReportMetadataResult,
+    LlmSectionPolishResult,
+)
+from webinar_transcriber.llm.utils import (
     ReportPolishResponse,
     SchemaModelT,
     SectionTextResponse,

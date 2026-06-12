@@ -8,49 +8,17 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from webinar_transcriber._env import llm_provider_name
+from webinar_transcriber.llm.types import (
+    LlmConfigurationError,
+    LlmProcessingError,
+    LlmReportMetadataResult,
+    LlmSectionPolishResult,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from .processor import InstructorLLMProcessor
-
-
-# ---------------------------------------------------------------------------
-# Error types
-# ---------------------------------------------------------------------------
-
-
-class LlmConfigurationError(RuntimeError):
-    """Raised when required LLM configuration is missing."""
-
-
-class LlmProcessingError(RuntimeError):
-    """Raised when the LLM response cannot be validated or applied."""
-
-
-# ---------------------------------------------------------------------------
-# Result types
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class LlmSectionPolishResult:
-    """Validated result from the section-text polishing phase."""
-
-    section_tldrs: dict[str, str]
-    section_transcripts: dict[str, str]
-    response_metadata: list[dict[str, object]] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class LlmReportMetadataResult:
-    """Validated result from the final report metadata polishing phase."""
-
-    summary: list[str]
-    action_items: list[str]
-    section_titles: dict[str, str]
-    response_metadata: list[dict[str, object]] = field(default_factory=list)
+    from webinar_transcriber.llm.processor import InstructorLLMProcessor
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +89,7 @@ def build_llm_processor_from_env(*, threads: int) -> InstructorLLMProcessor:
     Raises:
         LlmConfigurationError: If the provider selection or required environment is invalid.
     """
-    from .processor import InstructorLLMProcessor  # noqa: PLC0415
+    from webinar_transcriber.llm.processor import InstructorLLMProcessor  # noqa: PLC0415
 
     provider_name = llm_provider_name()
     spec = PROVIDERS.get(provider_name)

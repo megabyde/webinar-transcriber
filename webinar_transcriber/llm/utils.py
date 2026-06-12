@@ -9,10 +9,9 @@ from typing import TYPE_CHECKING, TypeVar
 
 from pydantic import BaseModel, Field
 
+from webinar_transcriber.llm.prompts import REPORT_SECTION_EXCERPT_LIMIT
+from webinar_transcriber.llm.types import LlmProcessingError
 from webinar_transcriber.text_utils import split_llm_paragraph_blocks
-
-from . import LlmProcessingError
-from .prompts import REPORT_SECTION_EXCERPT_LIMIT
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

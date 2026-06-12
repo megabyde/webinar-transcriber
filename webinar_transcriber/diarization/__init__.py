@@ -6,7 +6,7 @@ from dataclasses import replace
 from itertools import islice
 from typing import TYPE_CHECKING
 
-from .sherpa_diarizer import (
+from webinar_transcriber.diarization.sherpa_diarizer import (
     DIARIZATION_MODEL,
     DiarizationProcessingError,
     SherpaOnnxDiarizer,
