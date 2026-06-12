@@ -201,7 +201,10 @@ class WhisperCppTranscriber:
                 model = _model_cls()(self._model_name, **model_kwargs)
         except Exception as ex:
             raise AsrProcessingError(_model_prepare_error_message(self._model_name)) from ex
-        if getattr(model, "_ctx", True) is None:
+        # pywhispercpp keeps the native whisper context in Model._ctx and leaves it None when
+        # initialization failed without raising. A missing attribute (future pywhispercpp
+        # versions) is treated as healthy; only a present-but-None context is a failed init.
+        if getattr(model, "_ctx", "missing") is None:
             raise AsrProcessingError(_model_prepare_error_message(self._model_name))
         self._model = model
 
