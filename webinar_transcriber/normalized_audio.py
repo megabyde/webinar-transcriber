@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import tempfile
 import wave
-from contextlib import contextmanager
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import av
@@ -19,7 +16,8 @@ from webinar_transcriber.media import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator
+    from collections.abc import Callable, Iterable
+    from pathlib import Path
 
     from av.audio.frame import AudioFrame
     from av.audio.stream import AudioStream
@@ -117,17 +115,6 @@ def write_transcription_audio(
         resample_format=spec.resample_format,
         progress_callback=progress_callback,
     )
-
-
-@contextmanager
-def prepared_transcription_audio(
-    input_path: Path, *, progress_callback: Callable[[float], None] | None = None
-) -> Iterator[Path]:
-    """Yield a normalized mono 16 kHz WAV file for transcription."""
-    with tempfile.TemporaryDirectory(prefix="webinar-transcriber-audio-") as temp_dir:
-        audio_path = Path(temp_dir) / f"{input_path.stem}.wav"
-        write_transcription_audio(input_path, audio_path, progress_callback=progress_callback)
-        yield audio_path
 
 
 def preserve_transcription_audio(

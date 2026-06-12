@@ -285,17 +285,15 @@ def install_pipeline_runtime(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, input_path: Path, runtime: PipelineRuntime
 ) -> None:
     """Patch expensive processor seams while letting the real pipeline run."""
-    audio_path = tmp_path / f"{input_path.stem}.wav"
+    del tmp_path
 
-    @contextmanager
-    def fake_prepared_transcription_audio(_input_path: Path, *, progress_callback=None):
+    def fake_write_transcription_audio(
+        _input_path: Path, output_path: Path, *, progress_callback=None, **_kwargs
+    ) -> Path:
         if progress_callback is not None:
             progress_callback(runtime.media_asset.duration_sec)
-        audio_path.write_bytes(b"RIFFstub")
-        try:
-            yield audio_path
-        finally:
-            audio_path.unlink(missing_ok=True)
+        output_path.write_bytes(b"RIFFstub")
+        return output_path
 
     def fake_detect_speech_regions(*_args, progress_callback=None, **_kwargs):
         if progress_callback is not None:
@@ -305,8 +303,8 @@ def install_pipeline_runtime(
         return runtime.speech_regions, list(runtime.vad_warnings or [])
 
     monkeypatch.setattr(
-        "webinar_transcriber.processor.prepared_transcription_audio",
-        fake_prepared_transcription_audio,
+        "webinar_transcriber.processor.write_transcription_audio",
+        fake_write_transcription_audio,
     )
     monkeypatch.setattr(
         "webinar_transcriber.processor.probe_media", lambda _input_path: runtime.media_asset

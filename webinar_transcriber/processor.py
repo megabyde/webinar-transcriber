@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from contextlib import ExitStack, contextmanager
+import tempfile
+from contextlib import contextmanager, suppress
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -25,8 +26,8 @@ from webinar_transcriber.models import (
 )
 from webinar_transcriber.normalized_audio import (
     load_normalized_audio,
-    prepared_transcription_audio,
     preserve_transcription_audio,
+    write_transcription_audio,
 )
 from webinar_transcriber.paths import create_run_layout
 from webinar_transcriber.segmentation import detect_speech_regions, normalized_audio_duration
@@ -135,18 +136,17 @@ def process_input(
                 write_json(layout.metadata_path, asdict(media_asset))
                 st.update(detail=f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s")
 
-            with ExitStack() as audio_scope:
+            with tempfile.TemporaryDirectory(prefix="webinar-transcriber-audio-") as temp_dir:
                 audio_total = max(media_asset.duration_sec, 1.0)
                 with ctx.stage(
                     "prepare_transcription_audio", "Preparing audio", total=audio_total
                 ) as st:
-                    audio_path = audio_scope.enter_context(
-                        prepared_transcription_audio(
-                            input_path,
-                            progress_callback=lambda completed: st.update(
-                                completed=min(completed, audio_total)
-                            ),
-                        )
+                    audio_path = write_transcription_audio(
+                        input_path,
+                        Path(temp_dir) / f"{input_path.stem}.wav",
+                        progress_callback=lambda completed: st.update(
+                            completed=min(completed, audio_total)
+                        ),
                     )
                     st.update(completed=audio_total, detail=audio_path.name)
 
@@ -188,14 +188,11 @@ def process_input(
             ctx.reporter.complete_run(artifacts)
             return artifacts
         except Exception as ex:
-            write_run_diagnostics(
-                layout,
-                ctx,
-                status="failed",
-                failed_stage=ctx.current_stage,
-                error=str(ex),
-                suppress_errors=True,
-            )
+            # Diagnostics are best effort on failure; never mask the original error.
+            with suppress(Exception):
+                write_run_diagnostics(
+                    layout, ctx, status="failed", failed_stage=ctx.current_stage, error=str(ex)
+                )
             raise
 
 

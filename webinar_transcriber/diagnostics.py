@@ -30,7 +30,6 @@ def write_run_diagnostics(
     status: Literal["succeeded", "failed"],
     failed_stage: str | None = None,
     error: str | None = None,
-    suppress_errors: bool = False,
 ) -> Diagnostics:
     """Write diagnostics recorded on the processor context.
 
@@ -48,9 +47,5 @@ def write_run_diagnostics(
         diarization=ctx.diarization,
         warnings=ctx.warnings,
     )
-    try:
-        write_json(layout.diagnostics_path, asdict(diagnostics))
-    except Exception:  # pragma: no cover - best-effort failed-run diagnostics
-        if not suppress_errors:
-            raise
+    write_json(layout.diagnostics_path, asdict(diagnostics))
     return diagnostics
