@@ -14,7 +14,6 @@ from webinar_transcriber.models import SpeechRegion
 from webinar_transcriber.normalized_audio import (
     _mux_audio_frames,
     load_normalized_audio,
-    preserve_transcription_audio,
     write_transcription_audio,
 )
 from webinar_transcriber.segmentation import (
@@ -92,30 +91,6 @@ class TestNormalizedAudio:
             assert wav_file.getnchannels() == 1
             assert wav_file.getsampwidth() == 2
             assert wav_file.getnframes() > 0
-
-    def test_preserve_transcription_audio_transcodes_mp3_output(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        audio_path = tmp_path / "audio.wav"
-        expected_output = tmp_path / "transcription-audio.mp3"
-        calls: list[tuple[Path, Path, str]] = []
-
-        def fake_write(
-            input_path: Path, output_path: Path, *, audio_format: str, progress_callback=None
-        ) -> Path:
-            del progress_callback
-            calls.append((input_path, output_path, audio_format))
-            output_path.write_text("mp3", encoding="utf-8")
-            return output_path
-
-        monkeypatch.setattr(
-            "webinar_transcriber.normalized_audio.write_transcription_audio", fake_write
-        )
-        kept_audio_path = preserve_transcription_audio(audio_path, expected_output)
-
-        assert calls == [(audio_path, expected_output, "mp3")]
-        assert kept_audio_path == expected_output
-        assert kept_audio_path.read_text(encoding="utf-8") == "mp3"
 
     @pytest.mark.slow
     def test_write_transcription_audio_creates_real_mp3(self, tmp_path: Path) -> None:

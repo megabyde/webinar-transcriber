@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import wave
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
 import av
@@ -30,15 +29,10 @@ NORMALIZED_SAMPLE_WIDTH_BYTES = 2
 NORMALIZED_AUDIO_CODEC = "pcm_s16le"
 
 
-@dataclass(frozen=True, slots=True)
-class _AudioOutputSpec:
-    output_codec: str
-    resample_format: str
-
-
-_AUDIO_OUTPUT_SPECS = {
-    "wav": _AudioOutputSpec(output_codec=NORMALIZED_AUDIO_CODEC, resample_format="s16"),
-    "mp3": _AudioOutputSpec(output_codec="mp3", resample_format="fltp"),
+# audio_format -> (output_codec, resample_format)
+_AUDIO_OUTPUT_FORMATS = {
+    "wav": (NORMALIZED_AUDIO_CODEC, "s16"),
+    "mp3": ("mp3", "fltp"),
 }
 
 
@@ -107,26 +101,13 @@ def write_transcription_audio(
     Returns:
         Path: The written normalized audio path.
     """
-    spec = _AUDIO_OUTPUT_SPECS[audio_format]
+    output_codec, resample_format = _AUDIO_OUTPUT_FORMATS[audio_format]
     return _transcode_audio_with_pyav(
         input_path,
         output_path,
-        output_codec=spec.output_codec,
-        resample_format=spec.resample_format,
+        output_codec=output_codec,
+        resample_format=resample_format,
         progress_callback=progress_callback,
-    )
-
-
-def preserve_transcription_audio(
-    audio_path: Path, output_path: Path, *, progress_callback: Callable[[float], None] | None = None
-) -> Path:
-    """Persist prepared transcription audio as an MP3 run artifact.
-
-    Returns:
-        Path: The written artifact path.
-    """
-    return write_transcription_audio(
-        audio_path, output_path, audio_format="mp3", progress_callback=progress_callback
     )
 
 

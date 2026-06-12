@@ -462,15 +462,17 @@ class TestProcessInput:
         install_pipeline_runtime(
             monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime()
         )
-        preserve_calls: list[tuple[Path, Path]] = []
+        write_calls: list[tuple[Path, Path, str]] = []
 
-        def fake_preserve_audio(audio_path: Path, output_path: Path):
-            preserve_calls.append((audio_path, output_path))
-            output_path.write_text("mp3", encoding="utf-8")
+        def fake_write_audio(
+            audio_path: Path, output_path: Path, *, audio_format: str = "wav", **_kwargs
+        ) -> Path:
+            write_calls.append((audio_path, output_path, audio_format))
+            output_path.write_bytes(b"stub")
             return output_path
 
         monkeypatch.setattr(
-            "webinar_transcriber.processor.preserve_transcription_audio", fake_preserve_audio
+            "webinar_transcriber.processor.write_transcription_audio", fake_write_audio
         )
 
         artifacts = process_input(
@@ -480,11 +482,12 @@ class TestProcessInput:
         kept_audio_path = artifacts.layout.transcription_audio_path
         assert kept_audio_path.exists()
         assert kept_audio_path.suffix == ".mp3"
-        assert len(preserve_calls) == 1
-        source_audio_path, preserve_destination = preserve_calls[0]
+        assert len(write_calls) == 2
+        source_audio_path, kept_destination, kept_format = write_calls[1]
         assert source_audio_path.name == "sample-audio.wav"
         assert "webinar-transcriber-audio-" in source_audio_path.parent.name
-        assert preserve_destination == kept_audio_path
+        assert kept_destination == kept_audio_path
+        assert kept_format == "mp3"
 
     @pytest.mark.slow
     def test_keeps_normalized_audio_artifact_with_real_media_prep(self, tmp_path: Path) -> None:

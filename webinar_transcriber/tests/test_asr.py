@@ -10,10 +10,10 @@ from webinar_transcriber.asr import (
     WHISPER_CPP_MODEL_FILENAME,
     AsrProcessingError,
     WhisperCppTranscriber,
-    build_prompt_carryover,
-    device_name_from_system_info,
 )
+from webinar_transcriber.asr.carryover import build_prompt_carryover
 from webinar_transcriber.asr.config import DEFAULT_MAX_ASR_THREADS, default_asr_threads
+from webinar_transcriber.asr.transcriber import device_name_from_system_info
 from webinar_transcriber.models import DecodedWindow, InferenceWindow, TranscriptSegment
 
 
