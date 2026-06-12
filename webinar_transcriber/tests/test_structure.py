@@ -10,7 +10,6 @@ from webinar_transcriber.models import (
     TranscriptionResult,
     TranscriptSegment,
     VideoAsset,
-    VideoAssetRef,
 )
 from webinar_transcriber.structure import (
     align_by_time,
@@ -115,7 +114,8 @@ class TestBuildReport:
                     end_sec=12.0,
                     transcript_segment_ids=["segment-1"],
                     transcript_text="Agenda overview",
-                    video=VideoAssetRef(scene_id="scene-1", frame_id="frame-1"),
+                    scene_id="scene-1",
+                    frame_id="frame-1",
                 )
             ],
             warnings=["low confidence"],
@@ -304,7 +304,8 @@ class TestAudioSectionHeuristics:
             end_sec=10.0,
             transcript_segment_ids=["missing-segment"],
             transcript_text="Fallback block text",
-            video=VideoAssetRef(scene_id="scene-1", frame_id="frame-1"),
+            scene_id="scene-1",
+            frame_id="frame-1",
         )
 
         section = section_from_block(block, block_segments=[], section_index=1)

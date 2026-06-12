@@ -11,8 +11,11 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
+_COMPACT_OPTIONAL_KEYS = frozenset({"speaker", "scene_id", "frame_id"})
+
+
 def _compact_dict_factory(items: list[tuple[str, object]]) -> dict[str, object]:
-    return {k: v for k, v in items if not (k == "speaker" and v is None)}
+    return {k: v for k, v in items if not (k in _COMPACT_OPTIONAL_KEYS and v is None)}
 
 
 # ---------------------------------------------------------------------------
@@ -186,14 +189,6 @@ class SceneFrame:
     timestamp_sec: float
 
 
-@dataclass(slots=True, frozen=True)
-class VideoAssetRef:
-    """Reference to video scene/frame context for report sections."""
-
-    scene_id: str
-    frame_id: str | None = None
-
-
 # ---------------------------------------------------------------------------
 # Diarization
 # ---------------------------------------------------------------------------
@@ -217,17 +212,8 @@ class AlignmentBlock(TimelineItem):
 
     transcript_text: str
     transcript_segment_ids: list[str] = dataclass_field(default_factory=list)
-    video: VideoAssetRef | None = None
-
-    @property
-    def scene_id(self) -> str | None:
-        """Return the aligned scene id when available."""
-        return self.video.scene_id if self.video else None
-
-    @property
-    def frame_id(self) -> str | None:
-        """Return the aligned frame id when available."""
-        return self.video.frame_id if self.video else None
+    scene_id: str | None = None
+    frame_id: str | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -237,18 +223,9 @@ class ReportSection(TimelineItem):
     title: str
     transcript_text: str
     tldr: str | None = None
-    video: VideoAssetRef | None = None
+    scene_id: str | None = None
+    frame_id: str | None = None
     image_path: str | None = None
-
-    @property
-    def scene_id(self) -> str | None:
-        """Return the aligned scene id when available."""
-        return self.video.scene_id if self.video else None
-
-    @property
-    def frame_id(self) -> str | None:
-        """Return the aligned frame id when available."""
-        return self.video.frame_id if self.video else None
 
 
 @dataclass(slots=True, frozen=True)
