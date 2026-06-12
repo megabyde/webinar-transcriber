@@ -677,12 +677,6 @@ class TestProcessInput:
                 image_path=str(frames_dir / "scene-1.png"),
                 timestamp_sec=0.5,
             ),
-            SceneFrame(
-                id="frame-2",
-                scene_id="scene-2",
-                image_path=str(frames_dir / "scene-2.png"),
-                timestamp_sec=1.4,
-            ),
         ]
         install_pipeline_runtime(
             monkeypatch, tmp_path, input_path=input_path, runtime=video_runtime()
@@ -712,9 +706,10 @@ class TestProcessInput:
             {"id": "scene-2", "start_sec": 0.9, "end_sec": 1.8},
         ]
         assert artifacts.diagnostics.item_counts["scenes"] == 2
-        assert artifacts.diagnostics.item_counts["frames"] == 2
+        assert artifacts.diagnostics.item_counts["frames"] == 1
         assert artifacts.report.sections[0].image_path == "frames/scene-1.png"
         assert report_payload["sections"][0]["image_path"] == "frames/scene-1.png"
+        assert artifacts.report.sections[1].image_path is None
 
     def test_frame_extraction_warnings_reach_report_and_diagnostics(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
