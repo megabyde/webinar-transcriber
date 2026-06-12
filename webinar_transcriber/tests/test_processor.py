@@ -160,7 +160,6 @@ class FakeDiarizer:
     ) -> list[SpeakerTurn]:
         self.calls.append(len(samples))
         if progress_callback is not None:
-            progress_callback(1, 0)
             progress_callback(1, 2)
             progress_callback(2, 2)
         return self.turns
@@ -486,7 +485,11 @@ class TestProcessInput:
         kept_audio_path = artifacts.layout.transcription_audio_path()
         assert kept_audio_path.exists()
         assert kept_audio_path.suffix == ".mp3"
-        assert preserve_calls == [(tmp_path / "sample-audio.wav", kept_audio_path)]
+        assert len(preserve_calls) == 1
+        source_audio_path, preserve_destination = preserve_calls[0]
+        assert source_audio_path.name == "sample-audio.wav"
+        assert "webinar-transcriber-audio-" in source_audio_path.parent.name
+        assert preserve_destination == kept_audio_path
 
     @pytest.mark.slow
     def test_keeps_normalized_audio_artifact_with_real_media_prep(self, tmp_path: Path) -> None:
@@ -701,12 +704,6 @@ class TestProcessInput:
                 image_path=str(frames_dir / "scene-1.png"),
                 timestamp_sec=0.5,
             ),
-            SceneFrame(
-                id="frame-2",
-                scene_id="scene-2",
-                image_path=str(frames_dir / "scene-2.png"),
-                timestamp_sec=1.4,
-            ),
         ]
         install_pipeline_runtime(
             monkeypatch, tmp_path, input_path=input_path, runtime=video_runtime()
@@ -736,9 +733,10 @@ class TestProcessInput:
             {"id": "scene-2", "start_sec": 0.9, "end_sec": 1.8},
         ]
         assert artifacts.diagnostics.item_counts["scenes"] == 2
-        assert artifacts.diagnostics.item_counts["frames"] == 2
+        assert artifacts.diagnostics.item_counts["frames"] == 1
         assert artifacts.report.sections[0].image_path == "frames/scene-1.png"
         assert report_payload["sections"][0]["image_path"] == "frames/scene-1.png"
+        assert artifacts.report.sections[1].image_path is None
 
     def test_frame_extraction_warnings_reach_report_and_diagnostics(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -769,7 +767,8 @@ class TestProcessInput:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         input_path = FIXTURE_DIR / "sample-video.mp4"
-        missing_image_path = tmp_path / "missing-frame.png"
+        run_dir = tmp_path / "docx-warning-run"
+        missing_image_path = run_dir / "frames" / "missing-frame.png"
         install_pipeline_runtime(
             monkeypatch, tmp_path, input_path=input_path, runtime=video_runtime()
         )
@@ -789,9 +788,7 @@ class TestProcessInput:
             ],
         )
 
-        artifacts = process_input(
-            input_path, output_dir=tmp_path / "docx-warning-run", transcriber=FakeTranscriber()
-        )
+        artifacts = process_input(input_path, output_dir=run_dir, transcriber=FakeTranscriber())
 
         expected_warning = f"Section image does not exist: {missing_image_path}"
         report_payload = read_json(artifacts.layout.json_report_path)
@@ -802,7 +799,7 @@ class TestProcessInput:
 
 
 class TestProcessorSupport:
-    def test_write_run_diagnostics_can_suppress_write_errors(
+    def test_write_run_diagnostics_raises_on_write_errors(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         layout = RunLayout(run_dir=tmp_path)
@@ -814,19 +811,6 @@ class TestProcessorSupport:
 
         monkeypatch.setattr(Path, "write_text", fail_write_text)
 
-        diagnostics = write_run_diagnostics(
-            layout,
-            ctx,
-            status="failed",
-            failed_stage="probe_media",
-            error="boom",
-            suppress_errors=True,
-        )
-
-        assert diagnostics.error == "boom"
-        assert diagnostics.asr_pipeline is None
-        assert diagnostics.item_counts["vad_regions"] == 0
-        assert diagnostics.item_counts["windows"] == 0
         with pytest.raises(OSError, match="readonly"):
             write_run_diagnostics(
                 layout,

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from contextlib import ExitStack, contextmanager
+import tempfile
+from contextlib import contextmanager, suppress
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -25,8 +26,8 @@ from webinar_transcriber.models import (
 )
 from webinar_transcriber.normalized_audio import (
     load_normalized_audio,
-    prepared_transcription_audio,
     preserve_transcription_audio,
+    write_transcription_audio,
 )
 from webinar_transcriber.paths import create_run_layout
 from webinar_transcriber.segmentation import detect_speech_regions, normalized_audio_duration
@@ -50,6 +51,7 @@ if TYPE_CHECKING:
         Diagnostics,
         MediaAsset,
         ReportDocument,
+        ReportSection,
         Scene,
         SceneFrame,
         TranscriptionResult,
@@ -134,18 +136,17 @@ def process_input(
                 write_json(layout.metadata_path, asdict(media_asset))
                 st.update(detail=f"{media_asset.media_type.value}, {media_asset.duration_sec:.1f}s")
 
-            with ExitStack() as audio_scope:
+            with tempfile.TemporaryDirectory(prefix="webinar-transcriber-audio-") as temp_dir:
                 audio_total = max(media_asset.duration_sec, 1.0)
                 with ctx.stage(
                     "prepare_transcription_audio", "Preparing audio", total=audio_total
                 ) as st:
-                    audio_path = audio_scope.enter_context(
-                        prepared_transcription_audio(
-                            input_path,
-                            progress_callback=lambda completed: st.update(
-                                completed=min(completed, audio_total)
-                            ),
-                        )
+                    audio_path = write_transcription_audio(
+                        input_path,
+                        Path(temp_dir) / f"{input_path.stem}.wav",
+                        progress_callback=lambda completed: st.update(
+                            completed=min(completed, audio_total)
+                        ),
                     )
                     st.update(completed=audio_total, detail=audio_path.name)
 
@@ -187,14 +188,11 @@ def process_input(
             ctx.reporter.complete_run(artifacts)
             return artifacts
         except Exception as ex:
-            write_run_diagnostics(
-                layout,
-                ctx,
-                status="failed",
-                failed_stage=ctx.current_stage,
-                error=str(ex),
-                suppress_errors=True,
-            )
+            # Diagnostics are best effort on failure; never mask the original error.
+            with suppress(Exception):
+                write_run_diagnostics(
+                    layout, ctx, status="failed", failed_stage=ctx.current_stage, error=str(ex)
+                )
             raise
 
 
@@ -247,11 +245,11 @@ def _run_asr_pipeline(
     ctx.item_counts["windows"] = len(windows)
 
     with ctx.stage(
-        "transcribe", "Transcribing audio", total=float(len(windows)), detail="0 segments"
+        "transcribe", "Transcribing audio", total=len(windows), detail="0 segments"
     ) as st:
 
         def on_transcribe_progress(completed: int, count: int) -> None:
-            st.update(completed=float(completed), detail=_count(count, "segment"))
+            st.update(completed=completed, detail=_count(count, "segment"))
 
         decoded_windows = transcriber.transcribe_inference_windows(
             audio_samples,
@@ -263,7 +261,7 @@ def _run_asr_pipeline(
         write_json(layout.decoded_windows_path, [window.to_json() for window in decoded_windows])
         segment_count = sum(len(window.segments) for window in decoded_windows)
         st.update(
-            completed=float(len(windows)),
+            completed=len(windows),
             detail=_join_detail(
                 _count(segment_count, "segment"), _rtf(media_duration_sec, st.elapsed_sec())
             ),
@@ -279,8 +277,6 @@ def _run_asr_pipeline(
             st.update(completed=1.0, detail="analyzing audio")
 
             def on_diarize_progress(processed: int, total: int) -> None:
-                if total <= 0:
-                    return
                 embedding_progress = 60.0 * min(processed, total) / total
                 st.update(completed=35.0 + embedding_progress, detail="embedding speakers")
 
@@ -342,13 +338,13 @@ def _run_report_phase(
     alignment_blocks = None
 
     if isinstance(media_asset, VideoAsset):
-        scene_sample_total = float(estimated_scene_sample_count(media_asset.duration_sec))
+        scene_sample_total = estimated_scene_sample_count(media_asset.duration_sec)
         with ctx.stage(
             "detect_scenes", "Detecting scenes", total=scene_sample_total, detail="0 scenes"
         ) as st:
 
             def on_scene_progress(completed: float, count: int) -> None:
-                st.update(completed=float(completed), detail=_count(count, "scene"))
+                st.update(completed=completed, detail=_count(count, "scene"))
 
             scenes = detect_scenes(
                 input_path,
@@ -358,12 +354,12 @@ def _run_report_phase(
             st.update(completed=scene_sample_total, detail=_count(len(scenes), "scene"))
         write_json(layout.scenes_path, [asdict(scene) for scene in scenes])
 
-        with ctx.stage("extract_frames", "Extracting scene frames", total=float(len(scenes))) as st:
+        with ctx.stage("extract_frames", "Extracting scene frames", total=len(scenes)) as st:
             scene_frames = extract_representative_frames(
                 input_path,
                 scenes,
                 layout.frames_dir,
-                progress_callback=lambda completed: st.update(completed=float(completed)),
+                progress_callback=lambda completed: st.update(completed=completed),
                 warning_callback=ctx.record_warning,
             )
 
@@ -399,26 +395,16 @@ def _attach_section_images(
     report: ReportDocument, scene_frames: list[SceneFrame], run_dir: Path
 ) -> ReportDocument:
     frame_by_id = {frame.id: frame for frame in scene_frames}
-    return replace(
-        report,
-        sections=[
-            replace(section, image_path=_section_image_path(frame, run_dir))
-            if section.frame_id and (frame := frame_by_id.get(section.frame_id))
-            else section
-            for section in report.sections
-        ],
-    )
-
-
-def _section_image_path(frame: SceneFrame, run_dir: Path) -> str:
-    image_path = Path(frame.image_path)
-    try:
-        return image_path.relative_to(run_dir).as_posix()
-    except ValueError:
-        try:
-            return image_path.resolve().relative_to(run_dir.resolve()).as_posix()
-        except ValueError:
-            return frame.image_path
+    sections: list[ReportSection] = []
+    for section in report.sections:
+        frame = frame_by_id.get(section.frame_id) if section.frame_id else None
+        if frame is None:
+            sections.append(section)
+            continue
+        # Frames are always written under run_dir / "frames", so the path relativizes.
+        image_path = Path(frame.image_path).relative_to(run_dir).as_posix()
+        sections.append(replace(section, image_path=image_path))
+    return replace(report, sections=sections)
 
 
 def _polish_report(
@@ -436,12 +422,12 @@ def _polish_report(
     with ctx.stage(
         "llm_report_sections",
         "Polishing sections with LLM",
-        total=max(float(section_count), 1.0),
+        total=max(section_count, 1),
         detail=_join_detail(runtime_detail, _count(worker_count, "worker")),
     ) as st:
 
         def on_section_progress(advance: int) -> None:
-            st.update(advance=float(advance))
+            st.update(advance=advance)
 
         try:
             section_result = llm_processor.polish_report_sections_with_progress(
@@ -479,7 +465,7 @@ def _polish_report(
             )
             return report
         metadata_elapsed_sec = st.elapsed_sec()
-        st.update(detail=_metadata_detail(metadata_result, section_count=section_count))
+        st.update(detail=_metadata_detail(metadata_result))
 
     polished_report = replace(
         report,
@@ -509,20 +495,15 @@ def _polish_report(
     return polished_report
 
 
-def _metadata_detail(metadata_result: LlmReportMetadataResult, *, section_count: int) -> str | None:
-    summary_count = len(metadata_result.summary)
-    action_item_count = len(metadata_result.action_items)
-    title_count = len(metadata_result.section_titles)
-    title_update_count = title_count if title_count > 0 and title_count != section_count else 0
+def _metadata_detail(metadata_result: LlmReportMetadataResult) -> str:
     parts = []
-    if summary_count > 0:
-        parts.append(_count(summary_count, "summary bullet"))
-    if action_item_count > 0:
-        parts.append(_count(action_item_count, "action item"))
-    if title_update_count > 0:
-        noun = "title" if title_update_count == 1 else "titles"
-        parts.append(f"{title_update_count} {noun} updated")
-    return _join_detail(*parts) or None
+    if metadata_result.summary:
+        parts.append(_count(len(metadata_result.summary), "summary bullet"))
+    if metadata_result.action_items:
+        parts.append(_count(len(metadata_result.action_items), "action item"))
+    if metadata_result.section_titles:
+        parts.append(f"{_count(len(metadata_result.section_titles), 'title')} updated")
+    return _join_detail(*parts)
 
 
 def _count(n: int, noun: str) -> str:

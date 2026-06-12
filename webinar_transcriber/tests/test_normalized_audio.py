@@ -14,7 +14,6 @@ from webinar_transcriber.models import SpeechRegion
 from webinar_transcriber.normalized_audio import (
     _mux_audio_frames,
     load_normalized_audio,
-    prepared_transcription_audio,
     preserve_transcription_audio,
     write_transcription_audio,
 )
@@ -81,13 +80,6 @@ class TestNormalizedAudio:
         assert encoded_frames == [frame]
         assert muxed_packets == ["packet"]
 
-    def test_prepared_transcription_audio_normalizes_audio_input_to_temp_wav(self) -> None:
-        with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
-            assert audio_path.exists()
-            assert audio_path.suffix == ".wav"
-
-        assert not audio_path.exists()
-
     @pytest.mark.slow
     def test_write_transcription_audio_creates_wav(self, tmp_path: Path) -> None:
         output_path = write_transcription_audio(
@@ -101,32 +93,25 @@ class TestNormalizedAudio:
             assert wav_file.getsampwidth() == 2
             assert wav_file.getnframes() > 0
 
-    def test_prepared_transcription_audio_cleans_up_temp_wav(self) -> None:
-        with prepared_transcription_audio(FIXTURE_DIR / "sample-video.mp4") as audio_path:
-            assert audio_path.exists()
-            assert audio_path.suffix == ".wav"
-
-        assert not audio_path.exists()
-
     def test_preserve_transcription_audio_transcodes_mp3_output(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
-            expected_output = tmp_path / "transcription-audio.mp3"
-            calls: list[tuple[Path, Path, str]] = []
+        audio_path = tmp_path / "audio.wav"
+        expected_output = tmp_path / "transcription-audio.mp3"
+        calls: list[tuple[Path, Path, str]] = []
 
-            def fake_write(
-                input_path: Path, output_path: Path, *, audio_format: str, progress_callback=None
-            ) -> Path:
-                del progress_callback
-                calls.append((input_path, output_path, audio_format))
-                output_path.write_text("mp3", encoding="utf-8")
-                return output_path
+        def fake_write(
+            input_path: Path, output_path: Path, *, audio_format: str, progress_callback=None
+        ) -> Path:
+            del progress_callback
+            calls.append((input_path, output_path, audio_format))
+            output_path.write_text("mp3", encoding="utf-8")
+            return output_path
 
-            monkeypatch.setattr(
-                "webinar_transcriber.normalized_audio.write_transcription_audio", fake_write
-            )
-            kept_audio_path = preserve_transcription_audio(audio_path, expected_output)
+        monkeypatch.setattr(
+            "webinar_transcriber.normalized_audio.write_transcription_audio", fake_write
+        )
+        kept_audio_path = preserve_transcription_audio(audio_path, expected_output)
 
         assert calls == [(audio_path, expected_output, "mp3")]
         assert kept_audio_path == expected_output
@@ -134,10 +119,12 @@ class TestNormalizedAudio:
 
     @pytest.mark.slow
     def test_write_transcription_audio_creates_real_mp3(self, tmp_path: Path) -> None:
-        with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
-            output_path = write_transcription_audio(
-                audio_path, tmp_path / "audio.mp3", audio_format="mp3"
-            )
+        audio_path = write_transcription_audio(
+            FIXTURE_DIR / "sample-audio.mp3", tmp_path / "audio.wav"
+        )
+        output_path = write_transcription_audio(
+            audio_path, tmp_path / "audio.mp3", audio_format="mp3"
+        )
 
         assert output_path.exists()
         container = av.open(str(output_path))
@@ -174,9 +161,11 @@ class TestNormalizedAudio:
         with pytest.raises(MediaProcessingError, match="No audio stream found"):
             write_transcription_audio(FIXTURE_DIR / "sample-video.mp4", tmp_path / "audio.wav")
 
-    def test_load_normalized_audio_returns_mono_float32_samples(self) -> None:
-        with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
-            samples = load_normalized_audio(audio_path)
+    def test_load_normalized_audio_returns_mono_float32_samples(self, tmp_path: Path) -> None:
+        audio_path = write_transcription_audio(
+            FIXTURE_DIR / "sample-audio.mp3", tmp_path / "audio.wav"
+        )
+        samples = load_normalized_audio(audio_path)
 
         assert samples.dtype == np.float32
         assert samples.ndim == 1
@@ -413,18 +402,18 @@ class TestNormalizedAudio:
     def test_load_normalized_audio_rejects_invalid_wav_contract(
         self,
         monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
         framerate: int,
         channels: int,
         sample_width: int,
         message: str,
     ) -> None:
-        with prepared_transcription_audio(FIXTURE_DIR / "sample-audio.mp3") as audio_path:
-            monkeypatch.setattr(
-                "webinar_transcriber.normalized_audio.wave.open",
-                lambda *_args, **_kwargs: FakeWave(
-                    framerate=framerate, channels=channels, sample_width=sample_width
-                ),
-            )
+        monkeypatch.setattr(
+            "webinar_transcriber.normalized_audio.wave.open",
+            lambda *_args, **_kwargs: FakeWave(
+                framerate=framerate, channels=channels, sample_width=sample_width
+            ),
+        )
 
-            with pytest.raises(MediaProcessingError, match=message):
-                load_normalized_audio(audio_path)
+        with pytest.raises(MediaProcessingError, match=message):
+            load_normalized_audio(tmp_path / "audio.wav")
