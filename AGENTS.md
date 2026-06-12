@@ -135,6 +135,8 @@ webinar_transcriber/
 - When adapting third-party types that don't stub well, define a private `Protocol`. If `Any` is
   unavoidable in a Protocol method signature due to stub-level invariance constraints, suppress ruff
   with `# noqa: ANN401` and add a comment.
+- Bind caught exceptions as `ex` — `except SomeError as ex:` — never `as error:` or `as exc:`. The
+  same applies to `pytest.raises(...) as ex` in tests.
 - Replace `assert x is not None` guards in production code with explicit `if x is None: raise`.
   `assert` is stripped by optimised builds and banned by ruff S101.
 - Use the walrus operator selectively when it removes repeated work without making the code harder

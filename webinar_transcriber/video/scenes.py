@@ -90,8 +90,8 @@ def _select_scene_starts(
                 ):
                     progress_callback(final_sample_count, len(scene_starts))
             return scene_starts, duration_sec
-    except (OSError, av.FFmpegError) as error:  # pragma: no cover - defensive FFmpeg boundary
-        raise MediaProcessingError(f"Could not detect scenes in {video_path}: {error}") from error
+    except (OSError, av.FFmpegError) as ex:  # pragma: no cover - defensive FFmpeg boundary
+        raise MediaProcessingError(f"Could not detect scenes in {video_path}: {ex}") from ex
 
 
 def _filtered_frame_times(scene_filter: Graph) -> Iterator[float]:

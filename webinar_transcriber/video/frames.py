@@ -77,10 +77,10 @@ def extract_representative_frames(
                 if progress_callback is not None:
                     progress_callback(index)
                 processed_scene_count = index
-    except (MediaProcessingError, OSError, av.FFmpegError) as error:
+    except (MediaProcessingError, OSError, av.FFmpegError) as ex:
         _report_frame_extraction_failures(
             scenes[processed_scene_count:],
-            error,
+            ex,
             completed_offset=processed_scene_count,
             progress_callback=progress_callback,
             warning_callback=warning_callback,
@@ -91,7 +91,7 @@ def extract_representative_frames(
 
 def _report_frame_extraction_failures(
     scenes: list[Scene],
-    error: Exception,
+    ex: Exception,
     *,
     completed_offset: int,
     progress_callback: ProgressCallback | None,
@@ -101,7 +101,7 @@ def _report_frame_extraction_failures(
         frame_timestamp_sec = min(scene.end_sec, scene.start_sec + REPRESENTATIVE_FRAME_OFFSET_SEC)
         if warning_callback is not None:
             warning_callback(
-                f"Frame extraction failed for {scene.id} at {frame_timestamp_sec:.1f}s: {error}"
+                f"Frame extraction failed for {scene.id} at {frame_timestamp_sec:.1f}s: {ex}"
             )
         if progress_callback is not None:
             progress_callback(index)
@@ -136,8 +136,8 @@ def _extract_frame_from_container(
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         frame.to_image().convert("RGB").save(output_path)
-    except (OSError, av.FFmpegError) as error:  # pragma: no cover - PyAV/save defensive boundary
-        return False, str(error)
+    except (OSError, av.FFmpegError) as ex:  # pragma: no cover - PyAV/save defensive boundary
+        return False, str(ex)
 
     if not output_path.exists():  # pragma: no cover - PyAV/save defensive boundary
         return False, f"PyAV did not write {output_path}"

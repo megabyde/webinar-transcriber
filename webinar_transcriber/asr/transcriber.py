@@ -199,8 +199,8 @@ class WhisperCppTranscriber:
         try:
             with _redirect_native_output(self._log_path), _disable_tqdm_progress():
                 model = _model_cls()(self._model_name, **model_kwargs)
-        except Exception as error:
-            raise AsrProcessingError(_model_prepare_error_message(self._model_name)) from error
+        except Exception as ex:
+            raise AsrProcessingError(_model_prepare_error_message(self._model_name)) from ex
         if getattr(model, "_ctx", True) is None:
             raise AsrProcessingError(_model_prepare_error_message(self._model_name))
         self._model = model
@@ -329,8 +329,8 @@ class WhisperCppTranscriber:
             raw_segments: list[Any] = cast("Any", model).transcribe(
                 window_samples, **transcribe_kwargs
             )
-        except Exception as error:
-            raise AsrProcessingError(f"whisper.cpp inference failed for {window.id}.") from error
+        except Exception as ex:
+            raise AsrProcessingError(f"whisper.cpp inference failed for {window.id}.") from ex
 
         segments: list[TranscriptSegment] = []
         for segment_index, raw_segment in enumerate(raw_segments):

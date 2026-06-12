@@ -38,9 +38,9 @@ class TestCli:
 
         try:
             with CliRunner().isolated_filesystem():
-                with pytest.raises(SystemExit) as error:
+                with pytest.raises(SystemExit) as ex:
                     runpy.run_module("webinar_transcriber", run_name="__main__")
-                assert error.value.code == 0
+                assert ex.value.code == 0
         finally:
             sys.argv = original_argv
 
