@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from unittest.mock import Mock, patch
+from unittest.mock import ANY, Mock, patch
 
 import numpy as np
 import pytest
@@ -44,9 +44,6 @@ from webinar_transcriber.ui import StageReporter
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from webinar_transcriber.diarization import SherpaOnnxDiarizer
-    from webinar_transcriber.llm.processor import InstructorLLMProcessor
-
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 EXPECTED_LLM_WARNING = (
     "Section polish response returned an empty transcript text for section-1; kept original text."
@@ -64,84 +61,47 @@ def silent_reporter() -> StageReporter:
     return StageReporter(console=Console(quiet=True))
 
 
-def process_input(
-    *args: Any,
-    threads: int = 4,
-    keep_audio: bool = False,
-    llm_processor: InstructorLLMProcessor | None = None,
-    diarize_speakers: int | None = None,
-    diarizer: SherpaOnnxDiarizer | None = None,
-    transcriber: WhisperCppTranscriber | None = None,
-    reporter: StageReporter | None = None,
-    **kwargs: Any,
-) -> ProcessArtifacts:
-    return _process_input(
-        *args,
-        threads=threads,
-        keep_audio=keep_audio,
-        llm_processor=llm_processor,
-        diarizer=diarizer,
-        diarization_speaker_count=diarize_speakers,
-        transcriber=transcriber or FakeTranscriber(),
-        reporter=reporter or silent_reporter(),
-        **kwargs,
-    )
+def process_input(*args: Any, **kwargs: Any) -> ProcessArtifacts:
+    kwargs.setdefault("threads", 4)
+    kwargs.setdefault("transcriber", FakeTranscriber())
+    kwargs.setdefault("reporter", silent_reporter())
+    return _process_input(*args, **kwargs)
 
 
-class ConfigurableLLMProcessor:
-    provider_name = "openai"
-    model_name = "test-llm-model"
+def fake_llm_processor(
+    *,
+    section_result: (
+        LlmSectionPolishResult | Callable[[ReportDocument], LlmSectionPolishResult] | None
+    ) = None,
+    metadata_result: LlmReportMetadataResult | None = None,
+    section_error: LlmProcessingError | None = None,
+    metadata_error: LlmProcessingError | None = None,
+    section_progress: list[int] | None = None,
+    worker_count: int = 1,
+) -> Mock:
+    llm = Mock(provider_name="openai", model_name="test-llm-model")
+    llm.polish_worker_count.return_value = worker_count
 
-    def __init__(
-        self,
-        *,
-        section_result: LlmSectionPolishResult | Callable[[ReportDocument], LlmSectionPolishResult],
-        metadata_result: (
-            LlmReportMetadataResult
-            | Callable[[ReportDocument, dict[str, str]], LlmReportMetadataResult]
-            | None
-        ) = None,
-        section_error: LlmProcessingError | None = None,
-        metadata_error: LlmProcessingError | None = None,
-        section_progress: list[int] | None = None,
-        worker_count: int = 1,
-    ) -> None:
-        if isinstance(section_result, LlmSectionPolishResult):
-            self._section_result = lambda _report: section_result
-        else:
-            self._section_result = section_result
-        metadata_result = metadata_result or LlmReportMetadataResult(
+    def polish_sections(
+        report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
+    ) -> LlmSectionPolishResult | None:
+        if section_error is not None:
+            raise section_error
+        if progress_callback is not None:
+            for advance in section_progress or [len(report.sections)]:
+                progress_callback(advance)
+        if isinstance(section_result, LlmSectionPolishResult) or section_result is None:
+            return section_result
+        return section_result(report)
+
+    llm.polish_report_sections_with_progress.side_effect = polish_sections
+    if metadata_error is not None:
+        llm.polish_report_metadata.side_effect = metadata_error
+    else:
+        llm.polish_report_metadata.return_value = metadata_result or LlmReportMetadataResult(
             summary=[], action_items=[], section_titles={}
         )
-        if isinstance(metadata_result, LlmReportMetadataResult):
-            self._metadata_result = lambda _report, _section_transcripts: metadata_result
-        else:
-            self._metadata_result = metadata_result
-        self._section_error = section_error
-        self._metadata_error = metadata_error
-        self._section_progress = section_progress
-        self._worker_count = worker_count
-
-    def polish_worker_count(self, section_count: int) -> int:
-        del section_count
-        return self._worker_count
-
-    def polish_report_sections_with_progress(
-        self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
-    ) -> LlmSectionPolishResult:
-        if self._section_error is not None:
-            raise self._section_error
-        if progress_callback is not None:
-            for completed_count in self._section_progress or [len(report.sections)]:
-                progress_callback(completed_count)
-        return self._section_result(report)
-
-    def polish_report_metadata(
-        self, report: ReportDocument, *, section_transcripts: dict[str, str]
-    ) -> LlmReportMetadataResult:
-        if self._metadata_error is not None:
-            raise self._metadata_error
-        return self._metadata_result(report, section_transcripts)
+    return llm
 
 
 class FakeDiarizer:
@@ -266,7 +226,7 @@ class TestProcessInput:
             input_path,
             output_dir=tmp_path / "diarized-run",
             transcriber=transcriber,
-            diarize_speakers=4,
+            diarization_speaker_count=4,
             diarizer=diarizer,  # type: ignore
             reporter=reporter,
         )
@@ -344,7 +304,7 @@ class TestProcessInput:
             input_path,
             output_dir=tmp_path / "diarized-default-run",
             transcriber=transcriber,
-            diarize_speakers=1,
+            diarization_speaker_count=1,
             diarizer=diarizer,  # type: ignore
             reporter=reporter,
         )
@@ -808,34 +768,20 @@ class TestProcessorSupport:
         assert reporter.finished == []
 
     def test_transcriber_device_name_is_auto_before_runtime_is_prepared(self) -> None:
-        from webinar_transcriber.asr import WhisperCppTranscriber
 
         assert WhisperCppTranscriber(threads=4).device_name == "auto"
 
 
-@pytest.fixture
-def llm_success_result(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> tuple[ProcessArtifacts, RecordingStageReporter]:
-    input_path = FIXTURE_DIR / "sample-audio.mp3"
-    install_pipeline_runtime(monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime())
-    reporter = RecordingStageReporter()
-
-    def polished_metadata(
-        _report: ReportDocument, section_transcripts: dict[str, str]
-    ) -> LlmReportMetadataResult:
-        assert section_transcripts == {"section-1": EXPECTED_LLM_SECTION_TEXT}
-        return LlmReportMetadataResult(
-            summary=["Refined summary point."],
-            action_items=["Send the draft by Friday."],
-            section_titles={"section-1": "Refined Section Title"},
+class TestProcessInputLlm:
+    def test_applies_llm_outputs_to_report_and_diagnostics(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        input_path = FIXTURE_DIR / "sample-audio.mp3"
+        install_pipeline_runtime(
+            monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime()
         )
-
-    artifacts = process_input(
-        input_path,
-        output_dir=tmp_path / "llm-run",
-        transcriber=FakeTranscriber(),
-        llm_processor=ConfigurableLLMProcessor(  # type: ignore
+        reporter = RecordingStageReporter()
+        llm = fake_llm_processor(
             section_result=LlmSectionPolishResult(
                 section_tldrs={"section-1": "Updated section TL;DR."},
                 section_transcripts={"section-1": EXPECTED_LLM_SECTION_TEXT},
@@ -844,19 +790,24 @@ def llm_success_result(
                 ],
                 warnings=[EXPECTED_LLM_WARNING],
             ),
-            metadata_result=polished_metadata,
-        ),
-        reporter=reporter,
-    )
-    return artifacts, reporter
+            metadata_result=LlmReportMetadataResult(
+                summary=["Refined summary point."],
+                action_items=["Send the draft by Friday."],
+                section_titles={"section-1": "Refined Section Title"},
+            ),
+        )
 
+        artifacts = process_input(
+            input_path,
+            output_dir=tmp_path / "llm-run",
+            transcriber=FakeTranscriber(),
+            llm_processor=llm,
+            reporter=reporter,
+        )
 
-class TestProcessInputLlm:
-    def test_applies_llm_outputs_to_report_and_diagnostics(
-        self, llm_success_result: tuple[ProcessArtifacts, RecordingStageReporter]
-    ) -> None:
-        artifacts, reporter = llm_success_result
-
+        llm.polish_report_metadata.assert_called_once_with(
+            ANY, section_transcripts={"section-1": EXPECTED_LLM_SECTION_TEXT}
+        )
         assert artifacts.report.summary == ["Refined summary point."]
         assert artifacts.report.action_items == ["Send the draft by Friday."]
         assert artifacts.report.sections[0].title == "Refined Section Title"
@@ -943,22 +894,17 @@ class TestProcessInputLlm:
                 },
             )
 
-        def metadata_polish(
-            report: ReportDocument, _section_transcripts: dict[str, str]
-        ) -> LlmReportMetadataResult:
-            return LlmReportMetadataResult(
-                summary=[],
-                action_items=[],
-                section_titles={report.sections[0].id: "Renamed first section"},
-            )
-
         artifacts = process_input(
             input_path,
             output_dir=tmp_path / "llm-two-section-run",
             transcriber=TwoSectionTranscriber(),
-            llm_processor=ConfigurableLLMProcessor(  # type: ignore
+            llm_processor=fake_llm_processor(
                 section_result=section_polish,
-                metadata_result=metadata_polish,
+                metadata_result=LlmReportMetadataResult(
+                    summary=[],
+                    action_items=[],
+                    section_titles={"section-1": "Renamed first section"},
+                ),
                 section_progress=[1, 1],
                 worker_count=2,
             ),
@@ -997,9 +943,8 @@ class TestProcessInputLlm:
             input_path,
             output_dir=tmp_path / "section-fallback-run",
             transcriber=FakeTranscriber(),
-            llm_processor=ConfigurableLLMProcessor(  # type: ignore
-                section_result=LlmSectionPolishResult(section_tldrs={}, section_transcripts={}),
-                section_error=LlmProcessingError("section polish failed"),
+            llm_processor=fake_llm_processor(
+                section_error=LlmProcessingError("section polish failed")
             ),
             reporter=reporter,
         )
@@ -1031,8 +976,9 @@ class TestProcessInputLlm:
             input_path,
             output_dir=tmp_path / "metadata-fallback-run",
             transcriber=FakeTranscriber(),
-            llm_processor=ConfigurableLLMProcessor(  # type: ignore
-                section_result=section_polish, metadata_error=LlmProcessingError("metadata failed")
+            llm_processor=fake_llm_processor(
+                section_result=section_polish,
+                metadata_error=LlmProcessingError("metadata failed"),
             ),
             reporter=reporter,
         )
