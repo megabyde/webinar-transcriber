@@ -203,10 +203,6 @@ ignore = [
     "D1",
     # Public CLI/protocol/orchestration APIs intentionally take structured inputs
     "PLR0913",
-    # The processor waterfall is intentionally one orchestrator function
-    "PLR0915",
-    # This codebase uses many domain-specific thresholds and fixture literals
-    "PLR2004",
 ]
 
 [tool.ruff.lint.flake8-tidy-imports]
@@ -220,22 +216,12 @@ convention = "google"
 "webinar_transcriber/**/tests/*.py" = [
     # Test fixtures and monkeypatch seams do not benefit from exhaustive annotations
     "ANN",
-    # Tests intentionally accept unused fixture and helper arguments
-    "ARG",
-    # Test docstrings are kept lightweight
-    "D",
     # pydoclint is kept focused on production code
     "DOC",
-    # Naive datetimes in tests are usually deterministic fixture data
-    "DTZ",
-    # Local imports are often clearer in monkeypatched or dependency-seam tests
-    "PLC0415",
-    # Test predicates sometimes read clearest as explicit `a or b`
-    "PLR1714",
+    # Magic literals are the test vocabulary: fixture timings, counts, and thresholds
+    "PLR2004",
     # Plain `assert` is the standard pytest style
     "S101",
-    # Temporary test paths under pytest-managed directories are expected
-    "S108",
 ]
 [tool.pymarkdown.plugins.md013]
 line_length = 100

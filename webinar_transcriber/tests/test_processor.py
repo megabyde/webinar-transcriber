@@ -131,7 +131,7 @@ def run_basic_audio_pipeline(
     input_path = FIXTURE_DIR / "sample-audio.mp3"
     reporter = RecordingStageReporter()
     transcriber = FakeTranscriber()
-    install_pipeline_runtime(monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime())
+    install_pipeline_runtime(monkeypatch, runtime=audio_runtime())
 
     artifacts = process_input(
         input_path, output_dir=tmp_path / "run", transcriber=transcriber, reporter=reporter
@@ -218,9 +218,7 @@ class TestProcessInput:
             SpeakerTurn(start_sec=0.0, end_sec=3.2, speaker="S1"),
             SpeakerTurn(start_sec=3.2, end_sec=6.0, speaker="S2"),
         ])
-        install_pipeline_runtime(
-            monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime(duration_sec=6.0)
-        )
+        install_pipeline_runtime(monkeypatch, runtime=audio_runtime(duration_sec=6.0))
 
         artifacts = process_input(
             input_path,
@@ -296,9 +294,7 @@ class TestProcessInput:
                 return [SpeakerTurn(start_sec=0.0, end_sec=2.0, speaker="S1")]
 
         diarizer = PreparingDiarizer()
-        install_pipeline_runtime(
-            monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime(duration_sec=6.0)
-        )
+        install_pipeline_runtime(monkeypatch, runtime=audio_runtime(duration_sec=6.0))
 
         process_input(
             input_path,
@@ -323,8 +319,6 @@ class TestProcessInput:
         ]
         install_pipeline_runtime(
             monkeypatch,
-            tmp_path,
-            input_path=input_path,
             runtime=audio_runtime(duration_sec=3.0, speech_regions=regions),
         )
 
@@ -353,8 +347,6 @@ class TestProcessInput:
         transcriber = FakeTranscriber()
         install_pipeline_runtime(
             monkeypatch,
-            tmp_path,
-            input_path=input_path,
             runtime=audio_runtime(
                 duration_sec=65.0, speech_regions=[SpeechRegion(start_sec=0.0, end_sec=65.0)]
             ),
@@ -389,9 +381,7 @@ class TestProcessInput:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         input_path = FIXTURE_DIR / "sample-audio.mp3"
-        install_pipeline_runtime(
-            monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime()
-        )
+        install_pipeline_runtime(monkeypatch, runtime=audio_runtime())
         transcriber = FakeTranscriber(
             detected_language="ru",
             segments=[
@@ -419,9 +409,7 @@ class TestProcessInput:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         input_path = FIXTURE_DIR / "sample-audio.mp3"
-        install_pipeline_runtime(
-            monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime()
-        )
+        install_pipeline_runtime(monkeypatch, runtime=audio_runtime())
         write_calls: list[tuple[Path, Path, str]] = []
 
         def fake_write_audio(
@@ -496,9 +484,7 @@ class TestProcessInput:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         input_path = FIXTURE_DIR / "sample-audio.mp3"
-        install_pipeline_runtime(
-            monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime()
-        )
+        install_pipeline_runtime(monkeypatch, runtime=audio_runtime())
 
         class CloseTrackingTranscriber(FakeTranscriber):
             def __init__(self) -> None:
@@ -607,8 +593,6 @@ class TestProcessInput:
         reporter = RecordingStageReporter()
         install_pipeline_runtime(
             monkeypatch,
-            tmp_path,
-            input_path=input_path,
             runtime=audio_runtime(vad_warnings=["Silero warning"]),
         )
 
@@ -641,9 +625,7 @@ class TestProcessInput:
                 timestamp_sec=0.5,
             ),
         ]
-        install_pipeline_runtime(
-            monkeypatch, tmp_path, input_path=input_path, runtime=video_runtime()
-        )
+        install_pipeline_runtime(monkeypatch, runtime=video_runtime())
         install_video_scene_runtime(monkeypatch, scenes=scenes, frames=frames)
 
         artifacts = process_input(
@@ -679,9 +661,7 @@ class TestProcessInput:
     ) -> None:
         input_path = FIXTURE_DIR / "sample-video.mp4"
         reporter = RecordingStageReporter()
-        install_pipeline_runtime(
-            monkeypatch, tmp_path, input_path=input_path, runtime=video_runtime()
-        )
+        install_pipeline_runtime(monkeypatch, runtime=video_runtime())
         install_video_scene_runtime(
             monkeypatch,
             scenes=[Scene(id="scene-1", start_sec=0.0, end_sec=1.8)],
@@ -705,9 +685,7 @@ class TestProcessInput:
         input_path = FIXTURE_DIR / "sample-video.mp4"
         run_dir = tmp_path / "docx-warning-run"
         missing_image_path = run_dir / "frames" / "missing-frame.png"
-        install_pipeline_runtime(
-            monkeypatch, tmp_path, input_path=input_path, runtime=video_runtime()
-        )
+        install_pipeline_runtime(monkeypatch, runtime=video_runtime())
         monkeypatch.setattr(
             "webinar_transcriber.processor.detect_scenes",
             lambda *_args, **_kwargs: [Scene(id="scene-1", start_sec=0.0, end_sec=1.8)],
@@ -777,9 +755,7 @@ class TestProcessInputLlm:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         input_path = FIXTURE_DIR / "sample-audio.mp3"
-        install_pipeline_runtime(
-            monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime()
-        )
+        install_pipeline_runtime(monkeypatch, runtime=audio_runtime())
         reporter = RecordingStageReporter()
         llm = fake_llm_processor(
             section_result=LlmSectionPolishResult(
@@ -836,8 +812,6 @@ class TestProcessInputLlm:
         input_path = FIXTURE_DIR / "sample-audio.mp3"
         install_pipeline_runtime(
             monkeypatch,
-            tmp_path,
-            input_path=input_path,
             runtime=audio_runtime(
                 duration_sec=10.0,
                 speech_regions=[
@@ -934,9 +908,7 @@ class TestProcessInputLlm:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         input_path = FIXTURE_DIR / "sample-audio.mp3"
-        install_pipeline_runtime(
-            monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime()
-        )
+        install_pipeline_runtime(monkeypatch, runtime=audio_runtime())
         reporter = RecordingStageReporter()
 
         artifacts = process_input(
@@ -959,9 +931,7 @@ class TestProcessInputLlm:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         input_path = FIXTURE_DIR / "sample-audio.mp3"
-        install_pipeline_runtime(
-            monkeypatch, tmp_path, input_path=input_path, runtime=audio_runtime()
-        )
+        install_pipeline_runtime(monkeypatch, runtime=audio_runtime())
         reporter = RecordingStageReporter()
 
         def section_polish(report: ReportDocument) -> LlmSectionPolishResult:

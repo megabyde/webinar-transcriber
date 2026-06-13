@@ -11,6 +11,7 @@ from webinar_transcriber.asr import (
     AsrProcessingError,
     WhisperCppTranscriber,
 )
+from webinar_transcriber.asr import transcriber as transcriber_module
 from webinar_transcriber.asr.carryover import build_prompt_carryover
 from webinar_transcriber.asr.config import DEFAULT_MAX_ASR_THREADS, default_asr_threads
 from webinar_transcriber.asr.transcriber import device_name_from_system_info
@@ -130,9 +131,8 @@ class TestWhisperCppTranscriber:
         assert fake_model.init_calls[0][0] == "base"
         assert transcriber.model_name == "base"
 
-    def test_prepare_model_disables_tqdm_progress_during_model_setup(
-        self, monkeypatch, fake_model: FakeModel
-    ) -> None:
+    @pytest.mark.usefixtures("fake_model")
+    def test_prepare_model_disables_tqdm_progress_during_model_setup(self, monkeypatch) -> None:
         progress_context_calls: list[str] = []
 
         class _ProgressContext:
@@ -207,9 +207,8 @@ class TestWhisperCppTranscriber:
         assert transcriber.device_name == "metal"
         assert transcriber.system_info == "METAL = 1"
 
-    def test_transcriber_context_manager_clears_prepared_model(
-        self, fake_model: FakeModel, tmp_path
-    ) -> None:
+    @pytest.mark.usefixtures("fake_model")
+    def test_transcriber_context_manager_clears_prepared_model(self, tmp_path) -> None:
         model_path = tmp_path / "model.bin"
         model_path.write_text("stub", encoding="utf-8")
 
@@ -352,16 +351,12 @@ class TestWhisperCppTranscriber:
         assert transcriber.system_info == "CPU = 1"
 
     def test_disable_tqdm_progress_sets_env_var(self, monkeypatch) -> None:
-        from webinar_transcriber.asr import transcriber as transcriber_module
-
         monkeypatch.delenv("TQDM_DISABLE", raising=False)
 
         with vars(transcriber_module)["_disable_tqdm_progress"]():
             assert os.environ["TQDM_DISABLE"] == "1"
 
     def test_disable_tqdm_progress_restores_previous_environment(self, monkeypatch) -> None:
-        from webinar_transcriber.asr import transcriber as transcriber_module
-
         monkeypatch.setenv("TQDM_DISABLE", "0")
 
         with vars(transcriber_module)["_disable_tqdm_progress"]():
