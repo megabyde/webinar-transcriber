@@ -335,7 +335,6 @@ def _run_report_phase(
         normalized_transcription,
         scenes=scenes,
         scene_frames=scene_frames,
-        warnings=ctx.warnings,
     )
 
     if scene_frames:
@@ -345,7 +344,8 @@ def _run_report_phase(
         report = _polish_report(report, llm_processor=llm_processor, ctx=ctx)
     ctx.item_counts["report_sections"] = len(report.sections)
 
-    return _export_report(report, layout=layout, ctx=ctx)
+    _export_report(report, layout=layout, ctx=ctx)
+    return report
 
 
 def _detect_video_scenes(
@@ -387,22 +387,17 @@ def _detect_video_scenes(
     return scenes, scene_frames
 
 
-def _export_report(report: ReportDocument, *, layout: RunLayout, ctx: RunContext) -> ReportDocument:
+def _export_report(report: ReportDocument, *, layout: RunLayout, ctx: RunContext) -> None:
     """Write the Markdown, DOCX, and JSON artifacts for the report.
 
-    DOCX rendering may append warnings through ``ctx.record_warning``, so the report's warning
-    set is snapshot after that write and before ``report.json`` so the two stay aligned.
-
-    Returns:
-        ReportDocument: The report carrying the warning set written to report.json.
+    DOCX rendering may surface warnings through ``ctx.record_warning``; those land in
+    ``diagnostics.json`` (written after this stage), not on the report itself.
     """
     with ctx.stage("export", "Writing artifacts") as st:
         write_markdown_report(report, layout.markdown_report_path)
         write_docx_report(report, layout.docx_report_path, warning_callback=ctx.record_warning)
-        report = replace(report, warnings=list(ctx.warnings))
         write_json_report(report, layout.json_report_path)
         st.update(detail="report.md | report.docx | report.json")
-    return report
 
 
 def _attach_section_images(

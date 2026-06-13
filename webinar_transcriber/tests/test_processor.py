@@ -604,7 +604,6 @@ class TestProcessInput:
         )
 
         assert reporter.warnings == ["Silero warning"]
-        assert artifacts.report.warnings == ["Silero warning"]
         assert artifacts.diagnostics.warnings == ["Silero warning"]
 
     def test_writes_video_scene_artifacts_and_frame_links(
@@ -656,7 +655,7 @@ class TestProcessInput:
         assert report_payload["sections"][0]["image_path"] == "frames/scene-1.png"
         assert artifacts.report.sections[1].image_path is None
 
-    def test_frame_extraction_warnings_reach_report_and_diagnostics(
+    def test_frame_extraction_warnings_reach_diagnostics(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         input_path = FIXTURE_DIR / "sample-video.mp4"
@@ -676,10 +675,9 @@ class TestProcessInput:
         )
 
         assert reporter.warnings == ["Frame extraction failed"]
-        assert artifacts.report.warnings == ["Frame extraction failed"]
         assert artifacts.diagnostics.warnings == ["Frame extraction failed"]
 
-    def test_docx_export_warnings_reach_report_json_and_returned_artifacts(
+    def test_docx_export_warnings_reach_diagnostics_not_report_json(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         input_path = FIXTURE_DIR / "sample-video.mp4"
@@ -707,9 +705,9 @@ class TestProcessInput:
         expected_warning = f"Section image does not exist: {missing_image_path}"
         report_payload = read_json(artifacts.layout.json_report_path)
         diagnostics_payload = read_json(artifacts.layout.diagnostics_path)
-        assert artifacts.report.warnings == [expected_warning]
-        assert report_payload["warnings"] == [expected_warning]
+        assert "warnings" not in report_payload
         assert diagnostics_payload["warnings"] == [expected_warning]
+        assert artifacts.diagnostics.warnings == [expected_warning]
 
 
 class TestProcessorSupport:
@@ -789,7 +787,7 @@ class TestProcessInputLlm:
         assert artifacts.report.sections[0].title == "Refined Section Title"
         assert artifacts.report.sections[0].tldr == "Updated section TL;DR."
         assert artifacts.report.sections[0].transcript_text == EXPECTED_LLM_SECTION_TEXT
-        assert artifacts.report.warnings == [EXPECTED_LLM_WARNING]
+        assert artifacts.diagnostics.warnings == [EXPECTED_LLM_WARNING]
         assert reporter.warnings == [EXPECTED_LLM_WARNING]
         assert artifacts.diagnostics.llm is not None
         assert artifacts.diagnostics.llm.model == "test-llm-model"

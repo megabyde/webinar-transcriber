@@ -25,10 +25,10 @@ class TestStageReporter:
             layout=SimpleNamespace(
                 run_dir="runs/example", diagnostics_path="runs/example/diagnostics.json"
             ),
-            report=SimpleNamespace(
-                detected_language="ru", sections=[object(), object()], warnings=["warning one"]
+            report=SimpleNamespace(detected_language="ru", sections=[object(), object()]),
+            diagnostics=SimpleNamespace(
+                stage_durations_sec={"prepare": 1.0, "transcribe": 9.0}, warnings=["warning one"]
             ),
-            diagnostics=SimpleNamespace(stage_durations_sec={"prepare": 1.0, "transcribe": 9.0}),
             media_asset=SimpleNamespace(duration_sec=50.0),
         )
 
