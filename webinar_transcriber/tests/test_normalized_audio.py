@@ -73,6 +73,7 @@ class TestNormalizedAudio:
             def mux(self, packet: str) -> None:
                 muxed_packets.append(packet)
 
+        # Fakes duck-type the PyAV OutputContainer/AudioStream interface _mux_audio_frames uses.
         _mux_audio_frames(FakeOutputContainer(), FakeOutputStream(), None)  # type: ignore
         _mux_audio_frames(FakeOutputContainer(), FakeOutputStream(), [frame])  # type: ignore
 

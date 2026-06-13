@@ -127,7 +127,7 @@ class TestCoreModels:
         assert isinstance(first_segment, dict)
         assert isinstance(second_segment, dict)
         assert "speaker" not in first_segment
-        assert second_segment["speaker"] == "S1"  # type: ignore
+        assert ("speaker", "S1") in second_segment.items()
 
     def test_inference_window_is_ordered_by_timeline(self) -> None:
         windows = [
