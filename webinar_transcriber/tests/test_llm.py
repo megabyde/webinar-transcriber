@@ -83,7 +83,7 @@ class TestBuildLlmProcessorFromEnv:
         monkeypatch.setenv(api_key_env, "test-key")
         monkeypatch.setenv(model_env, provider_model.rsplit("/", 1)[1])
         monkeypatch.setattr(
-            "webinar_transcriber.llm.importlib.import_module",
+            "webinar_transcriber.llm.providers.importlib.import_module",
             fake_import_module({"instructor": fake_instructor, provider_module: object()}),
         )
 
@@ -101,7 +101,7 @@ class TestBuildLlmProcessorFromEnv:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_MODEL", raising=False)
         monkeypatch.setattr(
-            "webinar_transcriber.llm.importlib.import_module",
+            "webinar_transcriber.llm.providers.importlib.import_module",
             fake_import_module({"instructor": FakeInstructorModule(object()), "openai": object()}),
         )
 
@@ -111,7 +111,7 @@ class TestBuildLlmProcessorFromEnv:
     def test_requires_llm_extra_for_openai(self, monkeypatch) -> None:
         monkeypatch.delenv("LLM_PROVIDER", raising=False)
         monkeypatch.setattr(
-            "webinar_transcriber.llm.importlib.import_module", fake_import_module({})
+            "webinar_transcriber.llm.providers.importlib.import_module", fake_import_module({})
         )
 
         with pytest.raises(
@@ -123,7 +123,7 @@ class TestBuildLlmProcessorFromEnv:
     def test_requires_llm_extra_for_anthropic(self, monkeypatch) -> None:
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")
         monkeypatch.setattr(
-            "webinar_transcriber.llm.importlib.import_module", fake_import_module({})
+            "webinar_transcriber.llm.providers.importlib.import_module", fake_import_module({})
         )
 
         with pytest.raises(
