@@ -138,7 +138,7 @@ class InstructorLLMProcessor:
 
     def polish_worker_count(self, section_count: int) -> int:
         """Return the worker-pool size for polishing the given number of sections."""
-        return min(self._threads, max(section_count, 1))
+        return min(self._threads, section_count)
 
     def _polish_section_texts(
         self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None

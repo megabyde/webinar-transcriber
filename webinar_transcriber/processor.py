@@ -407,7 +407,7 @@ def _polish_report(
     with ctx.stage(
         "llm_report_sections",
         "Polishing sections with LLM",
-        total=max(section_count, 1),
+        total=section_count,
         detail=_join_detail(runtime_detail, _count(worker_count, "worker")),
     ) as st:
 

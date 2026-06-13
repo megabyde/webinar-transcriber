@@ -692,7 +692,7 @@ class TestInstructorProcessorFlow:
 
     @pytest.mark.parametrize(
         ("section_count", "expected_worker_count"),
-        [(0, 1), (2, 2), (16, 6)],
+        [(0, 0), (2, 2), (16, 6)],
     )
     def test_polish_worker_count_is_bounded_by_threads(
         self, section_count: int, expected_worker_count: int
