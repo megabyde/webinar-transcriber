@@ -249,6 +249,7 @@ def _ensure_file(path: Path, *, url: str, expected_sha256: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         with (
+            # url is a hardcoded https GitHub release asset, not user input.
             urllib.request.urlopen(url) as response,  # noqa: S310
             NamedTemporaryFile(dir=path.parent, delete=False) as temp_file,
         ):

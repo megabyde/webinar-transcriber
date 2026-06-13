@@ -294,8 +294,11 @@ class TestInstructorLlmProcessor:
             section_transcripts={"section-1": "Overridden transcript text."},
         )
         sections = payload["sections"]
+        assert isinstance(sections, list)
+        first_section = sections[0]
+        assert isinstance(first_section, dict)
 
-        assert sections[0]["transcript_excerpt"] == "Overridden transcript text."  # type: ignore
+        assert ("transcript_excerpt", "Overridden transcript text.") in first_section.items()
         assert report.sections[0].transcript_text == "Original transcript text."
 
     def test_extract_response_metadata_returns_provider_finish_and_safety_fields(self) -> None:

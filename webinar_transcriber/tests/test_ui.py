@@ -32,6 +32,7 @@ class TestStageReporter:
             media_asset=SimpleNamespace(duration_sec=50.0),
         )
 
+        # SimpleNamespace duck-types the ProcessArtifacts attributes complete_run reads.
         reporter.complete_run(artifacts)  # type: ignore
 
         output = console.export_text()
