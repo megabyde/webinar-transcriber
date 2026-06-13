@@ -324,30 +324,9 @@ def _run_report_phase(
     scene_frames: list[SceneFrame] = []
 
     if isinstance(media_asset, VideoAsset):
-        scene_sample_total = estimated_scene_sample_count(media_asset.duration_sec)
-        with ctx.stage(
-            "detect_scenes", "Detecting scenes", total=scene_sample_total, detail="0 scenes"
-        ) as st:
-
-            def on_scene_progress(completed: float, count: int) -> None:
-                st.update(completed=completed, detail=_count(count, "scene"))
-
-            scenes = detect_scenes(
-                input_path,
-                duration_sec=media_asset.duration_sec,
-                progress_callback=on_scene_progress,
-            )
-            st.update(completed=scene_sample_total, detail=_count(len(scenes), "scene"))
-        write_json(layout.scenes_path, [asdict(scene) for scene in scenes])
-
-        with ctx.stage("extract_frames", "Extracting scene frames", total=len(scenes)) as st:
-            scene_frames = extract_representative_frames(
-                input_path,
-                scenes,
-                layout.frames_dir,
-                progress_callback=lambda completed: st.update(completed=completed),
-                warning_callback=ctx.record_warning,
-            )
+        scenes, scene_frames = _detect_video_scenes(
+            input_path=input_path, layout=layout, media_asset=media_asset, ctx=ctx
+        )
 
     ctx.item_counts["scenes"] = len(scenes)
     ctx.item_counts["frames"] = len(scene_frames)
@@ -366,13 +345,63 @@ def _run_report_phase(
         report = _polish_report(report, llm_processor=llm_processor, ctx=ctx)
     ctx.item_counts["report_sections"] = len(report.sections)
 
+    return _export_report(report, layout=layout, ctx=ctx)
+
+
+def _detect_video_scenes(
+    *,
+    input_path: Path,
+    layout: RunLayout,
+    media_asset: VideoAsset,
+    ctx: RunContext,
+) -> tuple[list[Scene], list[SceneFrame]]:
+    """Detect scenes, write the scene artifact, and extract representative frames.
+
+    Returns:
+        tuple[list[Scene], list[SceneFrame]]: Detected scenes and their representative frames.
+    """
+    scene_sample_total = estimated_scene_sample_count(media_asset.duration_sec)
+    with ctx.stage(
+        "detect_scenes", "Detecting scenes", total=scene_sample_total, detail="0 scenes"
+    ) as st:
+
+        def on_scene_progress(completed: float, count: int) -> None:
+            st.update(completed=completed, detail=_count(count, "scene"))
+
+        scenes = detect_scenes(
+            input_path,
+            duration_sec=media_asset.duration_sec,
+            progress_callback=on_scene_progress,
+        )
+        st.update(completed=scene_sample_total, detail=_count(len(scenes), "scene"))
+    write_json(layout.scenes_path, [asdict(scene) for scene in scenes])
+
+    with ctx.stage("extract_frames", "Extracting scene frames", total=len(scenes)) as st:
+        scene_frames = extract_representative_frames(
+            input_path,
+            scenes,
+            layout.frames_dir,
+            progress_callback=lambda completed: st.update(completed=completed),
+            warning_callback=ctx.record_warning,
+        )
+    return scenes, scene_frames
+
+
+def _export_report(report: ReportDocument, *, layout: RunLayout, ctx: RunContext) -> ReportDocument:
+    """Write the Markdown, DOCX, and JSON artifacts for the report.
+
+    DOCX rendering may append warnings through ``ctx.record_warning``, so the report's warning
+    set is snapshot after that write and before ``report.json`` so the two stay aligned.
+
+    Returns:
+        ReportDocument: The report carrying the warning set written to report.json.
+    """
     with ctx.stage("export", "Writing artifacts") as st:
         write_markdown_report(report, layout.markdown_report_path)
         write_docx_report(report, layout.docx_report_path, warning_callback=ctx.record_warning)
         report = replace(report, warnings=list(ctx.warnings))
         write_json_report(report, layout.json_report_path)
         st.update(detail="report.md | report.docx | report.json")
-
     return report
 
 
