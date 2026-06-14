@@ -24,6 +24,7 @@ classifiers = [
     "Topic :: Multimedia :: Video",
     "Topic :: Utilities",
 ]
+
 dependencies = [
     "click>=8.4.1,<9.0.0",
     "numpy>=2.4.6,<3.0.0",
@@ -35,6 +36,12 @@ dependencies = [
     "sherpa-onnx>=1.13.2,<1.14.0",
     "sherpa-onnx-core>=1.13.2,<1.14.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/megabyde/webinar-transcriber#readme"
+Repository = "https://github.com/megabyde/webinar-transcriber"
+Issues = "https://github.com/megabyde/webinar-transcriber/issues"
+Releases = "https://github.com/megabyde/webinar-transcriber/releases"
 
 [project.optional-dependencies]
 llm = [
