@@ -45,13 +45,31 @@ A change is ready to merge when all of the following hold:
   rather than lowering the threshold.
 - **Docs stay in sync.** If the change affects CLI flags, output artifacts, install targets, package
   layout, or runtime contracts, update `README.md` and `AGENTS.md` in the same PR.
-- **No dead code.** Remove unused imports, helpers with no callers, and `# TODO` comments that will
-  not be addressed in this PR.
+- **No dead code.** Remove unused imports, helpers with no callers, fields that are written or
+  serialized but never read back, and `# TODO` comments that will not be addressed in this PR.
 - **PR has a summary and a test plan.** Each pull request description includes a brief summary and
   an explicit test-plan checklist.
 - **Commits follow Conventional Commits.** Prefix commit messages with `refactor:`, `docs:`, `ci:`,
   `style:`, `feat:`, `fix:`, `test:`, `build:`, or `chore:`. Use an optional scope when it adds
   clarity, for example `build(deps):`.
+
+## Releasing
+
+- **Versioning is tag-driven.** `hatch-vcs` derives the version from a `vX.Y.Z` git tag into
+  `webinar_transcriber/_version.py`; never hand-edit a version.
+- **Choose the bump by semver judgment.** The JSON artifacts (`report.json`, `scenes.json`,
+  `diagnostics.json`) are local CLI outputs, not a stable API — a changed or removed artifact key is
+  a minor bump, not major, unless deliberately treated otherwise. Reserve major for CLI-flag or
+  install-contract breaks.
+- **Cut a release by pushing the tag.** With `main` green, push an annotated `vX.Y.Z` tag; the
+  `release.yml` workflow validates (lint and `make test-all` on Ubuntu and macOS plus CLI/whisper
+  smoke), builds the wheel and sdist, and creates a GitHub Release with those assets. There is no
+  PyPI publish.
+- **Curate the release notes.** After the release exists, replace the auto-generated "What's
+  Changed" list (`gh release edit --notes-file`) with: a `## Highlights` section that cites PRs
+  inline as `#NNN` (GitHub auto-links them); an `## Output changes` heads-up whenever the work
+  touched `report.json`/`scenes.json`/`diagnostics.json`, CLI flags, or generated artifacts; and the
+  **Full Changelog** compare link. Keep highlights scannable — themes, not a per-PR dump.
 
 ## Package Layout
 
@@ -119,6 +137,9 @@ webinar_transcriber/
   directly instead of carrying defensive conversion logic downstream. For example, transcription
   audio is normalized to `16000 Hz`, so the `sherpa-onnx` Silero VAD integration should assert that
   contract rather than silently resample.
+- Let genuine errors propagate. Reserve warnings for recoverable, user-actionable conditions; do not
+  downgrade a real failure (a failed image write, a missing required stream) into a warning that the
+  run then has to thread around.
 - The Silero VAD ONNX model is vendored under `webinar_transcriber/assets/` so default speech-region
   detection does not require PyTorch or a first-run network download.
 - Speaker diarization uses `sherpa-onnx` with downloaded ONNX models cached under
