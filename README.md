@@ -7,6 +7,8 @@
 [![uv](https://img.shields.io/badge/package-uv-5C5CFF?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
 [![License MIT](https://img.shields.io/badge/license-MIT-2F855A)](LICENSE)
 
+![Webinar Transcriber social preview](docs/assets/social-preview.png)
+
 ## Contents
 
 - [Overview](#overview)
@@ -41,6 +43,18 @@ items, and section TL;DRs, but it does not replace the base pipeline.
 - `uv`
 - For CUDA source builds: a C/C++ compiler, `cmake`, and a working CUDA toolkit with `nvcc` on
   `PATH` and `CUDA_HOME` set
+
+### Install from a release
+
+Install a tagged release directly from GitHub when you want a stable CLI without cloning the
+repository:
+
+```bash
+uv tool install --reinstall git+https://github.com/megabyde/webinar-transcriber.git@v1.1.0
+```
+
+Replace `v1.1.0` with the release tag you want. Release wheels and source distributions are
+published on the [GitHub Releases](https://github.com/megabyde/webinar-transcriber/releases) page.
 
 ### Install the CLI from this checkout
 
