@@ -1,4 +1,4 @@
-"""Optional cloud LLM helpers for transcript and report enhancement."""
+"""Optional cloud LLM helpers for transcript and report polishing."""
 
 from __future__ import annotations
 
