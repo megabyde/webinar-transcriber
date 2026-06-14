@@ -288,8 +288,6 @@ def _run_asr_pipeline(
         backend=ASR_BACKEND_NAME,
         model=transcriber.model_name,
         threads=threads,
-        vad_region_count=len(speech_regions),
-        window_count=len(windows),
         average_window_duration_sec=average_duration_sec(windows),
         normalized_audio_duration_sec=audio_duration_sec,
         system_info=transcriber.system_info,

@@ -235,12 +235,10 @@ ReportStatus = Literal["applied", "fallback"]
 class AsrPipelineDiagnostics:
     """Collected ASR diagnostics state for one processing run."""
 
-    backend: str | None
-    model: str | None
+    backend: str
+    model: str
     threads: int
-    normalized_audio_duration_sec: float | None = None
-    vad_region_count: int = 0
-    window_count: int = 0
+    normalized_audio_duration_sec: float
     average_window_duration_sec: float | None = None
     system_info: str | None = None
 
