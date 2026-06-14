@@ -40,10 +40,6 @@ class TimelineSpan:
         """Return the non-negative duration of the item."""
         return max(0.0, self.end_sec - self.start_sec)
 
-    def gap_before(self, other: TimelineSpan) -> float:
-        """Return the non-negative gap before another timeline item."""
-        return max(0.0, other.start_sec - self.end_sec)
-
 
 @dataclass(slots=True, frozen=True)
 class TimelineItem(TimelineSpan):

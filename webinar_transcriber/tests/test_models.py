@@ -45,8 +45,6 @@ class TestCoreModels:
 
         assert segment.midpoint == 1.6
         assert segment.duration_sec == pytest.approx(1.2)
-        next_seg = TranscriptSegment(id="seg-2", start_sec=3.0, end_sec=4.0, text="next")
-        assert segment.gap_before(next_seg) == pytest.approx(0.8)
 
     def test_report_document_defaults_optional_collections(self) -> None:
         report = ReportDocument(
