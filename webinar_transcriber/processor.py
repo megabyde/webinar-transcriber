@@ -28,11 +28,7 @@ from webinar_transcriber.segmentation import detect_speech_regions, normalized_a
 from webinar_transcriber.structure import build_report
 from webinar_transcriber.transcript.normalize import normalize_transcription
 from webinar_transcriber.transcript.reconcile import reconcile_decoded_windows
-from webinar_transcriber.video import (
-    detect_scenes,
-    estimated_scene_sample_count,
-    extract_representative_frames,
-)
+from webinar_transcriber.video import detect_scenes, estimated_scene_sample_count
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -44,9 +40,7 @@ if TYPE_CHECKING:
         Diagnostics,
         MediaAsset,
         ReportDocument,
-        ReportSection,
         Scene,
-        SceneFrame,
         TranscriptionResult,
     )
     from webinar_transcriber.paths import RunLayout
@@ -321,24 +315,15 @@ def _run_report_phase(
     ctx.item_counts["normalized_transcript_segments"] = len(normalized_transcription.segments)
 
     scenes: list[Scene] = []
-    scene_frames: list[SceneFrame] = []
 
     if isinstance(media_asset, VideoAsset):
-        scenes, scene_frames = _detect_video_scenes(
+        scenes = _detect_video_scenes(
             input_path=input_path, layout=layout, media_asset=media_asset, ctx=ctx
         )
 
     ctx.item_counts["scenes"] = len(scenes)
-    ctx.item_counts["frames"] = len(scene_frames)
-    report = build_report(
-        media_asset,
-        normalized_transcription,
-        scenes=scenes,
-        scene_frames=scene_frames,
-    )
-
-    if scene_frames:
-        report = _attach_section_images(report, scene_frames, layout.run_dir)
+    ctx.item_counts["frames"] = sum(scene.image_path is not None for scene in scenes)
+    report = build_report(media_asset, normalized_transcription, scenes=scenes)
 
     if llm_processor is not None:
         report = _polish_report(report, llm_processor=llm_processor, ctx=ctx)
@@ -354,11 +339,11 @@ def _detect_video_scenes(
     layout: RunLayout,
     media_asset: VideoAsset,
     ctx: RunContext,
-) -> tuple[list[Scene], list[SceneFrame]]:
-    """Detect scenes, write the scene artifact, and extract representative frames.
+) -> list[Scene]:
+    """Detect scenes and save each scene's representative frame in one decode pass.
 
     Returns:
-        tuple[list[Scene], list[SceneFrame]]: Detected scenes and their representative frames.
+        list[Scene]: Detected scenes, each carrying its representative frame image path.
     """
     scene_sample_total = estimated_scene_sample_count(media_asset.duration_sec)
     with ctx.stage(
@@ -370,50 +355,23 @@ def _detect_video_scenes(
 
         scenes = detect_scenes(
             input_path,
-            duration_sec=media_asset.duration_sec,
+            layout.frames_dir,
+            media_asset.duration_sec,
             progress_callback=on_scene_progress,
         )
         st.update(completed=scene_sample_total, detail=_count(len(scenes), "scene"))
-    write_json(layout.scenes_path, [asdict(scene) for scene in scenes])
 
-    with ctx.stage("extract_frames", "Extracting scene frames", total=len(scenes)) as st:
-        scene_frames = extract_representative_frames(
-            input_path,
-            scenes,
-            layout.frames_dir,
-            progress_callback=lambda completed: st.update(completed=completed),
-            warning_callback=ctx.record_warning,
-        )
-    return scenes, scene_frames
+    write_json(layout.scenes_path, [asdict(scene) for scene in scenes])
+    return scenes
 
 
 def _export_report(report: ReportDocument, *, layout: RunLayout, ctx: RunContext) -> None:
-    """Write the Markdown, DOCX, and JSON artifacts for the report.
-
-    DOCX rendering may surface warnings through ``ctx.record_warning``; those land in
-    ``diagnostics.json`` (written after this stage), not on the report itself.
-    """
+    """Write the Markdown, DOCX, and JSON artifacts for the report."""
     with ctx.stage("export", "Writing artifacts") as st:
         write_markdown_report(report, layout.markdown_report_path)
-        write_docx_report(report, layout.docx_report_path, warning_callback=ctx.record_warning)
+        write_docx_report(report, layout.docx_report_path)
         write_json_report(report, layout.json_report_path)
         st.update(detail="report.md | report.docx | report.json")
-
-
-def _attach_section_images(
-    report: ReportDocument, scene_frames: list[SceneFrame], run_dir: Path
-) -> ReportDocument:
-    frame_by_id = {frame.id: frame for frame in scene_frames}
-    sections: list[ReportSection] = []
-    for section in report.sections:
-        frame = frame_by_id.get(section.frame_id) if section.frame_id else None
-        if frame is None:
-            sections.append(section)
-            continue
-        # Frames are always written under run_dir / "frames", so the path relativizes.
-        image_path = Path(frame.image_path).relative_to(run_dir).as_posix()
-        sections.append(replace(section, image_path=image_path))
-    return replace(report, sections=sections)
 
 
 def _polish_report(
@@ -439,7 +397,7 @@ def _polish_report(
             st.update(advance=advance)
 
         try:
-            section_result = llm_processor.polish_report_sections_with_progress(
+            section_result = llm_processor.polish_report_sections(
                 report, progress_callback=on_section_progress
             )
         except LlmProcessingError as ex:

@@ -101,7 +101,7 @@ class InstructorLLMProcessor:
         """Return the configured LLM provider identifier."""
         return self._provider_name
 
-    def polish_report_sections_with_progress(
+    def polish_report_sections(
         self, report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
     ) -> LlmSectionPolishResult:
         """Return polished section text with per-section progress updates."""

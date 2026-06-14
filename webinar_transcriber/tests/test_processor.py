@@ -23,7 +23,6 @@ from webinar_transcriber.models import (
     InferenceWindow,
     ReportDocument,
     Scene,
-    SceneFrame,
     SpeakerTurn,
     SpeechRegion,
     TranscriptSegment,
@@ -94,7 +93,7 @@ def fake_llm_processor(
             return section_result
         return section_result(report)
 
-    llm.polish_report_sections_with_progress.side_effect = polish_sections
+    llm.polish_report_sections.side_effect = polish_sections
     if metadata_error is not None:
         llm.polish_report_metadata.side_effect = metadata_error
     else:
@@ -605,27 +604,20 @@ class TestProcessInput:
 
         assert reporter.warnings == ["Silero warning"]
         assert artifacts.diagnostics.warnings == ["Silero warning"]
+        # Warnings live in diagnostics.json only; report.json carries no warnings key.
+        assert "warnings" not in read_json(artifacts.layout.json_report_path)
 
     def test_writes_video_scene_artifacts_and_frame_links(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         input_path = FIXTURE_DIR / "sample-video.mp4"
         run_dir = tmp_path / "video-run"
-        frames_dir = run_dir / "frames"
         scenes = [
-            Scene(id="scene-1", start_sec=0.0, end_sec=0.9),
+            Scene(id="scene-1", start_sec=0.0, end_sec=0.9, image_path="frames/scene-1.png"),
             Scene(id="scene-2", start_sec=0.9, end_sec=1.8),
         ]
-        frames = [
-            SceneFrame(
-                id="frame-1",
-                scene_id="scene-1",
-                image_path=str(frames_dir / "scene-1.png"),
-                timestamp_sec=0.5,
-            ),
-        ]
         install_pipeline_runtime(monkeypatch, runtime=video_runtime())
-        install_video_scene_runtime(monkeypatch, scenes=scenes, frames=frames)
+        install_video_scene_runtime(monkeypatch, scenes=scenes)
 
         artifacts = process_input(
             input_path,
@@ -646,68 +638,14 @@ class TestProcessInput:
         report_payload = read_json(artifacts.layout.json_report_path)
 
         assert scenes_payload == [
-            {"id": "scene-1", "start_sec": 0.0, "end_sec": 0.9},
-            {"id": "scene-2", "start_sec": 0.9, "end_sec": 1.8},
+            {"id": "scene-1", "start_sec": 0.0, "end_sec": 0.9, "image_path": "frames/scene-1.png"},
+            {"id": "scene-2", "start_sec": 0.9, "end_sec": 1.8, "image_path": None},
         ]
         assert artifacts.diagnostics.item_counts["scenes"] == 2
         assert artifacts.diagnostics.item_counts["frames"] == 1
         assert artifacts.report.sections[0].image_path == "frames/scene-1.png"
         assert report_payload["sections"][0]["image_path"] == "frames/scene-1.png"
         assert artifacts.report.sections[1].image_path is None
-
-    def test_frame_extraction_warnings_reach_diagnostics(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        input_path = FIXTURE_DIR / "sample-video.mp4"
-        reporter = RecordingStageReporter()
-        install_pipeline_runtime(monkeypatch, runtime=video_runtime())
-        install_video_scene_runtime(
-            monkeypatch,
-            scenes=[Scene(id="scene-1", start_sec=0.0, end_sec=1.8)],
-            frame_warning="Frame extraction failed",
-        )
-
-        artifacts = process_input(
-            input_path,
-            output_dir=tmp_path / "video-warning-run",
-            transcriber=FakeTranscriber(),
-            reporter=reporter,
-        )
-
-        assert reporter.warnings == ["Frame extraction failed"]
-        assert artifacts.diagnostics.warnings == ["Frame extraction failed"]
-
-    def test_docx_export_warnings_reach_diagnostics_not_report_json(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        input_path = FIXTURE_DIR / "sample-video.mp4"
-        run_dir = tmp_path / "docx-warning-run"
-        missing_image_path = run_dir / "frames" / "missing-frame.png"
-        install_pipeline_runtime(monkeypatch, runtime=video_runtime())
-        monkeypatch.setattr(
-            "webinar_transcriber.processor.detect_scenes",
-            lambda *_args, **_kwargs: [Scene(id="scene-1", start_sec=0.0, end_sec=1.8)],
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.processor.extract_representative_frames",
-            lambda *_args, **_kwargs: [
-                SceneFrame(
-                    id="frame-1",
-                    scene_id="scene-1",
-                    image_path=str(missing_image_path),
-                    timestamp_sec=1.0,
-                )
-            ],
-        )
-
-        artifacts = process_input(input_path, output_dir=run_dir, transcriber=FakeTranscriber())
-
-        expected_warning = f"Section image does not exist: {missing_image_path}"
-        report_payload = read_json(artifacts.layout.json_report_path)
-        diagnostics_payload = read_json(artifacts.layout.diagnostics_path)
-        assert "warnings" not in report_payload
-        assert diagnostics_payload["warnings"] == [expected_warning]
-        assert artifacts.diagnostics.warnings == [expected_warning]
 
 
 class TestProcessorSupport:

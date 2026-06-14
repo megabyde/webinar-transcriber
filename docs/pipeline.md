@@ -54,8 +54,9 @@ For install and typical usage, see [README.md](../README.md).
    - The normalized transcript keeps timestamps and optional speaker labels, but produces cleaner
      paragraph-sized material for sectioning and export.
 1. Process video context when the input has video.
-   - Scene detection samples the video timeline and writes `scenes.json`.
-   - Representative frames are extracted into `frames/`.
+   - Scene detection samples the video timeline and writes `scenes.json`. The same decode pass saves
+     the frame that opened each scene into `frames/`, so frames are captured at the slide change
+     instead of being re-decoded in a second pass.
    - Transcript segments are aligned to scene ranges so the Markdown, DOCX, and JSON reports can
      associate sections with the right visual frame.
 1. Build report sections locally.
