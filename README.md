@@ -7,7 +7,7 @@
 [![uv](https://img.shields.io/badge/package-uv-5C5CFF?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
 [![License MIT](https://img.shields.io/badge/license-MIT-2F855A)](LICENSE)
 
-![Webinar Transcriber social preview](docs/assets/social-preview.png)
+![Webinar Transcriber preview](docs/assets/social-preview.png)
 
 ## Contents
 
@@ -26,11 +26,11 @@ machine-readable report artifacts. It accepts audio-only files and slide-based v
 scene detection and representative frames; audio-only runs keep the same transcript and report
 contract without visual context.
 
-The useful constraint is locality. The default pipeline normalizes the media, detects speech regions
-with the bundled Silero VAD ONNX model, transcribes windows with `whisper.cpp`, reconciles window
-overlap, and builds report sections with local heuristics. Optional LLM refinement runs only after
-that deterministic report exists. It can polish section text and refine titles, summaries, action
-items, and section TL;DRs, but it does not replace the base pipeline.
+The constraint that matters is locality. The default pipeline normalizes the media, detects speech
+regions with the bundled Silero VAD ONNX model, transcribes windows with `whisper.cpp`, reconciles
+window overlap, and builds report sections with local heuristics. Optional LLM refinement runs only
+after that deterministic report exists. It can polish section text and refine titles, summaries,
+action items, and section TL;DRs, but it does not replace the base pipeline.
 
 > [!NOTE]
 > The core pipeline runs locally. Cloud access is used only when you pass `--llm`.
@@ -46,15 +46,15 @@ items, and section TL;DRs, but it does not replace the base pipeline.
 
 ### Install from a release
 
-Install a tagged release directly from GitHub when you want a stable CLI without cloning the
-repository:
+Install a tagged release directly from GitHub when you want a fixed version and do not need a
+checkout:
 
 ```bash
 uv tool install --reinstall git+https://github.com/megabyde/webinar-transcriber.git@v1.1.0
 ```
 
-Replace `v1.1.0` with the release tag you want. Release wheels and source distributions are
-published on the [GitHub Releases](https://github.com/megabyde/webinar-transcriber/releases) page.
+Replace `v1.1.0` with the release tag you want. Release wheels and source distributions are attached
+to the [GitHub Releases](https://github.com/megabyde/webinar-transcriber/releases) page.
 
 ### Install the CLI from this checkout
 

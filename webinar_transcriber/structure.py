@@ -86,7 +86,7 @@ def build_video_sections(
 
 
 def build_audio_sections(segments: list[TranscriptSegment]) -> list[ReportSection]:
-    """Build best-effort audio-only report sections from transcript timing gaps."""
+    """Build audio-only report sections from transcript timing gaps."""
     meaningful_segments = [seg for seg in segments if seg.text.strip()]
     if not meaningful_segments:
         return []

@@ -34,8 +34,8 @@ For install and typical usage, see [README.md](../README.md).
      Whisper gets context without decoding the entire file at once.
 1. Transcribe windows locally.
    - Each window is decoded by `whisper.cpp` and mapped back onto the original media timeline.
-   - The raw per-window result is written to `asr/decoded_windows.json`; this is useful when
-     debugging boundary behavior before reconciliation.
+   - The raw per-window result is written to `asr/decoded_windows.json`; use it to debug boundary
+     behavior before reconciliation.
 1. Reconcile raw windows into a transcript.
    - Overlapping window boundaries are deduplicated by comparing text prefixes and suffixes.
    - Empty or invalid decoded segments are discarded.
@@ -61,8 +61,8 @@ For install and typical usage, see [README.md](../README.md).
      associate sections with the right visual frame.
 1. Build report sections locally.
    - Video reports are primarily organized by detected scene boundaries.
-   - Audio-only reports use transcript timing and gaps to produce a best-effort section structure.
-   - This local report is complete even when `--llm` is not used.
+   - Audio-only reports use transcript timing and gaps to produce deterministic sections.
+   - The local report is written even when `--llm` is not used.
 1. Optionally polish the report with an LLM.
    - `--llm` runs after the deterministic local report exists.
    - The LLM can polish section transcript text and refine summary bullets, action items, section
