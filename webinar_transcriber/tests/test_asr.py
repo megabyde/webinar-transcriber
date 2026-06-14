@@ -335,14 +335,14 @@ class TestWhisperCppTranscriber:
     def test_prepare_model_imports_pywhispercpp_model(self, monkeypatch) -> None:
         fake_model = FakeModel()
         monkeypatch.setattr(
+            "webinar_transcriber.asr.transcriber._disable_tqdm_progress",
+            lambda: __import__("contextlib").nullcontext(),
+        )
+        monkeypatch.setattr(
             "webinar_transcriber.asr.transcriber.importlib.import_module",
             lambda _name: type(
                 "FakeModelModule", (), {"Model": lambda *_args, **_kwargs: fake_model}
             )(),
-        )
-        monkeypatch.setattr(
-            "webinar_transcriber.asr.transcriber._disable_tqdm_progress",
-            lambda: __import__("contextlib").nullcontext(),
         )
 
         transcriber = WhisperCppTranscriber(threads=4)
