@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 
-_COMPACT_OPTIONAL_KEYS = frozenset({"speaker", "scene_id", "frame_id"})
+_COMPACT_OPTIONAL_KEYS = frozenset({"speaker"})
 
 
 def _compact_dict_factory(items: list[tuple[str, object]]) -> dict[str, object]:
@@ -176,17 +176,12 @@ class DecodedWindow:
 
 @dataclass(slots=True, frozen=True)
 class Scene(TimelineItem):
-    """Time-bounded scene for video processing."""
+    """Time-bounded scene for video processing, with its representative frame.
 
+    ``image_path`` is the run-directory-relative path of the saved frame.
+    """
 
-@dataclass(slots=True, frozen=True)
-class SceneFrame:
-    """Representative frame selected from a scene."""
-
-    id: str
-    scene_id: str
-    image_path: str
-    timestamp_sec: float
+    image_path: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -213,8 +208,6 @@ class ReportSection(TimelineItem):
     title: str
     transcript_text: str
     tldr: str | None = None
-    scene_id: str | None = None
-    frame_id: str | None = None
     image_path: str | None = None
 
 

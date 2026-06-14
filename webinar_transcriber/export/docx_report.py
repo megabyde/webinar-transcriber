@@ -13,8 +13,6 @@ from webinar_transcriber.export.formatting import section_timecode
 from webinar_transcriber.text_utils import split_paragraph_blocks
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from docx.document import Document as DocxDocument
 
     from webinar_transcriber.models import ReportDocument, ReportSection
@@ -28,12 +26,7 @@ _FORMATTED_PARAGRAPH_RE = re.compile(
 )
 
 
-def write_docx_report(
-    report: ReportDocument,
-    output_path: Path,
-    *,
-    warning_callback: Callable[[str], None] | None = None,
-) -> Path:
+def write_docx_report(report: ReportDocument, output_path: Path) -> Path:
     """Write the report to DOCX.
 
     Returns:
@@ -57,9 +50,7 @@ def write_docx_report(
 
     document.add_heading("Sections", level=1)
     for section in report.sections:
-        _add_section(
-            document, section, image_base_dir=output_path.parent, warning_callback=warning_callback
-        )
+        _add_section(document, section, image_base_dir=output_path.parent)
 
     document.save(str(output_path))
     return output_path
@@ -70,17 +61,11 @@ def _add_section(
     section: ReportSection,
     *,
     image_base_dir: Path,
-    warning_callback: Callable[[str], None] | None = None,
 ) -> None:
     title = section.title
     timecode = section_timecode(section.start_sec, section.end_sec)
     document.add_heading(f"{title} ({timecode})", level=2)
-    _add_section_image(
-        document,
-        section.image_path,
-        image_base_dir=image_base_dir,
-        warning_callback=warning_callback,
-    )
+    _add_section_image(document, section.image_path, image_base_dir=image_base_dir)
     _add_section_tldr(document, section.tldr)
     paragraphs = split_paragraph_blocks(section.transcript_text) or [section.transcript_text]
     for paragraph_text in paragraphs:
@@ -93,7 +78,6 @@ def _add_section_image(
     image_path: str | None,
     *,
     image_base_dir: Path,
-    warning_callback: Callable[[str], None] | None = None,
 ) -> None:
     if not image_path:
         return
@@ -101,11 +85,9 @@ def _add_section_image(
     resolved_path = Path(image_path)
     if not resolved_path.is_absolute():
         resolved_path = image_base_dir / resolved_path
-    if not resolved_path.exists():
-        if warning_callback is not None:
-            warning_callback(f"Section image does not exist: {resolved_path}")
-        return
-    document.add_picture(str(resolved_path), width=Inches(6))
+    # A missing image is acceptable for the DOCX: skip it rather than fail the export.
+    if resolved_path.exists():
+        document.add_picture(str(resolved_path), width=Inches(6))
 
 
 def _add_section_tldr(document: DocxDocument, tldr: str | None) -> None:

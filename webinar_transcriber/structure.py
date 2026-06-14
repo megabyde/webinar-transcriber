@@ -11,7 +11,6 @@ from webinar_transcriber.models import (
     ReportDocument,
     ReportSection,
     Scene,
-    SceneFrame,
     TranscriptionResult,
     TranscriptSegment,
     VideoAsset,
@@ -26,7 +25,6 @@ def build_report(
     transcription: TranscriptionResult,
     *,
     scenes: list[Scene] | None = None,
-    scene_frames: list[SceneFrame] | None = None,
 ) -> ReportDocument:
     """Build a report document from media metadata and transcript segments.
 
@@ -34,7 +32,7 @@ def build_report(
         ReportDocument: The structured report document.
     """
     if isinstance(media_asset, VideoAsset):
-        sections = build_video_sections(transcription.segments, scenes or [], scene_frames or [])
+        sections = build_video_sections(transcription.segments, scenes or [])
     else:
         sections = build_audio_sections(transcription.segments)
     return ReportDocument(
@@ -51,14 +49,12 @@ def build_report(
 def build_video_sections(
     segments: list[TranscriptSegment],
     scenes: list[Scene],
-    scene_frames: list[SceneFrame],
 ) -> list[ReportSection]:
     """Build report sections by assigning transcript segments to scenes via midpoint inclusion.
 
     Returns:
         list[ReportSection]: One scene-aligned section per scene, in timeline order.
     """
-    frame_by_scene = {frame.scene_id: frame for frame in scene_frames}
     sections: list[ReportSection] = []
 
     for scene in scenes:
@@ -67,19 +63,13 @@ def build_video_sections(
         ]
         transcript_text = " ".join(segment.text for segment in scene_segments).strip()
         meaningful_segments = [segment for segment in scene_segments if segment.text.strip()]
-        frame = frame_by_scene.get(scene.id)
         title = derive_title(transcript_text, fallback="")
         if meaningful_segments:
             sections.append(
-                _draft_section(
-                    meaningful_segments,
-                    title=title,
-                    scene_id=scene.id,
-                    frame_id=frame.id if frame else None,
-                )
+                _draft_section(meaningful_segments, title=title, image_path=scene.image_path)
             )
             continue
-        # Keep scene-backed sections even when no transcript segments aligned, so frame/title
+        # Keep scene-backed sections even when no transcript segments aligned, so the frame/title
         # context is preserved for scene-only blocks.
         sections.append(
             ReportSection(
@@ -88,8 +78,7 @@ def build_video_sections(
                 start_sec=scene.start_sec,
                 end_sec=scene.end_sec,
                 transcript_text=transcript_text,
-                scene_id=scene.id,
-                frame_id=frame.id if frame else None,
+                image_path=scene.image_path,
             )
         )
 
@@ -139,8 +128,7 @@ def _draft_section(
     segments: list[TranscriptSegment],
     *,
     title: str,
-    scene_id: str | None = None,
-    frame_id: str | None = None,
+    image_path: str | None = None,
 ) -> ReportSection:
     return ReportSection(
         id="",
@@ -148,8 +136,7 @@ def _draft_section(
         start_sec=segments[0].start_sec,
         end_sec=segments[-1].end_sec,
         transcript_text=_transcript_text_from_segments(segments),
-        scene_id=scene_id,
-        frame_id=frame_id,
+        image_path=image_path,
     )
 
 

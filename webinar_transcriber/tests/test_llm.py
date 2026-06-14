@@ -240,7 +240,7 @@ class TestInstructorLlmProcessor:
             ],
         )
 
-        section_result = processor.polish_report_sections_with_progress(report)
+        section_result = processor.polish_report_sections(report)
         metadata_result = processor.polish_report_metadata(
             report, section_transcripts=section_result.section_transcripts
         )
@@ -372,7 +372,7 @@ class TestInstructorLlmProcessor:
             ],
         )
 
-        section_result = processor.polish_report_sections_with_progress(report)
+        section_result = processor.polish_report_sections(report)
 
         with pytest.raises(LlmProcessingError):
             processor.polish_report_metadata(
@@ -472,9 +472,7 @@ class TestInstructorLlmProcessor:
             ],
         )
 
-        result = processor.polish_report_sections_with_progress(
-            report, progress_callback=progress_updates.append
-        )
+        result = processor.polish_report_sections(report, progress_callback=progress_updates.append)
 
         assert len(fake_client.calls) == 2
         assert result.section_tldrs == {"section-1": "Intro recap.", "section-2": "Agenda recap."}
@@ -533,7 +531,7 @@ class TestInstructorLlmProcessor:
             ],
         )
 
-        result = processor.polish_report_sections_with_progress(report)
+        result = processor.polish_report_sections(report)
 
         assert fake_client.create_with_completion.call_count == 1
         assert fake_client.attempts.call_count == 2
@@ -603,9 +601,7 @@ class TestInstructorLlmProcessor:
             ],
         )
 
-        result = processor.polish_report_sections_with_progress(
-            report, progress_callback=progress_updates.append
-        )
+        result = processor.polish_report_sections(report, progress_callback=progress_updates.append)
 
         assert completions == ["section-2", "section-1"]
         assert progress_updates == [1, 1]
@@ -643,7 +639,7 @@ class TestInstructorLlmProcessor:
             ],
         )
 
-        processor.polish_report_sections_with_progress(report)
+        processor.polish_report_sections(report)
 
         messages = fake_client.create_with_completion.call_args.kwargs["messages"]
         system_prompt = messages[0]["content"]
@@ -684,7 +680,7 @@ class TestInstructorProcessorFlow:
         processor = self.processor({})
         report = ReportDocument(title="Demo", source_file="demo.wav", media_type=MediaType.AUDIO)
 
-        result = processor.polish_report_sections_with_progress(report)
+        result = processor.polish_report_sections(report)
 
         assert result.section_transcripts == {}
         assert result.section_tldrs == {}
@@ -720,9 +716,7 @@ class TestInstructorProcessorFlow:
             ],
         )
 
-        result = processor.polish_report_sections_with_progress(
-            report, progress_callback=progress_updates.append
-        )
+        result = processor.polish_report_sections(report, progress_callback=progress_updates.append)
 
         assert result.section_transcripts == {"section-1": "Agenda review."}
         assert result.section_tldrs == {"section-1": "Existing recap."}
@@ -748,7 +742,7 @@ class TestInstructorProcessorFlow:
             ],
         )
 
-        result = processor.polish_report_sections_with_progress(report)
+        result = processor.polish_report_sections(report)
 
         assert result.section_transcripts == {"section-1": "Agenda review."}
         assert result.section_tldrs == {"section-1": "Recap."}
