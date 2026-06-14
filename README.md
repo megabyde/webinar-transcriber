@@ -53,8 +53,12 @@ checkout:
 uv tool install --reinstall git+https://github.com/megabyde/webinar-transcriber.git@v1.1.0
 ```
 
-Replace `v1.1.0` with the release tag you want. Release wheels and source distributions are attached
-to the [GitHub Releases](https://github.com/megabyde/webinar-transcriber/releases) page.
+> [!NOTE]
+> The project does not publish to PyPI. Install from a Git tag, a GitHub Release asset, or a local
+> checkout.
+
+Replace `v1.1.0` with the release tag you want. Wheel and source distribution files are attached to
+the [GitHub Releases](https://github.com/megabyde/webinar-transcriber/releases) page.
 
 ### Install the CLI from this checkout
 
@@ -126,6 +130,15 @@ webinar-transcriber INPUT --keep-audio
 webinar-transcriber INPUT --output-dir runs/custom-demo
 ```
 
+### Runtime modes
+
+| Mode                | Effect                                                        |
+| ------------------- | ------------------------------------------------------------- |
+| Default             | Local ASR, local report, standard artifacts.                  |
+| Speaker diarization | `--diarize` adds speaker labels and `diarization.json`.       |
+| Cloud LLM polish    | `make install-llm` + `--llm` sends report text to provider.   |
+| Keep audio artifact | `--keep-audio` writes `transcription-audio.mp3` into the run. |
+
 ### Cloud LLM
 
 `--llm` enables provider-backed report refinement after deterministic sectioning. The LLM step can
@@ -138,6 +151,10 @@ The base install does not include provider SDKs. Install the LLM extra first:
 ```bash
 make install-llm
 ```
+
+> [!IMPORTANT]
+> `--llm` sends report text and transcript excerpts to the configured provider. Do not use it for
+> recordings that must stay entirely local.
 
 Configuration comes from environment variables. The CLI does not pin a model name; pass a model
 identifier supported by the provider you are using.
@@ -287,6 +304,10 @@ the C/C++/CUDA toolchain.
 ### Output layout
 
 Successful runs can write:
+
+> [!NOTE]
+> Core successful runs write metadata, transcript, report, diagnostics, and ASR artifacts.
+> Diarization, scene, frame, and kept-audio artifacts are conditional on the input type and flags.
 
 ```text
 runs/<timestamp>_<basename>/
