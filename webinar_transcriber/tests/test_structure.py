@@ -5,7 +5,6 @@ import pytest
 from webinar_transcriber.models import (
     AudioAsset,
     Scene,
-    SceneFrame,
     TranscriptionResult,
     TranscriptSegment,
     VideoAsset,
@@ -28,29 +27,20 @@ class TestBuildVideoSections:
                 TranscriptSegment(id="seg-2", text="Demo", start_sec=1.2, end_sec=1.8),
             ],
             scenes=[
-                Scene(id="scene-1", start_sec=0.0, end_sec=1.0),
-                Scene(id="scene-2", start_sec=1.0, end_sec=2.0),
-            ],
-            scene_frames=[
-                SceneFrame(
-                    id="frame-1", scene_id="scene-1", image_path="scene-1.png", timestamp_sec=0.5
-                ),
-                SceneFrame(
-                    id="frame-2", scene_id="scene-2", image_path="scene-2.png", timestamp_sec=1.5
-                ),
+                Scene(id="scene-1", start_sec=0.0, end_sec=1.0, image_path="frames/scene-1.png"),
+                Scene(id="scene-2", start_sec=1.0, end_sec=2.0, image_path="frames/scene-2.png"),
             ],
         )
 
         assert [section.transcript_text for section in sections] == ["Intro", "Demo"]
         assert [section.id for section in sections] == ["section-1", "section-2"]
-        assert sections[0].frame_id == "frame-1"
-        assert sections[1].frame_id == "frame-2"
+        assert sections[0].image_path == "frames/scene-1.png"
+        assert sections[1].image_path == "frames/scene-2.png"
 
     def test_returns_empty_list_when_there_are_no_scenes(self) -> None:
         sections = build_video_sections(
             segments=[TranscriptSegment(id="seg-1", text="Intro", start_sec=0.0, end_sec=0.8)],
             scenes=[],
-            scene_frames=[],
         )
 
         assert sections == []
@@ -59,13 +49,8 @@ class TestBuildVideoSections:
         sections = build_video_sections(
             segments=[TranscriptSegment(id="seg-1", text="Demo", start_sec=1.2, end_sec=1.8)],
             scenes=[
-                Scene(id="scene-1", start_sec=0.0, end_sec=1.0),
+                Scene(id="scene-1", start_sec=0.0, end_sec=1.0, image_path="frames/scene-1.png"),
                 Scene(id="scene-2", start_sec=1.0, end_sec=2.0),
-            ],
-            scene_frames=[
-                SceneFrame(
-                    id="frame-1", scene_id="scene-1", image_path="scene-1.png", timestamp_sec=0.5
-                )
             ],
         )
 
@@ -73,8 +58,7 @@ class TestBuildVideoSections:
         assert sections[0].title == "Slide 1"
         assert (sections[0].start_sec, sections[0].end_sec) == (0.0, 1.0)
         assert sections[0].transcript_text == ""
-        assert sections[0].scene_id == "scene-1"
-        assert sections[0].frame_id == "frame-1"
+        assert sections[0].image_path == "frames/scene-1.png"
         assert sections[1].id == "section-2"
         assert sections[1].title == "Demo"
         assert (sections[1].start_sec, sections[1].end_sec) == (1.2, 1.8)
@@ -83,7 +67,6 @@ class TestBuildVideoSections:
         sections = build_video_sections(
             segments=[TranscriptSegment(id="seg-1", text="   ", start_sec=0.2, end_sec=0.8)],
             scenes=[Scene(id="scene-1", start_sec=0.0, end_sec=1.0)],
-            scene_frames=[],
         )
 
         assert len(sections) == 1
@@ -124,17 +107,14 @@ class TestBuildReport:
                     )
                 ],
             ),
-            scenes=[Scene(id="scene-1", start_sec=0.0, end_sec=12.0)],
-            scene_frames=[
-                SceneFrame(
-                    id="frame-1", scene_id="scene-1", image_path="scene-1.png", timestamp_sec=1.0
-                )
+            scenes=[
+                Scene(id="scene-1", start_sec=0.0, end_sec=12.0, image_path="frames/scene-1.png")
             ],
         )
 
         assert report.title == "Demo File"
         assert report.sections[0].title == "Agenda overview"
-        assert report.sections[0].frame_id == "frame-1"
+        assert report.sections[0].image_path == "frames/scene-1.png"
 
     def test_emits_empty_summary_and_action_items_without_llm(self) -> None:
         report = build_report(

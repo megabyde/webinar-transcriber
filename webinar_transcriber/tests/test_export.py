@@ -136,12 +136,11 @@ class TestDocxReport:
         )
 
         output_path = tmp_path / "report.docx"
-        warnings: list[str] = []
 
-        write_docx_report(report, output_path, warning_callback=warnings.append)
+        write_docx_report(report, output_path)
 
+        # A missing image is skipped silently; the DOCX is still written.
         assert output_path.exists()
-        assert warnings == [f"Section image does not exist: {tmp_path / 'missing.png'}"]
 
     def test_embeds_section_image(self, tmp_path: Path) -> None:
         image_path = tmp_path / "frame.png"

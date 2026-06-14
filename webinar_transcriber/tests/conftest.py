@@ -23,7 +23,6 @@ from webinar_transcriber.models import (
     MediaType,
     ReportDocument,
     Scene,
-    SceneFrame,
     SpeechRegion,
     TranscriptionResult,
     TranscriptSegment,
@@ -303,31 +302,21 @@ def install_video_scene_runtime(
     monkeypatch: pytest.MonkeyPatch,
     *,
     scenes: list[Scene],
-    frames: list[SceneFrame] | None = None,
-    frame_warning: str | None = None,
 ) -> None:
-    def fake_detect_scenes(*_args, progress_callback=None, **_kwargs) -> list[Scene]:
-        if progress_callback is not None:
-            for index in range(1, len(scenes) + 1):
+    def fake_detect_scenes(
+        _input_path: Path, frames_dir: Path, _duration_sec: float, *, progress_callback=None
+    ) -> list[Scene]:
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        for index, scene in enumerate(scenes, start=1):
+            if progress_callback is not None:
                 progress_callback(index, index)
+            if scene.image_path is not None:
+                Image.new("RGB", (8, 8), color="white").save(
+                    frames_dir / Path(scene.image_path).name
+                )
         return scenes
 
-    def fake_extract_frames(*_args, progress_callback=None, warning_callback=None, **_kwargs):
-        if frame_warning is not None:
-            assert warning_callback is not None
-            warning_callback(frame_warning)
-        extracted_frames = list(frames or [])
-        for index, frame in enumerate(extracted_frames, start=1):
-            Path(frame.image_path).parent.mkdir(parents=True, exist_ok=True)
-            Image.new("RGB", (8, 8), color="white").save(frame.image_path)
-            if progress_callback is not None:
-                progress_callback(index)
-        return extracted_frames
-
     monkeypatch.setattr("webinar_transcriber.processor.detect_scenes", fake_detect_scenes)
-    monkeypatch.setattr(
-        "webinar_transcriber.processor.extract_representative_frames", fake_extract_frames
-    )
 
 
 def audio_runtime(

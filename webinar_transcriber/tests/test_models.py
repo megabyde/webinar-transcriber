@@ -67,30 +67,6 @@ class TestCoreModels:
         assert report.sections[0].title == "Overview"
         assert report.sections[0].tldr is None
 
-    def test_report_json_omits_unset_scene_and_frame_ids(self) -> None:
-        report = ReportDocument(
-            title="Demo",
-            source_file="demo.wav",
-            media_type=MediaType.AUDIO,
-            sections=[
-                ReportSection(
-                    id="section-1",
-                    title="Overview",
-                    start_sec=0.0,
-                    end_sec=10.0,
-                    transcript_text="Transcript body.",
-                )
-            ],
-        )
-
-        sections = report.to_json()["sections"]
-
-        assert isinstance(sections, list)
-        section_payload = sections[0]
-        assert isinstance(section_payload, dict)
-        assert "scene_id" not in section_payload
-        assert "frame_id" not in section_payload
-
     def test_scene_exposes_midpoint(self) -> None:
         scene = Scene(id="scene-1", start_sec=2.0, end_sec=5.0)
 
