@@ -130,13 +130,11 @@ class TestBuildReport:
                     id="frame-1", scene_id="scene-1", image_path="scene-1.png", timestamp_sec=1.0
                 )
             ],
-            warnings=["low confidence"],
         )
 
         assert report.title == "Demo File"
         assert report.sections[0].title == "Agenda overview"
         assert report.sections[0].frame_id == "frame-1"
-        assert report.warnings == ["low confidence"]
 
     def test_emits_empty_summary_and_action_items_without_llm(self) -> None:
         report = build_report(

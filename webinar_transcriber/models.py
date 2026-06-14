@@ -229,7 +229,6 @@ class ReportDocument:
     summary: list[str] = dataclass_field(default_factory=list)
     action_items: list[str] = dataclass_field(default_factory=list)
     sections: list[ReportSection] = dataclass_field(default_factory=list)
-    warnings: list[str] = dataclass_field(default_factory=list)
 
     def to_json(self) -> dict[str, object]:
         """Return the report JSON artifact payload."""

@@ -27,7 +27,6 @@ def build_report(
     *,
     scenes: list[Scene] | None = None,
     scene_frames: list[SceneFrame] | None = None,
-    warnings: list[str] | None = None,
 ) -> ReportDocument:
     """Build a report document from media metadata and transcript segments.
 
@@ -46,7 +45,6 @@ def build_report(
         summary=[],
         action_items=[],
         sections=sections,
-        warnings=warnings or [],
     )
 
 

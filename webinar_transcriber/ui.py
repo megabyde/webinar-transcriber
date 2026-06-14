@@ -137,7 +137,7 @@ class StageReporter:
         table = Table.grid(padding=(0, 2))
         table.add_column(style="dim")
         table.add_column()
-        warning_count = len(artifacts.report.warnings)
+        warning_count = len(artifacts.diagnostics.warnings)
         warning_text = Text(str(warning_count), style="yellow" if warning_count else "green")
         table.add_row("Run directory", Text(str(artifacts.layout.run_dir), style="cyan"))
         table.add_row("Diagnostics", Text(str(artifacts.layout.diagnostics_path), style="cyan"))
