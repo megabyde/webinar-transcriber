@@ -8,8 +8,9 @@ Keep repository documentation consolidated in:
 
 - `README.md` for user-facing usage, behavior, and artifact contracts
 - `AGENTS.md` for contributor and implementation guidance
-- `docs/` for reference-style internals that would bloat `README.md` without helping a typical user
-  (currently: `docs/pipeline.md` — per-stage pipeline detail)
+- `docs/` for reference-style detail that would bloat `README.md` or obscure the user flow
+  (`docs/pipeline.md` — per-stage pipeline detail; `docs/releasing.md` — release process;
+  `docs/troubleshooting.md` — error-indexed fixes; `docs/development.md` — checkout setup and gates)
 
 Prefer extending `README.md` first. Add a new file under `docs/` only when a section is long enough
 to obscure the user-facing flow and self-contained enough to read on its own. Repository assets stay
@@ -53,49 +54,11 @@ A change is ready to merge when all of the following hold:
   `style:`, `feat:`, `fix:`, `test:`, `build:`, or `chore:`. Use an optional scope when it adds
   clarity, for example `build(deps):`.
 
-## Releasing
-
-- **Versioning is tag-driven.** `hatch-vcs` derives the version from a `vX.Y.Z` git tag into
-  `webinar_transcriber/_version.py`; never hand-edit a version.
-- **Choose the bump by semver judgment.** The JSON artifacts (`report.json`, `scenes.json`,
-  `diagnostics.json`) are local CLI outputs, not a stable API — a changed or removed artifact key is
-  a minor bump, not major, unless deliberately treated otherwise. Reserve major for CLI-flag or
-  install-contract breaks.
-- **Cut a release by pushing the tag.** With `main` green, push an annotated `vX.Y.Z` tag; the
-  `release.yml` workflow validates (lint and `make test-all` on Ubuntu and macOS plus CLI/whisper
-  smoke), builds the wheel and sdist, and creates a GitHub Release with those assets. There is no
-  PyPI publish.
-- **Curate the release notes.** After the release exists, replace the auto-generated "What's
-  Changed" list (`gh release edit --notes-file`) with: a `## Highlights` section that cites PRs
-  inline as `#NNN` (GitHub auto-links them); an `## Output changes` heads-up whenever the work
-  touched `report.json`/`scenes.json`/`diagnostics.json`, CLI flags, or generated artifacts; and the
-  **Full Changelog** compare link. Keep highlights scannable — themes, not a per-PR dump.
-
 ## Package Layout
 
-The package intentionally avoids deep nesting.
-
-```text
-webinar_transcriber/
-├── cli.py                  Click CLI entrypoints
-├── processor.py            pipeline orchestration and RunContext dataclasses
-├── asr/                    window planning, carryover policy, pywhispercpp wrapper
-├── diarization/            optional local speaker diarization via sherpa-onnx
-├── llm/                    optional cloud LLM integrations
-├── transcript/             normalization and window reconciliation
-├── video/                  scene detection and frame extraction
-├── export/                 Markdown, DOCX, and JSON writers
-├── diagnostics.py          run-diagnostics assembly and persistence
-├── paths.py                RunLayout — deterministic run-directory construction
-├── media.py                probing helpers and shared media error types
-├── models.py               shared dataclasses and domain types
-├── normalized_audio.py     deterministic transcription-audio preparation
-├── segmentation.py         speech-region detection and duration helpers
-├── structure.py            transcript-scene alignment and report heuristics
-├── text_utils.py           paragraph splitting and sentence terminator helpers
-├── ui.py                   StageReporter — Rich-backed progress (track() context manager)
-└── tests/                  flat test suite; committed fixtures under tests/fixtures/
-```
+The package is deliberately flat: shallow subpackages by domain (`asr`, `diarization`, `llm`,
+`transcript`, `video`, `export`) with leaf modules at the root. Read the tree directly rather than
+maintaining a copy here, and avoid adding deep nesting.
 
 ## Runtime Contracts
 
@@ -144,6 +107,51 @@ webinar_transcriber/
   detection does not require PyTorch or a first-run network download.
 - Speaker diarization uses `sherpa-onnx` with downloaded ONNX models cached under
   `~/.cache/webinar-transcriber/diarization`; keep those model artifacts out of the wheel.
+
+## Simplification and Refactoring Notes
+
+This repo has improved repeatedly by making complexity justify itself, not the reverse. In review
+the maintainer keeps pushing past a first "this is load-bearing" reading and is usually right. Carry
+that prior: an abstraction must earn its keep, the default answer to "can this be simpler" is yes
+until the code proves otherwise, and a challenge to a conservative answer is a request for evidence.
+Grep the real readers and callers, then produce a verified cleanup or give the precise structural
+reason it can't be done and act rather than re-explain. A small flag-free helper is fine when a
+linter genuinely forces extraction; a state flag or multi-helper split to dodge one is
+over-engineering.
+
+Recurring smells to check for:
+
+- **Test-only knobs** — a param/field whose only non-default caller is a test; delete it and let
+  tests monkeypatch the constant or exercise the real contract.
+- **1:1 wrappers / single-caller helpers** that only rename one shape or forward one call; inline at
+  the call site.
+- **Write-only fields** serialized or assigned but never read back; delete unless an external
+  artifact contract consumes them.
+- **Duplicated diagnostics or serialization** — one value under two keys or two artifacts; pick the
+  single owner.
+- **Wrapper / result-object chains** threading one value through re-keying passes, or a plan/spec
+  wrapping a `min()`/`len()`; collapse to one shape or a function.
+- **Re-export / lazy-import surfaces with no production consumer**; import from the defining leaf
+  module, keeping a package re-export only to isolate an optional extra or a real public boundary.
+- **Protocols for a single in-tree implementation**; type the collaborator concretely and let tests
+  use duck-typed fakes. A Protocol earns its place only at a third-party or polymorphic seam.
+- **Fakes re-implementing production logic**; replace with a Mock-based double that runs the real
+  policy or object, so the test proves production behavior.
+- **Defensive branches guarding states an earlier stage forbids** (a guard on a positive constant, a
+  `getattr` default masking a missing attribute); assert the invariant or delete the branch.
+- **Errors downgraded to warnings** the run then threads around; let them propagate, reserving
+  warnings for recoverable, user-actionable conditions.
+- **Config bags between exactly two callers**; inline as kwargs or fields.
+- **Stale suppressions** — ruff ignores with zero hits, `type: ignore` / `cast()` that narrow away
+  with `isinstance`; re-enable or narrow, keeping only documented stub gaps.
+
+When acting: put ownership at the boundary that already knows the value (the CLI builds
+collaborators, stages record their own diagnostics, ASR owns window policy, export/report models
+carry no diagnostics-only data); prefer the narrowest cohesive cleanup with a clear before/after
+story; verify with a byte-identical fixture-artifact diff where possible over tests that only prove
+one helper forwarded to another; and make any user-visible contract change (CLI flags, artifact
+paths, JSON shapes, diagnostics or stage keys) explicit in the PR with `README.md` and `AGENTS.md`
+updated in the same change.
 
 ## Style Notes
 
