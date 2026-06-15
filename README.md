@@ -53,10 +53,6 @@ checkout:
 uv tool install --reinstall git+https://github.com/megabyde/webinar-transcriber.git@v1.1.0
 ```
 
-> [!NOTE]
-> The project does not publish to PyPI. Install from a Git tag, a GitHub Release asset, or a local
-> checkout.
-
 Replace `v1.1.0` with the release tag you want. Wheel and source distribution files are attached to
 the [GitHub Releases](https://github.com/megabyde/webinar-transcriber/releases) page.
 
@@ -129,15 +125,6 @@ webinar-transcriber INPUT1 INPUT2 INPUT3
 webinar-transcriber INPUT --keep-audio
 webinar-transcriber INPUT --output-dir runs/custom-demo
 ```
-
-### Runtime modes
-
-| Mode                | Effect                                                        |
-| ------------------- | ------------------------------------------------------------- |
-| Default             | Local ASR, local report, standard artifacts.                  |
-| Speaker diarization | `--diarize` adds speaker labels and `diarization.json`.       |
-| Cloud LLM polish    | `make install-llm` + `--llm` sends report text to provider.   |
-| Keep audio artifact | `--keep-audio` writes `transcription-audio.mp3` into the run. |
 
 ### Cloud LLM
 
@@ -304,10 +291,6 @@ the C/C++/CUDA toolchain.
 ### Output layout
 
 Successful runs can write:
-
-> [!NOTE]
-> Core successful runs write metadata, transcript, report, diagnostics, and ASR artifacts.
-> Diarization, scene, frame, and kept-audio artifacts are conditional on the input type and flags.
 
 ```text
 runs/<timestamp>_<basename>/
