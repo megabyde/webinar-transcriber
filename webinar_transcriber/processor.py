@@ -399,14 +399,9 @@ def _polish_report(
                 report, progress_callback=on_section_progress
             )
         except LlmProcessingError as ex:
-            ctx.record_warning(str(ex))
-            st.update(detail=_join_detail(runtime_detail, "fallback"))
-            ctx.llm = LlmDiagnostics(
-                model=model_name,
-                report_status="fallback",
-                report_latency_sec=st.elapsed_sec(),
+            return _record_llm_fallback(
+                report, ex, ctx=ctx, st=st, runtime_detail=runtime_detail, model_name=model_name
             )
-            return report
         section_elapsed_sec = st.elapsed_sec()
         st.update(detail=_count(section_count, "section"))
     for warning in section_result.warnings:
@@ -420,15 +415,16 @@ def _polish_report(
                 report, section_transcripts=section_result.section_transcripts
             )
         except LlmProcessingError as ex:
-            ctx.record_warning(str(ex))
-            st.update(detail=_join_detail(runtime_detail, "fallback"))
-            ctx.llm = LlmDiagnostics(
-                model=model_name,
-                report_status="fallback",
-                report_latency_sec=section_elapsed_sec + st.elapsed_sec(),
+            return _record_llm_fallback(
+                report,
+                ex,
+                ctx=ctx,
+                st=st,
+                runtime_detail=runtime_detail,
+                model_name=model_name,
+                prior_elapsed_sec=section_elapsed_sec,
                 response_metadata=section_result.response_metadata,
             )
-            return report
         metadata_elapsed_sec = st.elapsed_sec()
         st.update(detail=_metadata_detail(metadata_result))
 
@@ -458,6 +454,33 @@ def _polish_report(
         ],
     )
     return polished_report
+
+
+def _record_llm_fallback(
+    report: ReportDocument,
+    ex: LlmProcessingError,
+    *,
+    ctx: RunContext,
+    st: StageHandle,
+    runtime_detail: str,
+    model_name: str,
+    prior_elapsed_sec: float = 0.0,
+    response_metadata: list[dict[str, object]] | None = None,
+) -> ReportDocument:
+    """Record an LLM-stage fallback (warning + diagnostics) and return the unpolished report.
+
+    Returns:
+        ReportDocument: The original, unpolished report.
+    """
+    ctx.record_warning(str(ex))
+    st.update(detail=_join_detail(runtime_detail, "fallback"))
+    ctx.llm = LlmDiagnostics(
+        model=model_name,
+        report_status="fallback",
+        report_latency_sec=prior_elapsed_sec + st.elapsed_sec(),
+        response_metadata=response_metadata or [],
+    )
+    return report
 
 
 def _metadata_detail(metadata_result: LlmReportMetadataResult) -> str:
