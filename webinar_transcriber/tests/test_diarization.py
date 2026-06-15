@@ -229,7 +229,7 @@ class TestConfig:
 
 class TestSherpaOnnxDiarizer:
     def test_errors_when_sherpa_is_unavailable(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(sherpa_runtime, "_load_sherpa_onnx", lambda: None)
+        monkeypatch.setattr(sherpa_runtime, "load_sherpa_onnx", lambda: None)
 
         with pytest.raises(DiarizationProcessingError, match="sherpa-onnx is unavailable"):
             sherpa_runtime.SherpaOnnxDiarizer(threads=1).prepare(speaker_count=2)
@@ -246,7 +246,7 @@ class TestSherpaOnnxDiarizer:
                 ]
             ]
         )
-        monkeypatch.setattr(sherpa_runtime, "_load_sherpa_onnx", lambda: fake_sherpa)
+        monkeypatch.setattr(sherpa_runtime, "load_sherpa_onnx", lambda: fake_sherpa)
         monkeypatch.setattr(
             sherpa_runtime,
             "ensure_default_models",
@@ -278,7 +278,7 @@ class TestSherpaOnnxDiarizer:
         fake_sherpa = FakeSherpaModule(
             results=[[FakeSherpaItem(0.0, 1.0, 9), FakeSherpaItem(1.0, 2.0, 8)]]
         )
-        monkeypatch.setattr(sherpa_runtime, "_load_sherpa_onnx", lambda: fake_sherpa)
+        monkeypatch.setattr(sherpa_runtime, "load_sherpa_onnx", lambda: fake_sherpa)
         monkeypatch.setattr(
             sherpa_runtime,
             "ensure_default_models",
@@ -459,16 +459,3 @@ class TestModelDownload:
 
         with pytest.raises(DiarizationProcessingError, match="failed verification"):
             sherpa_runtime._ensure_segmentation_model(model_path)  # noqa: SLF001
-
-    def test_load_sherpa_onnx_handles_missing_module(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            sherpa_runtime.importlib, "import_module", Mock(side_effect=ImportError)
-        )
-
-        assert sherpa_runtime._load_sherpa_onnx() is None  # noqa: SLF001
-
-    def test_load_sherpa_onnx_returns_module(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        fake_module = object()
-        monkeypatch.setattr(sherpa_runtime.importlib, "import_module", lambda _name: fake_module)
-
-        assert sherpa_runtime._load_sherpa_onnx() is fake_module  # noqa: SLF001

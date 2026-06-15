@@ -7,16 +7,15 @@ them with runtime-specific library details.
 
 from __future__ import annotations
 
-import importlib
 from importlib import resources
 from typing import TYPE_CHECKING
 
+from webinar_transcriber._env import load_sherpa_onnx
 from webinar_transcriber.models import SpeechRegion
 from webinar_transcriber.normalized_audio import NORMALIZED_SAMPLE_RATE
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from types import ModuleType
 
     import numpy as np
 
@@ -79,7 +78,7 @@ def normalize_regions(regions: list[SpeechRegion]) -> list[SpeechRegion]:
 def _silero_speech_regions(
     samples: np.ndarray, *, threads: int, progress_callback: ProgressCallback | None = None
 ) -> list[SpeechRegion] | None:
-    sherpa_onnx = _load_sherpa_onnx()
+    sherpa_onnx = load_sherpa_onnx()
     if sherpa_onnx is None:
         return None
 
@@ -151,10 +150,3 @@ def _silero_speech_regions(
 
 def _silero_vad_model_path() -> resources.abc.Traversable:
     return resources.files("webinar_transcriber.assets").joinpath("silero_vad.onnx")
-
-
-def _load_sherpa_onnx() -> ModuleType | None:
-    try:
-        return importlib.import_module("sherpa_onnx")
-    except ImportError:  # pragma: no cover - optional wheel/import boundary
-        return None
