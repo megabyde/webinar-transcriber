@@ -19,48 +19,35 @@ if TYPE_CHECKING:
 @dataclass(frozen=True, slots=True)
 class ProviderSpec:
     label: str
-    module_name: str
-    api_key_env: str
-    model_env: str
     request_kwargs: Mapping[str, object] = field(default_factory=dict)
 
 
 PROVIDERS = {
-    "openai": ProviderSpec(
-        label="OpenAI",
-        module_name="openai",
-        api_key_env="OPENAI_API_KEY",
-        model_env="OPENAI_MODEL",
-    ),
-    "anthropic": ProviderSpec(
-        label="Anthropic",
-        module_name="anthropic",
-        api_key_env="ANTHROPIC_API_KEY",
-        model_env="ANTHROPIC_MODEL",
-        request_kwargs={"max_tokens": 4096},
-    ),
+    "openai": ProviderSpec(label="OpenAI"),
+    # Anthropic's Messages API requires max_tokens; OpenAI's is optional.
+    "anthropic": ProviderSpec(label="Anthropic", request_kwargs={"max_tokens": 4096}),
 }
 
 
-def required_provider_env(*, api_key_env: str, model_env: str) -> tuple[str, str]:
-    """Return the required API key and model name for one provider.
+def required_provider_env(provider_name: str) -> tuple[str, str]:
+    """Return the required model name and API key for one provider.
+
+    The env var names follow the SDK-standard ``{PROVIDER}_API_KEY`` / ``{PROVIDER}_MODEL`` pattern.
 
     Returns:
-        tuple[str, str]: The configured API key and model name.
+        tuple[str, str]: The configured model name and API key.
 
     Raises:
         LlmConfigurationError: If either required environment variable is missing.
     """
-    api_key = os.environ.get(api_key_env)
-    model_name = os.environ.get(model_env)
-    if not api_key or not model_name:
-        missing = ", ".join(
-            env_name
-            for env_name, value in ((api_key_env, api_key), (model_env, model_name))
-            if not value
+    prefix = provider_name.upper()
+    api_key = os.environ.get(f"{prefix}_API_KEY")
+    model_name = os.environ.get(f"{prefix}_MODEL")
+    if not (model_name and api_key):
+        raise LlmConfigurationError(
+            f"Set {prefix}_API_KEY and {prefix}_MODEL for the '{provider_name}' LLM provider."
         )
-        raise LlmConfigurationError(f"Missing required LLM environment variables: {missing}.")
-    return api_key, model_name
+    return model_name, api_key
 
 
 def _required_llm_module(module_name: str, *, provider_label: str) -> object:
@@ -95,10 +82,8 @@ def build_llm_processor_from_env(*, threads: int) -> InstructorLLMProcessor:
         )
 
     instructor: Any = _required_llm_module("instructor", provider_label=spec.label)
-    _required_llm_module(spec.module_name, provider_label=spec.label)
-    api_key, model_name = required_provider_env(
-        api_key_env=spec.api_key_env, model_env=spec.model_env
-    )
+    _required_llm_module(provider_name, provider_label=spec.label)
+    model_name, api_key = required_provider_env(provider_name)
 
     return InstructorLLMProcessor(
         client=instructor.from_provider(
