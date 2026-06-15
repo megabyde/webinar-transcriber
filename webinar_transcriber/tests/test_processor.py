@@ -19,7 +19,6 @@ from webinar_transcriber.llm import (
     LlmSectionPolishResult,
 )
 from webinar_transcriber.models import (
-    DecodedWindow,
     InferenceWindow,
     ReportDocument,
     Scene,
@@ -526,35 +525,14 @@ class TestProcessInput:
         assert transcriber.close_calls == 1
 
     def test_persists_intermediate_artifacts_on_failure(self, tmp_path: Path) -> None:
-        class OneWindowTranscriber(FakeTranscriber):
-            def transcribe_inference_windows(
-                self,
-                audio_samples: np.ndarray,
-                windows: list[InferenceWindow],
-                *,
-                language: str | None = None,
-                progress_callback: Callable[[int, int], None] | None = None,
-                warning_callback: Callable[[str], None] | None = None,
-            ) -> list[DecodedWindow]:
-                del audio_samples, language, warning_callback
-                if progress_callback is not None:
-                    progress_callback(1, 1)
-                return [
-                    DecodedWindow(
-                        window=windows[0],
-                        text="Agenda review and project status update.",
-                        detected_language="en",
-                        segments=[
-                            TranscriptSegment(
-                                id="segment-1",
-                                text="Agenda review and project status update.",
-                                start_sec=0.0,
-                                end_sec=3.0,
-                            )
-                        ],
-                    )
-                ]
-
+        one_segment = [
+            TranscriptSegment(
+                id="segment-1",
+                text="Agenda review and project status update.",
+                start_sec=0.0,
+                end_sec=3.0,
+            )
+        ]
         output_dir = tmp_path / "failed-run"
         with (
             patch("webinar_transcriber.processor.build_report", side_effect=RuntimeError("boom")),
@@ -571,7 +549,7 @@ class TestProcessInput:
             process_input(
                 FIXTURE_DIR / "sample-audio.mp3",
                 output_dir=output_dir,
-                transcriber=OneWindowTranscriber(),
+                transcriber=FakeTranscriber(segments=one_segment),
             )
 
         assert (output_dir / "metadata.json").exists()
@@ -757,44 +735,20 @@ class TestProcessInputLlm:
             ),
         )
         reporter = RecordingStageReporter()
-
-        class TwoSectionTranscriber(FakeTranscriber):
-            def transcribe_inference_windows(
-                self,
-                audio_samples: np.ndarray,
-                windows: list[InferenceWindow],
-                *,
-                language: str | None = None,
-                progress_callback: Callable[[int, int], None] | None = None,
-                warning_callback: Callable[[str], None] | None = None,
-            ) -> list[DecodedWindow]:
-                del audio_samples, language, warning_callback
-                segments = [
-                    [
-                        TranscriptSegment(
-                            id="segment-1", text="Opening topic.", start_sec=0.0, end_sec=1.5
-                        )
-                    ],
-                    [
-                        TranscriptSegment(
-                            id="segment-2",
-                            text="Later topic starts now.",
-                            start_sec=8.0,
-                            end_sec=9.5,
-                        )
-                    ],
-                ]
-                if progress_callback is not None:
-                    progress_callback(len(windows), 2)
-                return [
-                    DecodedWindow(
-                        window=window,
-                        text=segments[index][0].text,
-                        segments=segments[index],
-                        detected_language="en",
+        two_section_transcriber = FakeTranscriber(
+            window_segments=[
+                [
+                    TranscriptSegment(
+                        id="segment-1", text="Opening topic.", start_sec=0.0, end_sec=1.5
                     )
-                    for index, window in enumerate(windows)
-                ]
+                ],
+                [
+                    TranscriptSegment(
+                        id="segment-2", text="Later topic starts now.", start_sec=8.0, end_sec=9.5
+                    )
+                ],
+            ]
+        )
 
         def section_polish(report: ReportDocument) -> LlmSectionPolishResult:
             return LlmSectionPolishResult(
@@ -807,7 +761,7 @@ class TestProcessInputLlm:
         artifacts = process_input(
             input_path,
             output_dir=tmp_path / "llm-two-section-run",
-            transcriber=TwoSectionTranscriber(),
+            transcriber=two_section_transcriber,
             llm_processor=fake_llm_processor(
                 section_result=section_polish,
                 metadata_result=LlmReportMetadataResult(
