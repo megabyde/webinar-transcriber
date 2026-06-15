@@ -53,14 +53,19 @@ def _mux_audio_frames(
             output_container.mux(packet)
 
 
-def _transcode_audio_with_pyav(
+def write_transcription_audio(
     input_path: Path,
     output_path: Path,
     *,
-    output_codec: str,
-    resample_format: str,
+    audio_format: str = "wav",
     progress_callback: Callable[[float], None] | None = None,
 ) -> Path:
+    """Convert audio into a normalized transcription-audio format.
+
+    Returns:
+        Path: The written normalized audio path.
+    """
+    output_codec, resample_format = _AUDIO_OUTPUT_FORMATS[audio_format]
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with (
         open_audio_input_container(input_path) as (input_container, input_stream),
@@ -87,28 +92,6 @@ def _transcode_audio_with_pyav(
     if not output_path.exists():  # pragma: no cover - PyAV defensive postcondition
         raise MediaProcessingError(f"PyAV did not write {output_path}.")
     return output_path
-
-
-def write_transcription_audio(
-    input_path: Path,
-    output_path: Path,
-    *,
-    audio_format: str = "wav",
-    progress_callback: Callable[[float], None] | None = None,
-) -> Path:
-    """Convert audio into a normalized transcription-audio format.
-
-    Returns:
-        Path: The written normalized audio path.
-    """
-    output_codec, resample_format = _AUDIO_OUTPUT_FORMATS[audio_format]
-    return _transcode_audio_with_pyav(
-        input_path,
-        output_path,
-        output_codec=output_codec,
-        resample_format=resample_format,
-        progress_callback=progress_callback,
-    )
 
 
 def load_normalized_audio(audio_path: Path) -> np.ndarray:
