@@ -209,11 +209,18 @@ class FakeTranscriber(WhisperCppTranscriber):
     """Stable whisper-style test double for deterministic transcripts."""
 
     def __init__(
-        self, *, detected_language: str = "en", segments: list[TranscriptSegment] | None = None
+        self,
+        *,
+        detected_language: str = "en",
+        segments: list[TranscriptSegment] | None = None,
+        window_segments: list[list[TranscriptSegment]] | None = None,
     ) -> None:
         super().__init__(model_name="test-model", threads=4)
         self._detected_language = detected_language
         self.windows_seen: list[InferenceWindow] = []
+        # window_segments gives distinct segments per decode window; segments repeats one list for
+        # every window (the common case).
+        self._window_segments = window_segments
         self._segments = segments or [
             TranscriptSegment(
                 id="segment-1",
@@ -250,17 +257,18 @@ class FakeTranscriber(WhisperCppTranscriber):
     ) -> list[DecodedWindow]:
         del audio_samples, warning_callback
         self.windows_seen = list(windows)
+        per_window = self._window_segments or [self._segments for _ in windows]
         if progress_callback is not None:
-            for index, _window in enumerate(windows, start=1):
-                progress_callback(index, len(self._segments))
+            for index, segments in enumerate(per_window, start=1):
+                progress_callback(index, len(segments))
         return [
             DecodedWindow(
                 window=window,
-                text=" ".join(segment.text for segment in self._segments),
+                text=" ".join(segment.text for segment in segments),
                 detected_language=self._detected_language,
-                segments=list(self._segments),
+                segments=list(segments),
             )
-            for window in windows
+            for window, segments in zip(windows, per_window, strict=False)
         ]
 
 
