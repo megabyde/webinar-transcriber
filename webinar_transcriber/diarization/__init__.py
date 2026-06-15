@@ -10,7 +10,6 @@ from webinar_transcriber.diarization.sherpa_diarizer import (
     DIARIZATION_MODEL,
     DiarizationProcessingError,
     SherpaOnnxDiarizer,
-    normalize_speaker_labels,
 )
 
 if TYPE_CHECKING:
@@ -22,7 +21,6 @@ __all__ = [
     "DiarizationProcessingError",
     "SherpaOnnxDiarizer",
     "assign_speakers",
-    "normalize_speaker_labels",
 ]
 
 
