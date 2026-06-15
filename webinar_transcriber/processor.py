@@ -12,6 +12,7 @@ from webinar_transcriber.asr import ASR_BACKEND_NAME, WhisperCppTranscriber, pla
 from webinar_transcriber.diagnostics import write_run_diagnostics
 from webinar_transcriber.diarization import DIARIZATION_MODEL, assign_speakers
 from webinar_transcriber.export import write_docx_report, write_json_report, write_markdown_report
+from webinar_transcriber.export.formatting import format_count, format_rtf, join_detail
 from webinar_transcriber.io import write_json
 from webinar_transcriber.llm import LlmProcessingError
 from webinar_transcriber.media import probe_media
@@ -207,15 +208,16 @@ def _run_asr_pipeline(
     ) as st:
 
         def on_vad_progress(completed: float, count: int) -> None:
-            st.update(completed=completed, detail=_count(count, "region"))
+            st.update(completed=completed, detail=format_count(count, "region"))
 
         speech_regions, vad_warnings = detect_speech_regions(
             audio_samples, threads=threads, progress_callback=on_vad_progress
         )
         st.update(
             completed=audio_duration_sec,
-            detail=_join_detail(
-                _count(len(speech_regions), "region"), _rtf(audio_duration_sec, st.elapsed_sec())
+            detail=join_detail(
+                format_count(len(speech_regions), "region"),
+                format_rtf(audio_duration_sec, st.elapsed_sec()),
             ),
         )
     for warning in vad_warnings:
@@ -231,7 +233,7 @@ def _run_asr_pipeline(
     ) as st:
 
         def on_transcribe_progress(completed: int, count: int) -> None:
-            st.update(completed=completed, detail=_count(count, "segment"))
+            st.update(completed=completed, detail=format_count(count, "segment"))
 
         decoded_windows = transcriber.transcribe_inference_windows(
             audio_samples,
@@ -243,8 +245,9 @@ def _run_asr_pipeline(
         segment_count = sum(len(window.segments) for window in decoded_windows)
         st.update(
             completed=len(windows),
-            detail=_join_detail(
-                _count(segment_count, "segment"), _rtf(media_duration_sec, st.elapsed_sec())
+            detail=join_detail(
+                format_count(segment_count, "segment"),
+                format_rtf(media_duration_sec, st.elapsed_sec()),
             ),
         )
     transcription = reconcile_decoded_windows(decoded_windows)
@@ -269,10 +272,10 @@ def _run_asr_pipeline(
             )
             st.update(
                 completed=100.0,
-                detail=_join_detail(
-                    _count(speaker_count, "speaker"),
-                    _count(len(speaker_turns), "turn"),
-                    _rtf(audio_duration_sec, st.elapsed_sec()),
+                detail=join_detail(
+                    format_count(speaker_count, "speaker"),
+                    format_count(len(speaker_turns), "turn"),
+                    format_rtf(audio_duration_sec, st.elapsed_sec()),
                 ),
             )
         ctx.diarization = DiarizationDiagnostics(
@@ -349,7 +352,7 @@ def _detect_video_scenes(
     ) as st:
 
         def on_scene_progress(completed: float, count: int) -> None:
-            st.update(completed=completed, detail=_count(count, "scene"))
+            st.update(completed=completed, detail=format_count(count, "scene"))
 
         scenes = detect_scenes(
             input_path,
@@ -357,7 +360,7 @@ def _detect_video_scenes(
             media_asset.duration_sec,
             progress_callback=on_scene_progress,
         )
-        st.update(completed=scene_sample_total, detail=_count(len(scenes), "scene"))
+        st.update(completed=scene_sample_total, detail=format_count(len(scenes), "scene"))
 
     write_json(layout.scenes_path, [asdict(scene) for scene in scenes])
     return scenes
@@ -382,13 +385,13 @@ def _polish_report(
     model_name = llm_processor.model_name
     section_count = len(report.sections)
     worker_count = llm_processor.polish_worker_count(section_count)
-    runtime_detail = _join_detail(provider_name, model_name)
+    runtime_detail = join_detail(provider_name, model_name)
 
     with ctx.stage(
         "llm_report_sections",
         "Polishing sections with LLM",
         total=section_count,
-        detail=_join_detail(runtime_detail, _count(worker_count, "worker")),
+        detail=join_detail(runtime_detail, format_count(worker_count, "worker")),
     ) as st:
 
         def on_section_progress(advance: int) -> None:
@@ -403,7 +406,7 @@ def _polish_report(
                 report, ex, ctx=ctx, st=st, runtime_detail=runtime_detail, model_name=model_name
             )
         section_elapsed_sec = st.elapsed_sec()
-        st.update(detail=_count(section_count, "section"))
+        st.update(detail=format_count(section_count, "section"))
     for warning in section_result.warnings:
         ctx.record_warning(warning)
 
@@ -473,7 +476,7 @@ def _record_llm_fallback(
         ReportDocument: The original, unpolished report.
     """
     ctx.record_warning(str(ex))
-    st.update(detail=_join_detail(runtime_detail, "fallback"))
+    st.update(detail=join_detail(runtime_detail, "fallback"))
     ctx.llm = LlmDiagnostics(
         model=model_name,
         report_status="fallback",
@@ -486,24 +489,12 @@ def _record_llm_fallback(
 def _metadata_detail(metadata_result: LlmReportMetadataResult) -> str:
     parts = []
     if metadata_result.summary:
-        parts.append(_count(len(metadata_result.summary), "summary bullet"))
+        parts.append(format_count(len(metadata_result.summary), "summary bullet"))
     if metadata_result.action_items:
-        parts.append(_count(len(metadata_result.action_items), "action item"))
+        parts.append(format_count(len(metadata_result.action_items), "action item"))
     if metadata_result.section_titles:
-        parts.append(f"{_count(len(metadata_result.section_titles), 'title')} updated")
-    return _join_detail(*parts)
-
-
-def _count(n: int, noun: str) -> str:
-    return f"{n} {noun}{'' if n == 1 else 's'}"
-
-
-def _rtf(audio_sec: float, elapsed_sec: float) -> str:
-    return f"RTF {format(round(audio_sec / elapsed_sec, 2), 'g')}x"
-
-
-def _join_detail(*parts: str | None) -> str:
-    return " | ".join(part for part in parts if part)
+        parts.append(f"{format_count(len(metadata_result.section_titles), 'title')} updated")
+    return join_detail(*parts)
 
 
 __all__ = [

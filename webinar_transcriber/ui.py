@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 class StageHandle:
     """State for one in-progress stage."""
 
+    key: str
     label: str
     started_at: float
     detail: str | None = None
@@ -85,7 +86,6 @@ class StageReporter:
         self, key: str, label: str, *, total: float | None = None, detail: str | None = None
     ) -> Iterator[StageHandle]:
         """Open a stage display and yield a handle for progress updates."""
-        del key  # part of the reporter protocol; recording test reporters consume stage keys
         progress = Progress(
             *self._columns(determinate=total is not None), console=self._console, transient=True
         )
@@ -93,6 +93,7 @@ class StageReporter:
         progress.start()
         task_id = progress.add_task(description, total=total)
         handle = StageHandle(
+            key=key,
             label=label,
             started_at=perf_counter(),
             detail=detail,

@@ -7,7 +7,13 @@ from docx import Document
 from PIL import Image
 
 from webinar_transcriber.export.docx_report import write_docx_report
-from webinar_transcriber.export.formatting import format_duration, format_timecode
+from webinar_transcriber.export.formatting import (
+    format_count,
+    format_duration,
+    format_rtf,
+    format_timecode,
+    join_detail,
+)
 from webinar_transcriber.export.json_report import write_json_report
 from webinar_transcriber.export.markdown import write_markdown_report
 from webinar_transcriber.models import MediaType, ReportDocument, ReportSection
@@ -26,6 +32,12 @@ class TestFormatting:
     def test_format_duration_formats_minutes_and_hours(self) -> None:
         assert format_duration(65.0) == "1m 05s"
         assert format_duration(3661.0) == "1h 01m 01s"
+
+    def test_formats_progress_detail_parts(self) -> None:
+        assert format_count(1, "region") == "1 region"
+        assert format_count(2, "region") == "2 regions"
+        assert format_rtf(10.0, 4.0) == "RTF 2.5x"
+        assert join_detail("2 regions", None, "RTF 2.5x") == "2 regions | RTF 2.5x"
 
 
 class TestDocxReport:
