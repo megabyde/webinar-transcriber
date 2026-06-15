@@ -58,8 +58,8 @@ class TestStageReporter:
         perf_values = iter([10.0, 13.5])
         monkeypatch.setattr("webinar_transcriber.ui.perf_counter", lambda: next(perf_values))
 
-        with reporter.track("llm_report", "Polishing report"):
-            pass
+        with reporter.track("llm_report", "Polishing report") as handle:
+            assert handle.key == "llm_report"
 
         assert console.export_text().strip() == "✓ Polishing report (3.50s)"
 

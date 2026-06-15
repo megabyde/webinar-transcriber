@@ -12,16 +12,6 @@ if TYPE_CHECKING:
     from webinar_transcriber.paths import RunLayout
     from webinar_transcriber.processor import RunContext
 
-_ZERO_ITEM_COUNTS = {
-    "transcript_segments": 0,
-    "normalized_transcript_segments": 0,
-    "vad_regions": 0,
-    "windows": 0,
-    "report_sections": 0,
-    "scenes": 0,
-    "frames": 0,
-}
-
 
 def write_run_diagnostics(
     layout: RunLayout,
@@ -42,7 +32,7 @@ def write_run_diagnostics(
         error=error,
         llm=ctx.llm,
         stage_durations_sec={key: round(value, 6) for key, value in ctx.stage_timings.items()},
-        item_counts=_ZERO_ITEM_COUNTS | ctx.item_counts,
+        item_counts=dict(ctx.item_counts),
         asr_pipeline=ctx.asr_pipeline,
         diarization=ctx.diarization,
         warnings=ctx.warnings,

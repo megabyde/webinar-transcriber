@@ -32,6 +32,21 @@ def format_duration(duration_sec: float) -> str:
     return f"{seconds}s"
 
 
+def format_count(n: int, noun: str) -> str:
+    """Format a count with a simple plural suffix."""
+    return f"{n} {noun}{'' if n == 1 else 's'}"
+
+
+def format_rtf(audio_sec: float, elapsed_sec: float) -> str:
+    """Format a real-time factor detail."""
+    return f"RTF {format(round(audio_sec / elapsed_sec, 2), 'g')}x"
+
+
+def join_detail(*parts: str | None) -> str:
+    """Join non-empty stage detail fragments."""
+    return " | ".join(part for part in parts if part)
+
+
 def section_timecode(start_sec: float, end_sec: float) -> str:
     """Format a section start/end range for report headings.
 
