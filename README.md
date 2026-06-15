@@ -99,7 +99,7 @@ CUDA is the only supported path that builds `pywhispercpp` from source:
 - `make install-cuda` installs the CLI tool with CUDA support.
 - `make sync-cuda` prepares the checkout development environment with CUDA support.
 
-If the build fails, see [CUDA install fails](#cuda-install-fails).
+If the build fails, see [CUDA install fails](docs/troubleshooting.md#cuda-install-fails).
 
 All examples below assume `webinar-transcriber` is available on `PATH`.
 
@@ -143,8 +143,7 @@ make install-llm
 > `--llm` sends report text and transcript excerpts to the configured provider. Do not use it for
 > recordings that must stay entirely local.
 
-Configuration comes from environment variables. The CLI does not pin a model name; pass a model
-identifier supported by the provider you are using.
+Configuration comes from environment variables; see [Environment variables](#environment-variables).
 
 ```bash
 OPENAI_API_KEY=... \
@@ -160,7 +159,7 @@ LLM_PROVIDER=anthropic \
 ```
 
 For missing environment variables, missing extras, or unsupported provider names, see
-[Troubleshooting](#troubleshooting).
+[Troubleshooting](docs/troubleshooting.md).
 
 ### Speaker diarization
 
@@ -182,7 +181,8 @@ downloads the segmentation and speaker-embedding models into
 When diarization is enabled, reports prefix transcript paragraphs with stable anonymous labels
 ordered by first appearance in the timeline: `S1`, `S2`, and so on. JSON artifacts include a
 `speaker` field on transcript segments and a separate `diarization.json` file with raw speaker
-turns. If labels look wrong, see [Poor diarization labels](#poor-diarization-labels).
+turns. If labels look wrong, see
+[Poor diarization labels](docs/troubleshooting.md#poor-diarization-labels).
 
 ### How it works
 
@@ -197,9 +197,9 @@ For per-stage detail and the artifact each stage produces, see [docs/pipeline.md
 
 ### ASR model
 
-`webinar-transcriber` uses `pywhispercpp` to resolve whisper.cpp models. By default, it uses
-`large-v3-turbo`, which `pywhispercpp` downloads into its cache on first use. You can pass another
-model identifier or a local GGML model path with `--asr-model`.
+`webinar-transcriber` uses `pywhispercpp` to resolve whisper.cpp models. By default it uses
+`large-v3-turbo` (downloaded on the first run, as noted in [Install](#install)). You can pass
+another model identifier or a local GGML model path with `--asr-model`.
 
 ```bash
 webinar-transcriber INPUT --asr-model large-v3-turbo
@@ -233,58 +233,8 @@ uses the host CPU count capped at 8. Lower it when the machine needs CPU capacit
 
 ## Troubleshooting
 
-### `Missing required LLM environment variables`
-
-`--llm` was passed without the required provider environment variables. Set `OPENAI_API_KEY` and
-`OPENAI_MODEL` for OpenAI, or set `LLM_PROVIDER=anthropic` plus `ANTHROPIC_API_KEY` and
-`ANTHROPIC_MODEL` for Anthropic.
-
-### `requires the 'llm' extra`
-
-The provider SDKs are not installed. Reinstall the CLI with the LLM extra:
-
-```bash
-make install-llm
-```
-
-Without `make`:
-
-```bash
-uv tool install --reinstall ".[llm]"
-```
-
-### `Unsupported LLM provider`
-
-`LLM_PROVIDER` is set to a value other than `openai` or `anthropic`. Unset it to use OpenAI, or set
-it to `anthropic`.
-
-### `Output directory already exists`
-
-The CLI refuses to overwrite existing run directories. Pass a new `--output-dir`, remove the
-existing directory, or omit `--output-dir` so the CLI creates a fresh timestamped directory under
-`runs/`.
-
-### `Could not prepare whisper.cpp model`
-
-`pywhispercpp` could not load the requested model. Check that `--asr-model` is a known identifier
-such as `large-v3-turbo` or `large-v3`, or that a local path points to a valid GGML file. The native
-`whisper-cpp.log` inside the run directory has the underlying error.
-
-### Wrong language detected
-
-Whisper can mis-detect language for short, multilingual, or noisy audio. Pass `--language CODE`, for
-example `--language en` or `--language ru`, to force the language hint.
-
-### Poor diarization labels
-
-`--diarize-speakers COUNT` forces an exact speaker count. If the count is wrong, labels degrade.
-Omit the flag to let `sherpa-onnx` estimate the count, or pass the correct count.
-
-### CUDA install fails
-
-`make install-cuda` rebuilds `pywhispercpp` from source and needs `nvcc` on `PATH` and `CUDA_HOME`
-set. If you do not need NVIDIA acceleration, use `make install`; it pulls prebuilt wheels and skips
-the C/C++/CUDA toolchain.
+Common errors and their fixes, indexed by the message the CLI prints, live in
+[docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## Reference
 
@@ -329,48 +279,6 @@ Diarization (read only when `--diarize` is passed):
 
 ## Development
 
-### Local setup
-
-Sync the checkout environment you need:
-
-- `make sync`: standard development and test dependencies.
-- `make sync-llm`: development dependencies plus optional LLM SDKs.
-- `make sync-cuda`: development environment with CUDA-built `pywhispercpp`.
-
-Without `make`:
-
-```bash
-uv sync
-uv sync --extra llm
-```
-
-### Running from a checkout
-
-To run the CLI without installing it as a uv tool, use the checkout environment:
-
-```bash
-uv run webinar-transcriber --help
-uv run webinar-transcriber INPUT
-```
-
-### Quality gates
-
-Use the fast test target for iteration:
-
-```bash
-make test
-```
-
-Before committing, run the full gate:
-
-```bash
-make format
-make check
-```
-
-`make check` runs Markdown checks, Ruff, `ty`, and the full coverage-gated pytest suite. Without
-`make`, run the equivalent `uv run ...` commands; the `Makefile` is the source of truth for each
-target's exact recipe.
-
-Contributor and agent-specific guidance, including coding conventions, testing notes, and the
-Definition of Done, lives in [AGENTS.md](AGENTS.md).
+Checkout setup, running from source, the make target reference, and the quality gate live in
+[docs/development.md](docs/development.md). Coding conventions, testing notes, and the Definition of
+Done live in [AGENTS.md](AGENTS.md).
