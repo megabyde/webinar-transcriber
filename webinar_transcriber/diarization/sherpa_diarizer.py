@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import importlib
 import tarfile
 import urllib.error
 import urllib.request
@@ -13,7 +12,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING
 
-from webinar_transcriber._env import diarization_cache_dir
+from webinar_transcriber._env import diarization_cache_dir, load_sherpa_onnx
 from webinar_transcriber.models import SpeakerTurn
 
 CLUSTER_THRESHOLD = 0.5
@@ -115,7 +114,7 @@ class SherpaOnnxDiarizer:
 
     def prepare(self, *, speaker_count: int | None) -> None:
         """Load diarization models and construct the native diarizer."""
-        sherpa_onnx = _load_sherpa_onnx()
+        sherpa_onnx = load_sherpa_onnx()
         if sherpa_onnx is None:
             raise DiarizationProcessingError("sherpa-onnx is unavailable for speaker diarization.")
 
@@ -273,10 +272,3 @@ def _verified(path: Path, expected_sha256: str) -> bool:
         while chunk := model_file.read(1024 * 1024):
             digest.update(chunk)
     return digest.hexdigest() == expected_sha256
-
-
-def _load_sherpa_onnx() -> ModuleType | None:
-    try:
-        return importlib.import_module("sherpa_onnx")
-    except ImportError:  # pragma: no cover - optional wheel/import boundary
-        return None

@@ -1,7 +1,8 @@
-"""Typed environment-variable accessors."""
+"""Environment-variable accessors and optional-dependency loaders."""
 
 from __future__ import annotations
 
+import importlib
 import os
 from contextlib import contextmanager
 from pathlib import Path
@@ -9,10 +10,25 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from types import ModuleType
 
 LLM_PROVIDER_ENV = "LLM_PROVIDER"
 TQDM_DISABLE_ENV = "TQDM_DISABLE"
 WEBINAR_DIARIZATION_CACHE_DIR_ENV = "WEBINAR_DIARIZATION_CACHE_DIR"
+
+
+def load_sherpa_onnx() -> ModuleType | None:
+    """Return the imported sherpa-onnx module, or None when the optional wheel is absent.
+
+    Shared by speech-region detection and speaker diarization, which both depend on sherpa-onnx.
+
+    Returns:
+        ModuleType | None: The sherpa-onnx module, or None if it is not installed.
+    """
+    try:
+        return importlib.import_module("sherpa_onnx")
+    except ImportError:  # pragma: no cover - optional wheel/import boundary
+        return None
 
 
 def llm_provider_name() -> str:
