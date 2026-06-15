@@ -53,8 +53,8 @@ checkout:
 uv tool install --reinstall git+https://github.com/megabyde/webinar-transcriber.git@v1.1.0
 ```
 
-Replace `v1.1.0` with the release tag you want. Release wheels and source distributions are attached
-to the [GitHub Releases](https://github.com/megabyde/webinar-transcriber/releases) page.
+Replace `v1.1.0` with the release tag you want. Wheel and source distribution files are attached to
+the [GitHub Releases](https://github.com/megabyde/webinar-transcriber/releases) page.
 
 ### Install the CLI from this checkout
 
@@ -138,6 +138,10 @@ The base install does not include provider SDKs. Install the LLM extra first:
 ```bash
 make install-llm
 ```
+
+> [!IMPORTANT]
+> `--llm` sends report text and transcript excerpts to the configured provider. Do not use it for
+> recordings that must stay entirely local.
 
 Configuration comes from environment variables. The CLI does not pin a model name; pass a model
 identifier supported by the provider you are using.
