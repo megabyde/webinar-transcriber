@@ -145,12 +145,19 @@ def process_input(
                 )
 
                 if keep_audio:
-                    with ctx.stage("save_transcription_audio", "Saving transcription audio") as st:
+                    with ctx.stage(
+                        "save_transcription_audio", "Saving transcription audio", total=audio_total
+                    ) as st:
                         preserved_audio_path = layout.transcription_audio_path
                         write_transcription_audio(
-                            audio_path, preserved_audio_path, audio_format="mp3"
+                            audio_path,
+                            preserved_audio_path,
+                            audio_format="mp3",
+                            progress_callback=lambda completed: st.update(
+                                completed=min(completed, audio_total)
+                            ),
                         )
-                        st.update(detail=preserved_audio_path.name)
+                        st.update(completed=audio_total, detail=preserved_audio_path.name)
 
             report = _run_report_phase(
                 input_path=input_path,
