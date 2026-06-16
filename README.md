@@ -44,17 +44,32 @@ action items, and section TL;DRs, but it does not replace the base pipeline.
 - For CUDA source builds: a C/C++ compiler, `cmake`, and a working CUDA toolkit with `nvcc` on
   `PATH` and `CUDA_HOME` set
 
-### Install from a release
+### Install from PyPI
 
-Install a tagged release directly from GitHub when you want a fixed version and do not need a
-checkout:
+Install the published package as a standalone CLI:
 
 ```bash
-uv tool install --reinstall git+https://github.com/megabyde/webinar-transcriber.git@v1.1.0
+uv tool install webinar-transcriber
 ```
 
-Replace `v1.1.0` with the release tag you want. Wheel and source distribution files are attached to
-the [GitHub Releases](https://github.com/megabyde/webinar-transcriber/releases) page.
+Or with `pipx`, or into the current environment with `pip` (add the `llm` extra for cloud LLM
+refinement):
+
+```bash
+pipx install webinar-transcriber
+pip install "webinar-transcriber[llm]"
+```
+
+### Install from a GitHub release
+
+Pin a tagged release directly from GitHub when you want a fixed version and do not need a checkout:
+
+```bash
+uv tool install --reinstall git+https://github.com/megabyde/webinar-transcriber.git@v1.2.0
+```
+
+Replace `v1.2.0` with the release tag you want. Wheel and source distribution files are also
+attached to the [GitHub Releases](https://github.com/megabyde/webinar-transcriber/releases) page.
 
 ### Install the CLI from this checkout
 
