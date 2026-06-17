@@ -246,9 +246,10 @@ class TestProcessInput:
         assert artifacts.diagnostics.diarization is not None
         assert artifacts.diagnostics.diarization.speaker_count == 2
         assert artifacts.diagnostics.diarization.turn_count == 2
-        assert ("start", "diarize", 100.0, "preparing model") in reporter.progress
-        assert ("advance", "diarize", 1.0, "analyzing audio") in reporter.progress
-        assert ("advance", "diarize", 64.0, "embedding speakers") in reporter.progress
+        # Stage opens already labeled "analyzing audio" (covering prep + segmentation); the bar
+        # then jumps into the embedding range on the first callback (35 + 60*1/2 = 65%).
+        assert ("start", "diarize", 100.0, "analyzing audio") in reporter.progress
+        assert ("advance", "diarize", 65.0, "embedding speakers") in reporter.progress
         diarize_progress = [
             detail
             for action, stage_key, _, detail in reporter.progress
