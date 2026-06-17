@@ -411,9 +411,16 @@ class TestProcessInput:
         write_calls: list[tuple[Path, Path, str]] = []
 
         def fake_write_audio(
-            audio_path: Path, output_path: Path, *, audio_format: str = "wav", **_kwargs
+            audio_path: Path,
+            output_path: Path,
+            *,
+            audio_format: str = "wav",
+            progress_callback: Callable[[float], None] | None = None,
+            **_kwargs,
         ) -> Path:
             write_calls.append((audio_path, output_path, audio_format))
+            if progress_callback is not None:
+                progress_callback(1.0)
             output_path.write_bytes(b"stub")
             return output_path
 
