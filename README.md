@@ -8,7 +8,7 @@
 [![License MIT](https://img.shields.io/badge/license-MIT-2F855A)](LICENSE)
 
 ![Webinar Transcriber preview](docs/assets/social-preview.png#gh-light-mode-only)
-![Webinar Transcriber preview](docs/assets/social-preview-transparent.png#gh-dark-mode-only)
+![Webinar Transcriber preview](docs/assets/social-preview-dark.png#gh-dark-mode-only)
 
 ## Contents
 
