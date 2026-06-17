@@ -261,11 +261,13 @@ def _run_asr_pipeline(
     ctx.item_counts["transcript_segments"] = len(transcription.segments)
 
     if diarizer is not None:
+        # Model prep and the segmentation pass run as opaque native calls that freeze the display,
+        # so the stage opens already labeled "analyzing audio" rather than briefly showing
+        # "preparing model" — which would otherwise be the frame left stuck on screen.
         with ctx.stage(
-            "diarize", "Diarizing speakers", total=100.0, detail="preparing model"
+            "diarize", "Diarizing speakers", total=100.0, detail="analyzing audio"
         ) as st:
             diarizer.prepare(speaker_count=diarization_speaker_count)
-            st.update(completed=1.0, detail="analyzing audio")
 
             def on_diarize_progress(processed: int, total: int) -> None:
                 embedding_progress = 60.0 * min(processed, total) / total
