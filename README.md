@@ -32,17 +32,14 @@ window overlap, and builds report sections with local heuristics. Optional LLM r
 after that deterministic report exists. It can polish section text and refine titles, summaries,
 action items, and section TL;DRs, but it does not replace the base pipeline.
 
-> [!NOTE]
-> The core pipeline runs locally. Cloud access is used only when you pass `--llm`.
+For per-stage detail and the artifact each stage produces, see [docs/pipeline.md](docs/pipeline.md).
 
 ## Install
 
 ### Prerequisites
 
-- Python 3.12+
-- `uv`
-- For CUDA source builds: a C/C++ compiler, `cmake`, and a working CUDA toolkit with `nvcc` on
-  `PATH` and `CUDA_HOME` set
+- [Python 3.12+](https://www.python.org/downloads/) and
+  [uv](https://docs.astral.sh/uv/getting-started/installation/)
 
 ### Install from a release
 
@@ -71,22 +68,18 @@ From the repository root, run the target that matches the runtime you need:
 environment activation is needed. Re-run the install target after pulling changes when the installed
 command should track the checkout.
 
-Without `make`, use uv directly:
-
-```bash
-uv tool install --reinstall .
-```
+> [!TIP]
+> Without `make`, install the local checkout with uv directly:
+>
+> ```bash
+> uv tool install --reinstall .
+> ```
 
 Run `make help` to list every project target.
 
-The standard install uses prebuilt `pywhispercpp` wheels: CPU wheels on Linux and Windows, Metal on
-Apple Silicon where the wheel supports it. It does not install PyTorch. Speech-region detection uses
-the bundled Silero ONNX model through `sherpa-onnx`.
-
-The default `large-v3-turbo` Whisper model is downloaded by `pywhispercpp` on the first
-transcription run, not during installation. Each run records the active ASR backend in
-`diagnostics.json` under `asr_pipeline.system_info`; native whisper.cpp logs are written to
-`whisper-cpp.log` in the run directory.
+The standard install uses prebuilt `pywhispercpp` wheels and does not install PyTorch. The default
+`large-v3-turbo` Whisper model is downloaded on the first transcription run, not during
+installation.
 
 ### NVIDIA CUDA
 
@@ -94,14 +87,15 @@ transcription run, not during installation. Each run records the active ASR back
 > CUDA installs rebuild `pywhispercpp` locally and depend on the host CUDA toolkit. Use the standard
 > install unless you specifically need NVIDIA acceleration.
 
-CUDA is the only supported path that builds `pywhispercpp` from source:
+CUDA is the only supported path that builds `pywhispercpp` from source. It requires
+[CMake](https://cmake.org/download/), a C/C++ compiler, and a working
+[CUDA toolkit](https://developer.nvidia.com/cuda-downloads) with `nvcc` on `PATH` and `CUDA_HOME`
+set.
 
 - `make install-cuda` installs the CLI tool with CUDA support.
 - `make sync-cuda` prepares the checkout development environment with CUDA support.
 
 If the build fails, see [CUDA install fails](docs/troubleshooting.md#cuda-install-fails).
-
-All examples below assume `webinar-transcriber` is available on `PATH`.
 
 ## Usage
 
@@ -143,7 +137,13 @@ make install-llm
 > `--llm` sends report text and transcript excerpts to the configured provider. Do not use it for
 > recordings that must stay entirely local.
 
-Configuration comes from environment variables; see [Environment variables](#environment-variables).
+Configure the provider with environment variables:
+
+- `LLM_PROVIDER` — `openai` (default) or `anthropic`.
+- `OPENAI_API_KEY` / `OPENAI_MODEL` — API key and model identifier for the OpenAI provider.
+- `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` — API key and model identifier for the Anthropic provider.
+
+The CLI does not pin a default model name for either provider; pass any model the provider supports.
 
 ```bash
 OPENAI_API_KEY=... \
@@ -178,20 +178,13 @@ Diarization runs locally through `sherpa-onnx` and does not use an API key. The 
 downloads the segmentation and speaker-embedding models into
 `~/.cache/webinar-transcriber/diarization`.
 
+Set `WEBINAR_DIARIZATION_CACHE_DIR` to override that cache directory.
+
 When diarization is enabled, reports prefix transcript paragraphs with stable anonymous labels
 ordered by first appearance in the timeline: `S1`, `S2`, and so on. JSON artifacts include a
 `speaker` field on transcript segments and a separate `diarization.json` file with raw speaker
 turns. If labels look wrong, see
 [Poor diarization labels](docs/troubleshooting.md#poor-diarization-labels).
-
-### How it works
-
-The CLI runs this local pipeline: media probe, normalized transcription audio, Silero VAD, ASR
-window planning, `whisper.cpp` transcription, overlap reconciliation, optional speaker diarization,
-transcript normalization, optional scene detection and frame extraction, local report assembly,
-optional LLM polish, and final artifact and diagnostics write-out.
-
-For per-stage detail and the artifact each stage produces, see [docs/pipeline.md](docs/pipeline.md).
 
 ## Advanced Usage
 
@@ -261,21 +254,6 @@ runs/<timestamp>_<basename>/
 
 Failed runs still write `diagnostics.json` with the failed stage and any partial intermediate
 artifacts already produced, as long as the run directory exists.
-
-### Environment variables
-
-LLM provider configuration (read only when `--llm` is passed):
-
-- `LLM_PROVIDER` — `openai` (default) or `anthropic`.
-- `OPENAI_API_KEY` / `OPENAI_MODEL` — API key and model identifier for the OpenAI provider.
-- `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` — API key and model identifier for the Anthropic provider.
-
-The CLI does not pin a default model name for either provider; pass any model the provider supports.
-
-Diarization (read only when `--diarize` is passed):
-
-- `WEBINAR_DIARIZATION_CACHE_DIR` — override the cache directory for downloaded `sherpa-onnx`
-  diarization models. Defaults to `~/.cache/webinar-transcriber/diarization`.
 
 ## Development
 
