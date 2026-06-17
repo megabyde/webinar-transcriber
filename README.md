@@ -7,7 +7,8 @@
 [![uv](https://img.shields.io/badge/package-uv-5C5CFF?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
 [![License MIT](https://img.shields.io/badge/license-MIT-2F855A)](LICENSE)
 
-![Webinar Transcriber preview](docs/assets/social-preview.png)
+![Webinar Transcriber preview](docs/assets/social-preview.png#gh-light-mode-only)
+![Webinar Transcriber preview](docs/assets/social-preview-transparent.png#gh-dark-mode-only)
 
 ## Contents
 
