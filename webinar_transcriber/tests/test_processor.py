@@ -107,16 +107,16 @@ class FakeDiarizer:
 
     def __init__(self, turns: list[SpeakerTurn]) -> None:
         self.turns = turns
-        self.calls: list[int] = []
+        self.calls: list[Path] = []
         self.prepare_calls: list[int | None] = []
 
     def prepare(self, *, speaker_count: int | None) -> None:
         self.prepare_calls.append(speaker_count)
 
     def diarize(
-        self, samples: np.ndarray, *, progress_callback: Callable[[int, int], None] | None = None
+        self, wav_path: Path, *, progress_callback: Callable[[int, int], None] | None = None
     ) -> list[SpeakerTurn]:
-        self.calls.append(len(samples))
+        self.calls.append(wav_path)
         if progress_callback is not None:
             progress_callback(1, 2)
             progress_callback(2, 2)
@@ -230,7 +230,7 @@ class TestProcessInput:
         transcript_payload = read_json(artifacts.layout.transcript_path)
         diarization_payload = read_json(artifacts.layout.diarization_path)
 
-        assert diarizer.calls == [16_000]
+        assert [call.name for call in diarizer.calls] == ["sample-audio.wav"]
         assert diarizer.prepare_calls == [4]
         assert [segment["speaker"] for segment in transcript_payload["segments"]] == ["S1", "S2"]
         assert diarization_payload == [
@@ -283,11 +283,11 @@ class TestProcessInput:
 
             def diarize(
                 self,
-                samples: np.ndarray,
+                wav_path: Path,
                 *,
                 progress_callback: Callable[[int, int], None] | None = None,
             ) -> list[SpeakerTurn]:
-                del samples
+                del wav_path
                 if progress_callback is not None:
                     progress_callback(2, 2)
                 return [SpeakerTurn(start_sec=0.0, end_sec=2.0, speaker="S1")]
