@@ -10,7 +10,7 @@ import sys
 from contextlib import contextmanager, redirect_stderr
 from dataclasses import replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Self, cast
+from typing import TYPE_CHECKING, Any, Self
 
 import numpy as np
 
@@ -328,10 +328,9 @@ class WhisperCppTranscriber:
         if detected_language is not None:
             transcribe_kwargs["language"] = detected_language
         try:
-            # pywhispercpp stubs don't expose Model.transcribe()
-            raw_segments: list[Any] = cast("Any", model).transcribe(
-                window_samples, **transcribe_kwargs
-            )
+            # ty can't match the dynamically built **transcribe_kwargs to transcribe()'s typed
+            # parameters; the call is valid at runtime and the return type still infers.
+            raw_segments = model.transcribe(window_samples, **transcribe_kwargs)  # type: ignore
         except Exception as ex:
             raise AsrProcessingError(f"whisper.cpp inference failed for {window.id}.") from ex
 
