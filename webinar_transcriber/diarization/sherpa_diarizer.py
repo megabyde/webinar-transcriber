@@ -3,22 +3,27 @@
 from __future__ import annotations
 
 import hashlib
+import multiprocessing
 import tarfile
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, replace
 from importlib import metadata
 from pathlib import Path
+from queue import Empty
 from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING
 
 from webinar_transcriber._env import diarization_cache_dir, load_sherpa_onnx
 from webinar_transcriber.models import SpeakerTurn
+from webinar_transcriber.normalized_audio import load_normalized_audio
 
 CLUSTER_THRESHOLD = 0.5
 MIN_DURATION_ON_SEC = 0.3
 MIN_DURATION_OFF_SEC = 0.5
 DIARIZATION_MODEL = "pyannote-segmentation-3.0-fp32+nemo-titanet-small"
+# Wake the drain loop this often to check whether the child died without a terminal message.
+DIARIZATION_POLL_SEC = 0.5
 
 
 class DiarizationProcessingError(RuntimeError):
@@ -66,7 +71,7 @@ class DiarizationModelPaths:
 if TYPE_CHECKING:
     from collections.abc import Callable
     from types import ModuleType
-    from typing import Protocol
+    from typing import Any, Protocol
 
     import numpy as np
 
@@ -83,6 +88,18 @@ if TYPE_CHECKING:
             self, samples: np.ndarray, *, callback: Callable[[int, int], int] | None = None
         ) -> _DiarizationResult: ...
 
+    class _MessageQueue(Protocol):
+        """The slice of a multiprocessing Queue the child (put) and parent (get) exchange on."""
+
+        def put(self, item: object, /) -> None: ...
+        def get(self, *, timeout: float | None = ...) -> Any: ...  # noqa: ANN401 - heterogeneous (kind, *payload) tuple
+        def get_nowait(self) -> Any: ...  # noqa: ANN401 - heterogeneous (kind, *payload) tuple
+
+    class _DiarizationProcess(Protocol):
+        """The subset of a multiprocessing Process the drain loop needs to detect a dead child."""
+
+        def is_alive(self) -> bool: ...
+
 
 class SherpaOnnxDiarizer:
     """Local speaker diarizer backed by sherpa-onnx."""
@@ -91,7 +108,8 @@ class SherpaOnnxDiarizer:
         """Initialize a lazy sherpa-onnx diarizer."""
         self._cache_dir = cache_dir or default_cache_dir()
         self._threads = threads
-        self._prepared_diarizer: _NativeDiarizer | None = None
+        self._model_paths: DiarizationModelPaths | None = None
+        self._num_clusters: int | None = None
 
     @property
     def system_info(self) -> str | None:
@@ -101,75 +119,48 @@ class SherpaOnnxDiarizer:
         except metadata.PackageNotFoundError:  # pragma: no cover - boundary dependency state
             return None
 
-    def diarize(
-        self, samples: np.ndarray, *, progress_callback: Callable[[int, int], None] | None = None
-    ) -> list[SpeakerTurn]:
-        """Return speaker turns for normalized audio samples."""
-        if self._prepared_diarizer is None:
-            raise DiarizationProcessingError("Diarizer not prepared; call prepare() first.")
-        diarizer = self._prepared_diarizer
-
-        turns = self._run_diarization(diarizer, samples, progress_callback=progress_callback)
-        return normalize_speaker_labels(turns)
-
     def prepare(self, *, speaker_count: int | None) -> None:
-        """Load diarization models and construct the native diarizer."""
-        sherpa_onnx = load_sherpa_onnx()
-        if sherpa_onnx is None:
+        """Resolve diarization models; the native diarizer is built in the subprocess."""
+        if load_sherpa_onnx() is None:
             raise DiarizationProcessingError("sherpa-onnx is unavailable for speaker diarization.")
+        self._model_paths = ensure_default_models(self._cache_dir)
+        self._num_clusters = speaker_count or -1
 
-        paths = ensure_default_models(self._cache_dir)
-        num_clusters = speaker_count or -1
-        self._prepared_diarizer = self._build_diarizer(
-            sherpa_onnx, paths=paths, num_clusters=num_clusters
-        )
-
-    def _build_diarizer(
-        self, sherpa_onnx: ModuleType, *, paths: DiarizationModelPaths, num_clusters: int
-    ) -> _NativeDiarizer:
-        config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
-            segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
-                pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
-                    model=str(paths.segmentation_model)
-                ),
-                num_threads=self._threads,
-            ),
-            embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(
-                model=str(paths.embedding_model), num_threads=self._threads
-            ),
-            clustering=sherpa_onnx.FastClusteringConfig(
-                num_clusters=num_clusters, threshold=CLUSTER_THRESHOLD
-            ),
-            min_duration_on=MIN_DURATION_ON_SEC,
-            min_duration_off=MIN_DURATION_OFF_SEC,
-        )
-        if not config.validate():
-            raise DiarizationProcessingError("Speaker diarization model configuration is invalid.")
-
-        try:
-            return sherpa_onnx.OfflineSpeakerDiarization(config)
-        except RuntimeError as ex:
-            raise DiarizationProcessingError(str(ex)) from ex
-
-    def _run_diarization(
-        self,
-        diarizer: _NativeDiarizer,
-        samples: np.ndarray,
-        *,
-        progress_callback: Callable[[int, int], None] | None,
+    def diarize(
+        self, wav_path: Path, *, progress_callback: Callable[[int, int], None] | None = None
     ) -> list[SpeakerTurn]:
-        try:
-            result = diarizer.process(samples, callback=_sherpa_progress(progress_callback))
-        except RuntimeError as ex:
-            raise DiarizationProcessingError(str(ex)) from ex
+        """Run diarization in a child process and return normalized speaker turns.
 
-        return [
-            SpeakerTurn(
-                start_sec=float(item.start), end_sec=float(item.end), speaker=str(item.speaker)
-            )
-            for item in result.sort_by_start_time()
-            if float(item.end) > float(item.start)
-        ]
+        sherpa-onnx ``process()`` holds the GIL for its whole run, so running it here would freeze
+        the progress display and block Ctrl-C. The child does the work and streams progress back
+        over a queue; this main thread stays responsive, so the bar animates and a Ctrl-C
+        terminates the child.
+        """
+        if self._model_paths is None or self._num_clusters is None:
+            raise DiarizationProcessingError("Diarizer not prepared; call prepare() first.")
+
+        context = multiprocessing.get_context("spawn")
+        queue = context.Queue()
+        process = context.Process(
+            target=_run_diarization_subprocess,
+            args=(queue,),
+            kwargs={
+                "segmentation_model": self._model_paths.segmentation_model,
+                "embedding_model": self._model_paths.embedding_model,
+                "num_clusters": self._num_clusters,
+                "threads": self._threads,
+                "wav_path": wav_path,
+            },
+        )
+        process.start()
+        try:
+            turns = _drain_diarization(queue, process, progress_callback=progress_callback)
+        except BaseException:
+            process.terminate()
+            process.join()
+            raise
+        process.join()
+        return normalize_speaker_labels(turns)
 
 
 def ensure_default_models(cache_dir: Path | None = None) -> DiarizationModelPaths:
@@ -207,17 +198,113 @@ def normalize_speaker_labels(turns: list[SpeakerTurn]) -> list[SpeakerTurn]:
     return normalized
 
 
-def _sherpa_progress(
+def _drain_diarization(
+    queue: _MessageQueue,
+    process: _DiarizationProcess,
+    *,
     progress_callback: Callable[[int, int], None] | None,
-) -> Callable[[int, int], int] | None:
-    if progress_callback is None:
-        return None
+) -> list[SpeakerTurn]:
+    """Consume the child's messages, returning its turns or raising on failure.
 
-    def callback(processed_chunks: int, total_chunks: int) -> int:
-        progress_callback(processed_chunks, total_chunks)
-        return 0
+    Polls with a timeout so a child that dies without a terminal message (a native segfault/SIGKILL
+    or a bootstrap failure) raises instead of blocking forever; a last non-blocking read recovers a
+    final message that raced the child's exit.
+    """
+    while True:
+        try:
+            message = queue.get(timeout=DIARIZATION_POLL_SEC)
+        except Empty:
+            if process.is_alive():
+                continue
+            try:
+                message = queue.get_nowait()
+            except Empty:
+                raise DiarizationProcessingError(
+                    "Diarization subprocess exited without returning a result."
+                ) from None
+        kind, *payload = message
+        if kind == "progress":
+            if progress_callback is not None:
+                progress_callback(payload[0], payload[1])
+        elif kind == "done":
+            return payload[0]
+        else:
+            raise DiarizationProcessingError(payload[0])
 
-    return callback
+
+def _run_diarization_subprocess(
+    queue: _MessageQueue,
+    *,
+    segmentation_model: Path,
+    embedding_model: Path,
+    num_clusters: int,
+    threads: int,
+    wav_path: Path,
+) -> None:
+    """Child entry point: build the native diarizer, run it, and stream results over the queue.
+
+    Runs in a spawned process, so it re-imports sherpa-onnx and reloads the audio from disk rather
+    than inheriting parent state. Any failure is reported back as an ``error`` message so the parent
+    never blocks waiting for a result.
+    """
+    try:
+        sherpa_onnx = load_sherpa_onnx()
+        if sherpa_onnx is None:
+            raise DiarizationProcessingError("sherpa-onnx is unavailable for speaker diarization.")
+        diarizer = _build_native_diarizer(
+            sherpa_onnx,
+            paths=DiarizationModelPaths(
+                segmentation_model=segmentation_model, embedding_model=embedding_model
+            ),
+            num_clusters=num_clusters,
+            threads=threads,
+        )
+        samples = load_normalized_audio(wav_path)
+
+        def callback(processed: int, total: int) -> int:
+            queue.put(("progress", processed, total))
+            return 0
+
+        result = diarizer.process(samples, callback=callback)
+        queue.put(("done", _turns_from_result(result)))
+    except Exception as ex:  # noqa: BLE001 - process boundary: report any failure to the parent
+        queue.put(("error", str(ex)))
+
+
+def _build_native_diarizer(
+    sherpa_onnx: ModuleType, *, paths: DiarizationModelPaths, num_clusters: int, threads: int
+) -> _NativeDiarizer:
+    config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
+        segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
+            pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
+                model=str(paths.segmentation_model)
+            ),
+            num_threads=threads,
+        ),
+        embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(
+            model=str(paths.embedding_model), num_threads=threads
+        ),
+        clustering=sherpa_onnx.FastClusteringConfig(
+            num_clusters=num_clusters, threshold=CLUSTER_THRESHOLD
+        ),
+        min_duration_on=MIN_DURATION_ON_SEC,
+        min_duration_off=MIN_DURATION_OFF_SEC,
+    )
+    if not config.validate():
+        raise DiarizationProcessingError("Speaker diarization model configuration is invalid.")
+
+    try:
+        return sherpa_onnx.OfflineSpeakerDiarization(config)
+    except RuntimeError as ex:
+        raise DiarizationProcessingError(str(ex)) from ex
+
+
+def _turns_from_result(result: _DiarizationResult) -> list[SpeakerTurn]:
+    return [
+        SpeakerTurn(start_sec=float(item.start), end_sec=float(item.end), speaker=str(item.speaker))
+        for item in result.sort_by_start_time()
+        if float(item.end) > float(item.start)
+    ]
 
 
 def _ensure_segmentation_model(model_path: Path) -> None:

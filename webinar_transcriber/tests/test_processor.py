@@ -107,16 +107,16 @@ class FakeDiarizer:
 
     def __init__(self, turns: list[SpeakerTurn]) -> None:
         self.turns = turns
-        self.calls: list[int] = []
+        self.calls: list[Path] = []
         self.prepare_calls: list[int | None] = []
 
     def prepare(self, *, speaker_count: int | None) -> None:
         self.prepare_calls.append(speaker_count)
 
     def diarize(
-        self, samples: np.ndarray, *, progress_callback: Callable[[int, int], None] | None = None
+        self, wav_path: Path, *, progress_callback: Callable[[int, int], None] | None = None
     ) -> list[SpeakerTurn]:
-        self.calls.append(len(samples))
+        self.calls.append(wav_path)
         if progress_callback is not None:
             progress_callback(1, 2)
             progress_callback(2, 2)
@@ -230,7 +230,7 @@ class TestProcessInput:
         transcript_payload = read_json(artifacts.layout.transcript_path)
         diarization_payload = read_json(artifacts.layout.diarization_path)
 
-        assert diarizer.calls == [16_000]
+        assert [call.name for call in diarizer.calls] == ["sample-audio.wav"]
         assert diarizer.prepare_calls == [4]
         assert [segment["speaker"] for segment in transcript_payload["segments"]] == ["S1", "S2"]
         assert diarization_payload == [
@@ -246,9 +246,10 @@ class TestProcessInput:
         assert artifacts.diagnostics.diarization is not None
         assert artifacts.diagnostics.diarization.speaker_count == 2
         assert artifacts.diagnostics.diarization.turn_count == 2
-        assert ("start", "diarize", 100.0, "preparing model") in reporter.progress
-        assert ("advance", "diarize", 1.0, "analyzing audio") in reporter.progress
-        assert ("advance", "diarize", 64.0, "embedding speakers") in reporter.progress
+        # Stage opens already labeled "analyzing audio" (covering prep + segmentation); the bar
+        # then jumps into the embedding range on the first callback (35 + 60*1/2 = 65%).
+        assert ("start", "diarize", 100.0, "analyzing audio") in reporter.progress
+        assert ("advance", "diarize", 65.0, "embedding speakers") in reporter.progress
         diarize_progress = [
             detail
             for action, stage_key, _, detail in reporter.progress
@@ -282,11 +283,11 @@ class TestProcessInput:
 
             def diarize(
                 self,
-                samples: np.ndarray,
+                wav_path: Path,
                 *,
                 progress_callback: Callable[[int, int], None] | None = None,
             ) -> list[SpeakerTurn]:
-                del samples
+                del wav_path
                 if progress_callback is not None:
                     progress_callback(2, 2)
                 return [SpeakerTurn(start_sec=0.0, end_sec=2.0, speaker="S1")]
