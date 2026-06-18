@@ -6,6 +6,7 @@ import hashlib
 import tarfile
 from dataclasses import replace
 from pathlib import Path
+from queue import Empty
 from types import ModuleType, SimpleNamespace
 from typing import Self
 from unittest.mock import Mock
@@ -227,14 +228,86 @@ class TestConfig:
         assert paths.embedding_model == tmp_path / "nemo_en_titanet_small.onnx"
 
 
-class TestSherpaOnnxDiarizer:
-    def test_errors_when_sherpa_is_unavailable(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(sherpa_runtime, "load_sherpa_onnx", lambda: None)
+# get() script sentinels for the queue double.
+_TIMEOUT = object()  # simulate a poll timeout (raises Empty)
+_INTERRUPT = object()  # simulate Ctrl-C during the blocking get
 
-        with pytest.raises(DiarizationProcessingError, match="sherpa-onnx is unavailable"):
-            sherpa_runtime.SherpaOnnxDiarizer(threads=1).prepare(speaker_count=2)
 
-    def test_runs_auto_clustering_once_and_normalizes_labels(
+class _FakeQueue:
+    """Queue double: the child records puts; the parent replays scripted get()/get_nowait()."""
+
+    def __init__(self, get_script: list | None = None, nowait_script: list | None = None) -> None:
+        self._get = list(get_script or [])
+        self._nowait = list(nowait_script or [])
+        self.puts: list[object] = []
+
+    def put(self, item: object) -> None:
+        self.puts.append(item)
+
+    def get(self, *, timeout: float | None = None) -> object:
+        del timeout
+        item = self._get.pop(0)
+        if item is _TIMEOUT:
+            raise Empty
+        if item is _INTERRUPT:
+            raise KeyboardInterrupt
+        return item
+
+    def get_nowait(self) -> object:
+        if not self._nowait:
+            raise Empty
+        return self._nowait.pop(0)
+
+
+class _FakeProcess:
+    def __init__(self, alive: list[bool] | None = None) -> None:
+        self._alive = list(alive or [])
+        self.started = False
+        self.terminated = False
+        self.joins = 0
+
+    def start(self) -> None:
+        self.started = True
+
+    def is_alive(self) -> bool:
+        return self._alive.pop(0)
+
+    def terminate(self) -> None:
+        self.terminated = True
+
+    def join(self) -> None:
+        self.joins += 1
+
+
+class _FakeContext:
+    def __init__(self, queue: _FakeQueue, process: _FakeProcess) -> None:
+        self._queue = queue
+        self._process = process
+        self.process_kwargs: dict | None = None
+
+    def Queue(self) -> _FakeQueue:  # noqa: N802 - mirrors multiprocessing context API
+        return self._queue
+
+    def Process(self, *, target, args, kwargs) -> _FakeProcess:  # noqa: N802 - mirrors the API
+        del target, args
+        self.process_kwargs = kwargs
+        return self._process
+
+
+def _subprocess_kwargs(tmp_path: Path, *, num_clusters: int = -1, threads: int = 3) -> dict:
+    return {
+        "segmentation_model": tmp_path / "seg.onnx",
+        "embedding_model": tmp_path / "emb.onnx",
+        "num_clusters": num_clusters,
+        "threads": threads,
+        "wav_path": tmp_path / "audio.wav",
+    }
+
+
+class TestDiarizationSubprocessTarget:
+    """The child entry point, exercised in-process (a real spawn would escape coverage)."""
+
+    def test_streams_progress_then_raw_turns(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         fake_sherpa = FakeSherpaModule(
@@ -248,52 +321,109 @@ class TestSherpaOnnxDiarizer:
         )
         monkeypatch.setattr(sherpa_runtime, "load_sherpa_onnx", lambda: fake_sherpa)
         monkeypatch.setattr(
-            sherpa_runtime,
-            "ensure_default_models",
-            lambda _cache_dir: sherpa_runtime.DiarizationModelPaths(
-                segmentation_model=tmp_path / "seg.onnx", embedding_model=tmp_path / "emb.onnx"
-            ),
+            sherpa_runtime, "load_normalized_audio", lambda _path: np.zeros(16, dtype=np.float32)
         )
-        progress: list[tuple[int, int]] = []
+        queue = _FakeQueue()
 
-        diarizer = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path, threads=3)
-        diarizer.prepare(speaker_count=None)
-
-        turns = diarizer.diarize(
-            np.zeros(16, dtype=np.float32),
-            progress_callback=lambda processed, total: progress.append((processed, total)),
-        )
+        sherpa_runtime._run_diarization_subprocess(queue, **_subprocess_kwargs(tmp_path))  # noqa: SLF001
 
         assert fake_sherpa.cluster_counts == [-1]
         assert fake_sherpa.thread_counts == [3, 3]
-        assert turns == [
-            SpeakerTurn(start_sec=0.0, end_sec=1.0, speaker="S1"),
-            SpeakerTurn(start_sec=1.0, end_sec=2.0, speaker="S2"),
+        assert queue.puts == [
+            ("progress", 1, 2),
+            ("progress", 2, 2),
+            (
+                "done",
+                [
+                    SpeakerTurn(start_sec=0.0, end_sec=1.0, speaker="9"),
+                    SpeakerTurn(start_sec=1.0, end_sec=2.0, speaker="8"),
+                ],
+            ),
         ]
-        assert progress == [(1, 2), (2, 2)]
 
-    def test_uses_known_speaker_count_as_exact_cluster_count(
+    def test_passes_known_speaker_count_as_cluster_count(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        fake_sherpa = FakeSherpaModule(
-            results=[[FakeSherpaItem(0.0, 1.0, 9), FakeSherpaItem(1.0, 2.0, 8)]]
-        )
+        fake_sherpa = FakeSherpaModule(results=[[FakeSherpaItem(0.0, 1.0, 9)]])
         monkeypatch.setattr(sherpa_runtime, "load_sherpa_onnx", lambda: fake_sherpa)
         monkeypatch.setattr(
-            sherpa_runtime,
-            "ensure_default_models",
-            lambda _cache_dir: sherpa_runtime.DiarizationModelPaths(
-                segmentation_model=tmp_path / "seg.onnx", embedding_model=tmp_path / "emb.onnx"
-            ),
+            sherpa_runtime, "load_normalized_audio", lambda _path: np.zeros(16, dtype=np.float32)
+        )
+        queue = _FakeQueue()
+
+        sherpa_runtime._run_diarization_subprocess(  # noqa: SLF001
+            queue, **_subprocess_kwargs(tmp_path, num_clusters=2)
         )
 
-        diarizer = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path, threads=1)
-        diarizer.prepare(speaker_count=2)
-
-        turns = diarizer.diarize(np.zeros(16, dtype=np.float32))
-
         assert fake_sherpa.cluster_counts == [2]
-        assert [turn.speaker for turn in turns] == ["S1", "S2"]
+        assert queue.puts[-1] == ("done", [SpeakerTurn(start_sec=0.0, end_sec=1.0, speaker="9")])
+
+    def test_reports_missing_sherpa_as_error(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(sherpa_runtime, "load_sherpa_onnx", lambda: None)
+        queue = _FakeQueue()
+
+        sherpa_runtime._run_diarization_subprocess(queue, **_subprocess_kwargs(tmp_path))  # noqa: SLF001
+
+        assert queue.puts == [("error", "sherpa-onnx is unavailable for speaker diarization.")]
+
+    def test_reports_invalid_config_as_error(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(
+            sherpa_runtime, "load_sherpa_onnx", lambda: FakeSherpaModule(valid=False)
+        )
+        monkeypatch.setattr(
+            sherpa_runtime, "load_normalized_audio", lambda _path: np.zeros(16, dtype=np.float32)
+        )
+        queue = _FakeQueue()
+
+        sherpa_runtime._run_diarization_subprocess(queue, **_subprocess_kwargs(tmp_path))  # noqa: SLF001
+
+        assert queue.puts == [("error", "Speaker diarization model configuration is invalid.")]
+
+    def test_reports_native_constructor_error(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        class BrokenConstructorSherpa(FakeSherpaModule):
+            def OfflineSpeakerDiarization(self, _config):  # noqa: N802
+                raise RuntimeError("native constructor failure")
+
+        monkeypatch.setattr(sherpa_runtime, "load_sherpa_onnx", BrokenConstructorSherpa)
+        monkeypatch.setattr(
+            sherpa_runtime, "load_normalized_audio", lambda _path: np.zeros(16, dtype=np.float32)
+        )
+        queue = _FakeQueue()
+
+        sherpa_runtime._run_diarization_subprocess(queue, **_subprocess_kwargs(tmp_path))  # noqa: SLF001
+
+        assert queue.puts == [("error", "native constructor failure")]
+
+    def test_reports_native_process_error(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(
+            sherpa_runtime,
+            "load_sherpa_onnx",
+            lambda: FakeSherpaModule(runtime_error=RuntimeError("native failure")),
+        )
+        monkeypatch.setattr(
+            sherpa_runtime, "load_normalized_audio", lambda _path: np.zeros(16, dtype=np.float32)
+        )
+        queue = _FakeQueue()
+
+        sherpa_runtime._run_diarization_subprocess(queue, **_subprocess_kwargs(tmp_path))  # noqa: SLF001
+
+        assert queue.puts == [("error", "native failure")]
+
+
+class TestSherpaOnnxDiarizer:
+    def test_errors_when_sherpa_is_unavailable(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(sherpa_runtime, "load_sherpa_onnx", lambda: None)
+
+        with pytest.raises(DiarizationProcessingError, match="sherpa-onnx is unavailable"):
+            sherpa_runtime.SherpaOnnxDiarizer(threads=1).prepare(speaker_count=2)
 
     def test_exposes_system_info(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(sherpa_runtime.metadata, "version", lambda _name: "1.2.3")
@@ -302,50 +432,136 @@ class TestSherpaOnnxDiarizer:
 
         assert diarizer.system_info == "sherpa-onnx 1.2.3"
 
-    def test_prepare_rejects_invalid_config(self, tmp_path: Path) -> None:
-        diarizer = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path, threads=1)
-
-        with pytest.raises(DiarizationProcessingError, match="configuration is invalid"):
-            diarizer._build_diarizer(  # noqa: SLF001
-                FakeSherpaModule(valid=False),
-                paths=sherpa_runtime.DiarizationModelPaths(
-                    segmentation_model=tmp_path / "seg.onnx", embedding_model=tmp_path / "emb.onnx"
-                ),
-                num_clusters=-1,
-            )
-
-    def test_prepare_wraps_native_constructor_error(self, tmp_path: Path) -> None:
-        class BrokenConstructorSherpa(FakeSherpaModule):
-            def OfflineSpeakerDiarization(self, _config):  # noqa: N802
-                raise RuntimeError("native constructor failure")
-
-        diarizer = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path, threads=1)
-
-        with pytest.raises(DiarizationProcessingError, match="native constructor failure"):
-            diarizer._build_diarizer(  # noqa: SLF001
-                BrokenConstructorSherpa(),
-                paths=sherpa_runtime.DiarizationModelPaths(
-                    segmentation_model=tmp_path / "seg.onnx", embedding_model=tmp_path / "emb.onnx"
-                ),
-                num_clusters=-1,
-            )
-
     def test_diarize_raises_when_not_prepared(self) -> None:
         diarizer = sherpa_runtime.SherpaOnnxDiarizer(threads=1)
 
         with pytest.raises(DiarizationProcessingError, match="not prepared"):
-            diarizer.diarize(np.zeros(16, dtype=np.float32))
+            diarizer.diarize(Path("unused.wav"))
 
-    def test_run_diarization_wraps_runtime_error(self) -> None:
-        diarizer = sherpa_runtime.SherpaOnnxDiarizer(threads=1)
-        fake_sherpa = FakeSherpaModule(runtime_error=RuntimeError("native failure"))
+    def _prepared_diarizer(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        *,
+        queue: _FakeQueue,
+        process: _FakeProcess,
+        speaker_count: int | None = None,
+    ) -> tuple[sherpa_runtime.SherpaOnnxDiarizer, _FakeContext]:
+        monkeypatch.setattr(sherpa_runtime, "load_sherpa_onnx", FakeSherpaModule)
+        monkeypatch.setattr(
+            sherpa_runtime,
+            "ensure_default_models",
+            lambda _cache_dir: sherpa_runtime.DiarizationModelPaths(
+                segmentation_model=tmp_path / "seg.onnx", embedding_model=tmp_path / "emb.onnx"
+            ),
+        )
+        context = _FakeContext(queue, process)
+        monkeypatch.setattr(sherpa_runtime.multiprocessing, "get_context", lambda _method: context)
+        diarizer = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path, threads=1)
+        diarizer.prepare(speaker_count=speaker_count)
+        return diarizer, context
 
-        with pytest.raises(DiarizationProcessingError, match="native failure"):
-            diarizer._run_diarization(  # noqa: SLF001
-                fake_sherpa.OfflineSpeakerDiarization(None),
-                np.zeros(16, dtype=np.float32),
-                progress_callback=None,
-            )
+    def test_diarize_streams_progress_and_normalizes_labels(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        queue = _FakeQueue(
+            get_script=[
+                ("progress", 1, 2),
+                ("done", [SpeakerTurn(start_sec=0.0, end_sec=1.0, speaker="7")]),
+            ]
+        )
+        process = _FakeProcess()
+        diarizer, context = self._prepared_diarizer(
+            monkeypatch, tmp_path, queue=queue, process=process
+        )
+        progress: list[tuple[int, int]] = []
+
+        turns = diarizer.diarize(
+            tmp_path / "audio.wav",
+            progress_callback=lambda processed, total: progress.append((processed, total)),
+        )
+
+        assert progress == [(1, 2)]
+        assert turns == [SpeakerTurn(start_sec=0.0, end_sec=1.0, speaker="S1")]
+        assert process.started
+        assert process.joins == 1
+        assert not process.terminated
+        assert context.process_kwargs is not None
+        assert context.process_kwargs["wav_path"] == tmp_path / "audio.wav"
+        assert context.process_kwargs["num_clusters"] == -1
+
+    def test_diarize_raises_and_terminates_on_subprocess_error(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        process = _FakeProcess()
+        diarizer, _ = self._prepared_diarizer(
+            monkeypatch,
+            tmp_path,
+            queue=_FakeQueue(get_script=[("error", "subprocess boom")]),
+            process=process,
+        )
+
+        with pytest.raises(DiarizationProcessingError, match="subprocess boom"):
+            diarizer.diarize(tmp_path / "audio.wav")
+
+        assert process.terminated
+        assert process.joins == 1
+
+    def test_diarize_raises_when_child_exits_without_result(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        process = _FakeProcess(alive=[False])
+        diarizer, _ = self._prepared_diarizer(
+            monkeypatch, tmp_path, queue=_FakeQueue(get_script=[_TIMEOUT]), process=process
+        )
+
+        with pytest.raises(DiarizationProcessingError, match="exited without returning a result"):
+            diarizer.diarize(tmp_path / "audio.wav")
+
+        assert process.terminated
+
+    def test_diarize_keeps_polling_while_child_is_alive(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        queue = _FakeQueue(
+            get_script=[_TIMEOUT, ("done", [SpeakerTurn(start_sec=0.0, end_sec=1.0, speaker="7")])]
+        )
+        diarizer, _ = self._prepared_diarizer(
+            monkeypatch, tmp_path, queue=queue, process=_FakeProcess(alive=[True])
+        )
+
+        turns = diarizer.diarize(tmp_path / "audio.wav")
+
+        assert turns == [SpeakerTurn(start_sec=0.0, end_sec=1.0, speaker="S1")]
+
+    def test_diarize_recovers_final_message_after_child_exit(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        queue = _FakeQueue(
+            get_script=[_TIMEOUT],
+            nowait_script=[("done", [SpeakerTurn(start_sec=0.0, end_sec=1.0, speaker="7")])],
+        )
+        diarizer, _ = self._prepared_diarizer(
+            monkeypatch, tmp_path, queue=queue, process=_FakeProcess(alive=[False])
+        )
+
+        turns = diarizer.diarize(tmp_path / "audio.wav")
+
+        assert turns == [SpeakerTurn(start_sec=0.0, end_sec=1.0, speaker="S1")]
+
+    def test_diarize_terminates_child_on_interrupt(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        process = _FakeProcess()
+        diarizer, _ = self._prepared_diarizer(
+            monkeypatch, tmp_path, queue=_FakeQueue(get_script=[_INTERRUPT]), process=process
+        )
+
+        with pytest.raises(KeyboardInterrupt):
+            diarizer.diarize(tmp_path / "audio.wav")
+
+        assert process.terminated
+        assert process.joins == 1
 
 
 class TestModelDownload:

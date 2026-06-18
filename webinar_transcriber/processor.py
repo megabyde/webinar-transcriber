@@ -273,7 +273,7 @@ def _run_asr_pipeline(
                 embedding_progress = 60.0 * min(processed, total) / total
                 st.update(completed=35.0 + embedding_progress, detail="embedding speakers")
 
-            speaker_turns = diarizer.diarize(audio_samples, progress_callback=on_diarize_progress)
+            speaker_turns = diarizer.diarize(audio_path, progress_callback=on_diarize_progress)
             write_json(layout.diarization_path, [asdict(turn) for turn in speaker_turns])
             speaker_count = len({turn.speaker for turn in speaker_turns})
             transcription = replace(
