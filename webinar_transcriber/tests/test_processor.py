@@ -428,14 +428,22 @@ class TestProcessInput:
         monkeypatch.setattr(
             "webinar_transcriber.processor.write_transcription_audio", fake_write_audio
         )
+        reporter = RecordingStageReporter()
 
         artifacts = process_input(
-            input_path, output_dir=tmp_path / "run", transcriber=FakeTranscriber(), keep_audio=True
+            input_path,
+            output_dir=tmp_path / "run",
+            transcriber=FakeTranscriber(),
+            keep_audio=True,
+            reporter=reporter,
         )
 
         kept_audio_path = artifacts.layout.transcription_audio_path
         assert kept_audio_path.exists()
         assert kept_audio_path.suffix == ".mp3"
+        # The kept copy is saved before transcription so it survives a later-stage failure.
+        started = [stage for action, stage, *_ in reporter.progress if action == "start"]
+        assert started.index("save_transcription_audio") < started.index("transcribe")
         assert len(write_calls) == 2
         source_audio_path, kept_destination, kept_format = write_calls[1]
         assert source_audio_path.name == "sample-audio.wav"

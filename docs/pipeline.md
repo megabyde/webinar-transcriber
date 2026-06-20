@@ -17,7 +17,8 @@ For install and typical usage, see [README.md](../README.md).
    - PyAV decodes the input into temporary mono, 16 kHz, 16-bit [PCM] WAV audio.
    - Downstream speech detection, ASR, and diarization all consume this normalized audio contract.
    - The temporary WAV normally stays outside the run directory; `--keep-audio` saves a compressed
-     `transcription-audio.mp3` copy after transcription.
+     `transcription-audio.mp3` copy as soon as the audio is prepared, before transcription, so the
+     copy survives a later-stage failure.
 1. Load the local [ASR] runtime.
    - `pywhispercpp` loads the selected [Whisper] (`whisper.cpp`) model identifier or local GGML
      model path.
@@ -58,9 +59,10 @@ For install and typical usage, see [README.md](../README.md).
      changes, so one speaker turn carries a single label. Coalescing is in-memory; the persisted
      `transcript.json` keeps the raw per-segment transcript.
 1. Process video context when the input has video.
-   - [Scene detection][scene-detection] samples the video timeline and writes `scenes.json`. The
-     same decode pass saves the frame that opened each scene into `frames/`, so frames are captured
-     at the slide change instead of being re-decoded in a second pass.
+   - [Scene detection][scene-detection] samples the video timeline to find slide-change boundaries.
+   - A second pass seeks to the middle of each scene and saves a settled frame into `frames/`, so
+     the representative image is a full slide rather than a slide-change or fade-in frame;
+     `scenes.json` then records each scene's bounds and saved frame.
    - Transcript segments are aligned to scene ranges so the Markdown, DOCX, and JSON reports can
      associate sections with the right visual frame.
 1. Build report sections locally.
