@@ -1,4 +1,4 @@
-"""Helpers for normalizing ASR transcript segments before downstream use."""
+"""Coalesce raw ASR segments into readable, speaker-consistent blocks."""
 
 from __future__ import annotations
 
@@ -15,27 +15,31 @@ MAX_SEGMENT_CHARS = 420
 STRONG_SENTENCE_END_RE = re.compile(f"[{re.escape(SENTENCE_TERMINATORS)}]$")
 
 
-def normalize_transcription(transcription: TranscriptionResult) -> TranscriptionResult:
-    """Drop empty segments and merge adjacent short segments into larger utterances.
+def coalesce_transcript(transcription: TranscriptionResult) -> TranscriptionResult:
+    """Merge adjacent segments into readable blocks, splitting on speaker changes.
+
+    Short ASR fragments are merged into utterance-sized blocks; a new block starts on a speaker
+    change, a timing gap, or once a block grows past its duration/length/sentence-end bounds.
+    Speaker labels only refine the boundaries: unlabeled transcripts are still coalesced into
+    readable blocks.
 
     Returns:
-        TranscriptionResult: The normalized transcription.
+        TranscriptionResult: The coalesced transcription.
     """
     meaningful_segments = [segment for segment in transcription.segments if segment.text.strip()]
     if not meaningful_segments:
         return TranscriptionResult(detected_language=transcription.detected_language, segments=[])
 
     merged_segments: list[TranscriptSegment] = []
-    current_segments: list[TranscriptSegment] = []
+    current_segments: list[TranscriptSegment] = [meaningful_segments[0]]
 
-    for segment in meaningful_segments:
+    for segment in meaningful_segments[1:]:
         if _should_flush_before_adding(current_segments, segment):
             merged_segments.append(_merge_segment_group(current_segments, len(merged_segments) + 1))
             current_segments = []
         current_segments.append(segment)
 
-    if current_segments:
-        merged_segments.append(_merge_segment_group(current_segments, len(merged_segments) + 1))
+    merged_segments.append(_merge_segment_group(current_segments, len(merged_segments) + 1))
 
     return TranscriptionResult(
         detected_language=transcription.detected_language, segments=merged_segments
@@ -45,9 +49,6 @@ def normalize_transcription(transcription: TranscriptionResult) -> Transcription
 def _should_flush_before_adding(
     current_segments: list[TranscriptSegment], next_segment: TranscriptSegment
 ) -> bool:
-    if not current_segments:
-        return False
-
     current_start = current_segments[0].start_sec
     current_end = current_segments[-1].end_sec
     current_duration = max(0.0, current_end - current_start)

@@ -27,7 +27,7 @@ from webinar_transcriber.normalized_audio import load_normalized_audio, write_tr
 from webinar_transcriber.paths import create_run_layout
 from webinar_transcriber.segmentation import detect_speech_regions, normalized_audio_duration
 from webinar_transcriber.structure import build_report
-from webinar_transcriber.transcript.normalize import normalize_transcription
+from webinar_transcriber.transcript.coalesce import coalesce_transcript
 from webinar_transcriber.transcript.reconcile import reconcile_decoded_windows
 from webinar_transcriber.video import detect_scenes, estimated_scene_sample_count
 
@@ -321,8 +321,8 @@ def _run_report_phase(
     Returns:
         ReportDocument: The final exported report.
     """
-    normalized_transcription = normalize_transcription(transcription)
-    ctx.item_counts["normalized_transcript_segments"] = len(normalized_transcription.segments)
+    coalesced_transcription = coalesce_transcript(transcription)
+    ctx.item_counts["coalesced_transcript_segments"] = len(coalesced_transcription.segments)
 
     scenes: list[Scene] = []
 
@@ -333,7 +333,7 @@ def _run_report_phase(
 
     ctx.item_counts["scenes"] = len(scenes)
     ctx.item_counts["frames"] = sum(scene.image_path is not None for scene in scenes)
-    report = build_report(media_asset, normalized_transcription, scenes=scenes)
+    report = build_report(media_asset, coalesced_transcription, scenes=scenes)
 
     if llm_processor is not None:
         report = _polish_report(report, llm_processor=llm_processor, ctx=ctx)

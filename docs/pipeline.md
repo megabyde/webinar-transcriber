@@ -47,12 +47,14 @@ For install and typical usage, see [README.md](../README.md).
    - Speaker turns are normalized to anonymous labels ordered by first appearance (`S1`, `S2`, and
      so on) and written to `diarization.json`.
    - Transcript segments receive the speaker label with the largest time overlap before transcript
-     normalization, so speaker changes can prevent unrelated adjacent segments from being merged.
-1. Normalize the transcript for report generation.
-   - Adjacent transcript segments are merged only when the time gap is small enough and the speaker
-     label allows it.
-   - The normalized transcript keeps timestamps and optional speaker labels, but produces cleaner
-     paragraph-sized material for sectioning and export.
+     coalescing, so a speaker change starts a new block.
+1. Coalesce the transcript for report generation.
+   - Adjacent segments are merged into readable, paragraph-sized blocks; a new block starts on a
+     speaker change, a timing gap, or once a block reaches its length or sentence boundary. Speaker
+     labels only refine the boundaries, so unlabeled transcripts are coalesced the same way.
+   - The report renders each block as a paragraph and prints a speaker label only when the speaker
+     changes, so one speaker turn carries a single label. Coalescing is in-memory; the persisted
+     `transcript.json` keeps the raw per-segment transcript.
 1. Process video context when the input has video.
    - Scene detection samples the video timeline and writes `scenes.json`. The same decode pass saves
      the frame that opened each scene into `frames/`, so frames are captured at the slide change

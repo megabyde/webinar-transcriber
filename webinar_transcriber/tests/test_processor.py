@@ -376,7 +376,7 @@ class TestProcessInput:
             InferenceWindow(id="window-1", region_index=2, start_sec=3.0, end_sec=4.0)
         ]
 
-    def test_normalizes_transcript_before_report_generation(
+    def test_coalesces_transcript_before_report_generation(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         input_path = FIXTURE_DIR / "sample-audio.mp3"
@@ -401,7 +401,7 @@ class TestProcessInput:
             "всем.",
             "Новая тема начинается позже.",
         ]
-        assert artifacts.diagnostics.item_counts["normalized_transcript_segments"] == 2
+        assert artifacts.diagnostics.item_counts["coalesced_transcript_segments"] == 2
         assert artifacts.report.sections[0].transcript_text.startswith("Привет всем.")
 
     def test_keeps_normalized_audio_artifact(
