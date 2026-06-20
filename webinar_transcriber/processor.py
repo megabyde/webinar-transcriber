@@ -29,7 +29,11 @@ from webinar_transcriber.segmentation import detect_speech_regions, normalized_a
 from webinar_transcriber.structure import build_report
 from webinar_transcriber.transcript.coalesce import coalesce_transcript
 from webinar_transcriber.transcript.reconcile import reconcile_decoded_windows
-from webinar_transcriber.video import detect_scenes, estimated_scene_sample_count
+from webinar_transcriber.video import (
+    detect_scenes,
+    estimated_scene_sample_count,
+    save_scene_frames,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -133,18 +137,9 @@ def process_input(
                     )
                     st.update(completed=audio_total, detail=audio_path.name)
 
-                transcription = _run_asr_pipeline(
-                    audio_path=audio_path,
-                    media_duration_sec=media_asset.duration_sec,
-                    transcriber=active_transcriber,
-                    layout=layout,
-                    ctx=ctx,
-                    threads=threads,
-                    diarizer=diarizer,
-                    diarization_speaker_count=diarization_speaker_count,
-                )
-
                 if keep_audio:
+                    # Save the compressed copy before the long ASR/diarization stages so the kept
+                    # audio survives a crash or Ctrl-C mid-transcription.
                     with ctx.stage(
                         "save_transcription_audio", "Saving transcription audio", total=audio_total
                     ) as st:
@@ -158,6 +153,17 @@ def process_input(
                             ),
                         )
                         st.update(completed=audio_total, detail=preserved_audio_path.name)
+
+                transcription = _run_asr_pipeline(
+                    audio_path=audio_path,
+                    media_duration_sec=media_asset.duration_sec,
+                    transcriber=active_transcriber,
+                    layout=layout,
+                    ctx=ctx,
+                    threads=threads,
+                    diarizer=diarizer,
+                    diarization_speaker_count=diarization_speaker_count,
+                )
 
             report = _run_report_phase(
                 input_path=input_path,
@@ -350,7 +356,7 @@ def _detect_video_scenes(
     media_asset: VideoAsset,
     ctx: RunContext,
 ) -> list[Scene]:
-    """Detect scenes and save each scene's representative frame in one decode pass.
+    """Detect scenes, then save a mid-scene frame for each, recording diagnostics on the context.
 
     Returns:
         list[Scene]: Detected scenes, each carrying its representative frame image path.
@@ -364,12 +370,22 @@ def _detect_video_scenes(
             st.update(completed=completed, detail=format_count(count, "scene"))
 
         scenes = detect_scenes(
-            input_path,
-            layout.frames_dir,
-            media_asset.duration_sec,
-            progress_callback=on_scene_progress,
+            input_path, media_asset.duration_sec, progress_callback=on_scene_progress
         )
         st.update(completed=scene_sample_total, detail=format_count(len(scenes), "scene"))
+
+    frame_total = max(len(scenes), 1)
+    with ctx.stage(
+        "save_frames", "Saving scene frames", total=frame_total, detail="0 frames"
+    ) as st:
+
+        def on_frame_progress(saved: int) -> None:
+            st.update(completed=saved, detail=format_count(saved, "frame"))
+
+        scenes = save_scene_frames(
+            input_path, scenes, layout.frames_dir, progress_callback=on_frame_progress
+        )
+        st.update(completed=frame_total, detail=format_count(len(scenes), "frame"))
 
     write_json(layout.scenes_path, [asdict(scene) for scene in scenes])
     return scenes

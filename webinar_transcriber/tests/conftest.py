@@ -312,19 +312,28 @@ def install_video_scene_runtime(
     scenes: list[Scene],
 ) -> None:
     def fake_detect_scenes(
-        _input_path: Path, frames_dir: Path, _duration_sec: float, *, progress_callback=None
+        _input_path: Path, _duration_sec: float, *, progress_callback=None
     ) -> list[Scene]:
-        frames_dir.mkdir(parents=True, exist_ok=True)
-        for index, scene in enumerate(scenes, start=1):
+        for index, _scene in enumerate(scenes, start=1):
             if progress_callback is not None:
                 progress_callback(index, index)
+        return scenes
+
+    def fake_save_scene_frames(
+        _input_path: Path, in_scenes: list[Scene], frames_dir: Path, *, progress_callback=None
+    ) -> list[Scene]:
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        for index, scene in enumerate(in_scenes, start=1):
             if scene.image_path is not None:
                 Image.new("RGB", (8, 8), color="white").save(
                     frames_dir / Path(scene.image_path).name
                 )
-        return scenes
+            if progress_callback is not None:
+                progress_callback(index)
+        return in_scenes
 
     monkeypatch.setattr("webinar_transcriber.processor.detect_scenes", fake_detect_scenes)
+    monkeypatch.setattr("webinar_transcriber.processor.save_scene_frames", fake_save_scene_frames)
 
 
 def audio_runtime(
