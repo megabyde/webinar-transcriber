@@ -4,13 +4,22 @@ This file is the contributor and coding-agent guide for this repository.
 
 ## Scope
 
-Keep repository documentation consolidated in:
+Documentation is organized by [Diátaxis](https://diataxis.fr) mode. Decide where content goes by
+what it serves, not by which file is nearest:
 
-- `README.md` for user-facing usage, behavior, and artifact contracts
-- `AGENTS.md` for contributor and implementation guidance
-- `docs/` for reference-style detail that would bloat `README.md` or obscure the user flow
-  (`docs/pipeline.md` — per-stage pipeline detail; `docs/releasing.md` — release process;
-  `docs/troubleshooting.md` — error-indexed fixes; `docs/development.md` — checkout setup and gates)
+- `README.md`: the entry point. A how-to quick start, user-facing reference (CLI flags, environment
+  variables, output layout), and a brief explanation of what the tool is.
+- `docs/pipeline.md`: explanation. How and why the stages work; no step-by-step instructions and no
+  flag tables.
+- `docs/troubleshooting.md`: how-to. Error-indexed fixes.
+- `docs/development.md`: how-to and reference. Checkout setup, running from source, and the
+  make-target and quality-gate reference.
+- `docs/releasing.md`: how-to. The release process.
+- `AGENTS.md`: contributor and coding-agent process the user docs do not need.
+
+When unsure, place content by Diátaxis axis: action for someone working is how-to, information for
+someone working is reference, understanding is explanation. Keep modes separate within a file: do
+not fold explanation into a how-to, or a flag table into the pipeline explanation.
 
 Prefer extending `README.md` first. Add a new file under `docs/` only when a section is long enough
 to obscure the user-facing flow and self-contained enough to read on its own.
@@ -20,10 +29,6 @@ suffixes: `social-preview.png#gh-light-mode-only` and `social-preview-dark.png#g
 Keep `social-preview-dark.png` suitable for the repository social-preview setting.
 
 ## Tooling
-
-README owns the user-facing install and usage entry points. `docs/development.md` owns detailed
-checkout setup, running from source, and quality gates. Keep AGENTS focused on contributor-specific
-guidance that README and `docs/` do not need.
 
 Keep setup docs and Makefile targets in sync. If you add, rename, or remove a `make install*`
 target, update README in the same change. If you add, rename, or remove a `make sync*` target or
