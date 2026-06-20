@@ -5,10 +5,11 @@ conventions, testing notes, and the Definition of Done live in [AGENTS.md](../AG
 
 ## Prerequisites
 
-- Python 3.12+
-- `uv`
-- For CUDA development: a C/C++ compiler, `cmake`, and a working CUDA toolkit with `nvcc` on `PATH`
-  and `CUDA_HOME` set
+- [Python 3.12+](https://www.python.org/downloads/) and
+  [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- For CUDA development: [CMake](https://cmake.org/download/), a C/C++ compiler, and a working
+  [CUDA toolkit](https://developer.nvidia.com/cuda-downloads) with `nvcc` on `PATH` and `CUDA_HOME`
+  set
 
 ## Local setup
 

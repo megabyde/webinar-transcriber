@@ -13,18 +13,21 @@ Keep repository documentation consolidated in:
   `docs/troubleshooting.md` — error-indexed fixes; `docs/development.md` — checkout setup and gates)
 
 Prefer extending `README.md` first. Add a new file under `docs/` only when a section is long enough
-to obscure the user-facing flow and self-contained enough to read on its own. Repository assets stay
-under `docs/assets/`.
+to obscure the user-facing flow and self-contained enough to read on its own.
+
+Repository-visible assets stay under `docs/assets/`. The README preview uses GitHub's theme
+suffixes: `social-preview.png#gh-light-mode-only` and `social-preview-dark.png#gh-dark-mode-only`.
+Keep `social-preview-dark.png` suitable for the repository social-preview setting.
 
 ## Tooling
 
-README owns the user-facing install and development setup, including native dependencies and the
-standard verification commands. Keep AGENTS focused on contributor-specific guidance that README
-does not need.
+README owns the user-facing install and usage entry points. `docs/development.md` owns detailed
+checkout setup, running from source, and quality gates. Keep AGENTS focused on contributor-specific
+guidance that README and `docs/` do not need.
 
-Keep README and Makefile setup targets in sync. If you add, rename, or remove a `make sync*` or
-`make install*` target, update README in the same change so local checkout setup remains
-discoverable.
+Keep setup docs and Makefile targets in sync. If you add, rename, or remove a `make install*`
+target, update README in the same change. If you add, rename, or remove a `make sync*` target or
+quality-gate target, update `docs/development.md` in the same change.
 
 Use `make test` for quick iteration (fast subset, skips slow tests, no coverage gate). Run
 `make format` then `make check` before committing — `make check` is the full coverage-gated gate.
@@ -67,7 +70,9 @@ maintaining a copy here, and avoid adding deep nesting.
 - Successful runs write `diagnostics.json`; failed runs also write it once the run directory exists,
   though early failures can still leave only partial intermediate artifacts and no final report
   outputs.
-- Temporary audio extracted for transcription should stay outside the run directory.
+- Temporary WAV audio extracted for transcription should stay outside the run directory;
+  `--keep-audio` may write the compressed `transcription-audio.mp3` artifact described in
+  `README.md`.
 
 ## Testing Notes
 
