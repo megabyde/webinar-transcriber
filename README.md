@@ -181,10 +181,10 @@ downloads the segmentation and speaker-embedding models into
 
 Set `WEBINAR_DIARIZATION_CACHE_DIR` to override that cache directory.
 
-When diarization is enabled, reports prefix transcript paragraphs with stable anonymous labels
-ordered by first appearance in the timeline: `S1`, `S2`, and so on. JSON artifacts include a
-`speaker` field on transcript segments and a separate `diarization.json` file with raw speaker
-turns. If labels look wrong, see
+When diarization is enabled, reports label each speaker turn with stable anonymous labels ordered by
+first appearance in the timeline: `S1`, `S2`, and so on (one label per turn, even when a turn spans
+several paragraphs). JSON artifacts include a `speaker` field on transcript segments and a separate
+`diarization.json` file with raw speaker turns. If labels look wrong, see
 [Poor diarization labels](docs/troubleshooting.md#poor-diarization-labels).
 
 ## Advanced Usage

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from itertools import groupby
 from pathlib import Path
 
 from webinar_transcriber.models import (
@@ -174,20 +173,18 @@ def title_from_path(source_path: str) -> str:
 
 
 def _transcript_text_from_segments(segments: list[TranscriptSegment]) -> str:
-    meaningful_segments = [segment for segment in segments if segment.text.strip()]
-    if not any(segment.speaker for segment in meaningful_segments):
-        return "\n\n".join(segment.text.strip() for segment in meaningful_segments)
-
-    grouped_segments = groupby(meaningful_segments, key=lambda segment: segment.speaker)
-    return "\n\n".join(
-        _speaker_paragraph(speaker, [segment.text.strip() for segment in speaker_segments])
-        for speaker, speaker_segments in grouped_segments
-    )
-
-
-def _speaker_paragraph(speaker: str | None, texts: list[str]) -> str:
-    text = " ".join(texts).strip()
-    return f"**{speaker}:** {text}" if speaker else text
+    # Segments arrive already coalesced into readable blocks; render each as a paragraph and tag it
+    # only when the speaker changes, so a multi-paragraph turn carries one label.
+    paragraphs: list[str] = []
+    previous_speaker: str | None = None
+    for segment in segments:
+        text = segment.text.strip()
+        if segment.speaker and segment.speaker != previous_speaker:
+            paragraphs.append(f"**{segment.speaker}:** {text}")
+        else:
+            paragraphs.append(text)
+        previous_speaker = segment.speaker
+    return "\n\n".join(paragraphs)
 
 
 __all__ = [

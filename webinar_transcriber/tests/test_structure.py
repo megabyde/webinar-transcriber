@@ -246,7 +246,7 @@ class TestBuildReport:
         )
 
         assert report.sections[0].transcript_text == (
-            "**S1:** Agenda review. Project status.\n\n**S2:** Next steps."
+            "**S1:** Agenda review.\n\nProject status.\n\n**S2:** Next steps."
         )
 
 
