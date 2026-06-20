@@ -14,16 +14,17 @@ For install and typical usage, see [README.md](../README.md).
    - This data is written early to `metadata.json`, and later stages use the probed duration for
      progress, diagnostics, and report timing.
 1. Prepare deterministic transcription audio.
-   - PyAV decodes the input into temporary mono, `16 kHz`, `16-bit PCM WAV` audio.
+   - PyAV decodes the input into temporary mono, 16 kHz, 16-bit [PCM] WAV audio.
    - Downstream speech detection, ASR, and diarization all consume this normalized audio contract.
    - The temporary WAV normally stays outside the run directory; `--keep-audio` saves a compressed
      `transcription-audio.mp3` copy after transcription.
-1. Load the local ASR runtime.
-   - `pywhispercpp` loads the selected `whisper.cpp` model identifier or local GGML model path.
-   - The backend, model name, thread count, and native whisper.cpp logs are recorded in the run
+1. Load the local [ASR] runtime.
+   - `pywhispercpp` loads the selected [Whisper] (`whisper.cpp`) model identifier or local GGML
+     model path.
+   - The backend, model name, thread count, and native `whisper.cpp` logs are recorded in the run
      directory so performance and failures can be inspected after the run.
 1. Detect speech regions.
-   - The bundled Silero VAD ONNX model runs locally through `sherpa-onnx`.
+   - The bundled Silero [VAD] [ONNX] model runs locally through `sherpa-onnx`.
    - Speech ranges are padded, overlapping padded ranges are merged, and the result is written to
      `asr/speech_regions.json`.
    - If VAD cannot run on the host, the pipeline records a warning and falls back to treating the
@@ -41,7 +42,7 @@ For install and typical usage, see [README.md](../README.md).
    - Empty or invalid decoded segments are discarded.
    - The reconciled transcript is the source for `transcript.json` and for optional speaker
      assignment.
-1. Optionally diarize speakers.
+1. Optionally [diarize][diarization] speakers.
    - `--diarize` runs local `sherpa-onnx` speaker segmentation and embedding models against the same
      normalized audio.
    - Speaker turns are normalized to anonymous labels ordered by first appearance (`S1`, `S2`, and
@@ -50,22 +51,23 @@ For install and typical usage, see [README.md](../README.md).
      coalescing, so a speaker change starts a new block.
 1. Coalesce the transcript for report generation.
    - Adjacent segments are merged into readable, paragraph-sized blocks; a new block starts on a
-     speaker change, a timing gap, or once a block reaches its length or sentence boundary. Speaker
-     labels only refine the boundaries, so unlabeled transcripts are coalesced the same way.
+     speaker change, a timing gap, or once a block reaches its length or a
+     [sentence boundary][sentence-boundary]. Speaker labels only refine the boundaries, so unlabeled
+     transcripts are coalesced the same way.
    - The report renders each block as a paragraph and prints a speaker label only when the speaker
      changes, so one speaker turn carries a single label. Coalescing is in-memory; the persisted
      `transcript.json` keeps the raw per-segment transcript.
 1. Process video context when the input has video.
-   - Scene detection samples the video timeline and writes `scenes.json`. The same decode pass saves
-     the frame that opened each scene into `frames/`, so frames are captured at the slide change
-     instead of being re-decoded in a second pass.
+   - [Scene detection][scene-detection] samples the video timeline and writes `scenes.json`. The
+     same decode pass saves the frame that opened each scene into `frames/`, so frames are captured
+     at the slide change instead of being re-decoded in a second pass.
    - Transcript segments are aligned to scene ranges so the Markdown, DOCX, and JSON reports can
      associate sections with the right visual frame.
 1. Build report sections locally.
    - Video reports are primarily organized by detected scene boundaries.
    - Audio-only reports use transcript timing and gaps to produce deterministic sections.
    - The local report is written even when `--llm` is not used.
-1. Optionally polish the report with an LLM.
+1. Optionally polish the report with an [LLM].
    - `--llm` runs after the deterministic local report exists.
    - The LLM can polish section transcript text and refine summary bullets, action items, section
      titles, and section TL;DRs.
@@ -76,3 +78,13 @@ For install and typical usage, see [README.md](../README.md).
      written at the end of a successful run.
    - Failed runs still try to write `diagnostics.json` once the run directory exists, including the
      failed stage, warnings, timings, and any partial artifacts already produced.
+
+[asr]: https://en.wikipedia.org/wiki/Speech_recognition
+[diarization]: https://en.wikipedia.org/wiki/Speaker_diarisation
+[llm]: https://en.wikipedia.org/wiki/Large_language_model
+[onnx]: https://en.wikipedia.org/wiki/Open_Neural_Network_Exchange
+[pcm]: https://en.wikipedia.org/wiki/Pulse-code_modulation
+[scene-detection]: https://en.wikipedia.org/wiki/Shot_transition_detection
+[sentence-boundary]: https://en.wikipedia.org/wiki/Sentence_boundary_disambiguation
+[vad]: https://en.wikipedia.org/wiki/Voice_activity_detection
+[whisper]: https://en.wikipedia.org/wiki/Whisper_(speech_recognition_system)

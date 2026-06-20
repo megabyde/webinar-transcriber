@@ -27,11 +27,10 @@ machine-readable report artifacts. It accepts audio-only files and slide-based v
 scene detection and representative frames; audio-only runs keep the same transcript and report
 contract without visual context.
 
-The constraint that matters is locality. The default pipeline normalizes the media, detects speech
-regions with the bundled Silero VAD ONNX model, transcribes windows with `whisper.cpp`, reconciles
-window overlap, and builds report sections with local heuristics. Optional LLM refinement runs only
-after that deterministic report exists. It can polish section text and refine titles, summaries,
-action items, and section TL;DRs, but it does not replace the base pipeline.
+`webinar-transcriber` is local-first: speech detection, transcription, window reconciliation, and
+report sectioning all run on your machine with local models and heuristics. Optional LLM refinement
+runs only after that deterministic report exists; it polishes section text and refines titles,
+summaries, action items, and section TL;DRs, but never replaces the base pipeline.
 
 For per-stage detail and the artifact each stage produces, see [docs/pipeline.md](docs/pipeline.md).
 
@@ -78,8 +77,7 @@ command should track the checkout.
 
 Run `make help` to list every project target.
 
-The standard install uses prebuilt `pywhispercpp` wheels and does not install PyTorch. The default
-`large-v3-turbo` Whisper model is downloaded on the first transcription run, not during
+The default `large-v3-turbo` Whisper model downloads on the first transcription run, not during
 installation.
 
 ### NVIDIA CUDA
@@ -102,13 +100,11 @@ If the build fails, see [CUDA install fails](docs/troubleshooting.md#cuda-instal
 
 ### Quick start
 
-`webinar-transcriber` is a single root command. There are no subcommands. By default, each input
-gets a fresh run directory under `runs/`. Multiple inputs are processed sequentially. `--output-dir`
-is allowed only with one input.
+By default, each input gets a fresh run directory under `runs/`. Multiple inputs are processed
+sequentially. `--output-dir` is allowed only with one input.
 
 Any container PyAV can decode is accepted, including common formats such as `.mp4`, `.mkv`, `.mov`,
-`.webm`, `.mp3`, `.wav`, and `.m4a`. The first pipeline stage normalizes the audio track to mono
-`16 kHz` `16-bit PCM WAV`, independent of the input container.
+`.webm`, `.mp3`, `.wav`, and `.m4a`.
 
 > [!TIP]
 > Use a fresh `--output-dir` for reproducible comparisons. Existing output directories are refused,
@@ -140,9 +136,9 @@ make install-llm
 
 Configure the provider with environment variables:
 
-- `LLM_PROVIDER` — `openai` (default) or `anthropic`.
-- `OPENAI_API_KEY` / `OPENAI_MODEL` — API key and model identifier for the OpenAI provider.
-- `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` — API key and model identifier for the Anthropic provider.
+- `LLM_PROVIDER`: `openai` (default) or `anthropic`.
+- `OPENAI_API_KEY` / `OPENAI_MODEL`: API key and model identifier for the OpenAI provider.
+- `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL`: API key and model identifier for the Anthropic provider.
 
 The CLI does not pin a default model name for either provider; pass any model the provider supports.
 
@@ -177,9 +173,8 @@ webinar-transcriber INPUT --diarize --diarize-speakers 4
 
 Diarization runs locally through `sherpa-onnx` and does not use an API key. The first diarized run
 downloads the segmentation and speaker-embedding models into
-`~/.cache/webinar-transcriber/diarization`.
-
-Set `WEBINAR_DIARIZATION_CACHE_DIR` to override that cache directory.
+`~/.cache/webinar-transcriber/diarization`. Set `WEBINAR_DIARIZATION_CACHE_DIR` to override that
+cache directory.
 
 When diarization is enabled, reports label each speaker turn with stable anonymous labels ordered by
 first appearance in the timeline: `S1`, `S2`, and so on (one label per turn, even when a turn spans
