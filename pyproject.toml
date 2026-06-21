@@ -242,6 +242,9 @@ include = ["webinar_transcriber"]
 source = "vcs"
 tag-pattern = "^v(?P<version>.*)$"
 fallback-version = "0.0.0"
+# Drop the +g<sha> local segment so untagged builds (TestPyPI dry-runs) are uploadable dev
+# versions; exact tags still produce a clean release version.
+raw-options = { local_scheme = "no-local-version" }
 
 [tool.hatch.build.hooks.vcs]
 version-file = "webinar_transcriber/_version.py"
