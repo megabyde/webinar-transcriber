@@ -18,9 +18,9 @@ from webinar_transcriber._env import diarization_cache_dir, load_sherpa_onnx
 from webinar_transcriber.models import SpeakerTurn
 from webinar_transcriber.normalized_audio import load_normalized_audio
 
-CLUSTER_THRESHOLD = 0.5
-MIN_DURATION_ON_SEC = 0.3
-MIN_DURATION_OFF_SEC = 0.5
+CLUSTER_THRESHOLD = 1.2
+MIN_DURATION_ON_SEC = 0.5
+MIN_DURATION_OFF_SEC = 1.5
 DIARIZATION_MODEL = "pyannote-segmentation-3.0-fp32+nemo-titanet-small"
 # Wake the drain loop this often to check whether the child died without a terminal message.
 DIARIZATION_POLL_SEC = 0.5
