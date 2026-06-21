@@ -37,9 +37,8 @@ quality-gate target, update `docs/development.md` in the same change.
 Use `make test` for quick iteration (fast subset, skips slow tests, no coverage gate). Run
 `make format` then `make check` before committing — `make check` is the full coverage-gated gate.
 
-GitHub Actions runs `make lint` and `make test-all` so CI mirrors the local quality gate. CI runs on
-`ubuntu-latest` and `macos-latest`; Windows is not part of the CI matrix and is treated as
-best-effort.
+GitHub Actions runs `make check` so CI mirrors the local quality gate. CI runs on `ubuntu-latest`
+and `macos-latest`; Windows is not part of the CI matrix and is treated as best-effort.
 
 In sandboxed Codex runs, prefer `UV_CACHE_DIR=/tmp/uv-cache` for `uv` and `make` commands to avoid
 cache-permission failures.
