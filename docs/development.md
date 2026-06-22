@@ -26,9 +26,9 @@ uv sync
 uv sync --extra llm
 ```
 
-`make sync*` prepares a checkout for development; `make install*` (see the
-[README install table](../README.md#install-the-cli-from-this-checkout)) registers the built CLI as
-a uv tool. Use sync while working on the code, install to run the checkout as a tool.
+`make sync*` prepares a checkout for development;
+[installing as a uv tool](../README.md#install-the-cli-from-this-checkout) registers the built CLI
+globally. Use sync while working on the code, install to run the checkout as a tool.
 
 ## Running from a checkout
 

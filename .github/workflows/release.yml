@@ -28,7 +28,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
 
       - name: Sync dependencies
-        run: uv sync --extra llm --group dev
+        run: make sync-llm
 
       - name: Smoke CLI help
         run: uv run webinar-transcriber --help
@@ -36,11 +36,8 @@ jobs:
       - name: Smoke whisper runtime
         run: uv run python -c "from pywhispercpp.model import Model; assert Model.system_info().strip()"
 
-      - name: Lint
-        run: make lint
-
-      - name: Test
-        run: make test-all
+      - name: Lint and test
+        run: make check
 
   release:
     needs: validate
@@ -59,7 +56,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
 
       - name: Sync dependencies
-        run: uv sync --extra llm --group dev
+        run: make sync-llm
 
       - name: Build package
         run: uv build
@@ -76,6 +73,7 @@ jobs:
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v3
         with:
+          generate_release_notes: true
           files: |
             dist/*.whl
             dist/*.tar.gz
