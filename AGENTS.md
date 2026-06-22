@@ -52,8 +52,8 @@ A change is ready to merge when all of the following hold:
   suite, `ruff`, `ty`, and the markdown linters.
 - **100% coverage stays.** Add `# pragma: no cover` to genuinely unreachable defensive branches
   rather than lowering the threshold.
-- **Docs stay in sync.** If the change affects CLI flags, output artifacts, install targets, package
-  layout, or runtime contracts, update `README.md` and `AGENTS.md` in the same PR.
+- **Docs stay in sync.** If the change affects CLI flags, output artifacts, install commands,
+  package layout, or runtime contracts, update `README.md` and `AGENTS.md` in the same PR.
 - **No dead code.** Remove unused imports, helpers with no callers, fields that are written or
   serialized but never read back, and `# TODO` comments that will not be addressed in this PR.
 - **PR has a summary and a test plan.** Each pull request description includes a brief summary and
