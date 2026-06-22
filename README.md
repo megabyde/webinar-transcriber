@@ -49,13 +49,8 @@ Install the published package as a standalone CLI:
 uv tool install webinar-transcriber
 ```
 
-Or with `pipx`, or into the current environment with `pip` (add the `llm` extra for cloud LLM
-refinement):
-
-```bash
-pipx install webinar-transcriber
-pip install "webinar-transcriber[llm]"
-```
+`pipx install webinar-transcriber` works the same way. `pip install webinar-transcriber` installs
+into the current environment instead of as an isolated tool.
 
 ### Install from a GitHub release
 
@@ -78,17 +73,29 @@ command after pulling changes when the installed command should track the checko
 uv tool install --reinstall .
 ```
 
-To remove the installed tool:
+To remove the installed tool, whatever source it came from:
 
 ```bash
 uv tool uninstall webinar-transcriber
 ```
 
-The `llm` extra is covered in [Cloud LLM](#cloud-llm), and the CUDA path in
-[NVIDIA CUDA](#nvidia-cuda), below.
-
 The default `large-v3-turbo` Whisper model downloads on the first transcription run, not during
 installation.
+
+### Cloud LLM extra
+
+Provider-backed report refinement (`--llm`, see [Cloud LLM](#cloud-llm)) needs the OpenAI and
+Anthropic SDKs, which the base install omits. Append the `llm` extra to the package spec in
+whichever install command above you used. `--reinstall` applies the extra whether or not the package
+is already installed:
+
+```bash
+uv tool install --reinstall "webinar-transcriber[llm]"   # from PyPI
+uv tool install --reinstall ".[llm]"                     # from a checkout
+```
+
+For a GitHub release, append the extra in the direct-reference form:
+`"webinar-transcriber[llm] @ git+https://github.com/megabyde/webinar-transcriber.git@v1.2.0"`.
 
 ### NVIDIA CUDA
 
@@ -109,15 +116,8 @@ GGML_CUDA=1 uv tool install --reinstall . \
     --no-binary-package pywhispercpp
 ```
 
-To prepare the checkout development environment with CUDA support instead:
-
-```bash
-GGML_CUDA=1 uv sync \
-    --reinstall-package pywhispercpp \
-    --no-binary-package pywhispercpp
-```
-
-If the build fails, see [CUDA install fails](docs/troubleshooting.md#cuda-install-fails).
+If the build fails, see [CUDA install fails](docs/troubleshooting.md#cuda-install-fails). For a
+CUDA-enabled development checkout, see [Development](docs/development.md).
 
 ## Usage
 
@@ -147,14 +147,8 @@ polish section transcript text with light cleanup and paragraphing, and refine s
 action items, section titles, and section TL;DRs. Supported providers are `openai` and `anthropic`;
 OpenAI is the default.
 
-The base install does not include provider SDKs. Reinstall the CLI with the `llm` extra; the
-`--reinstall` flag applies the extra whether or not the package is already installed:
-
-```bash
-uv tool install --reinstall "webinar-transcriber[llm]"
-```
-
-From a checkout, install `'.[llm]'` instead.
+This step needs the OpenAI and Anthropic provider SDKs, which the base install omits. Install them
+with the `llm` extra (see [Cloud LLM extra](#cloud-llm-extra) under Install).
 
 > [!IMPORTANT]
 > `--llm` sends report text and transcript excerpts to the configured provider. Do not use it for

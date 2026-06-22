@@ -24,6 +24,9 @@ Without `make`:
 ```bash
 uv sync
 uv sync --extra llm
+GGML_CUDA=1 uv sync \
+    --reinstall-package pywhispercpp \
+    --no-binary-package pywhispercpp
 ```
 
 `make sync*` prepares a checkout for development;
