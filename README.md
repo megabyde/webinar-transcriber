@@ -70,27 +70,22 @@ attached to the [GitHub Releases](https://github.com/megabyde/webinar-transcribe
 
 ### Install the CLI from this checkout
 
-From the repository root, run the target that matches the runtime you need:
+From the repository root, install the local source tree as a uv tool. This registers
+`webinar-transcriber` from the checkout; no virtual environment activation is needed. Re-run the
+command after pulling changes when the installed command should track the checkout.
 
-| Command             | Installs                                                |
-| ------------------- | ------------------------------------------------------- |
-| `make install`      | Standard local CLI install.                             |
-| `make install-llm`  | CLI plus optional OpenAI/Anthropic LLM dependencies.    |
-| `make install-cuda` | CLI with `pywhispercpp` rebuilt from source for NVIDIA. |
-| `make uninstall`    | Removes the installed `webinar-transcriber` uv tool.    |
+```bash
+uv tool install --reinstall .
+```
 
-`make install` registers `webinar-transcriber` as a uv tool from the local source tree. No virtual
-environment activation is needed. Re-run the install target after pulling changes when the installed
-command should track the checkout.
+To remove the installed tool:
 
-> [!TIP]
-> Without `make`, install the local checkout with uv directly:
->
-> ```bash
-> uv tool install --reinstall .
-> ```
+```bash
+uv tool uninstall webinar-transcriber
+```
 
-Run `make help` to list every project target.
+The `llm` extra is covered in [Cloud LLM](#cloud-llm), and the CUDA path in
+[NVIDIA CUDA](#nvidia-cuda), below.
 
 The default `large-v3-turbo` Whisper model downloads on the first transcription run, not during
 installation.
@@ -106,8 +101,21 @@ CUDA is the only supported path that builds `pywhispercpp` from source. It requi
 [CUDA toolkit](https://developer.nvidia.com/cuda-downloads) with `nvcc` on `PATH` and `CUDA_HOME`
 set.
 
-- `make install-cuda` installs the CLI tool with CUDA support.
-- `make sync-cuda` prepares the checkout development environment with CUDA support.
+Install the CLI tool with CUDA support:
+
+```bash
+GGML_CUDA=1 uv tool install --reinstall . \
+    --reinstall-package pywhispercpp \
+    --no-binary-package pywhispercpp
+```
+
+To prepare the checkout development environment with CUDA support instead:
+
+```bash
+GGML_CUDA=1 uv sync \
+    --reinstall-package pywhispercpp \
+    --no-binary-package pywhispercpp
+```
 
 If the build fails, see [CUDA install fails](docs/troubleshooting.md#cuda-install-fails).
 
@@ -139,11 +147,14 @@ polish section transcript text with light cleanup and paragraphing, and refine s
 action items, section titles, and section TL;DRs. Supported providers are `openai` and `anthropic`;
 OpenAI is the default.
 
-The base install does not include provider SDKs. Install the LLM extra first:
+The base install does not include provider SDKs. Reinstall the CLI with the `llm` extra; the
+`--reinstall` flag applies the extra whether or not the package is already installed:
 
 ```bash
-make install-llm
+uv tool install --reinstall "webinar-transcriber[llm]"
 ```
+
+From a checkout, install `'.[llm]'` instead.
 
 > [!IMPORTANT]
 > `--llm` sends report text and transcript excerpts to the configured provider. Do not use it for
