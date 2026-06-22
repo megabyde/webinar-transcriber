@@ -19,17 +19,13 @@ plays in a normal media player and is a container PyAV can decode (for example `
 
 ## `requires the 'llm' extra`
 
-The provider SDKs are not installed. Reinstall the CLI with the LLM extra:
+The provider SDKs are not installed. Reinstall the CLI with the `llm` extra:
 
 ```bash
-make install-llm
+uv tool install --reinstall "webinar-transcriber[llm]"
 ```
 
-Without `make`:
-
-```bash
-uv tool install --reinstall ".[llm]"
-```
+From a checkout, use `'.[llm]'` instead.
 
 ## `Unsupported LLM provider`
 
@@ -60,6 +56,6 @@ Omit the flag to let `sherpa-onnx` estimate the count, or pass the correct count
 
 ## CUDA install fails
 
-`make install-cuda` rebuilds `pywhispercpp` from source and needs `nvcc` on `PATH` and `CUDA_HOME`
-set. If you do not need NVIDIA acceleration, use `make install`; it pulls prebuilt wheels and skips
-the C/C++/CUDA toolchain.
+The CUDA install rebuilds `pywhispercpp` from source and needs `nvcc` on `PATH` and `CUDA_HOME` set.
+If you do not need NVIDIA acceleration, use the standard `uv tool install --reinstall .`; it pulls
+prebuilt wheels and skips the C/C++/CUDA toolchain.
