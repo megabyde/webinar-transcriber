@@ -79,9 +79,6 @@ To remove the installed tool, whatever source it came from:
 uv tool uninstall webinar-transcriber
 ```
 
-The default `large-v3-turbo` Whisper model downloads on the first transcription run, not during
-installation.
-
 ### Cloud LLM extra
 
 Provider-backed report refinement (`--llm`, see [Cloud LLM](#cloud-llm)) needs the OpenAI and
@@ -207,7 +204,7 @@ several paragraphs). JSON artifacts include a `speaker` field on transcript segm
 ### ASR model
 
 `webinar-transcriber` uses `pywhispercpp` to resolve whisper.cpp models. By default it uses
-`large-v3-turbo` (downloaded on the first run, as noted in [Install](#install)). You can pass
+`large-v3-turbo` (downloaded on the first transcription run, not during installation). You can pass
 another model identifier or a local GGML model path with `--asr-model`.
 
 ```bash

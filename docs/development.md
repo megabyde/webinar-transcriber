@@ -62,5 +62,4 @@ make check
 target's exact recipe.
 
 Run `make help` for the full list of targets (including `clean` and `distclean`) with one-line
-descriptions. The CLI install targets are documented in the
-[README](../README.md#install-the-cli-from-this-checkout).
+descriptions. The CLI install commands are documented in the [README](../README.md#install).
