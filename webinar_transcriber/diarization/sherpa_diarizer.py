@@ -11,7 +11,7 @@ from dataclasses import dataclass, replace
 from importlib import metadata
 from pathlib import Path
 from queue import Empty
-from tempfile import NamedTemporaryFile
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 from webinar_transcriber._env import diarization_cache_dir, load_sherpa_onnx
@@ -334,25 +334,26 @@ def _ensure_file(path: Path, *, url: str, expected_sha256: str) -> None:
         return
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path: Path | None = None
-    try:
-        with (
-            # url is a hardcoded https GitHub release asset, not user input.
-            urllib.request.urlopen(url, timeout=MODEL_DOWNLOAD_TIMEOUT_SEC) as response,  # noqa: S310
-            NamedTemporaryFile(dir=path.parent, delete=False) as temp_file,
-        ):
-            temp_path = Path(temp_file.name)
-            while chunk := response.read(1024 * 1024):
-                temp_file.write(chunk)
-    except (OSError, urllib.error.URLError) as ex:
-        if temp_path is not None:
-            temp_path.unlink(missing_ok=True)
-        raise DiarizationProcessingError(f"Failed to download diarization model: {url}") from ex
+    with TemporaryDirectory(dir=path.parent) as temp_dir:
+        temp_path = Path(temp_dir) / path.name
+        try:
+            with (
+                # url is a hardcoded https GitHub release asset, not user input.
+                urllib.request.urlopen(  # noqa: S310
+                    url, timeout=MODEL_DOWNLOAD_TIMEOUT_SEC
+                ) as response,
+                temp_path.open("wb") as temp_file,
+            ):
+                while chunk := response.read(1024 * 1024):
+                    temp_file.write(chunk)
+        except (OSError, urllib.error.URLError) as ex:
+            raise DiarizationProcessingError(f"Failed to download diarization model: {url}") from ex
 
-    if not _verified(temp_path, expected_sha256):
-        temp_path.unlink(missing_ok=True)
-        raise DiarizationProcessingError(f"Downloaded diarization model failed verification: {url}")
-    temp_path.replace(path)
+        if not _verified(temp_path, expected_sha256):
+            raise DiarizationProcessingError(
+                f"Downloaded diarization model failed verification: {url}"
+            )
+        temp_path.replace(path)
 
 
 def _verified(path: Path, expected_sha256: str) -> bool:

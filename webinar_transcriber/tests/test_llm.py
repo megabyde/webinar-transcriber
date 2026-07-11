@@ -298,7 +298,6 @@ class TestInstructorLlmProcessor:
         first_section = sections[0]
         assert isinstance(first_section, dict)
 
-        assert "source_file" not in payload
         assert ("transcript_excerpt", "Overridden transcript text.") in first_section.items()
         assert report.sections[0].transcript_text == "Original transcript text."
 

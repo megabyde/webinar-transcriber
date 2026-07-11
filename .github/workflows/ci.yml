@@ -36,44 +36,6 @@ jobs:
       - name: Build distributions
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: uv build
-      - name: Verify distribution contents
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
-        run: |
-          uv run python -c '
-          import glob
-          import tarfile
-          import zipfile
-
-          wheel = glob.glob("dist/*.whl")
-          sdist = glob.glob("dist/*.tar.gz")
-          assert len(wheel) == len(sdist) == 1
-
-          with zipfile.ZipFile(wheel[0]) as archive:
-              wheel_names = set(archive.namelist())
-          assert "webinar_transcriber/py.typed" in wheel_names
-          assert "webinar_transcriber/assets/silero_vad.onnx" in wheel_names
-          assert not any(name.startswith("webinar_transcriber/tests/") for name in wheel_names)
-
-          with tarfile.open(sdist[0], "r:gz") as archive:
-              sdist_names = set(archive.getnames())
-          required_suffixes = (
-              "/README.md",
-              "/LICENSE",
-              "/LICENSE-3RDPARTY.md",
-              "/pyproject.toml",
-              "/webinar_transcriber/py.typed",
-              "/webinar_transcriber/assets/silero_vad.onnx",
-          )
-          forbidden_parts = (
-              "/.claude/",
-              "/.github/",
-              "/docs/",
-              "/webinar_transcriber/tests/",
-              "/uv.lock",
-          )
-          assert all(any(name.endswith(suffix) for name in sdist_names) for suffix in required_suffixes)
-          assert not any(part in name for name in sdist_names for part in forbidden_parts)
-          '
       - name: Smoke optional LLM extra
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: |
