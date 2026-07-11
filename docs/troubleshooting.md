@@ -1,14 +1,15 @@
 # Troubleshooting
 
-Common errors and how to resolve them. Each heading matches the message the CLI prints. Every run
-also writes `diagnostics.json` with the failed stage, and transcription failures leave the native
-`whisper-cpp.log` in the run directory.
+Common errors and how to resolve them. Each heading matches the message the CLI prints. Once a run
+directory exists, failures write `diagnostics.json` with the failed stage when the error occurred
+inside a named stage, and transcription failures leave the native `whisper-cpp.log` in the run
+directory.
 
-## `Could not open … with PyAV` / `No audio or video stream found`
+## `Could not open … with PyAV` / `No audio stream found`
 
-The input could not be decoded, or it carries neither an audio nor a video stream. Confirm the file
-plays in a normal media player and is a container PyAV can decode (for example `.mp4`, `.mkv`,
-`.mov`, `.webm`, `.mp3`, `.wav`, `.m4a`). Re-mux or re-encode a corrupt or exotic container with
+The input could not be decoded, or it has no audio stream to transcribe. Confirm the file plays in a
+normal media player and is a container PyAV can decode (for example `.mp4`, `.mkv`, `.mov`, `.webm`,
+`.mp3`, `.wav`, `.m4a`). Re-mux or re-encode a corrupt, video-only, or exotic container with
 `ffmpeg` before transcribing.
 
 ## `Missing required LLM environment variables`

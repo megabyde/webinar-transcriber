@@ -10,25 +10,72 @@ permissions:
 
 jobs:
   lint-test:
-    name: lint-test (${{ matrix.os }})
+    name: lint-test (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        python-version: ["3.12", "3.14"]
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - uses: astral-sh/setup-uv@v8.3.0
       - name: Sync dependencies
-        run: make sync-llm
+        run: make sync
       - name: Smoke CLI help
         run: uv run webinar-transcriber --help
       - name: Smoke whisper runtime
         run: uv run python -c "from pywhispercpp.model import Model; assert Model.system_info().strip()"
       - name: Lint and test
         run: make check
+      - name: Build distributions
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: uv build
+      - name: Verify distribution contents
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          uv run python -c '
+          import glob
+          import tarfile
+          import zipfile
+
+          wheel = glob.glob("dist/*.whl")
+          sdist = glob.glob("dist/*.tar.gz")
+          assert len(wheel) == len(sdist) == 1
+
+          with zipfile.ZipFile(wheel[0]) as archive:
+              wheel_names = set(archive.namelist())
+          assert "webinar_transcriber/py.typed" in wheel_names
+          assert "webinar_transcriber/assets/silero_vad.onnx" in wheel_names
+          assert not any(name.startswith("webinar_transcriber/tests/") for name in wheel_names)
+
+          with tarfile.open(sdist[0], "r:gz") as archive:
+              sdist_names = set(archive.getnames())
+          required_suffixes = (
+              "/README.md",
+              "/LICENSE",
+              "/LICENSE-3RDPARTY.md",
+              "/pyproject.toml",
+              "/webinar_transcriber/py.typed",
+              "/webinar_transcriber/assets/silero_vad.onnx",
+          )
+          forbidden_parts = (
+              "/.claude/",
+              "/.github/",
+              "/docs/",
+              "/webinar_transcriber/tests/",
+              "/uv.lock",
+          )
+          assert all(any(name.endswith(suffix) for name in sdist_names) for suffix in required_suffixes)
+          assert not any(part in name for name in sdist_names for part in forbidden_parts)
+          '
+      - name: Smoke optional LLM extra
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          make sync-llm
+          uv run python -c "import anthropic, instructor, openai; from webinar_transcriber.llm.processor import InstructorLLMProcessor"

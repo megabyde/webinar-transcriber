@@ -24,9 +24,9 @@ not fold explanation into a how-to, or a flag table into the pipeline explanatio
 Prefer extending `README.md` first. Add a new file under `docs/` only when a section is long enough
 to obscure the user-facing flow and self-contained enough to read on its own.
 
-Repository-visible assets stay under `docs/assets/`. The README preview uses GitHub's theme
-suffixes: `social-preview.png#gh-light-mode-only` and `social-preview-dark.png#gh-dark-mode-only`.
-Keep `social-preview-dark.png` suitable for the repository social-preview setting.
+Repository-visible assets stay under `docs/assets/`. The README preview uses one `<picture>` element
+with absolute raw GitHub URLs, so GitHub selects the appropriate theme and PyPI renders the default
+image. Keep `social-preview-dark.png` suitable for the repository social-preview setting.
 
 ## Tooling
 
@@ -38,8 +38,9 @@ change.
 Use `make test` for quick iteration (fast subset, skips slow tests, no coverage gate). Run
 `make format` then `make check` before committing — `make check` is the full coverage-gated gate.
 
-GitHub Actions runs `make check` so CI mirrors the local quality gate. CI runs on `ubuntu-latest`
-and `macos-latest`; Windows is not part of the CI matrix and is treated as best-effort.
+GitHub Actions runs `make check` so CI mirrors the local quality gate. CI runs Python 3.12 and 3.14
+on `ubuntu-latest` and `macos-latest`; Windows is not part of the CI matrix and is treated as
+best-effort.
 
 In sandboxed Codex runs, prefer `UV_CACHE_DIR=/tmp/uv-cache` for `uv` and `make` commands to avoid
 cache-permission failures.
@@ -70,6 +71,8 @@ maintaining a copy here, and avoid adding deep nesting.
 
 ## Runtime Contracts
 
+- Every accepted input contains a decodable audio stream. A usable video stream is optional and adds
+  scene detection and representative frames.
 - Successful default CLI runs write the report artifact set described in `README.md`.
 - `--diarize` runs locally and adds `diarization.json` plus speaker fields on transcript segments.
 - Successful runs write `diagnostics.json`; failed runs also write it once the run directory exists,
