@@ -577,7 +577,29 @@ class TestProcessInput:
         assert diagnostics_payload["item_counts"]["transcript_segments"] == 1
         assert diagnostics_payload["item_counts"]["windows"] == 1
         assert diagnostics_payload["error"] == "boom"
+        assert diagnostics_payload["failed_stage"] is None
         assert not (output_dir / "report.json").exists()
+
+    def test_writes_diagnostics_on_interrupt(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        output_dir = tmp_path / "interrupted-run"
+        install_pipeline_runtime(monkeypatch, runtime=audio_runtime())
+
+        with (
+            patch("webinar_transcriber.processor.build_report", side_effect=KeyboardInterrupt),
+            pytest.raises(KeyboardInterrupt),
+        ):
+            process_input(
+                FIXTURE_DIR / "sample-audio.mp3",
+                output_dir=output_dir,
+                transcriber=FakeTranscriber(),
+            )
+
+        diagnostics_payload = read_json(output_dir / "diagnostics.json")
+        assert diagnostics_payload["status"] == "failed"
+        assert diagnostics_payload["failed_stage"] is None
+        assert diagnostics_payload["error"] == "Interrupted by user."
 
     def test_forwards_vad_warnings_to_report_and_reporter(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -672,8 +694,17 @@ class TestProcessorSupport:
             raise RuntimeError("boom")
 
         assert "probe_media" in ctx.stage_timings
+        assert ctx.failed_stage == "probe_media"
         assert reporter.started == [("probe_media", "Probing media")]
         assert reporter.finished == []
+
+    def test_successful_stage_does_not_set_failed_stage(self) -> None:
+        ctx = RunContext(reporter=RecordingStageReporter())
+
+        with ctx.stage("probe_media", "Probing media"):
+            pass
+
+        assert ctx.failed_stage is None
 
     def test_transcriber_device_name_is_auto_before_runtime_is_prepared(self) -> None:
 

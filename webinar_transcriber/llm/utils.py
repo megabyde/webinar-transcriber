@@ -73,7 +73,6 @@ def build_report_polish_payload(
 
     return {
         "title": report.title,
-        "source_file": report.source_file,
         "detected_language": report.detected_language,
         "current_summary": report.summary,
         "current_action_items": report.action_items,

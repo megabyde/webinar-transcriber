@@ -70,7 +70,7 @@ class RunContext:
     reporter: StageReporter
     stage_timings: dict[str, float] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
-    current_stage: str | None = None
+    failed_stage: str | None = None
     item_counts: dict[str, int] = field(default_factory=dict)
     asr_pipeline: AsrPipelineDiagnostics | None = None
     diarization: DiarizationDiagnostics | None = None
@@ -86,10 +86,12 @@ class RunContext:
         self, key: str, label: str, *, total: float | None = None, detail: str | None = None
     ) -> Iterator[StageHandle]:
         """Track timing for one stage and surface it through the reporter."""
-        self.current_stage = key
         with self.reporter.track(key, label, total=total, detail=detail) as handle:
             try:
                 yield handle
+            except BaseException:
+                self.failed_stage = key
+                raise
             finally:
                 self.stage_timings[key] = handle.elapsed_sec()
 
@@ -184,11 +186,15 @@ def process_input(
             )
             ctx.reporter.complete_run(artifacts)
             return artifacts
-        except Exception as ex:
+        except BaseException as ex:
             # Diagnostics are best effort on failure; never mask the original error.
             with suppress(Exception):
                 write_run_diagnostics(
-                    layout, ctx, status="failed", failed_stage=ctx.current_stage, error=str(ex)
+                    layout,
+                    ctx,
+                    status="failed",
+                    failed_stage=ctx.failed_stage,
+                    error="Interrupted by user." if isinstance(ex, KeyboardInterrupt) else str(ex),
                 )
             raise
 

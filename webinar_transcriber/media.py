@@ -100,7 +100,7 @@ def probe_media(input_path: Path) -> MediaAsset:
         MediaAsset: The normalized probed media metadata.
 
     Raises:
-        MediaProcessingError: If the input contains no usable audio or video streams.
+        MediaProcessingError: If the input contains no usable audio stream.
     """
     with open_input_media_container(input_path) as input_container:
         streams = list(input_container.streams)
@@ -114,11 +114,11 @@ def probe_media(input_path: Path) -> MediaAsset:
             None,
         )
 
-        if audio_stream is None and video_stream is None:
-            raise MediaProcessingError(f"No audio or video stream found in {input_path}.")
+        if audio_stream is None:
+            raise MediaProcessingError(f"No audio stream found in {input_path}.")
 
         container_duration = input_container.duration
-        audio_duration = _stream_duration_sec(audio_stream) if audio_stream is not None else None
+        audio_duration = _stream_duration_sec(audio_stream)
         video_duration = _stream_duration_sec(video_stream) if video_stream is not None else None
         if container_duration is not None:
             duration_sec = float(container_duration / av.time_base)
@@ -129,13 +129,10 @@ def probe_media(input_path: Path) -> MediaAsset:
         else:
             duration_sec = 0.0
 
-        parsed_sample_rate = None
-        parsed_channels = None
-        if audio_stream is not None:
-            sample_rate = audio_stream.codec_context.sample_rate
-            channels = audio_stream.codec_context.channels
-            parsed_sample_rate = int(sample_rate) if sample_rate is not None else None
-            parsed_channels = int(channels) if channels is not None else None
+        sample_rate = audio_stream.codec_context.sample_rate
+        channels = audio_stream.codec_context.channels
+        parsed_sample_rate = int(sample_rate) if sample_rate is not None else None
+        parsed_channels = int(channels) if channels is not None else None
 
         if video_stream is None:
             return AudioAsset(

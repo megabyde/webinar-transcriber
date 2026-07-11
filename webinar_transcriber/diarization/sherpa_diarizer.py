@@ -24,6 +24,7 @@ MIN_DURATION_OFF_SEC = 1.5
 DIARIZATION_MODEL = "pyannote-segmentation-3.0-fp32+nemo-titanet-small"
 # Wake the drain loop this often to check whether the child died without a terminal message.
 DIARIZATION_POLL_SEC = 0.5
+MODEL_DOWNLOAD_TIMEOUT_SEC = 60
 
 
 class DiarizationProcessingError(RuntimeError):
@@ -333,16 +334,19 @@ def _ensure_file(path: Path, *, url: str, expected_sha256: str) -> None:
         return
 
     path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path: Path | None = None
     try:
         with (
             # url is a hardcoded https GitHub release asset, not user input.
-            urllib.request.urlopen(url) as response,  # noqa: S310
+            urllib.request.urlopen(url, timeout=MODEL_DOWNLOAD_TIMEOUT_SEC) as response,  # noqa: S310
             NamedTemporaryFile(dir=path.parent, delete=False) as temp_file,
         ):
             temp_path = Path(temp_file.name)
             while chunk := response.read(1024 * 1024):
                 temp_file.write(chunk)
     except (OSError, urllib.error.URLError) as ex:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
         raise DiarizationProcessingError(f"Failed to download diarization model: {url}") from ex
 
     if not _verified(temp_path, expected_sha256):

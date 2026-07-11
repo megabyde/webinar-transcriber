@@ -220,6 +220,18 @@ class TestCli:
         assert "--output-dir can only be used with one input file" in result.output
         process_input_mock.assert_not_called()
 
+    def test_rejects_speaker_count_without_diarization(self, tmp_path) -> None:
+        runner = CliRunner()
+        input_path = tmp_path / "demo.wav"
+        input_path.write_text("stub", encoding="utf-8")
+
+        with patch("webinar_transcriber.cli.process_input") as process_input_mock:
+            result = runner.invoke(main, [str(input_path), "--diarize-speakers", "2"])
+
+        assert result.exit_code != 0
+        assert "--diarize-speakers requires --diarize" in result.output
+        process_input_mock.assert_not_called()
+
     def test_rejects_existing_output_directory(self, tmp_path) -> None:
         runner = CliRunner()
         input_path = tmp_path / "demo.wav"
