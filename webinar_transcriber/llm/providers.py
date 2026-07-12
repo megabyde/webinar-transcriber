@@ -69,9 +69,8 @@ def build_llm_processor_from_env(*, threads: int) -> InstructorLLMProcessor:
     Raises:
         LlmConfigurationError: If the provider selection or required environment is invalid.
     """
-    # Deferred so importing this package does not pull in the llm-extra-only
-    # tenacity/pydantic/instructor dependencies that processor.py imports at module scope;
-    # the CLI imports this package unconditionally, including on base installs.
+    # The CLI imports this package on base installs. Defer processor.py so its llm-extra-only
+    # dependencies are loaded only when the user enables LLM processing.
     from webinar_transcriber.llm.processor import InstructorLLMProcessor  # noqa: PLC0415
 
     provider_name = llm_provider_name()

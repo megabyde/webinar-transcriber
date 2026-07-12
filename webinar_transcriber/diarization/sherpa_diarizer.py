@@ -22,7 +22,7 @@ CLUSTER_THRESHOLD = 1.2
 MIN_DURATION_ON_SEC = 0.5
 MIN_DURATION_OFF_SEC = 1.5
 DIARIZATION_MODEL = "pyannote-segmentation-3.0-fp32+nemo-titanet-small"
-# Wake the drain loop this often to check whether the child died without a terminal message.
+# Poll often enough to detect a child that exits without a terminal message.
 DIARIZATION_POLL_SEC = 0.5
 MODEL_DOWNLOAD_TIMEOUT_SEC = 60
 
@@ -338,7 +338,7 @@ def _ensure_file(path: Path, *, url: str, expected_sha256: str) -> None:
         temp_path = Path(temp_dir) / path.name
         try:
             with (
-                # url is a hardcoded https GitHub release asset, not user input.
+                # The URL is a hardcoded HTTPS GitHub release asset, not user input.
                 urllib.request.urlopen(  # noqa: S310
                     url, timeout=MODEL_DOWNLOAD_TIMEOUT_SEC
                 ) as response,

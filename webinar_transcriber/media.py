@@ -30,13 +30,13 @@ class MediaProcessingError(RuntimeError):
 
 def _first_audio_stream(input_container: InputContainer) -> AudioStream | None:
     stream = next((stream for stream in input_container.streams if stream.type == "audio"), None)
-    # av stubs type .streams as base Stream; .type filter doesn't narrow the subtype
+    # PyAV stubs expose .streams as base Stream; filtering on .type does not narrow it.
     return cast("AudioStream | None", stream)
 
 
 def _first_video_stream(input_container: InputContainer) -> VideoStream | None:
     stream = next((stream for stream in input_container.streams if stream.type == "video"), None)
-    # av stubs type .streams as base Stream; .type filter doesn't narrow the subtype
+    # PyAV stubs expose .streams as base Stream; filtering on .type does not narrow it.
     return cast("VideoStream | None", stream)
 
 
@@ -83,7 +83,7 @@ def open_output_media_container(path: Path) -> Iterator[OutputContainer]:
 
 
 def _pyav_stream_has_attached_picture(stream: Stream) -> bool:  # pragma: no cover
-    # av stubs omit disposition.attached_pic flag
+    # PyAV stubs omit disposition.attached_pic.
     return bool(stream.disposition & stream.disposition.attached_pic)
 
 

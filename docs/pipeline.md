@@ -6,21 +6,20 @@ For install and typical usage, see [README.md](../README.md).
 1. Create an isolated run directory.
    - Each input gets its own `runs/<timestamp>_<basename>/` directory unless you pass a single
      `--output-dir`.
-   - Existing output directories are refused instead of overwritten, so reruns do not silently mix
-     old and new artifacts.
+   - The CLI refuses existing output directories, so reruns cannot silently mix old and new
+     artifacts.
 1. Probe the media.
    - Every input must contain a decodable audio stream. A usable video stream adds scene processing;
      without one, the input follows the audio-only path.
    - The probe records the media type, duration, and stream metadata available to the rest of the
      pipeline.
-   - This data is written early to `metadata.json`, and later stages use the probed duration for
-     progress, diagnostics, and report timing.
+   - The pipeline writes this data to `metadata.json` early. Later stages use the probed duration
+     for progress, diagnostics, and report timing.
 1. Prepare deterministic transcription audio.
    - PyAV decodes the input into temporary mono, 16 kHz, 16-bit [PCM] WAV audio.
    - Downstream speech detection, ASR, and diarization all consume this normalized audio contract.
-   - The temporary WAV normally stays outside the run directory; `--keep-audio` saves a compressed
-     `transcription-audio.mp3` copy as soon as the audio is prepared, before transcription, so the
-     copy survives a later-stage failure.
+   - The temporary WAV normally stays outside the run directory. `--keep-audio` saves a compressed
+     `transcription-audio.mp3` copy before transcription, so it survives a later-stage failure.
 1. Load the local [ASR] runtime.
    - `pywhispercpp` loads the selected [Whisper] (`whisper.cpp`) model identifier or local GGML
      model path.

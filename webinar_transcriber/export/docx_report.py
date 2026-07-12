@@ -85,7 +85,7 @@ def _add_section_image(
     resolved_path = Path(image_path)
     if not resolved_path.is_absolute():
         resolved_path = image_base_dir / resolved_path
-    # A missing image is acceptable for the DOCX: skip it rather than fail the export.
+    # A missing section image does not invalidate the DOCX; omit it and continue the export.
     if resolved_path.exists():
         document.add_picture(str(resolved_path), width=Inches(6))
 

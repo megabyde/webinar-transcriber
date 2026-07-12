@@ -29,7 +29,7 @@ NORMALIZED_SAMPLE_WIDTH_BYTES = 2
 NORMALIZED_AUDIO_CODEC = "pcm_s16le"
 
 
-# audio_format -> (output_codec, resample_format)
+# Map each output format to its codec and resampler sample format.
 _AUDIO_OUTPUT_FORMATS = {
     "wav": (NORMALIZED_AUDIO_CODEC, "s16"),
     "mp3": ("mp3", "fltp"),
