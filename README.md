@@ -5,10 +5,13 @@
 [![Coverage 100%](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/megabyde/webinar-transcriber/actions/workflows/ci.yml)
 [![Ruff](https://img.shields.io/badge/lint-ruff-D7FF64?logo=ruff&logoColor=1D2B34)](https://docs.astral.sh/ruff/)
 [![uv](https://img.shields.io/badge/package-uv-5C5CFF?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
-[![License MIT](https://img.shields.io/badge/license-MIT-2F855A)](LICENSE)
+[![License MIT](https://img.shields.io/badge/license-MIT-2F855A)](https://github.com/megabyde/webinar-transcriber/blob/main/LICENSE)
 
-![Webinar Transcriber preview](docs/assets/social-preview.png#gh-light-mode-only)
-![Webinar Transcriber preview](docs/assets/social-preview-dark.png#gh-dark-mode-only)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/megabyde/webinar-transcriber/main/docs/assets/social-preview-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/megabyde/webinar-transcriber/main/docs/assets/social-preview.png">
+  <img alt="Webinar Transcriber preview" src="https://raw.githubusercontent.com/megabyde/webinar-transcriber/main/docs/assets/social-preview.png">
+</picture>
 
 ## Contents
 
@@ -32,7 +35,8 @@ report sectioning all run on your machine with local models and heuristics. Opti
 runs only after that deterministic report exists; it polishes section text and refines titles,
 summaries, action items, and section TL;DRs, but never replaces the base pipeline.
 
-For per-stage detail and the artifact each stage produces, see [docs/pipeline.md](docs/pipeline.md).
+For per-stage detail and the artifact each stage produces, see
+[Pipeline](https://github.com/megabyde/webinar-transcriber/blob/main/docs/pipeline.md).
 
 ## Install
 
@@ -57,10 +61,10 @@ into the current environment instead of as an isolated tool.
 Pin a tagged release directly from GitHub when you want a fixed version and do not need a checkout:
 
 ```bash
-uv tool install --reinstall git+https://github.com/megabyde/webinar-transcriber.git@v1.2.0
+uv tool install --reinstall git+https://github.com/megabyde/webinar-transcriber.git@v1.3.0
 ```
 
-Replace `v1.2.0` with the release tag you want. Wheel and source distribution files are also
+Replace `v1.3.0` with the release tag you want. Wheel and source distribution files are also
 attached to the [GitHub Releases](https://github.com/megabyde/webinar-transcriber/releases) page.
 
 ### Install the CLI from this checkout
@@ -92,7 +96,7 @@ uv tool install --reinstall ".[llm]"                     # from a checkout
 ```
 
 For a GitHub release, append the extra in the direct-reference form:
-`"webinar-transcriber[llm] @ git+https://github.com/megabyde/webinar-transcriber.git@v1.2.0"`.
+`"webinar-transcriber[llm] @ git+https://github.com/megabyde/webinar-transcriber.git@v1.3.0"`.
 
 ### NVIDIA CUDA
 
@@ -113,8 +117,10 @@ GGML_CUDA=1 uv tool install --reinstall . \
     --no-binary-package pywhispercpp
 ```
 
-If the build fails, see [CUDA install fails](docs/troubleshooting.md#cuda-install-fails). For a
-CUDA-enabled development checkout, see [Development](docs/development.md).
+If the build fails, see
+[CUDA install fails](https://github.com/megabyde/webinar-transcriber/blob/main/docs/troubleshooting.md#cuda-install-fails).
+For a CUDA-enabled development checkout, see
+[Development](https://github.com/megabyde/webinar-transcriber/blob/main/docs/development.md).
 
 ## Usage
 
@@ -123,8 +129,9 @@ CUDA-enabled development checkout, see [Development](docs/development.md).
 By default, each input gets a fresh run directory under `runs/`. Multiple inputs are processed
 sequentially. `--output-dir` is allowed only with one input.
 
-The CLI accepts any container PyAV can decode, including `.mp4`, `.mkv`, `.mov`, `.webm`, `.mp3`,
-`.wav`, and `.m4a`.
+The CLI accepts any container PyAV can decode when it contains an audio stream, including `.mp4`,
+`.mkv`, `.mov`, `.webm`, `.mp3`, `.wav`, and `.m4a`. A video stream is optional; when present, it
+adds scene detection and representative frames.
 
 > [!TIP]
 > Use a fresh `--output-dir` for reproducible comparisons. Existing output directories are refused,
@@ -148,8 +155,9 @@ This step needs provider SDKs that the base install omits. Install them with the
 [Cloud LLM extra](#cloud-llm-extra) under Install).
 
 > [!IMPORTANT]
-> `--llm` sends report text and transcript excerpts to the configured provider. Do not use it for
-> recordings that must stay entirely local.
+> `--llm` sends report text, section timing metadata, and transcript excerpts to the configured
+> provider. It does not send the local source path. Do not use it for recordings that must stay
+> entirely local.
 
 Configure the provider with environment variables:
 
@@ -173,7 +181,7 @@ LLM_PROVIDER=anthropic \
 ```
 
 For missing environment variables, missing extras, or unsupported provider names, see
-[Troubleshooting](docs/troubleshooting.md).
+[Troubleshooting](https://github.com/megabyde/webinar-transcriber/blob/main/docs/troubleshooting.md).
 
 ### Speaker diarization
 
@@ -197,7 +205,7 @@ When diarization is enabled, reports label each speaker turn with stable anonymo
 first appearance in the timeline: `S1`, `S2`, and so on (one label per turn, even when a turn spans
 several paragraphs). JSON artifacts include a `speaker` field on transcript segments and a separate
 `diarization.json` file with raw speaker turns. If labels look wrong, see
-[Poor diarization labels](docs/troubleshooting.md#poor-diarization-labels).
+[Poor diarization labels](https://github.com/megabyde/webinar-transcriber/blob/main/docs/troubleshooting.md#poor-diarization-labels).
 
 ## Advanced Usage
 
@@ -240,7 +248,7 @@ uses the host CPU count capped at 8. Lower it when the machine needs CPU capacit
 ## Troubleshooting
 
 Common errors and their fixes, indexed by the message the CLI prints, live in
-[docs/troubleshooting.md](docs/troubleshooting.md).
+[Troubleshooting](https://github.com/megabyde/webinar-transcriber/blob/main/docs/troubleshooting.md).
 
 ## Reference
 
@@ -271,5 +279,6 @@ artifacts already produced, as long as the run directory exists.
 ## Development
 
 Checkout setup, running from source, the make target reference, and the quality gate live in
-[docs/development.md](docs/development.md). Coding conventions, testing notes, and the Definition of
-Done live in [AGENTS.md](AGENTS.md).
+[Development](https://github.com/megabyde/webinar-transcriber/blob/main/docs/development.md). Coding
+conventions, testing notes, and the Definition of Done live in
+[AGENTS.md](https://github.com/megabyde/webinar-transcriber/blob/main/AGENTS.md).

@@ -587,10 +587,14 @@ class TestModelDownload:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         payload = b"model-bytes"
+        timeouts: list[int] = []
         assert FakeResponse(payload).read() == payload
-        monkeypatch.setattr(
-            sherpa_runtime.urllib.request, "urlopen", lambda _url: FakeResponse(payload)
-        )
+
+        def open_response(_url: str, *, timeout: int) -> FakeResponse:
+            timeouts.append(timeout)
+            return FakeResponse(payload)
+
+        monkeypatch.setattr(sherpa_runtime.urllib.request, "urlopen", open_response)
 
         output_path = tmp_path / "model.onnx"
         sherpa_runtime._ensure_file(  # noqa: SLF001
@@ -598,6 +602,7 @@ class TestModelDownload:
         )
 
         assert output_path.read_bytes() == payload
+        assert timeouts == [sherpa_runtime.MODEL_DOWNLOAD_TIMEOUT_SEC]
         sherpa_runtime._ensure_file(  # noqa: SLF001
             output_path, url="https://example.test/model", expected_sha256=_sha256(payload)
         )
@@ -616,12 +621,37 @@ class TestModelDownload:
             )
 
         monkeypatch.setattr(
-            sherpa_runtime.urllib.request, "urlopen", lambda _url: FakeResponse(b"wrong")
+            sherpa_runtime.urllib.request,
+            "urlopen",
+            lambda _url, **_kwargs: FakeResponse(b"wrong"),
         )
         with pytest.raises(DiarizationProcessingError, match="failed verification"):
             sherpa_runtime._ensure_file(  # noqa: SLF001
                 tmp_path / "bad.onnx", url="https://example.test/model", expected_sha256="missing"
             )
+
+    def test_ensure_file_removes_partial_download_after_transfer_failure(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        class FailingResponse(FakeResponse):
+            def read(self, size: int = -1) -> bytes:
+                del size
+                raise OSError("connection lost")
+
+        monkeypatch.setattr(
+            sherpa_runtime.urllib.request,
+            "urlopen",
+            lambda _url, **_kwargs: FailingResponse(b"partial"),
+        )
+
+        with pytest.raises(DiarizationProcessingError, match="Failed to download"):
+            sherpa_runtime._ensure_file(  # noqa: SLF001
+                tmp_path / "model.onnx",
+                url="https://example.test/model",
+                expected_sha256="missing",
+            )
+
+        assert not list(tmp_path.iterdir())
 
     def test_ensure_segmentation_model_extracts_archive(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

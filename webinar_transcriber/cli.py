@@ -96,6 +96,8 @@ def main(
     """Transcribe one or more audio or video input files."""
     if output_dir is not None and len(input_paths) > 1:
         raise CLIError("--output-dir can only be used with one input file.")
+    if diarize_speakers is not None and not diarize:
+        raise CLIError("--diarize-speakers requires --diarize.")
 
     reporter = StageReporter()
 

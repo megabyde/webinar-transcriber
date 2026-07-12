@@ -20,6 +20,8 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Multimedia :: Sound/Audio :: Speech",
     "Topic :: Multimedia :: Video",
     "Topic :: Utilities",
@@ -33,8 +35,9 @@ dependencies = [
     "python-docx>=1.2.0,<2.0.0",
     "rich>=14.3.4,<15.0.0",
     "av>=17.1.0,<19.0.0",
-    "sherpa-onnx>=1.13.3,<1.14.0",
-    "sherpa-onnx-core>=1.13.3,<1.14.0",
+    # These exact pins must move together; the wheel's registry metadata omits its core ABI.
+    "sherpa-onnx==1.13.3",
+    "sherpa-onnx-core==1.13.3",
 ]
 
 [project.urls]
@@ -66,6 +69,7 @@ dev = [
     "pytest>=9.1.1,<10.0.0",
     "pytest-cov>=7.1.0,<8.0.0",
     "ruff>=0.15.19,<1.0.0",
+    "tenacity>=9.1.4,<10.0.0",
     "ty>=0.0.53,<1.0.0",
     "mdformat-gfm>=1.0.0,<2.0.0",
     "mdformat-gfm-alerts>=2.0.0,<3.0.0",
@@ -235,6 +239,9 @@ line_length = 100
 code_block_line_length = 100
 heading_line_length = 100
 
+[tool.pymarkdown.plugins.md033]
+allowed_elements = "picture,source,img"
+
 [tool.ty.src]
 include = ["webinar_transcriber"]
 
@@ -251,3 +258,8 @@ version-file = "webinar_transcriber/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["webinar_transcriber"]
+exclude = ["/webinar_transcriber/tests"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["webinar_transcriber"]
+exclude = ["/webinar_transcriber/tests"]

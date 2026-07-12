@@ -10,25 +10,34 @@ permissions:
 
 jobs:
   lint-test:
-    name: lint-test (${{ matrix.os }})
+    name: lint-test (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        python-version: ["3.12", "3.14"]
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - uses: astral-sh/setup-uv@v8.3.0
       - name: Sync dependencies
-        run: make sync-llm
+        run: make sync
       - name: Smoke CLI help
         run: uv run webinar-transcriber --help
       - name: Smoke whisper runtime
         run: uv run python -c "from pywhispercpp.model import Model; assert Model.system_info().strip()"
       - name: Lint and test
         run: make check
+      - name: Build distributions
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: uv build
+      - name: Smoke optional LLM extra
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          make sync-llm
+          uv run python -c "import anthropic, instructor, openai; from webinar_transcriber.llm.processor import InstructorLLMProcessor"

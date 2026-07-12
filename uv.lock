@@ -1953,6 +1953,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "tenacity" },
     { name = "ty" },
 ]
 
@@ -1967,8 +1968,8 @@ requires-dist = [
     { name = "python-docx", specifier = ">=1.2.0,<2.0.0" },
     { name = "pywhispercpp", specifier = ">=1.5.0,<2.0.0" },
     { name = "rich", specifier = ">=14.3.4,<15.0.0" },
-    { name = "sherpa-onnx", specifier = ">=1.13.3,<1.14.0" },
-    { name = "sherpa-onnx-core", specifier = ">=1.13.3,<1.14.0" },
+    { name = "sherpa-onnx", specifier = "==1.13.3" },
+    { name = "sherpa-onnx-core", specifier = "==1.13.3" },
     { name = "tenacity", marker = "extra == 'llm'", specifier = ">=9.1.4,<10.0.0" },
 ]
 provides-extras = ["llm"]
@@ -1984,6 +1985,7 @@ dev = [
     { name = "pytest", specifier = ">=9.1.1,<10.0.0" },
     { name = "pytest-cov", specifier = ">=7.1.0,<8.0.0" },
     { name = "ruff", specifier = ">=0.15.19,<1.0.0" },
+    { name = "tenacity", specifier = ">=9.1.4,<10.0.0" },
     { name = "ty", specifier = ">=0.0.53,<1.0.0" },
 ]
 

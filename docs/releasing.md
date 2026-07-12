@@ -16,7 +16,7 @@ the CLI or installation contract.
 
 Once `main` is green, push an annotated `vX.Y.Z` tag. The `release.yml` workflow then:
 
-1. Runs lint and `make test-all` on Ubuntu and macOS, plus the CLI and Whisper smoke tests.
+1. Runs `make check` on Ubuntu and macOS, plus the CLI and Whisper smoke tests.
 1. Builds the wheel and source distribution.
 1. Creates a GitHub Release with both distributions attached.
 1. Waits for approval on the protected `pypi` environment, then publishes to PyPI.

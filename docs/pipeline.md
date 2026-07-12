@@ -9,8 +9,10 @@ For install and typical usage, see [README.md](../README.md).
    - The CLI refuses existing output directories, so reruns cannot silently mix old and new
      artifacts.
 1. Probe the media.
-   - The probe records whether the input is audio or video, its duration, and the streams available
-     to the rest of the pipeline.
+   - Every input must contain a decodable audio stream. A usable video stream adds scene processing;
+     without one, the input follows the audio-only path.
+   - The probe records the media type, duration, and stream metadata available to the rest of the
+     pipeline.
    - The pipeline writes this data to `metadata.json` early. Later stages use the probed duration
      for progress, diagnostics, and report timing.
 1. Prepare deterministic transcription audio.
