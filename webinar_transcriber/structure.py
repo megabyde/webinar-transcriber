@@ -68,8 +68,7 @@ def build_video_sections(
                 _draft_section(meaningful_segments, title=title, image_path=scene.image_path)
             )
             continue
-        # Keep scene-backed sections even when no transcript segments aligned, so the frame/title
-        # context is preserved for scene-only blocks.
+        # Keep scene-only sections so their frame and title context reach the report.
         sections.append(
             ReportSection(
                 id="",
@@ -173,8 +172,8 @@ def title_from_path(source_path: str) -> str:
 
 
 def _transcript_text_from_segments(segments: list[TranscriptSegment]) -> str:
-    # Segments arrive already coalesced into readable blocks; render each as a paragraph and tag it
-    # only when the speaker changes, so a multi-paragraph turn carries one label.
+    # Segments are already readable blocks. Render one paragraph per block and label only speaker
+    # changes, so a multi-paragraph turn carries one label.
     paragraphs: list[str] = []
     previous_speaker: str | None = None
     for segment in segments:

@@ -1,6 +1,6 @@
 # AGENTS
 
-This file is the contributor and coding-agent guide for this repository.
+Contributor and coding-agent guide for this repository.
 
 ## Scope
 
@@ -120,14 +120,12 @@ maintaining a copy here, and avoid adding deep nesting.
 
 ## Simplification and Refactoring Notes
 
-This repo has improved repeatedly by making complexity justify itself, not the reverse. In review
-the maintainer keeps pushing past a first "this is load-bearing" reading and is usually right. Carry
-that prior: an abstraction must earn its keep, the default answer to "can this be simpler" is yes
-until the code proves otherwise, and a challenge to a conservative answer is a request for evidence.
-Grep the real readers and callers, then produce a verified cleanup or give the precise structural
-reason it can't be done and act rather than re-explain. A small flag-free helper is fine when a
-linter genuinely forces extraction; a state flag or multi-helper split to dodge one is
-over-engineering.
+Complexity must justify itself. This repository has repeatedly improved when reviewers challenged
+code initially treated as load-bearing. Carry that prior into every review: assume an abstraction
+can be simpler until its callers prove otherwise. When challenged, grep the real readers and
+callers, then either make the verified cleanup or give the precise structural reason it must stay.
+Act rather than re-explain. A small flag-free helper is fine when a linter genuinely forces
+extraction; a state flag or multi-helper split to dodge one is over-engineering.
 
 Recurring smells to check for:
 

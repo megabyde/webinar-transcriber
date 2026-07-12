@@ -56,8 +56,8 @@ def detect_scenes(
 
     scenes: list[Scene] = []
     for index, (start_sec, next_start) in enumerate(scene_bounds, start=1):
-        # Clamp guards the case where the last scene-change frame sits past the probed duration,
-        # which would otherwise produce a zero- or negative-length scene.
+        # The final scene-change frame can sit past the probed duration. Clamp it to avoid a zero-
+        # or negative-length scene.
         end_sec = min(next_start, duration_sec)
         if end_sec <= start_sec:
             continue

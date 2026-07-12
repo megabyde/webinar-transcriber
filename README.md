@@ -73,7 +73,7 @@ command after pulling changes when the installed command should track the checko
 uv tool install --reinstall .
 ```
 
-To remove the installed tool, whatever source it came from:
+To remove the installed tool:
 
 ```bash
 uv tool uninstall webinar-transcriber
@@ -123,8 +123,8 @@ CUDA-enabled development checkout, see [Development](docs/development.md).
 By default, each input gets a fresh run directory under `runs/`. Multiple inputs are processed
 sequentially. `--output-dir` is allowed only with one input.
 
-Any container PyAV can decode is accepted, including common formats such as `.mp4`, `.mkv`, `.mov`,
-`.webm`, `.mp3`, `.wav`, and `.m4a`.
+The CLI accepts any container PyAV can decode, including `.mp4`, `.mkv`, `.mov`, `.webm`, `.mp3`,
+`.wav`, and `.m4a`.
 
 > [!TIP]
 > Use a fresh `--output-dir` for reproducible comparisons. Existing output directories are refused,
@@ -144,8 +144,8 @@ polish section transcript text with light cleanup and paragraphing, and refine s
 action items, section titles, and section TL;DRs. Supported providers are `openai` and `anthropic`;
 OpenAI is the default.
 
-This step needs the OpenAI and Anthropic provider SDKs, which the base install omits. Install them
-with the `llm` extra (see [Cloud LLM extra](#cloud-llm-extra) under Install).
+This step needs provider SDKs that the base install omits. Install them with the `llm` extra (see
+[Cloud LLM extra](#cloud-llm-extra) under Install).
 
 > [!IMPORTANT]
 > `--llm` sends report text and transcript excerpts to the configured provider. Do not use it for
