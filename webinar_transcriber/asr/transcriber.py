@@ -69,8 +69,8 @@ def _looks_like_model_path(model_name: str) -> bool:
 @contextmanager
 def _disable_tqdm_progress() -> Iterator[None]:
     """Suppress pywhispercpp download progress while constructing a model."""
-    # pywhispercpp does not expose a per-call progress flag for model downloads;
-    # tqdm reads TQDM_DISABLE when the progress bar is created.
+    # pywhispercpp has no per-call flag for model-download progress. tqdm reads TQDM_DISABLE when
+    # it creates the progress bar.
     with temporary_environment_variable(TQDM_DISABLE_ENV, "1"), redirect_stderr(io.StringIO()):
         yield
 
@@ -201,9 +201,8 @@ class WhisperCppTranscriber:
                 model = _model_cls()(self._model_name, **model_kwargs)
         except Exception as ex:
             raise AsrProcessingError(_model_prepare_error_message(self._model_name)) from ex
-        # pywhispercpp keeps the native whisper context in Model._ctx and leaves it None when
-        # initialization failed without raising. A missing attribute (future pywhispercpp
-        # versions) is treated as healthy; only a present-but-None context is a failed init.
+        # pywhispercpp leaves Model._ctx as None when native initialization fails without raising.
+        # Only a present None means failure; an absent attribute may be a future API change.
         if getattr(model, "_ctx", "missing") is None:
             raise AsrProcessingError(_model_prepare_error_message(self._model_name))
         self._model = model
@@ -259,9 +258,8 @@ class WhisperCppTranscriber:
         if self._model is None:
             return
         with _redirect_native_output(self._log_path):
-            # pywhispercpp exposes native cleanup through Model.__del__ rather than a
-            # public close/free method. Dropping the adapter's reference runs that
-            # destructor immediately on CPython unless another reference is held.
+            # pywhispercpp exposes cleanup through Model.__del__, not a public close method.
+            # Dropping this reference runs it immediately on CPython unless another owner remains.
             self._model = None
 
     def __exit__(
@@ -328,8 +326,8 @@ class WhisperCppTranscriber:
         if detected_language is not None:
             transcribe_kwargs["language"] = detected_language
         try:
-            # ty can't match the dynamically built **transcribe_kwargs to transcribe()'s typed
-            # parameters; the call is valid at runtime and the return type still infers.
+            # ty cannot match dynamic **transcribe_kwargs to the typed parameters. The runtime call
+            # is valid, and ty still infers the return type.
             raw_segments = model.transcribe(window_samples, **transcribe_kwargs)  # type: ignore
         except Exception as ex:
             raise AsrProcessingError(f"whisper.cpp inference failed for {window.id}.") from ex

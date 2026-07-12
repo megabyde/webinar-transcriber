@@ -1,42 +1,68 @@
 # Releasing
 
-How to cut a release of `webinar-transcriber`.
+How to cut and publish a release of `webinar-transcriber`.
 
-- **Versioning is tag-driven.** `hatch-vcs` derives the version from a `vX.Y.Z` git tag into
-  `webinar_transcriber/_version.py`; never hand-edit a version.
-- **Choose the bump by semver judgment.** The JSON artifacts (`report.json`, `scenes.json`,
-  `diagnostics.json`) are local CLI outputs, not a stable API — a changed or removed artifact key is
-  a minor bump, not major, unless deliberately treated otherwise. Reserve major for CLI-flag or
-  install-contract breaks.
-- **Cut a release by pushing the tag.** With `main` green, push an annotated `vX.Y.Z` tag; the
-  `release.yml` workflow validates (lint and `make test-all` on Ubuntu and macOS plus CLI/whisper
-  smoke), builds the wheel and sdist, and creates a GitHub Release with those assets. It then waits
-  for approval on the `pypi` environment and publishes to PyPI (see Publishing to PyPI below).
-- **Curate the release notes.** After the release exists, replace the auto-generated "What's
-  Changed" list (`gh release edit --notes-file`) with: a `## Highlights` section that cites PRs
-  inline as `#NNN` (GitHub auto-links them); an `## Output changes` heads-up whenever the work
-  touched `report.json`/`scenes.json`/`diagnostics.json`, CLI flags, or generated artifacts; and the
-  **Full Changelog** compare link. Keep highlights scannable — themes, not a per-PR dump.
+## Choose the version
+
+Versioning is tag-driven. `hatch-vcs` derives the version from a `vX.Y.Z` git tag and writes it to
+`webinar_transcriber/_version.py`; never edit that file by hand.
+
+Choose the bump using semver judgment. JSON artifacts such as `report.json`, `scenes.json`, and
+`diagnostics.json` are local CLI outputs, not a stable API. Changing or removing an artifact key is
+a minor bump unless the project deliberately treats it otherwise. Reserve a major bump for breaks to
+the CLI or installation contract.
+
+## Cut the release
+
+Once `main` is green, push an annotated `vX.Y.Z` tag. The `release.yml` workflow then:
+
+1. Runs lint and `make test-all` on Ubuntu and macOS, plus the CLI and Whisper smoke tests.
+1. Builds the wheel and source distribution.
+1. Creates a GitHub Release with both distributions attached.
+1. Waits for approval on the protected `pypi` environment, then publishes to PyPI.
+
+## Curate the release notes
+
+After the release exists, replace the generated "What's Changed" list with
+`gh release edit --notes-file`. Include:
+
+- A `## Highlights` section organized by theme, with PR references written as `#NNN` so GitHub
+  auto-links them.
+- A `## Output changes` section when the release changes `report.json`, `scenes.json`,
+  `diagnostics.json`, CLI flags, or generated artifacts.
+- The **Full Changelog** comparison link.
+
+Keep the highlights scannable; do not turn them into a per-PR dump.
 
 ## Publishing to PyPI
 
 Publishing uses [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/) (OIDC), so
-there are no API tokens to store. On a tag push the `release.yml` `publish-pypi` job runs under the
-protected `pypi` GitHub Environment and uploads the built wheel and sdist after a maintainer
+there are no API tokens to store. On a tag push, the `release.yml` `publish-pypi` job runs under the
+protected `pypi` GitHub Environment. It uploads the wheel and source distribution after a maintainer
 approves the deployment.
 
-**Dry-run before a real release.** PyPI versions are immutable, so validate first against TestPyPI.
-Run the `Release` workflow manually (`workflow_dispatch`) selecting the latest tag as the ref; the
-`publish-testpypi` job builds at that version and uploads to TestPyPI without cutting a GitHub
-Release. Confirm the install resolves (dependencies still come from real PyPI):
+### Dry-run with TestPyPI
+
+PyPI versions are immutable, so validate the release against TestPyPI first. Run the `Release`
+workflow manually (`workflow_dispatch`) and select the latest tag as the ref. The `publish-testpypi`
+job builds that version and uploads it without creating a GitHub Release.
+
+Confirm that installation resolves. Dependencies still come from the main PyPI index:
 
 ```bash
 pip install --index-url https://test.pypi.org/simple/ \
     --extra-index-url https://pypi.org/simple/ webinar-transcriber
 ```
 
-**One-time Trusted Publishing setup.** Before the first publish to each index, register a pending
-publisher (PyPI/TestPyPI → Account → Publishing) matching this repo exactly: owner `megabyde`,
-repository `webinar-transcriber`, workflow `release.yml`, and environment `pypi` (or `testpypi`).
-Create both GitHub Environments under repo Settings; protect `pypi` with a required reviewer so the
+### Configure Trusted Publishing
+
+Before the first publish to each index, register a pending publisher under PyPI or TestPyPI →
+Account → Publishing. Match the repository exactly:
+
+- Owner: `megabyde`
+- Repository: `webinar-transcriber`
+- Workflow: `release.yml`
+- Environment: `pypi` or `testpypi`
+
+Create both environments in the repository settings. Protect `pypi` with a required reviewer so a
 tag-triggered publish pauses for approval.

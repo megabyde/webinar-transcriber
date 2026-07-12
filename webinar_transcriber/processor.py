@@ -138,8 +138,8 @@ def process_input(
                     st.update(completed=audio_total, detail=audio_path.name)
 
                 if keep_audio:
-                    # Save the compressed copy before the long ASR/diarization stages so the kept
-                    # audio survives a crash or Ctrl-C mid-transcription.
+                    # Preserve the compressed audio before ASR and diarization so it survives a
+                    # crash or Ctrl-C during either stage.
                     with ctx.stage(
                         "save_transcription_audio", "Saving transcription audio", total=audio_total
                     ) as st:
@@ -185,7 +185,7 @@ def process_input(
             ctx.reporter.complete_run(artifacts)
             return artifacts
         except Exception as ex:
-            # Diagnostics are best effort on failure; never mask the original error.
+            # A diagnostics failure must not mask the original error.
             with suppress(Exception):
                 write_run_diagnostics(
                     layout, ctx, status="failed", failed_stage=ctx.current_stage, error=str(ex)
@@ -267,9 +267,8 @@ def _run_asr_pipeline(
     ctx.item_counts["transcript_segments"] = len(transcription.segments)
 
     if diarizer is not None:
-        # Model prep and the segmentation pass run as opaque native calls that freeze the display,
-        # so the stage opens already labeled "analyzing audio" rather than briefly showing
-        # "preparing model" — which would otherwise be the frame left stuck on screen.
+        # Native model setup and segmentation block the display. Start with "analyzing audio" so a
+        # transient "preparing model" frame does not remain stuck on screen.
         with ctx.stage(
             "diarize", "Diarizing speakers", total=100.0, detail="analyzing audio"
         ) as st:

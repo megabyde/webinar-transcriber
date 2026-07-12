@@ -6,9 +6,9 @@ also writes `diagnostics.json` with the failed stage, and transcription failures
 
 ## `Could not open … with PyAV` / `No audio or video stream found`
 
-The input could not be decoded, or it carries neither an audio nor a video stream. Confirm the file
-plays in a normal media player and is a container PyAV can decode (for example `.mp4`, `.mkv`,
-`.mov`, `.webm`, `.mp3`, `.wav`, `.m4a`). Re-mux or re-encode a corrupt or exotic container with
+The input could not be decoded, or it carries neither an audio nor a video stream. Confirm that the
+file plays in a media player and uses a container PyAV can decode, such as `.mp4`, `.mkv`, `.mov`,
+`.webm`, `.mp3`, `.wav`, or `.m4a`. Re-mux or re-encode a corrupt or unsupported container with
 `ffmpeg` before transcribing.
 
 ## `Missing required LLM environment variables`
@@ -25,7 +25,7 @@ The provider SDKs are not installed. Reinstall the CLI with the `llm` extra:
 uv tool install --reinstall "webinar-transcriber[llm]"
 ```
 
-From a checkout, use `'.[llm]'` instead.
+From a checkout, use `uv tool install --reinstall ".[llm]"` instead.
 
 ## `Unsupported LLM provider`
 
