@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
     from types import ModuleType
 
 LLM_PROVIDER_ENV = "LLM_PROVIDER"
@@ -43,7 +43,7 @@ def diarization_cache_dir() -> Path | None:
 
 
 @contextmanager
-def temporary_environment_variable(name: str, value: str) -> Iterator[None]:
+def temporary_environment_variable(name: str, value: str) -> Generator[None, None, None]:
     """Temporarily set one environment variable."""
     previous = os.environ.get(name)
     os.environ[name] = value

@@ -36,8 +36,8 @@ dependencies = [
     "rich>=14.3.4,<15.0.0",
     "av>=17.1.0,<19.0.0",
     # These exact pins must move together; the wheel's registry metadata omits its core ABI.
-    "sherpa-onnx==1.13.3",
-    "sherpa-onnx-core==1.13.3",
+    "sherpa-onnx==1.13.4",
+    "sherpa-onnx-core==1.13.4",
 ]
 
 [project.urls]
@@ -87,6 +87,14 @@ testpaths = ["webinar_transcriber/tests"]
 markers = [
     "slow: exercises real media-processing integration paths",
 ]
+
+[tool.basedpyright]
+include = ["webinar_transcriber"]
+ignore = ["webinar_transcriber/tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+enableTypeIgnoreComments = true
+reportDeprecated = "warning"
 
 [tool.coverage.run]
 branch = false
