@@ -88,6 +88,14 @@ markers = [
     "slow: exercises real media-processing integration paths",
 ]
 
+[tool.basedpyright]
+include = ["webinar_transcriber"]
+ignore = ["webinar_transcriber/tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+enableTypeIgnoreComments = true
+reportDeprecated = "warning"
+
 [tool.coverage.run]
 branch = false
 source = ["webinar_transcriber"]

@@ -36,7 +36,7 @@ from webinar_transcriber.video import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
 
     from webinar_transcriber.diarization import SherpaOnnxDiarizer
     from webinar_transcriber.llm import LlmReportMetadataResult
@@ -84,7 +84,7 @@ class RunContext:
     @contextmanager
     def stage(
         self, key: str, label: str, *, total: float | None = None, detail: str | None = None
-    ) -> Iterator[StageHandle]:
+    ) -> Generator[StageHandle, None, None]:
         """Track timing for one stage and surface it through the reporter."""
         with self.reporter.track(key, label, total=total, detail=detail) as handle:
             try:
