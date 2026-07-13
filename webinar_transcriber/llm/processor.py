@@ -70,6 +70,7 @@ class InstructorClient(Protocol):
 
     def create_with_completion(self, **kwargs: object) -> tuple[object, object]:
         """Return the parsed response model alongside the raw completion."""
+        ...
 
 
 class InstructorLLMProcessor:

@@ -16,6 +16,7 @@ from webinar_transcriber.normalized_audio import NORMALIZED_SAMPLE_RATE
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from importlib.resources.abc import Traversable
 
     import numpy as np
 
@@ -148,5 +149,5 @@ def _silero_speech_regions(
     return normalize_regions(padded_regions)
 
 
-def _silero_vad_model_path() -> resources.abc.Traversable:
+def _silero_vad_model_path() -> Traversable:
     return resources.files("webinar_transcriber.assets").joinpath("silero_vad.onnx")
