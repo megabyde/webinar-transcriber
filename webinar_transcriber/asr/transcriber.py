@@ -28,7 +28,7 @@ from webinar_transcriber.models import DecodedWindow, TranscriptSegment
 from webinar_transcriber.normalized_audio import sample_index_for_time
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Generator
     from types import TracebackType
 
     from pywhispercpp.model import Model
@@ -67,7 +67,7 @@ def _looks_like_model_path(model_name: str) -> bool:
 
 
 @contextmanager
-def _disable_tqdm_progress() -> Iterator[None]:
+def _disable_tqdm_progress() -> Generator[None, None, None]:
     """Suppress pywhispercpp download progress while constructing a model."""
     # pywhispercpp has no per-call flag for model-download progress. tqdm reads TQDM_DISABLE when
     # it creates the progress bar.
@@ -76,7 +76,7 @@ def _disable_tqdm_progress() -> Iterator[None]:
 
 
 @contextmanager
-def _redirect_native_output(log_path: Path | None) -> Iterator[None]:
+def _redirect_native_output(log_path: Path | None) -> Generator[None, None, None]:
     if log_path is None:
         yield
         return

@@ -26,7 +26,7 @@ from rich.text import Text
 from webinar_transcriber.export.formatting import format_duration
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
     from pathlib import Path
 
     from webinar_transcriber.processor import ProcessArtifacts
@@ -84,7 +84,7 @@ class StageReporter:
     @contextmanager
     def track(
         self, key: str, label: str, *, total: float | None = None, detail: str | None = None
-    ) -> Iterator[StageHandle]:
+    ) -> Generator[StageHandle, None, None]:
         """Open a stage display and yield a handle for progress updates."""
         progress = Progress(
             *self._columns(determinate=total is not None), console=self._console, transient=True

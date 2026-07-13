@@ -6,7 +6,8 @@ import math
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-import av
+from av.error import BlockingIOError as AvBlockingIOError
+from av.error import FFmpegError
 from av.filter import Graph
 
 from webinar_transcriber.media import MediaProcessingError, open_video_input_container
@@ -98,7 +99,7 @@ def save_scene_frames(
                 if progress_callback is not None:
                     progress_callback(len(captured))
             return captured
-    except (OSError, av.FFmpegError) as ex:  # pragma: no cover - defensive FFmpeg boundary
+    except (OSError, FFmpegError) as ex:  # pragma: no cover - defensive FFmpeg boundary
         raise MediaProcessingError(f"Could not save scene frames for {video_path}: {ex}") from ex
 
 
@@ -140,7 +141,7 @@ def _detect_scene_starts(
                 ):
                     progress_callback(final_sample_count, len(starts))
             return starts
-    except (OSError, av.FFmpegError) as ex:  # pragma: no cover - defensive FFmpeg boundary
+    except (OSError, FFmpegError) as ex:  # pragma: no cover - defensive FFmpeg boundary
         raise MediaProcessingError(f"Could not detect scenes in {video_path}: {ex}") from ex
 
 
@@ -167,7 +168,7 @@ def _filtered_scene_frames(scene_filter: Graph) -> Iterator[tuple[float, VideoFr
     while True:
         try:
             filtered_frame = scene_filter.vpull()
-        except av.BlockingIOError:
+        except AvBlockingIOError:
             return
         current_time = _frame_time_sec(filtered_frame)
         if current_time is not None:

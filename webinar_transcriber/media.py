@@ -6,11 +6,12 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import av
+from av.error import FFmpegError
 
 from webinar_transcriber.models import AudioAsset, MediaAsset, VideoAsset
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
     from pathlib import Path
 
     from av.audio.stream import AudioStream
@@ -41,18 +42,20 @@ def _first_video_stream(input_container: InputContainer) -> VideoStream | None:
 
 
 @contextmanager
-def open_input_media_container(path: Path) -> Iterator[InputContainer]:
+def open_input_media_container(path: Path) -> Generator[InputContainer, None, None]:
     """Open a PyAV input container and normalize open-time failures."""
     try:
         input_container = av.open(str(path), mode="r")
-    except (FileNotFoundError, OSError, av.FFmpegError) as ex:
+    except (FileNotFoundError, OSError, FFmpegError) as ex:
         raise MediaProcessingError(f"Could not open {path} with PyAV: {ex}") from ex
     with input_container as container:
         yield container
 
 
 @contextmanager
-def open_audio_input_container(path: Path) -> Iterator[tuple[InputContainer, AudioStream]]:
+def open_audio_input_container(
+    path: Path,
+) -> Generator[tuple[InputContainer, AudioStream], None, None]:
     """Open a PyAV input container and yield its required audio stream."""
     with open_input_media_container(path) as container:
         stream = _first_audio_stream(container)
@@ -62,7 +65,9 @@ def open_audio_input_container(path: Path) -> Iterator[tuple[InputContainer, Aud
 
 
 @contextmanager
-def open_video_input_container(path: Path) -> Iterator[tuple[InputContainer, VideoStream]]:
+def open_video_input_container(
+    path: Path,
+) -> Generator[tuple[InputContainer, VideoStream], None, None]:
     """Open a PyAV input container and yield its required video stream."""
     with open_input_media_container(path) as container:
         stream = _first_video_stream(container)
@@ -72,11 +77,11 @@ def open_video_input_container(path: Path) -> Iterator[tuple[InputContainer, Vid
 
 
 @contextmanager
-def open_output_media_container(path: Path) -> Iterator[OutputContainer]:
+def open_output_media_container(path: Path) -> Generator[OutputContainer, None, None]:
     """Open a PyAV output container and normalize open-time failures."""
     try:
         output_container = av.open(str(path), mode="w")
-    except (FileNotFoundError, OSError, av.FFmpegError) as ex:
+    except (FileNotFoundError, OSError, FFmpegError) as ex:
         raise MediaProcessingError(f"Could not open {path} for writing with PyAV: {ex}") from ex
     with output_container as container:
         yield container
