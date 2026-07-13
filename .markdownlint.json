@@ -1,5 +1,12 @@
 {
     "MD013": {
         "line_length": 100
+    },
+    "MD033": {
+        "allowed_elements": [
+            "picture",
+            "source",
+            "img"
+        ]
     }
 }
