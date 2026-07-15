@@ -75,6 +75,8 @@ class TestCoreModels:
     def test_diagnostics_defaults_empty_maps(self) -> None:
         diagnostics = Diagnostics()
 
+        assert diagnostics.mode == "normal"
+        assert diagnostics.replay is None
         assert diagnostics.llm is None
         assert diagnostics.stage_durations_sec == {}
         assert diagnostics.item_counts == {}

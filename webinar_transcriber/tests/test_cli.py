@@ -4,6 +4,7 @@ import runpy
 import sys
 from unittest.mock import ANY, patch
 
+import click
 import pytest
 from click.testing import CliRunner
 
@@ -12,6 +13,7 @@ from webinar_transcriber.asr import AsrProcessingError, default_asr_threads
 from webinar_transcriber.cli import main
 from webinar_transcriber.llm import LlmConfigurationError, LlmProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
+from webinar_transcriber.replay import ReplayValidationError
 from webinar_transcriber.tests.conftest import process_artifacts
 
 
@@ -22,7 +24,7 @@ class TestCli:
         result = runner.invoke(main, ["--help"])
 
         assert result.exit_code == 0
-        assert "Transcribe one or more audio or video input files." in result.output
+        assert "Transcribe INPUT files or rebuild one report with --from-run." in result.output
 
     def test_main_version_prints_package_version(self) -> None:
         runner = CliRunner()
@@ -178,6 +180,8 @@ class TestCli:
 
         assert result.exit_code == 0
         assert "--asr-model" in result.output
+        assert "--from-run" in result.output
+        assert "without media processing or" in normalized_output
         assert "--language" in result.output
         assert "--threads" in result.output
         assert "Defaults to the host CPU count, capped at 8" in normalized_output
@@ -193,6 +197,105 @@ class TestCli:
         assert "model path" in result.output
         assert "provider-backed report" in result.output
         assert "enhancement." in result.output
+
+    def test_runs_replay_with_supported_options(self, tmp_path) -> None:
+        runner = CliRunner()
+        source_run = tmp_path / "source-run"
+        source_run.mkdir()
+        output_dir = tmp_path / "replay"
+        llm_processor = object()
+
+        with (
+            patch("webinar_transcriber.cli.process_replay") as process_replay_mock,
+            patch(
+                "webinar_transcriber.cli.build_llm_processor_from_env",
+                return_value=llm_processor,
+            ) as build_llm_processor_mock,
+            patch("webinar_transcriber.cli.WhisperCppTranscriber") as transcriber_mock,
+            patch("webinar_transcriber.cli.SherpaOnnxDiarizer") as diarizer_mock,
+        ):
+            result = runner.invoke(
+                main,
+                [
+                    "--from-run",
+                    str(source_run),
+                    "--output-dir",
+                    str(output_dir),
+                    "--threads",
+                    "3",
+                    "--llm",
+                ],
+            )
+
+        assert result.exit_code == 0
+        build_llm_processor_mock.assert_called_once_with(threads=3)
+        process_replay_mock.assert_called_once_with(
+            source_run=source_run,
+            output_dir=output_dir,
+            llm_processor=llm_processor,
+            reporter=ANY,
+        )
+        transcriber_mock.assert_not_called()
+        diarizer_mock.assert_not_called()
+
+    def test_rejects_replay_with_input_file(self, tmp_path) -> None:
+        runner = CliRunner()
+        source_run = tmp_path / "source-run"
+        source_run.mkdir()
+        input_path = tmp_path / "demo.mp4"
+        input_path.write_text("stub", encoding="utf-8")
+
+        with patch("webinar_transcriber.cli.process_replay") as process_replay_mock:
+            result = runner.invoke(main, [str(input_path), "--from-run", str(source_run)])
+
+        assert result.exit_code != 0
+        assert "--from-run cannot be combined with input files" in result.output
+        process_replay_mock.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "option",
+        [
+            ["--asr-model", "large-v3"],
+            ["--language", "en"],
+            ["--keep-audio"],
+            ["--diarize"],
+            ["--no-diarize"],
+            ["--diarize-speakers", "2"],
+        ],
+    )
+    def test_rejects_incompatible_replay_options(self, tmp_path, option: list[str]) -> None:
+        runner = CliRunner()
+        source_run = tmp_path / "source-run"
+        source_run.mkdir()
+
+        with patch("webinar_transcriber.cli.process_replay") as process_replay_mock:
+            result = runner.invoke(main, ["--from-run", str(source_run), *option])
+
+        assert result.exit_code != 0
+        assert "--from-run cannot be combined with" in result.output
+        process_replay_mock.assert_not_called()
+
+    def test_rejects_future_command_line_options_in_replay_mode(self, tmp_path) -> None:
+        runner = CliRunner()
+        source_run = tmp_path / "source-run"
+        source_run.mkdir()
+        future_option = click.Option(["--future-media-option"], is_flag=True, expose_value=False)
+        main.params.append(future_option)
+        try:
+            result = runner.invoke(main, ["--from-run", str(source_run), "--future-media-option"])
+        finally:
+            main.params.remove(future_option)
+
+        assert result.exit_code != 0
+        assert "--from-run cannot be combined with --future-media-option" in result.output
+
+    def test_requires_input_or_replay_source(self) -> None:
+        runner = CliRunner()
+
+        result = runner.invoke(main, [])
+
+        assert result.exit_code != 0
+        assert "Provide at least one INPUT or --from-run RUN_DIR" in result.output
 
     def test_rejects_invalid_thread_count(self, tmp_path) -> None:
         runner = CliRunner()
@@ -256,6 +359,7 @@ class TestCli:
             (AsrProcessingError("missing ASR model"), "missing ASR model"),
             (LlmConfigurationError("missing LLM config"), "missing LLM config"),
             (LlmProcessingError("LLM request failed"), "LLM request failed"),
+            (ReplayValidationError("invalid replay"), "invalid replay"),
         ],
     )
     def test_reports_expected_runtime_errors_as_cli_errors(

@@ -20,11 +20,13 @@ from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
     DiarizationDiagnostics,
     LlmDiagnostics,
+    ReplayDiagnostics,
     VideoAsset,
     average_duration_sec,
 )
 from webinar_transcriber.normalized_audio import load_normalized_audio, write_transcription_audio
 from webinar_transcriber.paths import create_run_layout
+from webinar_transcriber.replay import copy_replay_source, load_replay_source
 from webinar_transcriber.segmentation import detect_speech_regions, normalized_audio_duration
 from webinar_transcriber.structure import build_report
 from webinar_transcriber.transcript.coalesce import coalesce_transcript
@@ -75,6 +77,7 @@ class RunContext:
     asr_pipeline: AsrPipelineDiagnostics | None = None
     diarization: DiarizationDiagnostics | None = None
     llm: LlmDiagnostics | None = None
+    replay: ReplayDiagnostics | None = None
 
     def record_warning(self, message: str) -> None:
         """Record and report one run warning."""
@@ -167,11 +170,17 @@ def process_input(
                     diarization_speaker_count=diarization_speaker_count,
                 )
 
-            report = _run_report_phase(
-                input_path=input_path,
+            scenes: list[Scene] = []
+            if isinstance(media_asset, VideoAsset):
+                scenes = _detect_video_scenes(
+                    input_path=input_path, layout=layout, media_asset=media_asset, ctx=ctx
+                )
+
+            report = _build_and_export_report(
                 layout=layout,
                 media_asset=media_asset,
                 transcription=transcription,
+                scenes=scenes,
                 llm_processor=llm_processor,
                 ctx=ctx,
             )
@@ -197,6 +206,70 @@ def process_input(
                     error="Interrupted by user." if isinstance(ex, KeyboardInterrupt) else str(ex),
                 )
             raise
+
+
+def process_replay(
+    source_run: Path,
+    *,
+    reporter: StageReporter,
+    output_dir: Path | None = None,
+    llm_processor: InstructorLLMProcessor | None = None,
+) -> ProcessArtifacts:
+    """Rebuild report artifacts from a validated persisted run.
+
+    Returns:
+        ProcessArtifacts: The completed replay artifacts.
+    """
+    resolved_source_run = source_run.resolve()
+    ctx = RunContext(
+        reporter=reporter,
+        replay=ReplayDiagnostics(source_run=str(resolved_source_run)),
+    )
+    ctx.reporter.begin_run(source_run)
+    with ctx.stage("validate_replay_source", "Validating replay source"):
+        source = load_replay_source(resolved_source_run)
+
+    original_input_path = Path(source.media_asset.path)
+    layout = create_run_layout(input_path=original_input_path, output_dir=output_dir)
+    try:
+        with ctx.stage("copy_replay_artifacts", "Copying replay artifacts") as st:
+            copy_replay_source(source, layout)
+            copied_count = 2 + len(source.frame_paths)
+            if isinstance(source.media_asset, VideoAsset):
+                copied_count += 1
+            if source.diarization_path is not None:
+                copied_count += 1
+            st.update(detail=format_count(copied_count, "artifact"))
+
+        ctx.item_counts["transcript_segments"] = len(source.transcription.segments)
+        report = _build_and_export_report(
+            layout=layout,
+            media_asset=source.media_asset,
+            transcription=source.transcription,
+            scenes=source.scenes,
+            llm_processor=llm_processor,
+            ctx=ctx,
+        )
+        diagnostics = write_run_diagnostics(layout, ctx, status="succeeded")
+        artifacts = ProcessArtifacts(
+            layout=layout,
+            media_asset=source.media_asset,
+            transcription=source.transcription,
+            report=report,
+            diagnostics=diagnostics,
+        )
+        ctx.reporter.complete_run(artifacts)
+        return artifacts
+    except BaseException as ex:
+        with suppress(Exception):
+            write_run_diagnostics(
+                layout,
+                ctx,
+                status="failed",
+                failed_stage=ctx.failed_stage,
+                error="Interrupted by user." if isinstance(ex, KeyboardInterrupt) else str(ex),
+            )
+        raise
 
 
 def _run_asr_pipeline(
@@ -318,12 +391,12 @@ def _run_asr_pipeline(
     return transcription
 
 
-def _run_report_phase(
+def _build_and_export_report(
     *,
-    input_path: Path,
     layout: RunLayout,
     media_asset: MediaAsset,
     transcription: TranscriptionResult,
+    scenes: list[Scene],
     llm_processor: InstructorLLMProcessor | None,
     ctx: RunContext,
 ) -> ReportDocument:
@@ -334,13 +407,6 @@ def _run_report_phase(
     """
     coalesced_transcription = coalesce_transcript(transcription)
     ctx.item_counts["coalesced_transcript_segments"] = len(coalesced_transcription.segments)
-
-    scenes: list[Scene] = []
-
-    if isinstance(media_asset, VideoAsset):
-        scenes = _detect_video_scenes(
-            input_path=input_path, layout=layout, media_asset=media_asset, ctx=ctx
-        )
 
     ctx.item_counts["scenes"] = len(scenes)
     ctx.item_counts["frames"] = sum(scene.image_path is not None for scene in scenes)
@@ -531,4 +597,5 @@ __all__ = [
     "ProcessArtifacts",
     "RunContext",
     "process_input",
+    "process_replay",
 ]

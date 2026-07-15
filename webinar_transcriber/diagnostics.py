@@ -27,6 +27,8 @@ def write_run_diagnostics(
         Diagnostics: The assembled diagnostics payload.
     """
     diagnostics = Diagnostics(
+        mode="replay" if ctx.replay is not None else "normal",
+        replay=ctx.replay,
         status=status,
         failed_stage=failed_stage,
         error=error,

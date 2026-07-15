@@ -229,6 +229,7 @@ class ReportDocument:
 # ---------------------------------------------------------------------------
 
 ReportStatus = Literal["applied", "fallback"]
+RunMode = Literal["normal", "replay"]
 
 
 @dataclass(slots=True, frozen=True)
@@ -264,9 +265,18 @@ class LlmDiagnostics:
 
 
 @dataclass(slots=True, frozen=True)
+class ReplayDiagnostics:
+    """Provenance for a report replay run."""
+
+    source_run: str
+
+
+@dataclass(slots=True, frozen=True)
 class Diagnostics:
     """Execution metadata recorded for a processing run."""
 
+    mode: RunMode = "normal"
+    replay: ReplayDiagnostics | None = None
     status: Literal["succeeded", "failed"] = "succeeded"
     failed_stage: str | None = None
     error: str | None = None

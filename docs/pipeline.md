@@ -3,6 +3,8 @@
 This document describes the deterministic stages the CLI runs from input file to final artifacts.
 For install and typical usage, see [README.md](../README.md).
 
+## Media pipeline
+
 1. Create an isolated run directory.
    - Each input gets its own `runs/<timestamp>_<basename>/` directory unless you pass a single
      `--output-dir`.
@@ -81,6 +83,23 @@ For install and typical usage, see [README.md](../README.md).
      written at the end of a successful run.
    - Failed runs still try to write `diagnostics.json` once the run directory exists, including the
      failed stage, warnings, timings, and any partial artifacts already produced.
+
+## Report replay
+
+Report replay enters the pipeline after the expensive media stages. It first validates persisted
+media metadata and transcript shapes; video runs also require valid scene metadata and every
+referenced frame. This validation finishes before a destination exists, so an incompatible or
+partial source run cannot leave what looks like a new run.
+
+After validation, replay copies the report inputs into a fresh directory and resumes at transcript
+coalescing. Section construction, optional LLM refinement, exports, and diagnostics use the same
+code as a media run. The copy makes the result independently replayable while leaving out ASR
+windows, native logs, and retained transcription audio, none of which report generation reads.
+
+Replay diagnostics distinguish this shorter execution path from normal processing and retain the
+absolute source-run path as provenance. Their stage timings cover validation, copying, optional LLM
+work, and export; absent media, VAD, ASR, diarization, and scene-detection timings mean those stages
+did not run.
 
 [asr]: https://en.wikipedia.org/wiki/Speech_recognition
 [diarization]: https://en.wikipedia.org/wiki/Speaker_diarisation

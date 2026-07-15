@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import click
+from click.core import ParameterSource
 
 from webinar_transcriber import __version__
 from webinar_transcriber.asr import (
@@ -21,7 +22,8 @@ from webinar_transcriber.llm import (
 )
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
-from webinar_transcriber.processor import process_input
+from webinar_transcriber.processor import process_input, process_replay
+from webinar_transcriber.replay import ReplayValidationError
 from webinar_transcriber.ui import StageReporter
 
 
@@ -34,8 +36,14 @@ class CLIError(click.ClickException):
 @click.argument(
     "input_paths",
     nargs=-1,
-    required=True,
+    required=False,
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--from-run",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=None,
+    help="Rebuild reports from a completed run without media processing or transcription.",
 )
 @click.option(
     "--output-dir",
@@ -82,8 +90,11 @@ class CLIError(click.ClickException):
     metavar="COUNT",
     help="Known exact speaker count to use for diarization. Omit for auto-clustering.",
 )
+@click.pass_context
 def main(
+    ctx: click.Context,
     input_paths: tuple[Path, ...],
+    from_run: Path | None,
     output_dir: Path | None,
     asr_model: str | None,
     language: str | None,
@@ -93,16 +104,28 @@ def main(
     diarize: bool,
     diarize_speakers: int | None,
 ) -> None:
-    """Transcribe one or more audio or video input files."""
-    if output_dir is not None and len(input_paths) > 1:
-        raise CLIError("--output-dir can only be used with one input file.")
-    if diarize_speakers is not None and not diarize:
-        raise CLIError("--diarize-speakers requires --diarize.")
+    """Transcribe INPUT files or rebuild one report with --from-run."""
+    _validate_options(
+        ctx,
+        input_paths=input_paths,
+        from_run=from_run,
+        output_dir=output_dir,
+        diarize=diarize,
+        diarize_speakers=diarize_speakers,
+    )
 
     reporter = StageReporter()
 
     try:
         llm_processor = build_llm_processor_from_env(threads=threads) if llm else None
+        if from_run is not None:
+            process_replay(
+                source_run=from_run,
+                output_dir=output_dir,
+                llm_processor=llm_processor,
+                reporter=reporter,
+            )
+            return
         for input_path in input_paths:
             diarizer = SherpaOnnxDiarizer(threads=threads) if diarize else None
             transcriber = WhisperCppTranscriber(
@@ -129,6 +152,46 @@ def main(
         LlmProcessingError,
         MediaProcessingError,
         OutputDirectoryExistsError,
+        ReplayValidationError,
     ) as ex:
         reporter.reset_active_display()
         raise CLIError(str(ex)) from ex
+
+
+def _validate_options(
+    ctx: click.Context,
+    *,
+    input_paths: tuple[Path, ...],
+    from_run: Path | None,
+    output_dir: Path | None,
+    diarize: bool,
+    diarize_speakers: int | None,
+) -> None:
+    if from_run is not None:
+        if input_paths:
+            raise CLIError("--from-run cannot be combined with input files.")
+        replay_parameters = {
+            "input_paths",
+            "from_run",
+            "output_dir",
+            "threads",
+            "llm",
+        }
+        incompatible = [
+            parameter.name
+            for parameter in ctx.command.params
+            if parameter.name not in replay_parameters
+            and ctx.get_parameter_source(parameter.name) is ParameterSource.COMMANDLINE
+        ]
+        if incompatible:
+            formatted_options = ", ".join(
+                f"--{option.replace('_', '-')}" for option in incompatible
+            )
+            raise CLIError(f"--from-run cannot be combined with {formatted_options}.")
+        return
+    if not input_paths:
+        raise click.UsageError("Provide at least one INPUT or --from-run RUN_DIR.")
+    if output_dir is not None and len(input_paths) > 1:
+        raise CLIError("--output-dir can only be used with one input file.")
+    if diarize_speakers is not None and not diarize:
+        raise CLIError("--diarize-speakers requires --diarize.")

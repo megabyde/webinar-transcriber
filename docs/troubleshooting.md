@@ -39,6 +39,22 @@ The CLI refuses to overwrite existing run directories. Pass a new `--output-dir`
 existing directory, or omit `--output-dir` so the CLI creates a fresh timestamped directory under
 `runs/`.
 
+## `--from-run cannot be combined with …`
+
+Replay starts from persisted report inputs, so input files and media-processing options cannot
+affect it. Remove the listed input or option. Replay accepts only `--output-dir`, `--threads`, and
+`--llm` in addition to `--from-run`.
+
+## `Replay source is missing required artifact` / `Replay source has invalid JSON`
+
+The selected run is partial, damaged, or incompatible with the current persisted artifact schema.
+Use a successful run containing `metadata.json` and `transcript.json`; video runs also need
+`scenes.json` and every frame referenced there. Do not repair the source in place when it is a
+baseline—copy it first or choose another completed run.
+
+Other replay validation errors name the invalid field or missing frame. Fix or replace that source
+artifact before retrying; validation does not create the requested destination directory.
+
 ## `Could not prepare whisper.cpp model`
 
 `pywhispercpp` could not load the requested model. Check that `--asr-model` is a known identifier

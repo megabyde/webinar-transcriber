@@ -78,6 +78,15 @@ maintaining a copy here, and avoid adding deep nesting.
 - Successful runs write `diagnostics.json`; failed runs also write it once the run directory exists,
   though early failures can still leave only partial intermediate artifacts and no final report
   outputs.
+- `--from-run` validates persisted report inputs before creating a destination, then copies them
+  into a new self-contained run and reruns only coalescing, sectioning, optional LLM refinement, and
+  exports. It must never mutate the source or call media, VAD, ASR, diarization, or scene-detection
+  stages.
+- Replay directories copy metadata, transcript, video scenes and referenced frames, and optional
+  diarization turns. ASR intermediates, native logs, and retained transcription audio are not report
+  inputs and are not copied.
+- Diagnostics use `mode: normal` with `replay: null` for media runs and `mode: replay` with
+  source-run provenance for replay runs.
 - Temporary WAV audio extracted for transcription should stay outside the run directory;
   `--keep-audio` may write the compressed `transcription-audio.mp3` artifact described in
   `README.md`.

@@ -144,6 +144,28 @@ webinar-transcriber INPUT --keep-audio
 webinar-transcriber INPUT --output-dir runs/custom-demo
 ```
 
+### Replay a report
+
+Use `--from-run RUN_DIR` to rebuild sectioning and exports from a completed run without decoding the
+source media or rerunning VAD, ASR, or diarization. Replay validates the persisted metadata,
+transcript, scenes, and referenced frames before creating a destination, then writes a new run
+directory; it never modifies the source run.
+
+```bash
+webinar-transcriber --from-run runs/previous-run
+webinar-transcriber --from-run runs/previous-run --output-dir runs/replayed-report
+webinar-transcriber --from-run runs/previous-run --llm
+```
+
+Replay accepts `--output-dir`, `--threads`, and `--llm`. Media-processing options are incompatible
+because their stages do not run: do not combine `--from-run` with input files, `--asr-model`,
+`--language`, `--keep-audio`, `--diarize`, `--no-diarize`, or `--diarize-speakers`.
+
+Each replay copies `metadata.json`, `transcript.json`, video `scenes.json` and referenced frames,
+and `diarization.json` when present. The new run is therefore sufficient for another replay without
+access to either the original media or source run. Retained transcription audio and ASR
+intermediates are not report inputs and are not copied.
+
 ### Cloud LLM
 
 `--llm` enables provider-backed report refinement after deterministic sectioning. The LLM step can
@@ -263,7 +285,7 @@ runs/<timestamp>_<basename>/
 ├─ report.md
 ├─ report.docx
 ├─ report.json               # final report in markdown, docx, and json
-├─ diagnostics.json          # stage timings, counts, warnings, ASR and optional LLM info
+├─ diagnostics.json          # run mode, provenance, timings, counts, warnings, runtime details
 ├─ asr/
 │  ├─ speech_regions.json    # VAD ranges
 │  └─ decoded_windows.json   # per-window decode output
@@ -272,6 +294,11 @@ runs/<timestamp>_<basename>/
 ├─ frames/                   # representative frames; video only
 └─ transcription-audio.mp3   # normalized audio copy; --keep-audio only
 ```
+
+Replay directories contain the copied report inputs and new report outputs, but no `asr/`,
+`whisper-cpp.log`, or `transcription-audio.mp3`. Their diagnostics set `mode` to `replay` and record
+the absolute source run under `replay.source_run`; normal runs set `mode` to `normal` and `replay`
+to `null`.
 
 Failed runs still write `diagnostics.json` with the failed stage and any partial intermediate
 artifacts already produced, as long as the run directory exists.
