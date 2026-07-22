@@ -1,7 +1,7 @@
 # Pipeline
 
-This document describes the deterministic stages the CLI runs from input file to final artifacts.
-For install and typical usage, see [README.md](../README.md).
+The CLI builds a deterministic local report through the stages below, then optionally polishes it
+with an LLM. For installation and typical usage, see [README.md](../README.md).
 
 1. Create an isolated run directory.
    - Each input gets its own `runs/<timestamp>_<basename>/` directory unless you pass a single

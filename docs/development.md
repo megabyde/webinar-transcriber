@@ -1,7 +1,7 @@
 # Development
 
-How to set up a checkout, run the CLI without installing it, and pass the quality gate. Coding
-conventions, testing notes, and the Definition of Done live in [AGENTS.md](../AGENTS.md).
+Set up a checkout, run the CLI without installing it, and verify changes with the quality gate.
+Coding conventions, testing notes, and the Definition of Done live in [AGENTS.md](../AGENTS.md).
 
 ## Prerequisites
 

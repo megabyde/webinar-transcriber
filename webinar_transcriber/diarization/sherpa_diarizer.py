@@ -90,14 +90,14 @@ if TYPE_CHECKING:
         ) -> _DiarizationResult: ...
 
     class _MessageQueue(Protocol):
-        """The slice of a multiprocessing Queue the child (put) and parent (get) exchange on."""
+        """Queue operations used to exchange messages between the parent and child processes."""
 
         def put(self, item: object, /) -> None: ...
         def get(self, *, timeout: float | None = ...) -> Any: ...  # noqa: ANN401 - heterogeneous (kind, *payload) tuple
         def get_nowait(self) -> Any: ...  # noqa: ANN401 - heterogeneous (kind, *payload) tuple
 
     class _DiarizationProcess(Protocol):
-        """The subset of a multiprocessing Process the drain loop needs to detect a dead child."""
+        """Process state used to detect a child that exits without a terminal message."""
 
         def is_alive(self) -> bool: ...
 
