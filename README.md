@@ -35,7 +35,7 @@ report sectioning all run on your machine with local models and heuristics. Opti
 runs only after that deterministic report exists; it polishes section text and refines titles,
 summaries, action items, and section TL;DRs, but never replaces the base pipeline.
 
-For per-stage detail and the artifact each stage produces, see
+For the stage sequence and its intermediate artifacts, see
 [Pipeline](https://github.com/megabyde/webinar-transcriber/blob/main/docs/pipeline.md).
 
 ## Install

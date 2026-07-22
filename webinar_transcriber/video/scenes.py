@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     FrameProgressCallback = Callable[[int], None]
 
     class SavableImage(Protocol):
-        """The slice of a PIL image the frame writer needs: save to a path."""
+        """PIL-compatible image that can be saved to a path."""
 
         def save(self, fp: Path, /) -> None: ...
 
@@ -164,7 +164,7 @@ def _decode_frame_at(
 
 
 def _filtered_scene_frames(scene_filter: Graph) -> Iterator[tuple[float, VideoFrame]]:
-    """Yield (timestamp, frame) for each scene-change frame buffered in the filter graph."""
+    """Yield each buffered scene-change frame with its timestamp."""
     while True:
         try:
             filtered_frame = scene_filter.vpull()

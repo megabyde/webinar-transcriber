@@ -1,7 +1,5 @@
 # Releasing
 
-How to cut and publish a release of `webinar-transcriber`.
-
 ## Choose the version
 
 Versioning is tag-driven. `hatch-vcs` derives the version from a `vX.Y.Z` git tag and writes it to

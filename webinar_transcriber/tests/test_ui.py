@@ -124,7 +124,7 @@ class TestStageReporter:
 
         output = console.export_text()
         assert "Interrupted during detecting scenes." in output
-        # finish line should not be printed on exception
+        # Exceptions must not print the stage completion line.
         assert "✓ Detecting scenes" not in output
 
     def test_interrupted_without_active_stage_omits_suffix(self) -> None:
