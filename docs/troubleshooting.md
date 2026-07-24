@@ -47,8 +47,8 @@ such as `large-v3-turbo` or `large-v3`, or that a local path points to a valid G
 
 ## Wrong language detected
 
-Whisper can mis-detect language for short, multilingual, or noisy audio. Pass `--language CODE`, for
-example `--language en` or `--language ru`, to force the language hint.
+Whisper can detect the wrong language for short, multilingual, or noisy audio. Pass
+`--language CODE`, for example `--language en` or `--language ru`, to force the language hint.
 
 ## Poor diarization labels
 
