@@ -15,7 +15,11 @@ import numpy as np
 import pytest
 
 import webinar_transcriber.diarization.sherpa_diarizer as sherpa_runtime
-from webinar_transcriber.diarization import DiarizationProcessingError, assign_speakers
+from webinar_transcriber.diarization import (
+    DiarizationConfigurationError,
+    DiarizationProcessingError,
+    assign_speakers,
+)
 from webinar_transcriber.diarization.sherpa_diarizer import (
     SEGMENTATION_MODEL,
     default_cache_dir,
@@ -366,7 +370,9 @@ class TestDiarizationSubprocessTarget:
 
         sherpa_runtime._run_diarization_subprocess(queue, **_subprocess_kwargs(tmp_path))  # noqa: SLF001
 
-        assert queue.puts == [("error", "sherpa-onnx is unavailable for speaker diarization.")]
+        assert queue.puts == [
+            ("setup_error", "sherpa-onnx is unavailable for speaker diarization.")
+        ]
 
     def test_reports_invalid_config_as_error(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -381,7 +387,9 @@ class TestDiarizationSubprocessTarget:
 
         sherpa_runtime._run_diarization_subprocess(queue, **_subprocess_kwargs(tmp_path))  # noqa: SLF001
 
-        assert queue.puts == [("error", "Speaker diarization model configuration is invalid.")]
+        assert queue.puts == [
+            ("setup_error", "Speaker diarization model configuration is invalid.")
+        ]
 
     def test_reports_native_constructor_error(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -398,7 +406,7 @@ class TestDiarizationSubprocessTarget:
 
         sherpa_runtime._run_diarization_subprocess(queue, **_subprocess_kwargs(tmp_path))  # noqa: SLF001
 
-        assert queue.puts == [("error", "native constructor failure")]
+        assert queue.puts == [("setup_error", "native constructor failure")]
 
     def test_reports_native_process_error(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -506,6 +514,22 @@ class TestSherpaOnnxDiarizer:
 
         assert process.terminated
         assert process.joins == 1
+
+    def test_diarize_reraises_a_child_setup_failure_as_configuration_error(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        process = _FakeProcess()
+        diarizer, _ = self._prepared_diarizer(
+            monkeypatch,
+            tmp_path,
+            queue=_FakeQueue(get_script=[("setup_error", "model configuration is invalid")]),
+            process=process,
+        )
+
+        with pytest.raises(DiarizationConfigurationError, match="model configuration is invalid"):
+            diarizer.diarize(tmp_path / "audio.wav")
+
+        assert process.terminated
 
     def test_diarize_raises_when_child_exits_without_result(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

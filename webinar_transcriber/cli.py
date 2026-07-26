@@ -9,11 +9,16 @@ import click
 from webinar_transcriber import __version__
 from webinar_transcriber.asr import (
     WHISPER_CPP_MODEL_FILENAME,
+    AsrConfigurationError,
     AsrProcessingError,
     WhisperCppTranscriber,
     default_asr_threads,
 )
-from webinar_transcriber.diarization import DiarizationProcessingError, SherpaOnnxDiarizer
+from webinar_transcriber.diarization import (
+    DiarizationConfigurationError,
+    DiarizationProcessingError,
+    SherpaOnnxDiarizer,
+)
 from webinar_transcriber.llm import (
     LlmConfigurationError,
     LlmProcessingError,
@@ -29,7 +34,15 @@ class CLIError(click.ClickException):
     """CLI error for actionable user-facing failures."""
 
 
-# Failures that belong to one input. A batch reports them and moves on to the next file.
+# Failures of the model, host, or provider setup rather than of one file. Every input would hit
+# them identically, so the first one stops the batch.
+SETUP_ERRORS = (
+    AsrConfigurationError,
+    DiarizationConfigurationError,
+    LlmConfigurationError,
+)
+# Failures that belong to one input. A batch reports them and moves on to the next file. These are
+# the base classes of the setup errors above, so the handlers must stay in this order.
 INPUT_ERRORS = (
     AsrProcessingError,
     DiarizationProcessingError,
@@ -136,6 +149,9 @@ def main(
                     transcriber=transcriber,
                     reporter=reporter,
                 )
+            except SETUP_ERRORS as ex:
+                reporter.reset_active_display()
+                raise CLIError(str(ex)) from ex
             except INPUT_ERRORS as ex:
                 failed_paths.append(input_path)
                 reporter.failed_run(input_path, str(ex))

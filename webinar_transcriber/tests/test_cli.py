@@ -8,8 +8,13 @@ import pytest
 from click.testing import CliRunner
 
 from webinar_transcriber import __version__
-from webinar_transcriber.asr import AsrProcessingError, default_asr_threads
+from webinar_transcriber.asr import (
+    AsrConfigurationError,
+    AsrProcessingError,
+    default_asr_threads,
+)
 from webinar_transcriber.cli import main
+from webinar_transcriber.diarization import DiarizationConfigurationError
 from webinar_transcriber.llm import LlmConfigurationError, LlmProcessingError
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
@@ -291,6 +296,37 @@ class TestCli:
         assert "No audio stream found in second.mp4." in result.output
         assert "2 succeeded, 1 failed" in result.output
         assert result.exit_code == 1
+
+    @pytest.mark.parametrize(
+        ("error", "message"),
+        [
+            (AsrConfigurationError("whisper.cpp model file does not exist"), "does not exist"),
+            (
+                DiarizationConfigurationError("sherpa-onnx is unavailable"),
+                "sherpa-onnx is unavailable",
+            ),
+        ],
+        ids=["asr-model", "diarization-runtime"],
+    )
+    def test_shared_setup_failure_stops_the_batch_after_one_attempt(
+        self, tmp_path, error: Exception, message: str
+    ) -> None:
+        runner = CliRunner()
+        paths = []
+        for name in ("first", "second", "third"):
+            path = tmp_path / f"{name}.mp4"
+            path.write_text("stub", encoding="utf-8")
+            paths.append(path)
+
+        with patch(
+            "webinar_transcriber.cli.process_input", side_effect=error
+        ) as process_input_mock:
+            result = runner.invoke(main, [str(path) for path in paths])
+
+        assert process_input_mock.call_count == 1
+        assert message in result.output
+        assert "succeeded" not in result.output
+        assert result.exit_code != 0
 
     def test_single_failing_input_reports_no_batch_tally(self, tmp_path) -> None:
         runner = CliRunner()

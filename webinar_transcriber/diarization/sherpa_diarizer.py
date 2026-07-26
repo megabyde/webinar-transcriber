@@ -31,6 +31,14 @@ class DiarizationProcessingError(RuntimeError):
     """Raised when local speaker diarization cannot complete."""
 
 
+class DiarizationConfigurationError(DiarizationProcessingError):
+    """Raised when the diarization models or runtime cannot be set up.
+
+    Separate from a per-run diarization failure because it depends on the host and cached models
+    rather than on the audio, so every input in a batch would hit it identically.
+    """
+
+
 @dataclass(frozen=True)
 class _SegmentationModel:
     directory: str
@@ -123,7 +131,9 @@ class SherpaOnnxDiarizer:
     def prepare(self, *, speaker_count: int | None) -> None:
         """Resolve diarization models; the native diarizer is built in the subprocess."""
         if load_sherpa_onnx() is None:
-            raise DiarizationProcessingError("sherpa-onnx is unavailable for speaker diarization.")
+            raise DiarizationConfigurationError(
+                "sherpa-onnx is unavailable for speaker diarization."
+            )
         self._model_paths = ensure_default_models(self._cache_dir)
         self._num_clusters = speaker_count or -1
 
@@ -138,7 +148,7 @@ class SherpaOnnxDiarizer:
         terminates the child.
         """
         if self._model_paths is None or self._num_clusters is None:
-            raise DiarizationProcessingError("Diarizer not prepared; call prepare() first.")
+            raise DiarizationConfigurationError("Diarizer not prepared; call prepare() first.")
 
         context = multiprocessing.get_context("spawn")
         queue = context.Queue()
@@ -229,6 +239,8 @@ def _drain_diarization(
                 progress_callback(payload[0], payload[1])
         elif kind == "done":
             return payload[0]
+        elif kind == "setup_error":
+            raise DiarizationConfigurationError(payload[0])
         else:
             raise DiarizationProcessingError(payload[0])
 
@@ -251,7 +263,9 @@ def _run_diarization_subprocess(
     try:
         sherpa_onnx = load_sherpa_onnx()
         if sherpa_onnx is None:
-            raise DiarizationProcessingError("sherpa-onnx is unavailable for speaker diarization.")
+            raise DiarizationConfigurationError(
+                "sherpa-onnx is unavailable for speaker diarization."
+            )
         diarizer = _build_native_diarizer(
             sherpa_onnx,
             paths=DiarizationModelPaths(
@@ -268,6 +282,9 @@ def _run_diarization_subprocess(
 
         result = diarizer.process(samples, callback=callback)
         queue.put(("done", _turns_from_result(result)))
+    except DiarizationConfigurationError as ex:
+        # Exception types do not survive the queue, so tag setup failures for the parent to re-raise
+        queue.put(("setup_error", str(ex)))
     except Exception as ex:  # noqa: BLE001 - process boundary: report any failure to the parent
         queue.put(("error", str(ex)))
 
@@ -292,12 +309,12 @@ def _build_native_diarizer(
         min_duration_off=MIN_DURATION_OFF_SEC,
     )
     if not config.validate():
-        raise DiarizationProcessingError("Speaker diarization model configuration is invalid.")
+        raise DiarizationConfigurationError("Speaker diarization model configuration is invalid.")
 
     try:
         return sherpa_onnx.OfflineSpeakerDiarization(config)
     except RuntimeError as ex:
-        raise DiarizationProcessingError(str(ex)) from ex
+        raise DiarizationConfigurationError(str(ex)) from ex
 
 
 def _turns_from_result(result: _DiarizationResult) -> list[SpeakerTurn]:
@@ -324,7 +341,7 @@ def _ensure_segmentation_model(model_path: Path) -> None:
         archive.extract(member, path=model_path.parent.parent, filter="data")
 
     if not _verified(model_path, SEGMENTATION_MODEL.model_sha256):
-        raise DiarizationProcessingError(
+        raise DiarizationConfigurationError(
             f"Downloaded diarization model failed verification: {model_path}"
         )
 
@@ -347,10 +364,12 @@ def _ensure_file(path: Path, *, url: str, expected_sha256: str) -> None:
                 while chunk := response.read(1024 * 1024):
                     temp_file.write(chunk)
         except (OSError, urllib.error.URLError) as ex:
-            raise DiarizationProcessingError(f"Failed to download diarization model: {url}") from ex
+            raise DiarizationConfigurationError(
+                f"Failed to download diarization model: {url}"
+            ) from ex
 
         if not _verified(temp_path, expected_sha256):
-            raise DiarizationProcessingError(
+            raise DiarizationConfigurationError(
                 f"Downloaded diarization model failed verification: {url}"
             )
         temp_path.replace(path)
