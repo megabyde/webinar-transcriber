@@ -123,6 +123,11 @@ maintaining a copy here, and avoid adding deep nesting.
   detection does not require PyTorch or a first-run network download.
 - Speaker diarization uses `sherpa-onnx` with downloaded ONNX models cached under
   `~/.cache/webinar-transcriber/diarization`; keep those model artifacts out of the wheel.
+- `sherpa-onnx` is a required dependency, but its wheel can be missing on an unsupported host, so
+  `load_sherpa_onnx` returns `None` rather than raising. The two callers diverge on purpose:
+  speech-region detection warns and falls back to one whole-file region, which still yields a
+  transcript, while diarization fails because speaker labels have no degraded form. Do not
+  "harmonize" these into one behavior.
 
 ## Simplification and Refactoring Notes
 
