@@ -305,7 +305,7 @@ class TestProcessInput:
         assert artifacts.diagnostics.diarization.speaker_count == 2
         assert artifacts.diagnostics.diarization.turn_count == 2
         # Stage opens already labeled "analyzing audio" (covering prep + segmentation); the bar
-        # then jumps into the embedding range on the first callback (35 + 60*1/2 = 65%).
+        # then jumps into the embedding range on the first callback (35 + 60*1/2 = 65%)
         assert ("start", "diarize", 100.0, "analyzing audio") in reporter.progress
         assert ("advance", "diarize", 65.0, "embedding speakers") in reporter.progress
         diarize_progress = [
@@ -499,7 +499,7 @@ class TestProcessInput:
         kept_audio_path = artifacts.layout.transcription_audio_path
         assert kept_audio_path.exists()
         assert kept_audio_path.suffix == ".mp3"
-        # The kept copy is saved before transcription so it survives a later-stage failure.
+        # The kept copy is saved before transcription so it survives a later-stage failure
         started = [stage for action, stage, *_ in reporter.progress if action == "start"]
         assert started.index("save_transcription_audio") < started.index("transcribe")
         assert len(write_calls) == 2
@@ -678,7 +678,7 @@ class TestProcessInput:
 
         assert reporter.warnings == ["Silero warning"]
         assert artifacts.diagnostics.warnings == ["Silero warning"]
-        # Warnings live in diagnostics.json only; report.json carries no warnings key.
+        # Warnings live in diagnostics.json only; report.json carries no warnings key
         assert "warnings" not in read_json(artifacts.layout.json_report_path)
 
     def test_writes_video_scene_artifacts_and_frame_links(

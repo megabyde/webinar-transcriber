@@ -150,7 +150,7 @@ def process_input(
 
                 if keep_audio:
                     # Preserve the compressed audio before ASR and diarization so it survives a
-                    # crash or Ctrl-C during either stage.
+                    # crash or Ctrl-C during either stage
                     with ctx.stage(
                         "save_transcription_audio", "Saving transcription audio", total=audio_total
                     ) as st:
@@ -195,7 +195,7 @@ def process_input(
             ctx.reporter.complete_run(artifacts)
             return artifacts
         except BaseException as ex:
-            # A diagnostics failure must not mask the original error.
+            # A diagnostics failure must not mask the original error
             with suppress(Exception):
                 write_run_diagnostics(
                     layout,

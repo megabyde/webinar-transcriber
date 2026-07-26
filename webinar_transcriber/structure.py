@@ -68,7 +68,7 @@ def build_video_sections(
                 _draft_section(meaningful_segments, title=title, image_path=scene.image_path)
             )
             continue
-        # Keep scene-only sections so their frame and title context reach the report.
+        # Keep scene-only sections so their frame and title context reach the report
         sections.append(
             ReportSection(
                 id="",

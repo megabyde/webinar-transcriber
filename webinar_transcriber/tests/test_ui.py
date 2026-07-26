@@ -32,7 +32,7 @@ class TestStageReporter:
             media_asset=SimpleNamespace(duration_sec=50.0),
         )
 
-        # SimpleNamespace duck-types the ProcessArtifacts attributes complete_run reads.
+        # SimpleNamespace duck-types the ProcessArtifacts attributes complete_run reads
         reporter.complete_run(artifacts)  # type: ignore
 
         output = console.export_text()
@@ -124,7 +124,7 @@ class TestStageReporter:
 
         output = console.export_text()
         assert "Interrupted during detecting scenes." in output
-        # Exceptions must not print the stage completion line.
+        # Exceptions must not print the stage completion line
         assert "✓ Detecting scenes" not in output
 
     def test_interrupted_without_active_stage_omits_suffix(self) -> None:

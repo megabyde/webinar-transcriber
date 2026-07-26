@@ -24,7 +24,7 @@ class ProviderSpec:
 
 PROVIDERS = {
     "openai": ProviderSpec(label="OpenAI"),
-    # Anthropic's Messages API requires max_tokens; OpenAI's is optional.
+    # Anthropic's Messages API requires max_tokens; OpenAI's is optional
     "anthropic": ProviderSpec(label="Anthropic", request_kwargs={"max_tokens": 4096}),
 }
 

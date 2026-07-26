@@ -228,7 +228,7 @@ class TestConfig:
         assert paths.embedding_model == tmp_path / "nemo_en_titanet_small.onnx"
 
 
-# get() script sentinels for the queue double.
+# get() script sentinels for the queue double
 _TIMEOUT = object()  # simulate a poll timeout (raises Empty)
 _INTERRUPT = object()  # simulate Ctrl-C during the blocking get
 
