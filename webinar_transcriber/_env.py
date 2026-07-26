@@ -1,4 +1,4 @@
-"""Environment-variable accessors and optional-dependency loaders."""
+"""Environment-variable accessors and third-party module loaders."""
 
 from __future__ import annotations
 
@@ -18,16 +18,18 @@ WEBINAR_DIARIZATION_CACHE_DIR_ENV = "WEBINAR_DIARIZATION_CACHE_DIR"
 
 
 def load_sherpa_onnx() -> ModuleType | None:
-    """Return the imported sherpa-onnx module, or None when the optional wheel is absent.
+    """Return the imported sherpa-onnx module, or None when its wheel is missing on this host.
 
-    Shared by speech-region detection and speaker diarization, which both depend on sherpa-onnx.
+    sherpa-onnx is a required dependency, so None means the wheel did not install rather than that
+    the user opted out. Callers decide what that costs them: speech-region detection warns and
+    falls back to one whole-file region, while speaker diarization has no degraded form and fails.
 
     Returns:
-        ModuleType | None: The sherpa-onnx module, or None if it is not installed.
+        ModuleType | None: The sherpa-onnx module, or None if it is not importable.
     """
     try:
         return importlib.import_module("sherpa_onnx")
-    except ImportError:  # pragma: no cover - optional wheel/import boundary
+    except ImportError:  # pragma: no cover - depends on host wheel availability
         return None
 
 
