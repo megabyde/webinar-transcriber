@@ -112,6 +112,10 @@ def _detect_scene_starts(
     """Return the start time of each detected scene; scene one starts at the top of the video."""
     try:
         with open_video_input_container(video_path) as (input_container, video_stream):
+            # This pass decodes every frame, and the PyAV default of slice threading is effectively
+            # serial for single-slice H.264. save_scene_frames stays on that default: it seeks to
+            # one frame per scene, and each seek flushes the thread pool.
+            video_stream.thread_type = "AUTO"
             scene_filter = _build_scene_filter_graph(video_stream)
             starts: list[float] = [0.0]
             processed_sample_count = 0
