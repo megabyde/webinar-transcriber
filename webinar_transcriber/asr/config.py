@@ -8,6 +8,10 @@ ASR_BACKEND_NAME = "whisper.cpp"
 WHISPER_CPP_MODEL_FILENAME = "large-v3-turbo"
 WHISPER_CPP_MODEL_EXAMPLE = "models/whisper-cpp/ggml-large-v3-turbo.bin"
 CARRYOVER_MAX_CHARS = 300
+# Speech regions split on sub-second VAD gaps as well as on real pauses. The prompt carries across
+# the former; across the latter it would condition a window on text from a distant part of the
+# timeline.
+CARRYOVER_MAX_GAP_SEC = 2.0
 WHISPER_ENTROPY_THOLD = 2.4
 WHISPER_LOGPROB_THOLD = -1.0
 WHISPER_NO_SPEECH_THOLD = 0.6
