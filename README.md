@@ -129,6 +129,11 @@ For a CUDA-enabled development checkout, see
 By default, each input gets a fresh run directory under `runs/`. Multiple inputs are processed
 sequentially. `--output-dir` is allowed only with one input.
 
+A failing input does not stop the batch: the CLI reports it, moves on to the next file, prints a
+`N succeeded, M failed` tally at the end, and exits `1` if anything failed. Ctrl-C still abandons
+the remaining inputs. A provider misconfiguration under `--llm` is reported before any input runs,
+since it would fail every one of them.
+
 The CLI accepts any container PyAV can decode when it contains an audio stream, including `.mp4`,
 `.mkv`, `.mov`, `.webm`, `.mp3`, `.wav`, and `.m4a`. A video stream is optional; when present, it
 adds scene detection and representative frames.

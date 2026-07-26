@@ -29,6 +29,16 @@ class CLIError(click.ClickException):
     """CLI error for actionable user-facing failures."""
 
 
+# Failures that belong to one input. A batch reports them and moves on to the next file.
+INPUT_ERRORS = (
+    AsrProcessingError,
+    DiarizationProcessingError,
+    LlmProcessingError,
+    MediaProcessingError,
+    OutputDirectoryExistsError,
+)
+
+
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(version=__version__, prog_name="webinar-transcriber")
 @click.argument(
@@ -101,34 +111,42 @@ def main(
 
     reporter = StageReporter()
 
+    # A provider misconfiguration would fail every input identically, so it aborts before any run
     try:
         llm_processor = build_llm_processor_from_env(threads=threads) if llm else None
+    except LlmConfigurationError as ex:
+        raise CLIError(str(ex)) from ex
+
+    failed_paths: list[Path] = []
+    try:
         for input_path in input_paths:
             diarizer = SherpaOnnxDiarizer(threads=threads) if diarize else None
             transcriber = WhisperCppTranscriber(
                 model_name=asr_model, threads=threads, language=language
             )
-            process_input(
-                input_path=input_path,
-                output_dir=output_dir,
-                threads=threads,
-                keep_audio=keep_audio,
-                llm_processor=llm_processor,
-                diarizer=diarizer,
-                diarization_speaker_count=diarize_speakers,
-                transcriber=transcriber,
-                reporter=reporter,
-            )
+            try:
+                process_input(
+                    input_path=input_path,
+                    output_dir=output_dir,
+                    threads=threads,
+                    keep_audio=keep_audio,
+                    llm_processor=llm_processor,
+                    diarizer=diarizer,
+                    diarization_speaker_count=diarize_speakers,
+                    transcriber=transcriber,
+                    reporter=reporter,
+                )
+            except INPUT_ERRORS as ex:
+                failed_paths.append(input_path)
+                reporter.failed_run(input_path, str(ex))
     except KeyboardInterrupt:
         reporter.interrupted()
         raise click.exceptions.Exit(130) from None
-    except (
-        AsrProcessingError,
-        DiarizationProcessingError,
-        LlmConfigurationError,
-        LlmProcessingError,
-        MediaProcessingError,
-        OutputDirectoryExistsError,
-    ) as ex:
-        reporter.reset_active_display()
-        raise CLIError(str(ex)) from ex
+
+    if failed_paths:
+        # One input already printed its own failure line; a batch needs the tally too
+        if len(input_paths) > 1:
+            reporter.batch_summary(
+                succeeded=len(input_paths) - len(failed_paths), failed=len(failed_paths)
+            )
+        raise click.exceptions.Exit(1)

@@ -11,6 +11,7 @@ from webinar_transcriber import __version__
 from webinar_transcriber.asr import AsrProcessingError, default_asr_threads
 from webinar_transcriber.cli import main
 from webinar_transcriber.llm import LlmConfigurationError, LlmProcessingError
+from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.tests.conftest import process_artifacts
 
@@ -254,11 +255,10 @@ class TestCli:
         ("error", "message"),
         [
             (AsrProcessingError("missing ASR model"), "missing ASR model"),
-            (LlmConfigurationError("missing LLM config"), "missing LLM config"),
             (LlmProcessingError("LLM request failed"), "LLM request failed"),
         ],
     )
-    def test_reports_expected_runtime_errors_as_cli_errors(
+    def test_reports_expected_runtime_errors(
         self, tmp_path, error: Exception, message: str
     ) -> None:
         runner = CliRunner()
@@ -270,6 +270,57 @@ class TestCli:
 
         assert result.exit_code != 0
         assert message in result.output
+
+    def test_continues_the_batch_past_a_failing_input(self, tmp_path) -> None:
+        runner = CliRunner()
+        paths = []
+        for name in ("first", "second", "third"):
+            path = tmp_path / f"{name}.mp4"
+            path.write_text("stub", encoding="utf-8")
+            paths.append(path)
+
+        def run(*, input_path, **_kwargs):
+            if input_path == paths[1]:
+                raise MediaProcessingError(f"No audio stream found in {input_path.name}.")
+            return process_artifacts(input_path, tmp_path / f"run-{input_path.stem}")
+
+        with patch("webinar_transcriber.cli.process_input", side_effect=run) as process_input_mock:
+            result = runner.invoke(main, [str(path) for path in paths])
+
+        assert [call.kwargs["input_path"] for call in process_input_mock.call_args_list] == paths
+        assert "No audio stream found in second.mp4." in result.output
+        assert "2 succeeded, 1 failed" in result.output
+        assert result.exit_code == 1
+
+    def test_single_failing_input_reports_no_batch_tally(self, tmp_path) -> None:
+        runner = CliRunner()
+        input_path = tmp_path / "demo.wav"
+        input_path.write_text("stub", encoding="utf-8")
+
+        with patch(
+            "webinar_transcriber.cli.process_input",
+            side_effect=MediaProcessingError("No audio stream found in demo.wav."),
+        ):
+            result = runner.invoke(main, [str(input_path)])
+
+        assert "No audio stream found in demo.wav." in result.output
+        assert "succeeded" not in result.output
+        assert result.exit_code == 1
+
+    def test_ctrl_c_abandons_the_rest_of_the_batch(self, tmp_path) -> None:
+        runner = CliRunner()
+        first_input = tmp_path / "first.mp4"
+        second_input = tmp_path / "second.mp4"
+        first_input.write_text("stub", encoding="utf-8")
+        second_input.write_text("stub", encoding="utf-8")
+
+        with patch(
+            "webinar_transcriber.cli.process_input", side_effect=KeyboardInterrupt
+        ) as process_input_mock:
+            result = runner.invoke(main, [str(first_input), str(second_input)])
+
+        assert process_input_mock.call_count == 1
+        assert result.exit_code == 130
 
     def test_reports_llm_configuration_errors_before_pipeline(self, tmp_path) -> None:
         runner = CliRunner()
