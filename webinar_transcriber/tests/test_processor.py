@@ -13,6 +13,7 @@ from rich.console import Console
 
 from webinar_transcriber.asr import WhisperCppTranscriber, plan_inference_windows
 from webinar_transcriber.diagnostics import write_run_diagnostics
+from webinar_transcriber.diarization import DiarizationProcessingError
 from webinar_transcriber.llm import (
     LlmProcessingError,
     LlmReportMetadataResult,
@@ -205,6 +206,35 @@ class TestProcessInput:
         assert vad_finished[0].startswith("1 region | RTF ")
         assert ("start", "transcribe", 1.0, "0 segments") in reporter.progress
         assert ("advance", "transcribe", 1.0, "2 segments") in reporter.progress
+
+    def test_transcript_is_persisted_before_diarization_can_fail(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class FailingDiarizer(FakeDiarizer):
+            def diarize(self, wav_path: Path, **kwargs: Any) -> list[SpeakerTurn]:
+                del wav_path, kwargs
+                raise DiarizationProcessingError("segmentation model crashed")
+
+        install_pipeline_runtime(monkeypatch, runtime=audio_runtime())
+        layout = RunLayout(run_dir=tmp_path / "interrupted-run")
+
+        with pytest.raises(DiarizationProcessingError, match="segmentation model crashed"):
+            process_input(
+                FIXTURE_DIR / "sample-audio.mp3",
+                output_dir=layout.run_dir,
+                diarizer=FailingDiarizer([]),
+            )
+
+        transcript_payload = read_json(layout.transcript_path)
+        diagnostics_payload = read_json(layout.diagnostics_path)
+
+        assert [segment["text"] for segment in transcript_payload["segments"]] == [
+            "Agenda review and project status update.",
+            "Next step please send the draft by Friday.",
+        ]
+        assert all("speaker" not in segment for segment in transcript_payload["segments"])
+        assert diagnostics_payload["status"] == "failed"
+        assert diagnostics_payload["failed_stage"] == "diarize"
 
     def test_diarizes_transcript_and_report_when_enabled(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

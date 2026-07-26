@@ -42,15 +42,16 @@ with an LLM. For installation and typical usage, see [README.md](../README.md).
 1. Reconcile raw windows into a transcript.
    - Overlapping window boundaries are deduplicated by comparing text prefixes and suffixes.
    - Empty or invalid decoded segments are discarded.
-   - The reconciled transcript is the source for `transcript.json` and for optional speaker
-     assignment.
+   - The reconciled transcript is written to `transcript.json` before optional speaker assignment,
+     so an interrupted diarization run keeps the finished transcription.
 1. Optionally [diarize][diarization] speakers.
    - `--diarize` runs local `sherpa-onnx` speaker segmentation and embedding models against the same
      normalized audio.
    - Speaker turns are normalized to anonymous labels ordered by first appearance (`S1`, `S2`, and
      so on) and written to `diarization.json`.
    - Transcript segments receive the speaker label with the largest time overlap before transcript
-     coalescing, so a speaker change starts a new block.
+     coalescing, so a speaker change starts a new block. After speaker assignment, `transcript.json`
+     is rewritten with those labels.
 1. Coalesce the transcript for report generation.
    - Adjacent segments are merged into readable, paragraph-sized blocks; a new block starts on a
      speaker change, a timing gap, or once a block reaches its length or a

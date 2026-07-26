@@ -78,6 +78,8 @@ maintaining a copy here, and avoid adding deep nesting.
 - Successful runs write `diagnostics.json`; failed runs also write it once the run directory exists,
   though early failures can still leave only partial intermediate artifacts and no final report
   outputs.
+- `transcript.json` is written after reconciliation and rewritten after diarization. Diarization can
+  run for minutes, so finished transcription work must be persisted before it starts.
 - Temporary WAV audio extracted for transcription should stay outside the run directory;
   `--keep-audio` may write the compressed `transcription-audio.mp3` artifact described in
   `README.md`.

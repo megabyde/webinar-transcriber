@@ -269,6 +269,9 @@ def _run_asr_pipeline(
         )
     transcription = reconcile_decoded_windows(decoded_windows)
     ctx.item_counts["transcript_segments"] = len(transcription.segments)
+    # Persist finished transcription work before diarization, which can run for minutes; the
+    # diarized transcript overwrites this file with speaker labels below
+    write_json(layout.transcript_path, transcription.to_json())
 
     if diarizer is not None:
         # Native model setup and segmentation block the display. Start with "analyzing audio" so a
