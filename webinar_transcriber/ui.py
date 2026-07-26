@@ -133,6 +133,15 @@ class StageReporter:
         self._stop_active_progress()
         self._clear_active()
 
+    def failed_run(self, input_path: Path, message: str) -> None:
+        """Render one failed input so a batch can continue past it."""
+        self.reset_active_display()
+        self._console.print(f"[red]✗[/] {input_path.name} - {message}")
+
+    def batch_summary(self, *, succeeded: int, failed: int) -> None:
+        """Render the tally across a multi-input run."""
+        self._console.print(f"\n[bold]{succeeded} succeeded, {failed} failed[/]")
+
     def complete_run(self, artifacts: ProcessArtifacts) -> None:
         """Render the completion summary panel."""
         table = Table.grid(padding=(0, 2))

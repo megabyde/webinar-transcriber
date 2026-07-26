@@ -129,6 +129,14 @@ class AsrProcessingError(RuntimeError):
     """Raised when the whisper.cpp ASR adapter cannot prepare or run."""
 
 
+class AsrConfigurationError(AsrProcessingError):
+    """Raised when the ASR model itself cannot be resolved or loaded.
+
+    Separate from a decode failure because it depends on the model and host rather than on the
+    input, so every input in a batch would hit it identically.
+    """
+
+
 class WhisperCppTranscriber:
     """ASR implementation using pywhispercpp."""
 
@@ -187,7 +195,7 @@ class WhisperCppTranscriber:
         """Resolve the model and initialize one pywhispercpp model instance.
 
         Raises:
-            AsrProcessingError: If model resolution or model creation fails.
+            AsrConfigurationError: If model resolution or model creation fails.
         """
         self._model_name = self._resolve_model_name()
         self.close()
@@ -206,11 +214,11 @@ class WhisperCppTranscriber:
             with _redirect_native_output(self._log_path), _disable_tqdm_progress():
                 model = _model_cls()(self._model_name, **model_kwargs)
         except Exception as ex:
-            raise AsrProcessingError(_model_prepare_error_message(self._model_name)) from ex
+            raise AsrConfigurationError(_model_prepare_error_message(self._model_name)) from ex
         # pywhispercpp leaves Model._ctx as None when native initialization fails without raising.
         # Only a present None means failure; an absent attribute may be a future API change.
         if getattr(model, "_ctx", "missing") is None:
-            raise AsrProcessingError(_model_prepare_error_message(self._model_name))
+            raise AsrConfigurationError(_model_prepare_error_message(self._model_name))
         self._model = model
 
     def transcribe_inference_windows(
@@ -286,7 +294,7 @@ class WhisperCppTranscriber:
         if self._model is None:
             self.prepare_model()
         if self._model is None:
-            raise AsrProcessingError(
+            raise AsrConfigurationError(
                 "pywhispercpp model was not initialized during model preparation."
             )
         return self._model
@@ -296,7 +304,7 @@ class WhisperCppTranscriber:
             return self._model_name
         configured_model_path = Path(self._model_name).expanduser()
         if not configured_model_path.exists():
-            raise AsrProcessingError(_missing_model_error_message(configured_model_path))
+            raise AsrConfigurationError(_missing_model_error_message(configured_model_path))
         return str(configured_model_path)
 
     def _transcribe_window(

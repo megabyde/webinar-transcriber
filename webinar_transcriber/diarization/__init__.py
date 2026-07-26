@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from webinar_transcriber.diarization.sherpa_diarizer import (
     DIARIZATION_MODEL,
+    DiarizationConfigurationError,
     DiarizationProcessingError,
     SherpaOnnxDiarizer,
 )
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "DIARIZATION_MODEL",
+    "DiarizationConfigurationError",
     "DiarizationProcessingError",
     "SherpaOnnxDiarizer",
     "assign_speakers",

@@ -74,6 +74,9 @@ maintaining a copy here, and avoid adding deep nesting.
 - Every accepted input contains a decodable audio stream. A usable video stream is optional and adds
   scene detection and representative frames.
 - Successful default CLI runs write the report artifact set described in `README.md`.
+- One failing input does not abort a batch. Per-input errors are reported and the run continues,
+  with a tally and exit code `1` at the end. Configuration errors that would fail every input, and
+  Ctrl-C, still stop immediately.
 - `--diarize` runs locally and adds `diarization.json` plus speaker fields on transcript segments.
 - Successful runs write `diagnostics.json`; failed runs also write it once the run directory exists,
   though early failures can still leave only partial intermediate artifacts and no final report
