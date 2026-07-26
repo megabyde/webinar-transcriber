@@ -24,7 +24,6 @@ from webinar_transcriber.models import (
     ReportDocument,
     Scene,
     SpeechRegion,
-    TranscriptionResult,
     TranscriptSegment,
     VideoAsset,
 )
@@ -120,7 +119,6 @@ def process_artifacts(input_path: Path, run_dir: Path) -> ProcessArtifacts:
     return ProcessArtifacts(
         layout=RunLayout(run_dir=run_dir),
         media_asset=VideoAsset(path=str(input_path), duration_sec=1.0),
-        transcription=TranscriptionResult(detected_language="en"),
         report=ReportDocument(
             title="Demo", source_file=str(input_path), media_type=MediaType.VIDEO
         ),
