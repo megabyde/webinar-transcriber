@@ -153,6 +153,11 @@ class WhisperCppTranscriber:
         return self._model_name
 
     @property
+    def language(self) -> str | None:
+        """Return the forced language hint, or None when detection is automatic."""
+        return self._language
+
+    @property
     def device_name(self) -> str:
         """Return the detected runtime backend name."""
         if (system_info := self.system_info) is None:

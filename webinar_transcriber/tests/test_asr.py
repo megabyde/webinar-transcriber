@@ -349,6 +349,16 @@ class TestWhisperCppTranscriber:
         assert decoded_windows[1].input_prompt == expected_prompt
         assert fake_model.transcribe_calls[1][1].get("initial_prompt") == expected_prompt
 
+    @pytest.mark.parametrize(
+        ("configured", "expected"),
+        [(None, None), ("  ru  ", "ru")],
+        ids=["auto-detect", "forced"],
+    )
+    def test_language_property_reports_the_forced_hint(
+        self, configured: str | None, expected: str | None
+    ) -> None:
+        assert WhisperCppTranscriber(threads=4, language=configured).language == expected
+
     def test_transcribe_inference_windows_uses_forced_language(self, fake_model: FakeModel) -> None:
         fake_model.detected_language = "ru"
 

@@ -7,6 +7,8 @@ from dataclasses import field as dataclass_field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 
+from webinar_transcriber import __version__
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -232,6 +234,16 @@ ReportStatus = Literal["applied", "fallback"]
 
 
 @dataclass(slots=True, frozen=True)
+class RunConfig:
+    """CLI-selected options that shaped one processing run."""
+
+    language: str | None = None
+    diarize_speakers: int | None = None
+    keep_audio: bool = False
+    llm: bool = False
+
+
+@dataclass(slots=True, frozen=True)
 class AsrPipelineDiagnostics:
     """Collected ASR diagnostics state for one processing run."""
 
@@ -267,9 +279,11 @@ class LlmDiagnostics:
 class Diagnostics:
     """Execution metadata recorded for a processing run."""
 
+    version: str = __version__
     status: Literal["succeeded", "failed"] = "succeeded"
     failed_stage: str | None = None
     error: str | None = None
+    config: RunConfig | None = None
     llm: LlmDiagnostics | None = None
     stage_durations_sec: dict[str, float] = dataclass_field(default_factory=dict)
     item_counts: dict[str, int] = dataclass_field(default_factory=dict)

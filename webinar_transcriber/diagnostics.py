@@ -30,6 +30,7 @@ def write_run_diagnostics(
         status=status,
         failed_stage=failed_stage,
         error=error,
+        config=ctx.config,
         llm=ctx.llm,
         stage_durations_sec={key: round(value, 6) for key, value in ctx.stage_timings.items()},
         item_counts=dict(ctx.item_counts),

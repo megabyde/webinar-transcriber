@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 from rich.console import Console
 
+from webinar_transcriber import __version__
 from webinar_transcriber.asr import WhisperCppTranscriber, plan_inference_windows
 from webinar_transcriber.diagnostics import write_run_diagnostics
 from webinar_transcriber.diarization import DiarizationProcessingError
@@ -22,6 +23,7 @@ from webinar_transcriber.llm import (
 from webinar_transcriber.models import (
     InferenceWindow,
     ReportDocument,
+    RunConfig,
     Scene,
     SpeakerTurn,
     SpeechRegion,
@@ -206,6 +208,32 @@ class TestProcessInput:
         assert vad_finished[0].startswith("1 region | RTF ")
         assert ("start", "transcribe", 1.0, "0 segments") in reporter.progress
         assert ("advance", "transcribe", 1.0, "2 segments") in reporter.progress
+
+    def test_diagnostics_record_the_tool_version_and_run_configuration(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        install_pipeline_runtime(monkeypatch, runtime=audio_runtime())
+
+        artifacts = process_input(
+            FIXTURE_DIR / "sample-audio.mp3",
+            output_dir=tmp_path / "configured-run",
+            keep_audio=True,
+            diarizer=FakeDiarizer([SpeakerTurn(start_sec=0.0, end_sec=6.0, speaker="S1")]),
+            diarization_speaker_count=2,
+            llm_processor=fake_llm_processor(
+                section_result=LlmSectionPolishResult(section_tldrs={}, section_transcripts={})
+            ),
+        )
+
+        diagnostics_payload = read_json(artifacts.layout.diagnostics_path)
+
+        assert diagnostics_payload["version"] == __version__
+        assert diagnostics_payload["config"] == {
+            "language": None,
+            "diarize_speakers": 2,
+            "keep_audio": True,
+            "llm": True,
+        }
 
     def test_transcript_is_persisted_before_diarization_can_fail(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -699,7 +727,7 @@ class TestProcessorSupport:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         layout = RunLayout(run_dir=tmp_path)
-        ctx = RunContext(reporter=silent_reporter())
+        ctx = RunContext(reporter=silent_reporter(), config=RunConfig())
 
         def fail_write_text(self, *args, **kwargs):
             del self, args, kwargs
@@ -718,7 +746,7 @@ class TestProcessorSupport:
 
     def test_stage_records_timing_on_failure_without_finish_event(self) -> None:
         reporter = RecordingStageReporter()
-        ctx = RunContext(reporter=reporter)
+        ctx = RunContext(reporter=reporter, config=RunConfig())
 
         with pytest.raises(RuntimeError, match="boom"), ctx.stage("probe_media", "Probing media"):
             raise RuntimeError("boom")
@@ -729,7 +757,7 @@ class TestProcessorSupport:
         assert reporter.finished == []
 
     def test_successful_stage_does_not_set_failed_stage(self) -> None:
-        ctx = RunContext(reporter=RecordingStageReporter())
+        ctx = RunContext(reporter=RecordingStageReporter(), config=RunConfig())
 
         with ctx.stage("probe_media", "Probing media"):
             pass
