@@ -20,6 +20,7 @@ from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
     DiarizationDiagnostics,
     LlmDiagnostics,
+    RunConfig,
     VideoAsset,
     average_duration_sec,
 )
@@ -67,6 +68,7 @@ class RunContext:
     """Mutable state and recorded diagnostics for one processing run."""
 
     reporter: StageReporter
+    config: RunConfig
     stage_timings: dict[str, float] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     failed_stage: str | None = None
@@ -112,7 +114,15 @@ def process_input(
     Returns:
         ProcessArtifacts: The completed processing artifacts.
     """
-    ctx = RunContext(reporter=reporter)
+    ctx = RunContext(
+        reporter=reporter,
+        config=RunConfig(
+            language=transcriber.language,
+            diarize_speakers=diarization_speaker_count,
+            keep_audio=keep_audio,
+            llm=llm_processor is not None,
+        ),
+    )
 
     with transcriber as active_transcriber:
         layout = create_run_layout(input_path=input_path, output_dir=output_dir)

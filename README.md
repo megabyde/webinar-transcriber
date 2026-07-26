@@ -263,7 +263,8 @@ runs/<timestamp>_<basename>/
 ├─ report.md
 ├─ report.docx
 ├─ report.json               # final report in markdown, docx, and json
-├─ diagnostics.json          # stage timings, counts, warnings, ASR and optional LLM info
+├─ diagnostics.json          # tool version, run options, stage timings, counts, warnings,
+│                            # ASR and optional LLM info
 ├─ asr/
 │  ├─ speech_regions.json    # VAD ranges
 │  └─ decoded_windows.json   # per-window decode output

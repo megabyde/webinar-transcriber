@@ -77,7 +77,8 @@ maintaining a copy here, and avoid adding deep nesting.
 - `--diarize` runs locally and adds `diarization.json` plus speaker fields on transcript segments.
 - Successful runs write `diagnostics.json`; failed runs also write it once the run directory exists,
   though early failures can still leave only partial intermediate artifacts and no final report
-  outputs.
+  outputs. It carries the tool version and the run options that shaped the output, so a run
+  directory stays interpretable without the invoking shell history.
 - `transcript.json` is written after reconciliation and rewritten after diarization. Diarization can
   run for minutes, so finished transcription work must be persisted before it starts.
 - Temporary WAV audio extracted for transcription should stay outside the run directory;

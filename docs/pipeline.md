@@ -80,6 +80,8 @@ with an LLM. For installation and typical usage, see [README.md](../README.md).
 1. Write final artifacts and diagnostics.
    - `report.md`, `report.docx`, `report.json`, `transcript.json`, and `diagnostics.json` are
      written at the end of a successful run.
+   - `diagnostics.json` records the tool version and the run options that shaped the output, so a
+     run directory can be interpreted and compared long after the run.
    - Failed runs still try to write `diagnostics.json` once the run directory exists, including the
      failed stage, warnings, timings, and any partial artifacts already produced.
 
