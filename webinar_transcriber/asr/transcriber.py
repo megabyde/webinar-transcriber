@@ -17,6 +17,7 @@ import numpy as np
 from webinar_transcriber._env import TQDM_DISABLE_ENV, temporary_environment_variable
 from webinar_transcriber.asr.carryover import build_prompt_carryover
 from webinar_transcriber.asr.config import (
+    CARRYOVER_MAX_GAP_SEC,
     WHISPER_CPP_MODEL_EXAMPLE,
     WHISPER_CPP_MODEL_FILENAME,
     WHISPER_ENTROPY_THOLD,
@@ -230,10 +231,14 @@ class WhisperCppTranscriber:
         decoded_windows: list[DecodedWindow] = []
         decoded_segment_count = 0
         previous_region_index: int | None = None
+        previous_window_end_sec = 0.0
 
         for window_index, window in enumerate(ordered_windows, start=1):
-            if forced_language is None and previous_region_index != window.region_index:
-                language_hint = None
+            if previous_region_index != window.region_index:
+                if forced_language is None:
+                    language_hint = None
+                if window.start_sec - previous_window_end_sec > CARRYOVER_MAX_GAP_SEC:
+                    carryover_prompt = ""
             decoded_window = self._transcribe_window(
                 model,
                 audio_samples,
@@ -248,6 +253,7 @@ class WhisperCppTranscriber:
             if forced_language is None:
                 language_hint = decoded_window.detected_language
             previous_region_index = window.region_index
+            previous_window_end_sec = window.end_sec
             carryover_prompt = next_carryover
             if progress_callback is not None:
                 progress_callback(window_index, decoded_segment_count)

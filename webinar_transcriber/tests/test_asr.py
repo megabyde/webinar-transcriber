@@ -318,6 +318,37 @@ class TestWhisperCppTranscriber:
         assert fake_model.transcribe_calls[2][1] == {"language": "en"}
         assert fake_model.transcribe_calls[3][1] == {"language": "en"}
 
+    @pytest.mark.parametrize(
+        ("next_region_start_sec", "expected_prompt"),
+        [
+            pytest.param(2.5, "agenda review", id="sub-second-vad-split-keeps-prompt"),
+            pytest.param(6.0, None, id="real-silence-drops-prompt"),
+        ],
+    )
+    def test_prompt_carryover_survives_only_short_gaps_between_speech_regions(
+        self, fake_model: FakeModel, next_region_start_sec: float, expected_prompt: str | None
+    ) -> None:
+        fake_model.returned_segments = [
+            [FakeSegment(0, 100, "agenda review")],
+            [FakeSegment(0, 100, "unrelated closing remarks")],
+        ]
+
+        decoded_windows = WhisperCppTranscriber(threads=4).transcribe_inference_windows(
+            np.zeros(160_000, dtype=np.float32),
+            [
+                InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=1.0),
+                InferenceWindow(
+                    id="window-2",
+                    region_index=1,
+                    start_sec=next_region_start_sec,
+                    end_sec=next_region_start_sec + 1.0,
+                ),
+            ],
+        )
+
+        assert decoded_windows[1].input_prompt == expected_prompt
+        assert fake_model.transcribe_calls[1][1].get("initial_prompt") == expected_prompt
+
     def test_transcribe_inference_windows_uses_forced_language(self, fake_model: FakeModel) -> None:
         fake_model.detected_language = "ru"
 
