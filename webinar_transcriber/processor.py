@@ -58,7 +58,6 @@ class ProcessArtifacts:
 
     layout: RunLayout
     media_asset: MediaAsset
-    transcription: TranscriptionResult
     report: ReportDocument
     diagnostics: Diagnostics
 
@@ -180,7 +179,6 @@ def process_input(
             artifacts = ProcessArtifacts(
                 layout=layout,
                 media_asset=media_asset,
-                transcription=transcription,
                 report=report,
                 diagnostics=diagnostics,
             )
