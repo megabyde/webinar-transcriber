@@ -151,7 +151,7 @@ class TestDocxReport:
 
         write_docx_report(report, output_path)
 
-        # A missing image is skipped silently; the DOCX is still written.
+        # A missing image is skipped silently; the DOCX is still written
         assert output_path.exists()
 
     def test_embeds_section_image(self, tmp_path: Path) -> None:

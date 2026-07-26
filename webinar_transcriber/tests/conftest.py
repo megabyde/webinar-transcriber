@@ -172,7 +172,7 @@ class FakeSherpaModule:
         self.detectors: list[FakeSherpaVoiceActivityDetector] = []
 
     def VadModelConfig(self) -> SimpleNamespace:  # noqa: N802
-        # Production sets every config field it reads; only window_size needs a fake value.
+        # Production sets every config field it reads; only window_size needs a fake value
         return SimpleNamespace(silero_vad=SimpleNamespace(window_size=self._window_size))
 
     def VoiceActivityDetector(  # noqa: N802
@@ -217,7 +217,7 @@ class FakeTranscriber(WhisperCppTranscriber):
         self._detected_language = detected_language
         self.windows_seen: list[InferenceWindow] = []
         # window_segments gives distinct segments per decode window; segments repeats one list for
-        # every window (the common case).
+        # every window (the common case)
         self._window_segments = window_segments
         self._segments = segments or [
             TranscriptSegment(

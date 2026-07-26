@@ -514,7 +514,7 @@ class TestWhisperCppTranscriber:
 
 class TestPromptCarryover:
     def test_build_prompt_carryover_uses_bounded_suffix(self) -> None:
-        # 310 chars; the 300-char cut lands on the separator space, which is stripped.
+        # 310 chars; the 300-char cut lands on the separator space, which is stripped
         carryover = build_prompt_carryover(
             DecodedWindow(
                 window=InferenceWindow(id="window-2", region_index=0, start_sec=18.5, end_sec=35.0),
@@ -526,7 +526,7 @@ class TestPromptCarryover:
         assert carryover == "z" * 299
 
     def test_build_prompt_carryover_keeps_suffix_without_sentence_boundary(self) -> None:
-        # 310 chars in one token; the cut keeps the partial-word suffix.
+        # 310 chars in one token; the cut keeps the partial-word suffix
         carryover = build_prompt_carryover(
             DecodedWindow(
                 window=InferenceWindow(id="window-2", region_index=0, start_sec=18.5, end_sec=35.0),

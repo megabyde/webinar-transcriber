@@ -320,7 +320,7 @@ class WhisperCppTranscriber:
         detected_language = language_hint
         if detected_language is None:
             try:
-                # pywhispercpp returns (("ru", 0.99), {"ru": 0.99, ...}).
+                # pywhispercpp returns (("ru", 0.99), {"ru": 0.99, ...})
                 detected_language = model.auto_detect_language(
                     window_samples, n_threads=self._threads
                 )[0][0]

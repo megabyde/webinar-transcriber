@@ -70,7 +70,7 @@ class TestDetectScenes:
 
         assert len(scenes) >= 2
         assert scenes[0].start_sec == 0.0
-        # Detection returns time bounds only; frames are captured separately.
+        # Detection returns time bounds only; frames are captured separately
         assert all(scene.image_path is None for scene in scenes)
         assert progress_updates
         assert progress_updates[-1][1] == len(scenes)
@@ -183,7 +183,7 @@ class TestSaveSceneFrames:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         # Frames cover 0.0-0.9s, but the probed duration stretches the lone scene to 2.0s, so its
-        # 1.0s midpoint sits past the last frame and the capture falls back to the final frame.
+        # 1.0s midpoint sits past the last frame and the capture falls back to the final frame
         video_path = tmp_path / "blank.mp4"
         _write_synthetic_video(video_path, [0] * 10)
         _patch_scene_detection(monkeypatch, scan_fps=10.0, min_scene_length_sec=0.1)
