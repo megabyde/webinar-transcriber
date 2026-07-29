@@ -222,6 +222,10 @@ ignore = [
     "D1",
     # Public CLI, protocol, and orchestration APIs intentionally take structured inputs.
     "PLR0913",
+    # Click and pytest manage these signatures; keyword-only markers add no clarity.
+    "PLR0917",
+    # Long collection strings use implicit concatenation without extra parentheses.
+    "ISC004",
 ]
 
 [tool.ruff.lint.flake8-tidy-imports]
