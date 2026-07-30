@@ -40,6 +40,9 @@ For the stage sequence and its intermediate artifacts, see
 
 ## Install
 
+Choose one base install path. Use PyPI for normal use, a GitHub tag for a fixed release, or the
+checkout when developing this repository. Add LLM or CUDA support only when needed.
+
 ### Prerequisites
 
 - [Python 3.12+](https://www.python.org/downloads/) and
@@ -83,7 +86,7 @@ To remove the installed tool:
 uv tool uninstall webinar-transcriber
 ```
 
-### Cloud LLM extra
+### Optional: Cloud LLM extra
 
 Provider-backed report refinement (`--llm`, see [Cloud LLM](#cloud-llm)) needs the OpenAI and
 Anthropic SDKs, which the base install omits. Append the `llm` extra to the package spec in
@@ -98,7 +101,7 @@ uv tool install --reinstall ".[llm]"                     # from a checkout
 For a GitHub release, append the extra in the direct-reference form:
 `"webinar-transcriber[llm] @ git+https://github.com/megabyde/webinar-transcriber.git@v1.3.0"`.
 
-### NVIDIA CUDA
+### Optional: NVIDIA CUDA
 
 > [!CAUTION]
 > CUDA installs rebuild `pywhispercpp` locally and depend on the host CUDA toolkit. Use the standard
@@ -122,12 +125,40 @@ If the build fails, see
 For a CUDA-enabled development checkout, see
 [Development](https://github.com/megabyde/webinar-transcriber/blob/main/docs/development.md).
 
+### Verify the installation
+
+Run both commands after completing the selected install path:
+
+```console
+$ webinar-transcriber --version
+webinar-transcriber, version X.Y.Z
+$ webinar-transcriber --help
+Usage: webinar-transcriber [OPTIONS] INPUT_PATHS...
+```
+
+Installation is complete when both commands exit successfully and `--help` lists the input argument
+and CLI options.
+
 ## Usage
 
 ### Quick start
 
-By default, each input gets a fresh run directory under `runs/`. Multiple inputs are processed
-sequentially. `--output-dir` is allowed only with one input.
+To produce the first report, start with one local media file that contains a decodable audio stream:
+
+```bash
+webinar-transcriber INPUT
+```
+
+Replace `INPUT` with the media path. On the first transcription run, `pywhispercpp` downloads the
+default `large-v3-turbo` model. A successful run prints its output path and writes `report.md`,
+`report.docx`, `report.json`, `transcript.json`, and `diagnostics.json` in a fresh directory under
+`runs/`.
+
+To process a batch, pass all inputs to one command. Inputs run sequentially:
+
+```bash
+webinar-transcriber INPUT1 INPUT2 INPUT3
+```
 
 A failing input does not stop the batch: the CLI reports it, moves on to the next file, prints a
 `N succeeded, M failed` tally at the end, and exits `1` if anything failed. Ctrl-C still abandons
@@ -142,9 +173,10 @@ adds scene detection and representative frames.
 > Use a fresh `--output-dir` for reproducible comparisons. Existing output directories are refused,
 > not overwritten.
 
+Use `--keep-audio` to retain compressed transcription audio, or `--output-dir` to name the run
+directory for a single input:
+
 ```bash
-webinar-transcriber INPUT
-webinar-transcriber INPUT1 INPUT2 INPUT3
 webinar-transcriber INPUT --keep-audio
 webinar-transcriber INPUT --output-dir runs/custom-demo
 ```
@@ -174,16 +206,19 @@ The CLI does not pin a default model name for either provider; pass any model th
 
 ```bash
 OPENAI_API_KEY=... \
-    OPENAI_MODEL=<openai-model> \
+    OPENAI_MODEL="<openai-model>" \
     webinar-transcriber INPUT --llm
 ```
 
 ```bash
 LLM_PROVIDER=anthropic \
     ANTHROPIC_API_KEY=... \
-    ANTHROPIC_MODEL=<anthropic-model> \
+    ANTHROPIC_MODEL="<anthropic-model>" \
     webinar-transcriber INPUT --llm
 ```
+
+The LLM step is complete when `report.md`, `report.docx`, and `report.json` exist in the run
+directory. If refinement falls back to local content, `diagnostics.json` records the warning.
 
 For missing environment variables, missing extras, or unsupported provider names, see
 [Troubleshooting](https://github.com/megabyde/webinar-transcriber/blob/main/docs/troubleshooting.md).
@@ -211,6 +246,9 @@ first appearance in the timeline: `S1`, `S2`, and so on (one label per turn, eve
 several paragraphs). JSON artifacts include a `speaker` field on transcript segments and a separate
 `diarization.json` file with raw speaker turns. If labels look wrong, see
 [Poor diarization labels](https://github.com/megabyde/webinar-transcriber/blob/main/docs/troubleshooting.md#poor-diarization-labels).
+
+Diarization is complete when the run directory contains `diarization.json` and transcript segments
+in `transcript.json` include `speaker` fields.
 
 ## Advanced Usage
 

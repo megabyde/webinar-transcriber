@@ -5,6 +5,11 @@ directory exists, failures write `diagnostics.json` with the failed stage when t
 inside a named stage, and transcription failures leave the native `whisper-cpp.log` in the run
 directory.
 
+Find the heading that matches the error, apply its fix, then run the corrected
+`webinar-transcriber INPUT ...` command. Recovery is complete when the command reaches report export
+and writes `report.md`, `report.docx`, and `report.json`. If it fails again after creating a run
+directory, inspect `diagnostics.json` first and `whisper-cpp.log` for transcription failures.
+
 ## `Could not open … with PyAV` / `No audio stream found`
 
 The input could not be decoded, or it has no audio stream to transcribe. Confirm that the file plays
@@ -12,11 +17,17 @@ in a media player and uses a container PyAV can decode, such as `.mp4`, `.mkv`, 
 `.mp3`, `.wav`, or `.m4a`. Re-mux or re-encode a corrupt, video-only, or unsupported container with
 `ffmpeg` before transcribing.
 
+Verify the replacement file by running `webinar-transcriber INPUT`. The fix worked when media
+probing succeeds and the run advances to transcription.
+
 ## `Missing required LLM environment variables`
 
 `--llm` was passed without the required provider environment variables. Set `OPENAI_API_KEY` and
 `OPENAI_MODEL` for OpenAI, or set `LLM_PROVIDER=anthropic` plus `ANTHROPIC_API_KEY` and
 `ANTHROPIC_MODEL` for Anthropic.
+
+Re-run `webinar-transcriber INPUT --llm` with all required variables set in the same shell. The fix
+worked when processing starts instead of stopping before the first input.
 
 ## `requires the 'llm' extra`
 
@@ -28,16 +39,32 @@ uv tool install --reinstall "webinar-transcriber[llm]"
 
 From a checkout, use `uv tool install --reinstall ".[llm]"` instead.
 
+With the provider environment variables set, run `webinar-transcriber INPUT --llm`. The fix worked
+when the command starts without the missing-extra error.
+
 ## `Unsupported LLM provider`
 
 `LLM_PROVIDER` is set to a value other than `openai` or `anthropic`. Unset it to use OpenAI, or set
 it to `anthropic`.
 
+Re-run `webinar-transcriber INPUT --llm` after correcting `LLM_PROVIDER`. The fix worked when
+provider validation passes and processing starts.
+
 ## `Output directory already exists`
 
-The CLI refuses to overwrite existing run directories. Pass a new `--output-dir`, remove the
-existing directory, or omit `--output-dir` so the CLI creates a fresh timestamped directory under
-`runs/`.
+The CLI refuses to overwrite existing run directories.
+
+> [!CAUTION]
+> Do not remove the existing directory until any artifacts you need are copied elsewhere.
+
+The safe default is a new path:
+
+```bash
+webinar-transcriber INPUT --output-dir runs/new-run
+```
+
+Alternatively, omit `--output-dir` so the CLI creates a fresh timestamped directory under `runs/`.
+The fix worked when the command creates the new directory and begins media processing.
 
 ## `Could not prepare whisper.cpp model`
 
@@ -45,18 +72,38 @@ existing directory, or omit `--output-dir` so the CLI creates a fresh timestampe
 such as `large-v3-turbo` or `large-v3`, or that a local path points to a valid GGML file. The native
 `whisper-cpp.log` inside the run directory has the underlying error.
 
+Re-run `webinar-transcriber INPUT --asr-model large-v3-turbo`, or pass the corrected local GGML
+path. The fix worked when model preparation completes and transcription starts.
+
 ## Wrong language detected
 
 Whisper can detect the wrong language for short, multilingual, or noisy audio. Pass
 `--language CODE`, for example `--language en` or `--language ru`, to force the language hint.
+
+Run `webinar-transcriber INPUT --language CODE` with the intended language code. Check
+`transcript.json` in the new run directory; the fix worked when the transcript uses the intended
+language.
 
 ## Poor diarization labels
 
 `--diarize-speakers COUNT` forces an exact speaker count. If the count is wrong, labels degrade.
 Omit the flag to let `sherpa-onnx` estimate the count, or pass the correct count.
 
+Run `webinar-transcriber INPUT --diarize` without a count first. Check `diarization.json` and the
+speaker fields in `transcript.json`; keep an explicit count only when it improves those labels.
+
 ## CUDA install fails
 
 The CUDA install rebuilds `pywhispercpp` from source and needs `nvcc` on `PATH` and `CUDA_HOME` set.
 If you do not need NVIDIA acceleration, use the standard `uv tool install --reinstall .`; it pulls
 prebuilt wheels and skips the C/C++/CUDA toolchain.
+
+If CUDA is required, verify both prerequisites before retrying the install:
+
+```bash
+nvcc --version
+printf '%s\n' "$CUDA_HOME"
+```
+
+The first command must print the CUDA compiler version; the second must print the toolkit path. Only
+then rerun the CUDA install command from the README.
