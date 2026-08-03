@@ -20,6 +20,7 @@ from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
     DiarizationDiagnostics,
     LlmDiagnostics,
+    LlmRerunDiagnostics,
     RunConfig,
     VideoAsset,
     average_duration_sec,
@@ -68,7 +69,7 @@ class RunContext:
     """Mutable state and recorded diagnostics for one processing run."""
 
     reporter: StageReporter
-    config: RunConfig
+    config: RunConfig | None
     stage_timings: dict[str, float] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     failed_stage: str | None = None
@@ -76,6 +77,7 @@ class RunContext:
     asr_pipeline: AsrPipelineDiagnostics | None = None
     diarization: DiarizationDiagnostics | None = None
     llm: LlmDiagnostics | None = None
+    llm_rerun: LlmRerunDiagnostics | None = None
 
     def record_warning(self, message: str) -> None:
         """Record and report one run warning."""
@@ -358,10 +360,12 @@ def _run_report_phase(
     report = build_report(media_asset, coalesced_transcription, scenes=scenes)
 
     if llm_processor is not None:
-        report = _polish_report(report, llm_processor=llm_processor, ctx=ctx)
+        with ctx.stage("write_local_report", "Writing local report"):
+            write_json_report(report, layout.local_json_report_path)
+        report = polish_report(report, llm_processor=llm_processor, ctx=ctx)
     ctx.item_counts["report_sections"] = len(report.sections)
 
-    _export_report(report, layout=layout, ctx=ctx)
+    export_report(report, layout=layout, ctx=ctx)
     return report
 
 
@@ -407,7 +411,7 @@ def _detect_video_scenes(
     return scenes
 
 
-def _export_report(report: ReportDocument, *, layout: RunLayout, ctx: RunContext) -> None:
+def export_report(report: ReportDocument, *, layout: RunLayout, ctx: RunContext) -> None:
     """Write the Markdown, DOCX, and JSON artifacts for the report."""
     with ctx.stage("export", "Writing artifacts") as st:
         write_markdown_report(report, layout.markdown_report_path)
@@ -416,7 +420,7 @@ def _export_report(report: ReportDocument, *, layout: RunLayout, ctx: RunContext
         st.update(detail="report.md | report.docx | report.json")
 
 
-def _polish_report(
+def polish_report(
     report: ReportDocument,
     *,
     llm_processor: InstructorLLMProcessor,
@@ -444,7 +448,13 @@ def _polish_report(
             )
         except LlmProcessingError as ex:
             return _record_llm_fallback(
-                report, ex, ctx=ctx, st=st, runtime_detail=runtime_detail, model_name=model_name
+                report,
+                ex,
+                ctx=ctx,
+                st=st,
+                runtime_detail=runtime_detail,
+                provider_name=provider_name,
+                model_name=model_name,
             )
         section_elapsed_sec = st.elapsed_sec()
         st.update(detail=format_count(section_count, "section"))
@@ -465,6 +475,7 @@ def _polish_report(
                 ctx=ctx,
                 st=st,
                 runtime_detail=runtime_detail,
+                provider_name=provider_name,
                 model_name=model_name,
                 prior_elapsed_sec=section_elapsed_sec,
                 response_metadata=section_result.response_metadata,
@@ -489,6 +500,7 @@ def _polish_report(
         ],
     )
     ctx.llm = LlmDiagnostics(
+        provider=provider_name,
         model=model_name,
         report_status="applied",
         report_latency_sec=section_elapsed_sec + metadata_elapsed_sec,
@@ -507,6 +519,7 @@ def _record_llm_fallback(
     ctx: RunContext,
     st: StageHandle,
     runtime_detail: str,
+    provider_name: str,
     model_name: str,
     prior_elapsed_sec: float = 0.0,
     response_metadata: list[dict[str, object]] | None = None,
@@ -519,6 +532,7 @@ def _record_llm_fallback(
     ctx.record_warning(str(ex))
     st.update(detail=join_detail(runtime_detail, "fallback"))
     ctx.llm = LlmDiagnostics(
+        provider=provider_name,
         model=model_name,
         report_status="fallback",
         report_latency_sec=prior_elapsed_sec + st.elapsed_sec(),
@@ -541,5 +555,7 @@ def _metadata_detail(metadata_result: LlmReportMetadataResult) -> str:
 __all__ = [
     "ProcessArtifacts",
     "RunContext",
+    "export_report",
+    "polish_report",
     "process_input",
 ]

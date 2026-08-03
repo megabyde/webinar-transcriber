@@ -166,6 +166,7 @@ class TestProcessInput:
         assert artifacts.layout.markdown_report_path.exists()
         assert artifacts.layout.docx_report_path.stat().st_size > 0
         assert artifacts.layout.json_report_path.exists()
+        assert not artifacts.layout.local_json_report_path.exists()
         assert artifacts.layout.speech_regions_path.exists()
         assert artifacts.layout.decoded_windows_path.exists()
         assert not artifacts.layout.transcription_audio_path.exists()
@@ -811,6 +812,7 @@ class TestProcessInputLlm:
         assert artifacts.diagnostics.warnings == [EXPECTED_LLM_WARNING]
         assert reporter.warnings == [EXPECTED_LLM_WARNING]
         assert artifacts.diagnostics.llm is not None
+        assert artifacts.diagnostics.llm.provider == "openai"
         assert artifacts.diagnostics.llm.model == "test-llm-model"
         assert artifacts.diagnostics.llm.report_status == "applied"
         assert artifacts.diagnostics.llm.response_metadata == [
@@ -819,7 +821,16 @@ class TestProcessInputLlm:
         assert "llm_report_sections" in artifacts.diagnostics.stage_durations_sec
         assert "llm_report_metadata" in artifacts.diagnostics.stage_durations_sec
 
+        local_report_payload = read_json(artifacts.layout.local_json_report_path)
+        assert local_report_payload["summary"] == []
+        assert local_report_payload["action_items"] == []
+        assert local_report_payload["sections"][0]["transcript_text"] == (
+            "Agenda review and project status update.\n\nNext step please send the draft by Friday."
+        )
+        assert local_report_payload["sections"][0]["title"] != "Refined Section Title"
+
         diagnostics_payload = read_json(artifacts.layout.diagnostics_path)
+        assert diagnostics_payload["llm"]["provider"] == "openai"
         assert diagnostics_payload["llm"]["response_metadata"] == [
             {"stage": "section_polish", "section_id": "section-1", "finish_reason": "stop"}
         ]

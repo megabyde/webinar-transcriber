@@ -70,9 +70,12 @@ with an LLM. For installation and typical usage, see [README.md](../README.md).
 1. Build report sections locally.
    - Video reports are primarily organized by detected scene boundaries.
    - Audio-only reports use transcript timing and gaps to produce deterministic sections.
-   - The local report is written even when `--llm` is not used.
+   - Without `--llm`, this deterministic report becomes the final report.
 1. Optionally polish the report with an [LLM].
    - `--llm` runs after the deterministic local report exists.
+   - Before contacting the provider, the pipeline writes the deterministic report to
+     `report.local.json` so the same input can be polished again without repeating local media
+     processing.
    - The LLM can polish section transcript text and refine summary bullets, action items, section
      titles, and section TL;DRs.
    - If an LLM step fails, diagnostics and warnings record the fallback and the local report content
@@ -84,6 +87,14 @@ with an LLM. For installation and typical usage, see [README.md](../README.md).
      run directory can be interpreted and compared long after the run.
    - Failed runs still try to write `diagnostics.json` once the run directory exists, including the
      failed stage, warnings, timings, and any partial artifacts already produced.
+
+An LLM-only rerun follows a shorter branch from the persisted report to LLM polishing and report
+export. It writes a timestamped variant under the source run's `llm/` directory, preserving the
+source artifacts. The `llm_rerun` diagnostics object identifies the exact source report by path,
+SHA-256 hash, and tool version even when the rerun fails before the provider responds. Successful
+provider work is recorded separately under `llm`. An earlier run without LLM refinement can use its
+final `report.json`; an older polished run or rerun variant has no trustworthy pre-LLM snapshot and
+is rejected.
 
 [asr]: https://en.wikipedia.org/wiki/Speech_recognition
 [diarization]: https://en.wikipedia.org/wiki/Speaker_diarisation

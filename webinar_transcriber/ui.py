@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from time import perf_counter
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
 
+    from webinar_transcriber.llm.rerun import LlmRerunArtifacts
     from webinar_transcriber.processor import ProcessArtifacts
 
 
@@ -80,6 +82,10 @@ class StageReporter:
     def begin_run(self, input_path: Path) -> None:
         """Render the start of a processing run."""
         self._console.print(f"[bold cyan]Starting[/] {input_path.name}")
+
+    def begin_llm_rerun(self, run_dir: Path) -> None:
+        """Render the start of an LLM-only report rerun."""
+        self._console.print(f"[bold cyan]Rerunning LLM[/] {run_dir}")
 
     @contextmanager
     def track(
@@ -154,6 +160,26 @@ class StageReporter:
         table.add_row("Language", Text(artifacts.report.detected_language or "unknown"))
         table.add_row("Sections", Text(str(len(artifacts.report.sections))))
         table.add_row("Processing", Text(_processing_detail(artifacts)))
+        table.add_row("Warnings", warning_text)
+        self._console.print()
+        self._console.print(
+            Panel.fit(table, title="[bold green]Completed[/]", border_style="green")
+        )
+
+    def complete_llm_rerun(self, artifacts: LlmRerunArtifacts) -> None:
+        """Render the completion summary for an LLM-only report rerun."""
+        table = Table.grid(padding=(0, 2))
+        table.add_column(style="dim")
+        table.add_column()
+        warning_count = len(artifacts.diagnostics.warnings)
+        warning_text = Text(str(warning_count), style="yellow" if warning_count else "green")
+        table.add_row(
+            "Output directory", Text(os.path.relpath(artifacts.layout.run_dir), style="cyan")
+        )
+        table.add_row(
+            "Source report", Text(os.path.relpath(artifacts.source_report_path), style="cyan")
+        )
+        table.add_row("Sections", Text(str(len(artifacts.report.sections))))
         table.add_row("Warnings", warning_text)
         self._console.print()
         self._console.print(

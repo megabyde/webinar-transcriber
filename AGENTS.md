@@ -82,6 +82,12 @@ maintaining a copy here, and avoid adding deep nesting.
   though early failures can still leave only partial intermediate artifacts and no final report
   outputs. It carries the tool version and the run options that shaped the output, so a run
   directory stays interpretable without the invoking shell history.
+- `--llm` writes the deterministic pre-LLM report to `report.local.json`. `--rerun-llm RUN_DIR`
+  reads that snapshot and writes a timestamped report variant under `RUN_DIR/llm/` without changing
+  source artifacts. Earlier non-LLM runs may use `report.json`; older LLM-polished runs and rerun
+  variants are rejected because they have no trustworthy deterministic input. Variant diagnostics
+  record the source-run path, source-report path and hash, and source version under `llm_rerun`,
+  independently of provider progress.
 - `transcript.json` is written after reconciliation and rewritten after diarization. Diarization can
   run for minutes, so finished transcription work must be persisted before it starts.
 - Temporary WAV audio extracted for transcription should stay outside the run directory;

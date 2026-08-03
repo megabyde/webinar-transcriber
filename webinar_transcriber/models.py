@@ -266,9 +266,20 @@ class DiarizationDiagnostics:
 
 
 @dataclass(slots=True, frozen=True)
+class LlmRerunDiagnostics:
+    """Source provenance for an LLM-only report rerun."""
+
+    source_run: str
+    source_report: str
+    source_report_sha256: str
+    source_version: str
+
+
+@dataclass(slots=True, frozen=True)
 class LlmDiagnostics:
     """Collected LLM diagnostics for one LLM-enabled processing run."""
 
+    provider: str
     model: str
     report_status: ReportStatus
     report_latency_sec: float
@@ -285,6 +296,7 @@ class Diagnostics:
     error: str | None = None
     config: RunConfig | None = None
     llm: LlmDiagnostics | None = None
+    llm_rerun: LlmRerunDiagnostics | None = None
     stage_durations_sec: dict[str, float] = dataclass_field(default_factory=dict)
     item_counts: dict[str, int] = dataclass_field(default_factory=dict)
     asr_pipeline: AsrPipelineDiagnostics | None = None

@@ -64,3 +64,4 @@ class TestRunLayout:
 
         assert layout.run_dir.exists()
         assert layout.json_report_path == output_dir / "report.json"
+        assert layout.local_json_report_path == output_dir / "report.local.json"

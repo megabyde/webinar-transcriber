@@ -18,6 +18,14 @@ class TestStageReporter:
 
         assert console.export_text() == "Starting demo.wav\n"
 
+    def test_begin_llm_rerun_prints_source_run(self) -> None:
+        console = Console(record=True, width=100)
+        reporter = StageReporter(console=console)
+
+        reporter.begin_llm_rerun(Path("runs/example"))
+
+        assert console.export_text() == "Rerunning LLM runs/example\n"
+
     def test_complete_run_renders_completion_panel(self) -> None:
         console = Console(record=True, width=100)
         reporter = StageReporter(console=console)
@@ -49,6 +57,33 @@ class TestStageReporter:
         assert "10s | RTF 5x" in output
         assert "Warnings" in output
         assert "1" in output
+
+    def test_complete_llm_rerun_renders_relative_output_and_source(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        console = Console(record=True, width=100)
+        reporter = StageReporter(console=console)
+        artifacts = SimpleNamespace(
+            layout=SimpleNamespace(run_dir=tmp_path / "runs/example/llm/variant"),
+            source_report_path=tmp_path / "runs/example/report.local.json",
+            report=SimpleNamespace(sections=[object(), object()]),
+            diagnostics=SimpleNamespace(warnings=[]),
+        )
+
+        # SimpleNamespace duck-types the LlmRerunArtifacts attributes this renderer reads
+        reporter.complete_llm_rerun(artifacts)  # type: ignore
+
+        output = console.export_text()
+        assert "Completed" in output
+        assert "Output directory" in output
+        assert "runs/example/llm/variant" in output
+        assert "Source report" in output
+        assert "runs/example/report.local.json" in output
+        assert "Sections" in output
+        assert "2" in output
+        assert "Warnings" in output
+        assert "0" in output
 
     def test_track_indeterminate_records_elapsed_time(
         self, monkeypatch: pytest.MonkeyPatch
