@@ -32,6 +32,7 @@ LLM_EXTRA_INSTALL_RE = r'uv tool install --reinstall "\.\[llm\]"'
 
 class FakeInstructorModule:
     class Mode:
+        RESPONSES_TOOLS = "responses_tools"
         TOOLS = "tools"
 
     def __init__(self, client: object) -> None:
@@ -52,9 +53,18 @@ class TestBuildLlmProcessorFromEnv:
             "provider_name",
             "provider_module",
             "provider_model",
+            "provider_mode",
         ),
         [
-            (None, "OPENAI_API_KEY", "OPENAI_MODEL", "openai", "openai", "openai/gpt-test"),
+            (
+                None,
+                "OPENAI_API_KEY",
+                "OPENAI_MODEL",
+                "openai",
+                "openai",
+                "openai/gpt-test",
+                FakeInstructorModule.Mode.RESPONSES_TOOLS,
+            ),
             (
                 "anthropic",
                 "ANTHROPIC_API_KEY",
@@ -62,6 +72,7 @@ class TestBuildLlmProcessorFromEnv:
                 "anthropic",
                 "anthropic",
                 "anthropic/claude-test",
+                FakeInstructorModule.Mode.TOOLS,
             ),
         ],
     )
@@ -74,6 +85,7 @@ class TestBuildLlmProcessorFromEnv:
         provider_name: str,
         provider_module: str,
         provider_model: str,
+        provider_mode: str,
     ) -> None:
         fake_instructor = FakeInstructorModule(object())
         if provider_env is None:
@@ -93,7 +105,7 @@ class TestBuildLlmProcessorFromEnv:
         assert processor.provider_name == provider_name
         assert processor.model_name == provider_model.rsplit("/", 1)[1]
         assert fake_instructor.calls == [
-            (provider_model, {"api_key": "test-key", "mode": FakeInstructorModule.Mode.TOOLS})
+            (provider_model, {"api_key": "test-key", "mode": provider_mode})
         ]
 
     def test_requires_api_key_and_model(self, monkeypatch) -> None:

@@ -202,18 +202,21 @@ Configure the provider with environment variables:
 - `OPENAI_API_KEY` / `OPENAI_MODEL`: API key and model identifier for the OpenAI provider.
 - `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL`: API key and model identifier for the Anthropic provider.
 
-The CLI does not pin a default model name for either provider; pass any model the provider supports.
+The CLI does not pin a default model name. For this transcript-polishing workload, start with
+`gpt-5.6-terra` on OpenAI or `claude-sonnet-5` on Anthropic. For lower-cost, high-volume runs,
+evaluate `gpt-5.6-luna` or `claude-haiku-4-5` against the same report before switching. Set the
+model explicitly so each run records the exact choice.
 
 ```bash
 OPENAI_API_KEY=... \
-    OPENAI_MODEL="<openai-model>" \
+    OPENAI_MODEL="gpt-5.6-terra" \
     webinar-transcriber INPUT --llm
 ```
 
 ```bash
 LLM_PROVIDER=anthropic \
     ANTHROPIC_API_KEY=... \
-    ANTHROPIC_MODEL="<anthropic-model>" \
+    ANTHROPIC_MODEL="claude-sonnet-5" \
     webinar-transcriber INPUT --llm
 ```
 
