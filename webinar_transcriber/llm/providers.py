@@ -83,10 +83,11 @@ def build_llm_processor_from_env(*, threads: int) -> InstructorLLMProcessor:
     instructor: Any = _required_llm_module("instructor", provider_label=spec.label)
     _required_llm_module(provider_name, provider_label=spec.label)
     model_name, api_key = required_provider_env(provider_name)
+    mode = instructor.Mode.RESPONSES_TOOLS if provider_name == "openai" else instructor.Mode.TOOLS
 
     return InstructorLLMProcessor(
         client=instructor.from_provider(
-            f"{provider_name}/{model_name}", api_key=api_key, mode=instructor.Mode.TOOLS
+            f"{provider_name}/{model_name}", api_key=api_key, mode=mode
         ),
         provider_name=provider_name,
         model_name=model_name,
