@@ -133,7 +133,7 @@ Run both commands after completing the selected install path:
 $ webinar-transcriber --version
 webinar-transcriber, version X.Y.Z
 $ webinar-transcriber --help
-Usage: webinar-transcriber [OPTIONS] INPUT_PATHS...
+Usage: webinar-transcriber [OPTIONS] [INPUT_PATHS]...
 ```
 
 Installation is complete when both commands exit successfully and `--help` lists the input argument
@@ -220,11 +220,33 @@ LLM_PROVIDER=anthropic \
     webinar-transcriber INPUT --llm
 ```
 
-The LLM step is complete when `report.md`, `report.docx`, and `report.json` exist in the run
-directory. If refinement falls back to local content, `diagnostics.json` records the warning.
+The LLM step is complete when `report.local.json`, `report.md`, `report.docx`, and `report.json`
+exist in the run directory. `report.local.json` preserves the deterministic input to the LLM. If
+refinement falls back to local content, `diagnostics.json` records the warning.
 
 For missing environment variables, missing extras, or unsupported provider names, see
 [Troubleshooting](https://github.com/megabyde/webinar-transcriber/blob/main/docs/troubleshooting.md).
+
+#### Rerun only the LLM step
+
+To try a different provider or model without transcribing the media again, point `--rerun-llm` at a
+successfully completed run:
+
+```bash
+OPENAI_API_KEY=... \
+    OPENAI_MODEL="<openai-model>" \
+    webinar-transcriber --rerun-llm runs/<timestamp>_<basename>
+```
+
+The command reads `report.local.json`, runs only LLM refinement and report export, and writes a new
+variant under `RUN_DIR/llm/<timestamp>/`. It never overwrites the source run. Each variant contains
+`report.md`, `report.docx`, `report.json`, and `diagnostics.json`; `llm_rerun` diagnostics record
+the source report hash and version, while `llm` records the current provider and model when
+available.
+
+Earlier runs created without `--llm` can use their final `report.json` as the deterministic source.
+Older runs already polished by an LLM cannot be rerun safely because they have no
+`report.local.json`; rerun variants are also rejected to avoid polishing LLM output twice.
 
 ### Speaker diarization
 
@@ -309,6 +331,7 @@ runs/<timestamp>_<basename>/
 ├─ report.md
 ├─ report.docx
 ├─ report.json               # final report in markdown, docx, and json
+├─ report.local.json         # deterministic pre-LLM report; --llm only
 ├─ diagnostics.json          # tool version, run options, stage timings, counts, warnings,
 │                            # ASR and optional LLM info
 ├─ asr/
@@ -317,6 +340,11 @@ runs/<timestamp>_<basename>/
 ├─ diarization.json          # anonymous speaker turns; --diarize only
 ├─ scenes.json               # scene boundaries; video only
 ├─ frames/                   # representative frames; video only
+├─ llm/<timestamp>/          # --rerun-llm variants
+│  ├─ report.md
+│  ├─ report.docx
+│  ├─ report.json
+│  └─ diagnostics.json       # llm_rerun source provenance and current provider/model
 └─ transcription-audio.mp3   # normalized audio copy; --keep-audio only
 ```
 

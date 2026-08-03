@@ -24,6 +24,11 @@ from webinar_transcriber.llm import (
     LlmProcessingError,
     build_llm_processor_from_env,
 )
+from webinar_transcriber.llm.rerun import (
+    LlmRerunError,
+    load_llm_rerun_source,
+    rerun_llm_report,
+)
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.processor import process_input
@@ -57,8 +62,15 @@ INPUT_ERRORS = (
 @click.argument(
     "input_paths",
     nargs=-1,
-    required=True,
+    required=False,
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+@click.option(
+    "--rerun-llm",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=None,
+    metavar="RUN_DIR",
+    help="Regenerate LLM-polished reports from a completed run.",
 )
 @click.option(
     "--output-dir",
@@ -88,7 +100,10 @@ INPUT_ERRORS = (
     metavar="INTEGER",
     default=default_asr_threads(),
     show_default=True,
-    help="Number of local audio-processing threads. Defaults to the host CPU count, capped at 8.",
+    help=(
+        "Number of local processing and concurrent LLM threads. "
+        "Defaults to the host CPU count, capped at 8."
+    ),
 )
 @click.option("--keep-audio", is_flag=True, help="Keep normalized transcription audio as mp3.")
 @click.option("--llm", is_flag=True, help="Enable optional provider-backed report enhancement.")
@@ -107,6 +122,7 @@ INPUT_ERRORS = (
 )
 def main(
     input_paths: tuple[Path, ...],
+    rerun_llm: Path | None,
     output_dir: Path | None,
     asr_model: str | None,
     language: str | None,
@@ -116,13 +132,20 @@ def main(
     diarize: bool,
     diarize_speakers: int | None,
 ) -> None:
-    """Transcribe one or more audio or video input files."""
-    if output_dir is not None and len(input_paths) > 1:
-        raise CLIError("--output-dir can only be used with one input file.")
-    if diarize_speakers is not None and not diarize:
-        raise CLIError("--diarize-speakers requires --diarize.")
+    """Transcribe media inputs or regenerate a completed run's LLM reports."""
+    _validate_cli_args(
+        input_paths,
+        rerun_llm=rerun_llm,
+        output_dir=output_dir,
+        diarize=diarize,
+        diarize_speakers=diarize_speakers,
+    )
 
     reporter = StageReporter()
+
+    if rerun_llm is not None:
+        _run_llm_rerun(rerun_llm, threads=threads, reporter=reporter)
+        return
 
     # A provider misconfiguration would fail every input identically, so it aborts before any run
     try:
@@ -166,3 +189,40 @@ def main(
                 succeeded=len(input_paths) - len(failed_paths), failed=len(failed_paths)
             )
         raise click.exceptions.Exit(1)
+
+
+def _validate_cli_args(
+    input_paths: tuple[Path, ...],
+    *,
+    rerun_llm: Path | None,
+    output_dir: Path | None,
+    diarize: bool,
+    diarize_speakers: int | None,
+) -> None:
+    if not input_paths and rerun_llm is None:
+        raise CLIError("Provide at least one input file or --rerun-llm RUN_DIR.")
+    if rerun_llm is not None:
+        if input_paths:
+            raise CLIError("--rerun-llm cannot be used with input files.")
+        if output_dir is not None:
+            raise CLIError("--rerun-llm cannot be used with --output-dir.")
+        return
+    if output_dir is not None and len(input_paths) > 1:
+        raise CLIError("--output-dir can only be used with one input file.")
+    if diarize_speakers is not None and not diarize:
+        raise CLIError("--diarize-speakers requires --diarize.")
+
+
+def _run_llm_rerun(run_dir: Path, *, threads: int, reporter: StageReporter) -> None:
+    try:
+        source = load_llm_rerun_source(run_dir)
+        llm_processor = build_llm_processor_from_env(threads=threads)
+        rerun_llm_report(source, llm_processor=llm_processor, reporter=reporter)
+    except LlmConfigurationError as ex:
+        raise CLIError(str(ex)) from ex
+    except LlmRerunError as ex:
+        reporter.reset_active_display()
+        raise CLIError(str(ex)) from ex
+    except KeyboardInterrupt:
+        reporter.interrupted()
+        raise click.exceptions.Exit(130) from None

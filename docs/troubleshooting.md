@@ -50,6 +50,31 @@ it to `anthropic`.
 Re-run `webinar-transcriber INPUT --llm` after correcting `LLM_PROVIDER`. The fix worked when
 provider validation passes and processing starts.
 
+## `Older LLM-polished runs cannot be rerun`
+
+The source run used an LLM but predates `report.local.json`, so its `report.json` already contains
+LLM output. Rerunning from that artifact would polish generated text a second time. Keep the
+existing reports, or transcribe the original media again with `--llm` to create a reusable local
+snapshot.
+
+The replacement run is reusable when `report.local.json` exists. Pass that run directory to
+`webinar-transcriber --rerun-llm RUN_DIR`; the new report variant appears under `RUN_DIR/llm/`.
+
+## `The selected run directory is an LLM rerun variant`
+
+The selected directory is already under a source run's `llm/` directory. Its report contains LLM
+output, so using it as another source would polish generated text twice. Pass the original run
+directory shown by `llm_rerun.source_run` in the variant's `diagnostics.json`.
+
+## `LLM rerun requires a successfully completed source run`
+
+The selected directory has a failed or incomplete `diagnostics.json`. LLM-only reruns do not resume
+partial media processing. Fix the original failure and complete a new transcription run, then pass
+that successful run directory to `--rerun-llm`.
+
+The source is ready when its `diagnostics.json` has `"status": "succeeded"` and its final report
+artifacts exist.
+
 ## `Output directory already exists`
 
 The CLI refuses to overwrite existing run directories.

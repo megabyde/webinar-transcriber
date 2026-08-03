@@ -16,6 +16,7 @@ from webinar_transcriber.asr import (
 from webinar_transcriber.cli import main
 from webinar_transcriber.diarization import DiarizationConfigurationError
 from webinar_transcriber.llm import LlmConfigurationError, LlmProcessingError
+from webinar_transcriber.llm.rerun import LlmRerunError
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
 from webinar_transcriber.tests.conftest import process_artifacts
@@ -28,7 +29,9 @@ class TestCli:
         result = runner.invoke(main, ["--help"])
 
         assert result.exit_code == 0
-        assert "Transcribe one or more audio or video input files." in result.output
+        assert "Transcribe media inputs or regenerate a completed run's LLM reports." in (
+            result.output
+        )
 
     def test_main_version_prints_package_version(self) -> None:
         runner = CliRunner()
@@ -191,6 +194,7 @@ class TestCli:
         assert "--keep-audio" in result.output
         assert "Keep normalized transcription audio as mp3" in result.output
         assert "--llm" in result.output
+        assert "--rerun-llm" in result.output
         assert "--diarize / --no-diarize" in result.output
         assert "--diarize-speakers" in result.output
         assert "Override the whisper.cpp model identifier" in result.output
@@ -199,6 +203,121 @@ class TestCli:
         assert "model path" in result.output
         assert "provider-backed report" in result.output
         assert "enhancement." in result.output
+
+    def test_requires_input_or_llm_rerun(self) -> None:
+        result = CliRunner().invoke(main)
+
+        assert result.exit_code != 0
+        assert "Provide at least one input file or --rerun-llm RUN_DIR" in result.output
+
+    def test_reruns_llm_without_starting_media_pipeline(self, tmp_path) -> None:
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+        source = object()
+        llm_processor = object()
+
+        with (
+            patch(
+                "webinar_transcriber.cli.load_llm_rerun_source", return_value=source
+            ) as load_source_mock,
+            patch(
+                "webinar_transcriber.cli.build_llm_processor_from_env",
+                return_value=llm_processor,
+            ) as build_llm_processor_mock,
+            patch("webinar_transcriber.cli.rerun_llm_report") as rerun_mock,
+            patch("webinar_transcriber.cli.process_input") as process_input_mock,
+        ):
+            result = CliRunner().invoke(
+                main,
+                [
+                    "--rerun-llm",
+                    str(run_dir),
+                    "--threads",
+                    "3",
+                    "--asr-model",
+                    "unused.bin",
+                    "--language",
+                    "ru",
+                    "--keep-audio",
+                    "--llm",
+                    "--diarize-speakers",
+                    "2",
+                ],
+            )
+
+        assert result.exit_code == 0
+        load_source_mock.assert_called_once_with(run_dir)
+        build_llm_processor_mock.assert_called_once_with(threads=3)
+        rerun_mock.assert_called_once_with(source, llm_processor=llm_processor, reporter=ANY)
+        process_input_mock.assert_not_called()
+
+    def test_rejects_llm_rerun_with_input(self, tmp_path) -> None:
+        input_path = tmp_path / "demo.wav"
+        input_path.write_text("stub", encoding="utf-8")
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+
+        result = CliRunner().invoke(main, [str(input_path), "--rerun-llm", str(run_dir)])
+
+        assert result.exit_code != 0
+        assert "--rerun-llm cannot be used with input files" in result.output
+
+    def test_rejects_llm_rerun_with_output_directory(self, tmp_path) -> None:
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+
+        result = CliRunner().invoke(
+            main, ["--rerun-llm", str(run_dir), "--output-dir", str(tmp_path / "output")]
+        )
+
+        assert result.exit_code != 0
+        assert "--rerun-llm cannot be used with --output-dir" in result.output
+
+    def test_reports_llm_configuration_error_during_rerun(self, tmp_path) -> None:
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+
+        with (
+            patch("webinar_transcriber.cli.load_llm_rerun_source", return_value=object()),
+            patch(
+                "webinar_transcriber.cli.build_llm_processor_from_env",
+                side_effect=LlmConfigurationError("missing LLM config"),
+            ),
+        ):
+            result = CliRunner().invoke(main, ["--rerun-llm", str(run_dir)])
+
+        assert result.exit_code != 0
+        assert "missing LLM config" in result.output
+
+    def test_reports_invalid_llm_rerun_source(self, tmp_path) -> None:
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+
+        with (
+            patch(
+                "webinar_transcriber.cli.load_llm_rerun_source",
+                side_effect=LlmRerunError("unsafe source run"),
+            ),
+            patch("webinar_transcriber.cli.build_llm_processor_from_env") as build_mock,
+        ):
+            result = CliRunner().invoke(main, ["--rerun-llm", str(run_dir)])
+
+        assert result.exit_code != 0
+        assert "unsafe source run" in result.output
+        build_mock.assert_not_called()
+
+    def test_handles_ctrl_c_during_llm_rerun(self, tmp_path) -> None:
+        run_dir = tmp_path / "run"
+        run_dir.mkdir()
+
+        with (
+            patch("webinar_transcriber.cli.load_llm_rerun_source", return_value=object()),
+            patch("webinar_transcriber.cli.build_llm_processor_from_env", return_value=object()),
+            patch("webinar_transcriber.cli.rerun_llm_report", side_effect=KeyboardInterrupt),
+        ):
+            result = CliRunner().invoke(main, ["--rerun-llm", str(run_dir)])
+
+        assert result.exit_code == 130
 
     def test_rejects_invalid_thread_count(self, tmp_path) -> None:
         runner = CliRunner()

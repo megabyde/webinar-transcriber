@@ -32,6 +32,7 @@ def write_run_diagnostics(
         error=error,
         config=ctx.config,
         llm=ctx.llm,
+        llm_rerun=ctx.llm_rerun,
         stage_durations_sec={key: round(value, 6) for key, value in ctx.stage_timings.items()},
         item_counts=dict(ctx.item_counts),
         asr_pipeline=ctx.asr_pipeline,

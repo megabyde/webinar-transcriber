@@ -70,6 +70,10 @@ class RunLayout:
         return self.run_dir / "report.json"
 
     @property
+    def local_json_report_path(self) -> Path:
+        return self.run_dir / "report.local.json"
+
+    @property
     def transcription_audio_path(self) -> Path:
         return self.run_dir / "transcription-audio.mp3"
 
