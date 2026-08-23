@@ -118,7 +118,7 @@ INPUT_ERRORS = (
     type=click.IntRange(min=1, max=20),
     default=None,
     metavar="COUNT",
-    help="Known exact speaker count to use for diarization. Omit for auto-clustering.",
+    help="Known speaker count; surplus speakers are folded in. Omit for auto-clustering.",
 )
 def main(
     input_paths: tuple[Path, ...],
