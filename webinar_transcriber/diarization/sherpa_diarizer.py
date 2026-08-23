@@ -20,6 +20,8 @@ from webinar_transcriber.normalized_audio import load_normalized_audio
 
 CLUSTER_THRESHOLD = 1.2
 MIN_DURATION_ON_SEC = 0.5
+# A speaker whose longest turn never reaches an utterance is a boundary artifact, not a voice
+MIN_SPEAKER_TURN_SEC = 4 * MIN_DURATION_ON_SEC
 MIN_DURATION_OFF_SEC = 1.5
 DIARIZATION_MODEL = "pyannote-segmentation-3.0-fp32+nemo-titanet-small"
 # Poll often enough to detect a child that exits without a terminal message
@@ -176,6 +178,7 @@ class SherpaOnnxDiarizer:
             process.join()
             raise
         process.join()
+        turns = drop_spurious_speakers(turns)
         if self._speaker_count is not None:
             turns = reconcile_speaker_count(turns, self._speaker_count)
         return normalize_speaker_labels(turns)
@@ -220,7 +223,34 @@ def reconcile_speaker_count(turns: list[SpeakerTurn], speaker_count: int) -> lis
         return turns
 
     ranked = sorted(speaking_time, key=lambda speaker: (-speaking_time[speaker], speaker))
-    retained = set(ranked[:speaker_count])
+    return _fold_into(turns, set(ranked[:speaker_count]))
+
+
+def drop_spurious_speakers(turns: list[SpeakerTurn]) -> list[SpeakerTurn]:
+    """Fold speakers who never hold the floor for a whole utterance into their neighbours.
+
+    Clustering at the tuned threshold strands momentary boundary artifacts as their own speaker: on
+    a 2.2h two-presenter recording it reported a third speaker holding 3.2s across turns of 0.9s,
+    0.6s, and 1.7s. Judging on the longest turn rather than on total speech keeps a real participant
+    who only asks one question, whose single utterance runs far longer than any artifact.
+
+    A recording where nobody reaches an utterance is left alone. The rule separates voices from
+    artifacts by how long they hold the floor, so when no one does it has no signal to separate
+    them on, and folding everyone into an arbitrary survivor would merge real speakers.
+    """
+    longest_turn: dict[str, float] = {}
+    for turn in turns:
+        longest_turn[turn.speaker] = max(longest_turn.get(turn.speaker, 0.0), turn.duration_sec)
+
+    retained = {
+        speaker for speaker, longest in longest_turn.items() if longest >= MIN_SPEAKER_TURN_SEC
+    }
+    if not retained or len(retained) == len(longest_turn):
+        return turns
+    return _fold_into(turns, retained)
+
+
+def _fold_into(turns: list[SpeakerTurn], retained: set[str]) -> list[SpeakerTurn]:
     anchors = [turn for turn in turns if turn.speaker in retained]
     return [
         turn if turn.speaker in retained else replace(turn, speaker=_nearest_speaker(turn, anchors))
