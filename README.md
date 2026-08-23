@@ -257,9 +257,11 @@ webinar-transcriber INPUT --diarize
 webinar-transcriber INPUT --diarize --diarize-speakers 4
 ```
 
-> [!WARNING]
-> Pass `--diarize-speakers` only when the exact speaker count is known. A wrong count can force poor
-> speaker labels. Omit the option to let Sherpa estimate the count.
+> [!NOTE]
+> `--diarize-speakers` is applied after clustering: clustering always runs at the tuned distance
+> threshold, and any surplus speakers are folded into the nearest remaining one, shortest speaking
+> time first. It can only reduce the speaker count, never raise it, so a count higher than the
+> estimate has no effect. Omit the option to let sherpa-onnx estimate the count.
 
 Diarization runs locally through `sherpa-onnx` and does not use an API key. The first diarized run
 downloads the segmentation and speaker-embedding models into

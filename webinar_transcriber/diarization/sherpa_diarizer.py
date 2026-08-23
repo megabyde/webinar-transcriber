@@ -118,7 +118,7 @@ class SherpaOnnxDiarizer:
         self._cache_dir = cache_dir or default_cache_dir()
         self._threads = threads
         self._model_paths: DiarizationModelPaths | None = None
-        self._num_clusters: int | None = None
+        self._speaker_count: int | None = None
 
     @property
     def system_info(self) -> str | None:
@@ -129,13 +129,19 @@ class SherpaOnnxDiarizer:
             return None
 
     def prepare(self, *, speaker_count: int | None) -> None:
-        """Resolve diarization models; the native diarizer is built in the subprocess."""
+        """Resolve diarization models; the native diarizer is built in the subprocess.
+
+        A known speaker count is applied after clustering rather than handed to sherpa-onnx, which
+        ignores ``threshold`` whenever ``num_clusters`` is set. Cutting the dendrogram at the human
+        speaker count discards the tuned ``CLUSTER_THRESHOLD`` and strands non-speech clusters,
+        which merges distinct speakers instead of dropping the noise.
+        """
         if load_sherpa_onnx() is None:
             raise DiarizationConfigurationError(
                 "sherpa-onnx is unavailable for speaker diarization."
             )
         self._model_paths = ensure_default_models(self._cache_dir)
-        self._num_clusters = speaker_count or -1
+        self._speaker_count = speaker_count
 
     def diarize(
         self, wav_path: Path, *, progress_callback: Callable[[int, int], None] | None = None
@@ -147,7 +153,7 @@ class SherpaOnnxDiarizer:
         over a queue; this main thread stays responsive, so the bar animates and a Ctrl-C
         terminates the child.
         """
-        if self._model_paths is None or self._num_clusters is None:
+        if self._model_paths is None:
             raise DiarizationConfigurationError("Diarizer not prepared; call prepare() first.")
 
         context = multiprocessing.get_context("spawn")
@@ -158,7 +164,6 @@ class SherpaOnnxDiarizer:
             kwargs={
                 "segmentation_model": self._model_paths.segmentation_model,
                 "embedding_model": self._model_paths.embedding_model,
-                "num_clusters": self._num_clusters,
                 "threads": self._threads,
                 "wav_path": wav_path,
             },
@@ -171,6 +176,8 @@ class SherpaOnnxDiarizer:
             process.join()
             raise
         process.join()
+        if self._speaker_count is not None:
+            turns = reconcile_speaker_count(turns, self._speaker_count)
         return normalize_speaker_labels(turns)
 
 
@@ -196,6 +203,38 @@ def default_model_paths(cache_dir: Path | None = None) -> DiarizationModelPaths:
         segmentation_model=root / SEGMENTATION_MODEL.directory / SEGMENTATION_MODEL.file_name,
         embedding_model=root / EMBEDDING_MODEL.file_name,
     )
+
+
+def reconcile_speaker_count(turns: list[SpeakerTurn], speaker_count: int) -> list[SpeakerTurn]:
+    """Fold the shortest-speaking speakers into their neighbours until ``speaker_count`` remain.
+
+    Clustering runs at the tuned threshold and can strand short non-speech clusters, so a recording
+    with two speakers may come back with three. Reassigning those turns preserves the threshold's
+    separation of the real speakers, which re-clustering at a fixed count does not. Fewer speakers
+    than asked for are left alone; a cluster that was never found cannot be recovered here.
+    """
+    speaking_time: dict[str, float] = {}
+    for turn in turns:
+        speaking_time[turn.speaker] = speaking_time.get(turn.speaker, 0.0) + turn.duration_sec
+    if len(speaking_time) <= speaker_count:
+        return turns
+
+    ranked = sorted(speaking_time, key=lambda speaker: (-speaking_time[speaker], speaker))
+    retained = set(ranked[:speaker_count])
+    anchors = [turn for turn in turns if turn.speaker in retained]
+    return [
+        turn if turn.speaker in retained else replace(turn, speaker=_nearest_speaker(turn, anchors))
+        for turn in turns
+    ]
+
+
+def _nearest_speaker(turn: SpeakerTurn, anchors: list[SpeakerTurn]) -> str:
+    """Return the speaker of the closest anchor turn, preferring the earlier one on a tie."""
+    return min(anchors, key=lambda anchor: (_gap_sec(turn, anchor), anchor.start_sec)).speaker
+
+
+def _gap_sec(turn: SpeakerTurn, other: SpeakerTurn) -> float:
+    return max(0.0, other.start_sec - turn.end_sec, turn.start_sec - other.end_sec)
 
 
 def normalize_speaker_labels(turns: list[SpeakerTurn]) -> list[SpeakerTurn]:
@@ -250,7 +289,6 @@ def _run_diarization_subprocess(
     *,
     segmentation_model: Path,
     embedding_model: Path,
-    num_clusters: int,
     threads: int,
     wav_path: Path,
 ) -> None:
@@ -271,7 +309,6 @@ def _run_diarization_subprocess(
             paths=DiarizationModelPaths(
                 segmentation_model=segmentation_model, embedding_model=embedding_model
             ),
-            num_clusters=num_clusters,
             threads=threads,
         )
         samples = load_normalized_audio(wav_path)
@@ -290,7 +327,7 @@ def _run_diarization_subprocess(
 
 
 def _build_native_diarizer(
-    sherpa_onnx: ModuleType, *, paths: DiarizationModelPaths, num_clusters: int, threads: int
+    sherpa_onnx: ModuleType, *, paths: DiarizationModelPaths, threads: int
 ) -> _NativeDiarizer:
     config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
         segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
@@ -302,9 +339,7 @@ def _build_native_diarizer(
         embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(
             model=str(paths.embedding_model), num_threads=threads
         ),
-        clustering=sherpa_onnx.FastClusteringConfig(
-            num_clusters=num_clusters, threshold=CLUSTER_THRESHOLD
-        ),
+        clustering=sherpa_onnx.FastClusteringConfig(num_clusters=-1, threshold=CLUSTER_THRESHOLD),
         min_duration_on=MIN_DURATION_ON_SEC,
         min_duration_off=MIN_DURATION_OFF_SEC,
     )

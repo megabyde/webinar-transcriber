@@ -298,11 +298,10 @@ class _FakeContext:
         return self._process
 
 
-def _subprocess_kwargs(tmp_path: Path, *, num_clusters: int = -1, threads: int = 3) -> dict:
+def _subprocess_kwargs(tmp_path: Path, *, threads: int = 3) -> dict:
     return {
         "segmentation_model": tmp_path / "seg.onnx",
         "embedding_model": tmp_path / "emb.onnx",
-        "num_clusters": num_clusters,
         "threads": threads,
         "wav_path": tmp_path / "audio.wav",
     }
@@ -345,7 +344,7 @@ class TestDiarizationSubprocessTarget:
             ),
         ]
 
-    def test_passes_known_speaker_count_as_cluster_count(
+    def test_always_clusters_on_threshold_never_a_fixed_count(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         fake_sherpa = FakeSherpaModule(results=[[FakeSherpaItem(0.0, 1.0, 9)]])
@@ -356,10 +355,10 @@ class TestDiarizationSubprocessTarget:
         queue = _FakeQueue()
 
         sherpa_runtime._run_diarization_subprocess(  # noqa: SLF001
-            queue, **_subprocess_kwargs(tmp_path, num_clusters=2)
+            queue, **_subprocess_kwargs(tmp_path)
         )
 
-        assert fake_sherpa.cluster_counts == [2]
+        assert fake_sherpa.cluster_counts == [-1]
         assert queue.puts[-1] == ("done", [SpeakerTurn(start_sec=0.0, end_sec=1.0, speaker="9")])
 
     def test_reports_missing_sherpa_as_error(
@@ -496,7 +495,30 @@ class TestSherpaOnnxDiarizer:
         assert not process.terminated
         assert context.process_kwargs is not None
         assert context.process_kwargs["wav_path"] == tmp_path / "audio.wav"
-        assert context.process_kwargs["num_clusters"] == -1
+        assert "num_clusters" not in context.process_kwargs
+
+    def test_diarize_applies_a_known_speaker_count_to_the_clustered_turns(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        queue = _FakeQueue(
+            get_script=[
+                (
+                    "done",
+                    [
+                        SpeakerTurn(start_sec=0.0, end_sec=30.0, speaker="0"),
+                        SpeakerTurn(start_sec=30.0, end_sec=31.0, speaker="2"),
+                        SpeakerTurn(start_sec=31.0, end_sec=60.0, speaker="1"),
+                    ],
+                )
+            ]
+        )
+        diarizer, _ = self._prepared_diarizer(
+            monkeypatch, tmp_path, queue=queue, process=_FakeProcess(), speaker_count=2
+        )
+
+        turns = diarizer.diarize(tmp_path / "audio.wav")
+
+        assert [turn.speaker for turn in turns] == ["S1", "S1", "S2"]
 
     def test_diarize_raises_and_terminates_on_subprocess_error(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -729,3 +751,50 @@ class TestModelDownload:
 
         with pytest.raises(DiarizationProcessingError, match="failed verification"):
             sherpa_runtime._ensure_segmentation_model(model_path)  # noqa: SLF001
+
+
+class TestReconcileSpeakerCount:
+    """Applying a known speaker count after clustering rather than during it."""
+
+    def test_folds_a_stray_cluster_into_the_speaker_surrounding_it(self) -> None:
+        turns = [
+            SpeakerTurn(start_sec=0.0, end_sec=60.0, speaker="0"),
+            SpeakerTurn(start_sec=60.0, end_sec=61.0, speaker="2"),
+            SpeakerTurn(start_sec=61.0, end_sec=120.0, speaker="0"),
+            SpeakerTurn(start_sec=120.0, end_sec=170.0, speaker="1"),
+        ]
+
+        reconciled = sherpa_runtime.reconcile_speaker_count(turns, 2)
+
+        assert [turn.speaker for turn in reconciled] == ["0", "0", "0", "1"]
+
+    def test_keeps_the_longest_speaking_speakers(self) -> None:
+        turns = [
+            SpeakerTurn(start_sec=0.0, end_sec=1.0, speaker="quiet"),
+            SpeakerTurn(start_sec=10.0, end_sec=40.0, speaker="loud"),
+            SpeakerTurn(start_sec=40.0, end_sec=60.0, speaker="middle"),
+        ]
+
+        reconciled = sherpa_runtime.reconcile_speaker_count(turns, 2)
+
+        assert {turn.speaker for turn in reconciled} == {"loud", "middle"}
+
+    def test_leaves_turns_untouched_when_clustering_found_no_surplus(self) -> None:
+        turns = [
+            SpeakerTurn(start_sec=0.0, end_sec=1.0, speaker="0"),
+            SpeakerTurn(start_sec=1.0, end_sec=2.0, speaker="1"),
+        ]
+
+        assert sherpa_runtime.reconcile_speaker_count(turns, 3) is turns
+        assert sherpa_runtime.reconcile_speaker_count(turns, 2) is turns
+
+    def test_prefers_the_earlier_anchor_when_two_are_equally_close(self) -> None:
+        turns = [
+            SpeakerTurn(start_sec=0.0, end_sec=10.0, speaker="0"),
+            SpeakerTurn(start_sec=20.0, end_sec=21.0, speaker="2"),
+            SpeakerTurn(start_sec=31.0, end_sec=60.0, speaker="1"),
+        ]
+
+        reconciled = sherpa_runtime.reconcile_speaker_count(turns, 2)
+
+        assert reconciled[1].speaker == "0"
