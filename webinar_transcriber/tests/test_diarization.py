@@ -830,10 +830,16 @@ class TestDropSpuriousSpeakers:
 
         assert sherpa_runtime.drop_spurious_speakers(turns) is turns
 
-    def test_keeps_everything_when_no_speaker_holds_the_floor(self) -> None:
+    def test_keeps_rapid_speakers_apart_when_none_holds_the_floor(self) -> None:
+        """A brisk exchange gives the rule no signal, so folding would merge real voices."""
         turns = [
-            SpeakerTurn(start_sec=0.0, end_sec=1.0, speaker="0"),
-            SpeakerTurn(start_sec=1.0, end_sec=1.5, speaker="1"),
+            SpeakerTurn(start_sec=0.0, end_sec=1.5, speaker="0"),
+            SpeakerTurn(start_sec=1.5, end_sec=3.0, speaker="1"),
+            SpeakerTurn(start_sec=3.0, end_sec=4.5, speaker="0"),
+            SpeakerTurn(start_sec=4.5, end_sec=6.0, speaker="1"),
         ]
 
-        assert sherpa_runtime.drop_spurious_speakers(turns) is turns
+        folded = sherpa_runtime.drop_spurious_speakers(turns)
+
+        assert folded is turns
+        assert {turn.speaker for turn in folded} == {"0", "1"}

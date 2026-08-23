@@ -233,6 +233,10 @@ def drop_spurious_speakers(turns: list[SpeakerTurn]) -> list[SpeakerTurn]:
     a 2.2h two-presenter recording it reported a third speaker holding 3.2s across turns of 0.9s,
     0.6s, and 1.7s. Judging on the longest turn rather than on total speech keeps a real participant
     who only asks one question, whose single utterance runs far longer than any artifact.
+
+    A recording where nobody reaches an utterance is left alone. The rule separates voices from
+    artifacts by how long they hold the floor, so when no one does it has no signal to separate
+    them on, and folding everyone into an arbitrary survivor would merge real speakers.
     """
     longest_turn: dict[str, float] = {}
     for turn in turns:
