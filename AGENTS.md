@@ -78,6 +78,11 @@ maintaining a copy here, and avoid adding deep nesting.
   with a tally and exit code `1` at the end. Configuration errors that would fail every input, and
   Ctrl-C, still stop immediately.
 - `--diarize` runs locally and adds `diarization.json` plus speaker fields on transcript segments.
+  Clustering always runs at `CLUSTER_THRESHOLD`; a requested speaker count never reaches
+  sherpa-onnx, which would ignore that threshold. Speakers whose longest turn stays under
+  `MIN_SPEAKER_TURN_SEC` are folded into the nearest remaining speaker, and `--diarize-speakers`
+  then folds the shortest-speaking surplus, so both the labels and the reported speaker count can be
+  lower than raw clustering produced.
 - Successful runs write `diagnostics.json`; failed runs also write it once the run directory exists,
   though early failures can still leave only partial intermediate artifacts and no final report
   outputs. It carries the tool version and the run options that shaped the output, so a run
