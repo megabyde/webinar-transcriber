@@ -506,8 +506,8 @@ class TestSherpaOnnxDiarizer:
                     "done",
                     [
                         SpeakerTurn(start_sec=0.0, end_sec=30.0, speaker="0"),
-                        SpeakerTurn(start_sec=30.0, end_sec=31.0, speaker="2"),
-                        SpeakerTurn(start_sec=31.0, end_sec=60.0, speaker="1"),
+                        SpeakerTurn(start_sec=30.0, end_sec=40.0, speaker="2"),
+                        SpeakerTurn(start_sec=40.0, end_sec=60.0, speaker="1"),
                     ],
                 )
             ]
@@ -798,3 +798,42 @@ class TestReconcileSpeakerCount:
         reconciled = sherpa_runtime.reconcile_speaker_count(turns, 2)
 
         assert reconciled[1].speaker == "0"
+
+
+class TestDropSpuriousSpeakers:
+    """Speakers that never hold the floor for a whole utterance are boundary artifacts."""
+
+    def test_folds_a_fragment_only_speaker_into_its_neighbour(self) -> None:
+        turns = [
+            SpeakerTurn(start_sec=0.0, end_sec=60.0, speaker="0"),
+            SpeakerTurn(start_sec=60.0, end_sec=61.0, speaker="2"),
+            SpeakerTurn(start_sec=61.0, end_sec=120.0, speaker="0"),
+        ]
+
+        folded = sherpa_runtime.drop_spurious_speakers(turns)
+
+        assert [turn.speaker for turn in folded] == ["0", "0", "0"]
+
+    def test_keeps_a_brief_participant_who_speaks_once(self) -> None:
+        turns = [
+            SpeakerTurn(start_sec=0.0, end_sec=600.0, speaker="0"),
+            SpeakerTurn(start_sec=600.0, end_sec=608.0, speaker="1"),
+        ]
+
+        assert sherpa_runtime.drop_spurious_speakers(turns) is turns
+
+    def test_keeps_every_speaker_when_all_hold_the_floor(self) -> None:
+        turns = [
+            SpeakerTurn(start_sec=0.0, end_sec=30.0, speaker="0"),
+            SpeakerTurn(start_sec=30.0, end_sec=60.0, speaker="1"),
+        ]
+
+        assert sherpa_runtime.drop_spurious_speakers(turns) is turns
+
+    def test_keeps_everything_when_no_speaker_holds_the_floor(self) -> None:
+        turns = [
+            SpeakerTurn(start_sec=0.0, end_sec=1.0, speaker="0"),
+            SpeakerTurn(start_sec=1.0, end_sec=1.5, speaker="1"),
+        ]
+
+        assert sherpa_runtime.drop_spurious_speakers(turns) is turns

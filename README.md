@@ -263,6 +263,10 @@ webinar-transcriber INPUT --diarize --diarize-speakers 4
 > time first. It can only reduce the speaker count, never raise it, so a count higher than the
 > estimate has no effect. Omit the option to let sherpa-onnx estimate the count.
 
+Speakers who never hold the floor for a whole utterance are folded into whoever speaks around them,
+so momentary boundary artifacts do not surface as an extra speaker. A participant who speaks only
+once is kept: the rule looks at the longest single turn, not at total speaking time.
+
 Diarization runs locally through `sherpa-onnx` and does not use an API key. The first diarized run
 downloads the segmentation and speaker-embedding models into
 `~/.cache/webinar-transcriber/diarization`. Set `WEBINAR_DIARIZATION_CACHE_DIR` to override that
