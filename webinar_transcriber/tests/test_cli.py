@@ -29,6 +29,8 @@ class TestCli:
         result = runner.invoke(main, ["--help"])
 
         assert result.exit_code == 0
+        assert "Positional arguments:" in result.output
+        assert "[INPUT_PATHS]...  Media files to transcribe." in result.output
         assert "Transcribe media inputs or regenerate a completed run's LLM reports." in (
             result.output
         )
@@ -46,10 +48,9 @@ class TestCli:
         sys.argv = ["python", "--version"]
 
         try:
-            with CliRunner().isolated_filesystem():
-                with pytest.raises(SystemExit) as ex:
-                    runpy.run_module("webinar_transcriber", run_name="__main__")
-                assert ex.value.code == 0
+            with pytest.raises(SystemExit) as ex:
+                runpy.run_module("webinar_transcriber", run_name="__main__")
+            assert ex.value.code == 0
         finally:
             sys.argv = original_argv
 
