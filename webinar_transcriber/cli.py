@@ -64,6 +64,7 @@ INPUT_ERRORS = (
     nargs=-1,
     required=False,
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Media files to transcribe.",
 )
 @click.option(
     "--rerun-llm",
