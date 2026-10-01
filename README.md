@@ -189,7 +189,7 @@ action items, section titles, and section TL;DRs. Supported providers are `opena
 OpenAI is the default.
 
 This step needs provider SDKs that the base install omits. Install them with the `llm` extra (see
-[Cloud LLM extra](#cloud-llm-extra) under Install).
+[Cloud LLM extra](#optional-cloud-llm-extra) under Install).
 
 > [!IMPORTANT]
 > `--llm` sends report text, section timing metadata, and transcript excerpts to the configured
