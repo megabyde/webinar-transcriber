@@ -738,7 +738,6 @@ class TestProcessorSupport:
                 layout,
                 ctx,
                 status="failed",
-                failed_stage="probe_media",
                 error="boom",
             )
 

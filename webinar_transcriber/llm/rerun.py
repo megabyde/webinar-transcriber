@@ -6,7 +6,6 @@ import hashlib
 import json
 import math
 import os
-from contextlib import suppress
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -71,7 +70,7 @@ def rerun_llm_report(
         ),
     )
     reporter.begin_llm_rerun(source.run_dir)
-    try:
+    with ctx.failure_diagnostics(layout):
         report = polish_report(report, llm_processor=llm_processor, ctx=ctx)
         ctx.item_counts["report_sections"] = len(report.sections)
         export_report(report, layout=layout, ctx=ctx)
@@ -84,16 +83,6 @@ def rerun_llm_report(
         )
         reporter.complete_llm_rerun(artifacts)
         return artifacts
-    except BaseException as ex:
-        with suppress(Exception):
-            write_run_diagnostics(
-                layout,
-                ctx,
-                status="failed",
-                failed_stage=ctx.failed_stage,
-                error="Interrupted by user." if isinstance(ex, KeyboardInterrupt) else str(ex),
-            )
-        raise
 
 
 def load_llm_rerun_source(run_dir: Path) -> LlmRerunSource:

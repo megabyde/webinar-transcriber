@@ -98,6 +98,22 @@ class RunContext:
             finally:
                 self.stage_timings[key] = handle.elapsed_sec()
 
+    @contextmanager
+    def failure_diagnostics(self, layout: RunLayout) -> Generator[None, None, None]:
+        """Write failed-run diagnostics when the wrapped block raises, then re-raise."""
+        try:
+            yield
+        except BaseException as ex:
+            # A diagnostics failure must not mask the original error
+            with suppress(Exception):
+                write_run_diagnostics(
+                    layout,
+                    self,
+                    status="failed",
+                    error="Interrupted by user." if isinstance(ex, KeyboardInterrupt) else str(ex),
+                )
+            raise
+
 
 def process_input(
     input_path: Path,
@@ -130,7 +146,7 @@ def process_input(
         layout = create_run_layout(input_path=input_path, output_dir=output_dir)
         active_transcriber.set_log_path(layout.run_dir / "whisper-cpp.log")
         ctx.reporter.begin_run(input_path)
-        try:
+        with ctx.failure_diagnostics(layout):
             with ctx.stage("probe_media", "Probing media") as st:
                 media_asset = probe_media(input_path)
                 write_json(layout.metadata_path, asdict(media_asset))
@@ -196,17 +212,6 @@ def process_input(
             )
             ctx.reporter.complete_run(artifacts)
             return artifacts
-        except BaseException as ex:
-            # A diagnostics failure must not mask the original error
-            with suppress(Exception):
-                write_run_diagnostics(
-                    layout,
-                    ctx,
-                    status="failed",
-                    failed_stage=ctx.failed_stage,
-                    error="Interrupted by user." if isinstance(ex, KeyboardInterrupt) else str(ex),
-                )
-            raise
 
 
 def _run_asr_pipeline(
@@ -317,8 +322,7 @@ def _run_asr_pipeline(
             model=DIARIZATION_MODEL,
             system_info=diarizer.system_info,
         )
-
-    write_json(layout.transcript_path, transcription.to_json())
+        write_json(layout.transcript_path, transcription.to_json())
 
     ctx.asr_pipeline = AsrPipelineDiagnostics(
         backend=ASR_BACKEND_NAME,

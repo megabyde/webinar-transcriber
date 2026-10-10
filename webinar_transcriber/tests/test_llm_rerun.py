@@ -220,7 +220,7 @@ class TestRerunLlmReport:
         with (
             patch("webinar_transcriber.llm.rerun.polish_report", side_effect=RuntimeError("boom")),
             patch(
-                "webinar_transcriber.llm.rerun.write_run_diagnostics",
+                "webinar_transcriber.processor.write_run_diagnostics",
                 side_effect=OSError("disk full"),
             ),
             pytest.raises(RuntimeError, match="boom"),
