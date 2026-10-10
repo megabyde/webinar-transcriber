@@ -68,14 +68,14 @@ def _llm_processor() -> Mock:
     processor.polish_report_sections.return_value = LlmSectionPolishResult(
         section_tldrs={"section-1": "Polished TL;DR."},
         section_transcripts={"section-1": "Polished transcript."},
-        response_metadata=[{"stage": "section_polish", "finish_reason": "stop"}],
+        response_metadata=[{"stage": "section_polish", "status": "completed"}],
         warnings=["Provider warning."],
     )
     processor.polish_report_metadata.return_value = LlmReportMetadataResult(
         summary=["Polished summary."],
         action_items=["Polished action."],
         section_titles={"section-1": "Polished section"},
-        response_metadata=[{"stage": "metadata_polish", "finish_reason": "stop"}],
+        response_metadata=[{"stage": "metadata_polish", "status": "completed"}],
     )
     return processor
 

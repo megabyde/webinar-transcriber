@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import re
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, TypeVar
 
 from pydantic import BaseModel, Field
@@ -14,7 +12,7 @@ from webinar_transcriber.llm.types import LlmProcessingError
 from webinar_transcriber.text_utils import split_llm_paragraph_blocks
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
     from webinar_transcriber.models import ReportDocument
 
@@ -179,57 +177,25 @@ def _joined_llm_paragraphs(text: str) -> str:
 
 
 def extract_response_metadata(response: object) -> dict[str, object]:
-    """Extract non-sensitive provider response metadata for diagnostics."""
-    metadata: dict[str, object] = {}
-    choice = _first_choice(response)
-    message = getattr(choice, "message", None) if choice is not None else None
+    """Extract the provider's completion status for diagnostics.
 
-    if finish_reason := _text_attr(choice, "finish_reason"):
-        metadata["finish_reason"] = finish_reason
+    OpenAI Responses report ``status`` and ``incomplete_details``; Anthropic Messages report
+    ``stop_reason``. A truncated response can still parse into the schema, so these fields are the
+    only record that the output was cut short.
+    """
+    metadata: dict[str, object] = {}
+    if status := _text_attr(response, "status"):
+        metadata["status"] = status
+    if incomplete_reason := _text_attr(getattr(response, "incomplete_details", None), "reason"):
+        metadata["incomplete_reason"] = incomplete_reason
     if stop_reason := _text_attr(response, "stop_reason"):
         metadata["stop_reason"] = stop_reason
-    refusal = getattr(message, "refusal", None)
-    if refusal:
-        metadata["refusal"] = True
-
-    safety = _json_safe(getattr(choice, "content_filter_results", None))
-    if safety is not None:
-        metadata["safety"] = safety
-    prompt_filter_results = _json_safe(getattr(response, "prompt_filter_results", None))
-    if prompt_filter_results is not None:
-        metadata["prompt_filter_results"] = prompt_filter_results
-
     return metadata
-
-
-def _first_choice(response: object) -> object | None:
-    choices = getattr(response, "choices", None)
-    if isinstance(choices, Sequence) and choices:
-        return choices[0]
-    return None
 
 
 def _text_attr(value: object | None, name: str) -> str | None:
     text = getattr(value, name, None)
     return text if isinstance(text, str) and text else None
-
-
-def _json_safe(value: object) -> object | None:
-    try:
-        return json.loads(json.dumps(value, default=_json_default, ensure_ascii=False))
-    except (TypeError, ValueError):
-        return None
-
-
-def _json_default(value: object) -> object:
-    if callable(model_dump := getattr(value, "model_dump", None)):
-        try:
-            return model_dump(mode="json")
-        except TypeError:
-            return model_dump()
-    if callable(to_dict := getattr(value, "to_dict", None)):
-        return to_dict()
-    return None
 
 
 def schema_label(response_model: type[object]) -> str:

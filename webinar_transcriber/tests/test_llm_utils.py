@@ -1,7 +1,5 @@
 """Tests for pure helpers in webinar_transcriber.llm.utils."""
 
-from types import SimpleNamespace
-
 import pytest
 from pydantic import BaseModel
 
@@ -9,7 +7,6 @@ from webinar_transcriber.llm import LlmProcessingError
 from webinar_transcriber.llm.utils import (
     ReportPolishResponse,
     ReportSectionUpdate,
-    extract_response_metadata,
     normalize_polished_section_text,
     normalize_polished_section_tldr,
     normalize_report_lines,
@@ -123,11 +120,3 @@ class TestLlmNormalization:
         assert schema_label(SectionTextResponse) == "Section polish"
         assert schema_label(ReportPolishResponse) == "Report polish"
         assert schema_label(OtherResponse) == "Structured LLM"
-
-    def test_extract_response_metadata_skips_cycles(self) -> None:
-        filter_results: dict[str, object] = {}
-        filter_results["self"] = filter_results
-        choice = SimpleNamespace(content_filter_results=filter_results)
-        response = SimpleNamespace(choices=[choice])
-
-        assert extract_response_metadata(response) == {}
