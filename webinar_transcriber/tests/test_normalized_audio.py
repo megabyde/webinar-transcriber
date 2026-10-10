@@ -1,5 +1,6 @@
 """Tests for normalized-audio preparation and segmentation."""
 
+import tracemalloc
 import wave
 from pathlib import Path
 from typing import Self
@@ -146,6 +147,26 @@ class TestNormalizedAudio:
         assert samples.dtype == np.float32
         assert samples.ndim == 1
         assert samples.size > 0
+
+    def test_load_normalized_audio_scales_without_a_second_full_copy(self, tmp_path: Path) -> None:
+        audio_path = tmp_path / "audio.wav"
+        pcm = np.array([-32768, -16384, 0, 16384, 32767] * 200_000, dtype=np.int16)
+        with wave.open(str(audio_path), "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(16_000)
+            wav_file.writeframes(pcm.tobytes())
+
+        tracemalloc.start()
+        try:
+            samples = load_normalized_audio(audio_path)
+            _, peak_bytes = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+
+        assert samples[:5].tolist() == [-1.0, -0.5, 0.0, 0.5, 32767 / 32768]
+        # The int16 frames plus one float32 array; a second float32 copy would add another 2x
+        assert peak_bytes < 1.25 * (pcm.nbytes + samples.nbytes)
 
     def test_detect_speech_regions_falls_back_to_full_audio_without_vad_backend(
         self, monkeypatch

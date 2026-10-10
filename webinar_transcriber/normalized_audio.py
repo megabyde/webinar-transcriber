@@ -120,4 +120,7 @@ def load_normalized_audio(audio_path: Path) -> np.ndarray:
             f"Expected 16-bit PCM transcription audio, got {sample_width * 8}-bit."
         )
 
-    return np.frombuffer(raw_frames, dtype=np.int16).astype(np.float32) / 32768.0
+    samples = np.frombuffer(raw_frames, dtype=np.int16).astype(np.float32)
+    # Scale in place: a webinar-length array is hundreds of MiB, and a second copy doubles the peak
+    samples /= 32768.0
+    return samples
