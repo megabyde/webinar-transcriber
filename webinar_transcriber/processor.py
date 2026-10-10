@@ -460,14 +460,13 @@ def polish_report(
         st.update(detail=format_count(section_count, "section"))
     for warning in section_result.warnings:
         ctx.record_warning(warning)
+    sectioned_report = replace(report, sections=section_result.sections)
 
     with ctx.stage(
         "llm_report_metadata", "Polishing report summary with LLM", detail=runtime_detail
     ) as st:
         try:
-            metadata_result = llm_processor.polish_report_metadata(
-                report, section_transcripts=section_result.section_transcripts
-            )
+            metadata_result = llm_processor.polish_report_metadata(sectioned_report)
         except LlmProcessingError as ex:
             return _record_llm_fallback(
                 report,
@@ -488,15 +487,8 @@ def polish_report(
         summary=metadata_result.summary,
         action_items=metadata_result.action_items,
         sections=[
-            replace(
-                section,
-                title=metadata_result.section_titles.get(section.id, section.title),
-                tldr=section_result.section_tldrs.get(section.id, section.tldr),
-                transcript_text=section_result.section_transcripts.get(
-                    section.id, section.transcript_text
-                ),
-            )
-            for section in report.sections
+            replace(section, title=metadata_result.section_titles.get(section.id, section.title))
+            for section in sectioned_report.sections
         ],
     )
     ctx.llm = LlmDiagnostics(

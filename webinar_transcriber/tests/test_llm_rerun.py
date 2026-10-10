@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -65,9 +66,11 @@ def _write_source_run(
 def _llm_processor() -> Mock:
     processor = Mock(provider_name="openai", model_name="gpt-test")
     processor.polish_worker_count.return_value = 1
-    processor.polish_report_sections.return_value = LlmSectionPolishResult(
-        section_tldrs={"section-1": "Polished TL;DR."},
-        section_transcripts={"section-1": "Polished transcript."},
+    processor.polish_report_sections.side_effect = lambda report, **_: LlmSectionPolishResult(
+        sections=[
+            replace(section, tldr="Polished TL;DR.", transcript_text="Polished transcript.")
+            for section in report.sections
+        ],
         response_metadata=[{"stage": "section_polish", "status": "completed"}],
         warnings=["Provider warning."],
     )

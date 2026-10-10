@@ -1,6 +1,7 @@
 """Tests for optional cloud LLM helpers."""
 
 import json
+from dataclasses import replace
 from threading import Event, Lock
 from types import SimpleNamespace
 from typing import Any
@@ -17,6 +18,7 @@ from webinar_transcriber.llm import (
 )
 from webinar_transcriber.llm import processor as llm_processor
 from webinar_transcriber.llm.processor import InstructorLLMProcessor
+from webinar_transcriber.llm.prompts import REPORT_SECTION_EXCERPT_LIMIT
 from webinar_transcriber.llm.utils import (
     ReportPolishResponse,
     ReportSectionUpdate,
@@ -244,16 +246,19 @@ class TestInstructorLlmProcessor:
 
         section_result = processor.polish_report_sections(report)
         metadata_result = processor.polish_report_metadata(
-            report, section_transcripts=section_result.section_transcripts
+            replace(report, sections=section_result.sections)
         )
 
         assert metadata_result.summary == ["Improved summary."]
         assert metadata_result.action_items == ["Send the updated draft by Friday."]
         assert metadata_result.section_titles == {"section-1": "Improved overview"}
-        assert section_result.section_tldrs == {"section-1": "Short recap of the section."}
-        assert section_result.section_transcripts == {
-            "section-1": "Agenda review and project status update.\n\nPlease listen."
-        }
+        assert section_result.sections == [
+            replace(
+                report.sections[0],
+                tldr="Short recap of the section.",
+                transcript_text="Agenda review and project status update.\n\nPlease listen.",
+            )
+        ]
         assert section_result.response_metadata == [
             {"stage": "section_polish", "section_id": "section-1", "status": "completed"}
         ]
@@ -273,8 +278,12 @@ class TestInstructorLlmProcessor:
             "end_sec": 10.0,
             "transcript_text": "Agenda review and project status update.",
         }
+        report_payload = json.loads(calls[1].kwargs["messages"][1]["content"])
+        assert report_payload["sections"][0]["transcript_excerpt"] == (
+            "Agenda review and project status update.\n\nPlease listen."
+        )
 
-    def test_build_report_polish_payload_uses_section_transcript_overrides(self) -> None:
+    def test_build_report_polish_payload_caps_each_section_excerpt(self) -> None:
         report = ReportDocument(
             title="Demo",
             source_file="demo.wav",
@@ -285,23 +294,18 @@ class TestInstructorLlmProcessor:
                     title="Agenda",
                     start_sec=0.0,
                     end_sec=10.0,
-                    transcript_text="Original transcript text.",
+                    transcript_text="word " * 1_000,
                 )
             ],
         )
 
-        payload = build_report_polish_payload(
-            report,
-            total_char_budget=1_000,
-            section_transcripts={"section-1": "Overridden transcript text."},
-        )
+        payload = build_report_polish_payload(report)
         sections = payload["sections"]
         assert isinstance(sections, list)
-        first_section = sections[0]
-        assert isinstance(first_section, dict)
+        excerpt = sections[0]["transcript_excerpt"]
 
-        assert ("transcript_excerpt", "Overridden transcript text.") in first_section.items()
-        assert report.sections[0].transcript_text == "Original transcript text."
+        assert len(excerpt) <= REPORT_SECTION_EXCERPT_LIMIT
+        assert excerpt.endswith("…")
 
     @pytest.mark.parametrize(
         ("completion", "expected"),
@@ -369,9 +373,7 @@ class TestInstructorLlmProcessor:
         section_result = processor.polish_report_sections(report)
 
         with pytest.raises(LlmProcessingError):
-            processor.polish_report_metadata(
-                report, section_transcripts=section_result.section_transcripts
-            )
+            processor.polish_report_metadata(replace(report, sections=section_result.sections))
 
     def test_rejects_non_matching_schema(self) -> None:
         fake_client = self.fake_client((object(), self.FakeCompletion()))
@@ -394,11 +396,10 @@ class TestInstructorLlmProcessor:
             ],
         )
 
-        with pytest.raises(LlmProcessingError, match="Report polish response did not match"):
-            processor.polish_report_metadata(
-                report,
-                section_transcripts={"section-1": "Agenda review and project status update."},
-            )
+        with pytest.raises(
+            LlmProcessingError, match="Report polishing failed: response did not match the schema"
+        ):
+            processor.polish_report_metadata(report)
 
     def test_wraps_client_errors(self) -> None:
         fake_client = self.fake_client(RuntimeError("boom"))
@@ -408,7 +409,7 @@ class TestInstructorLlmProcessor:
         report = ReportDocument(title="Demo", source_file="demo.wav", media_type=MediaType.AUDIO)
 
         with pytest.raises(LlmProcessingError, match="Report polishing failed: boom"):
-            processor.polish_report_metadata(report, section_transcripts={})
+            processor.polish_report_metadata(report)
 
     def test_polishes_each_section_text(self) -> None:
         progress_updates: list[int] = []
@@ -469,9 +470,10 @@ class TestInstructorLlmProcessor:
         result = processor.polish_report_sections(report, progress_callback=progress_updates.append)
 
         assert len(fake_client.calls) == 2
-        assert result.section_tldrs == {"section-1": "Intro recap.", "section-2": "Agenda recap."}
-        assert result.section_transcripts["section-1"] == "Intro review and project status update."
-        assert result.section_transcripts["section-2"] == "Agenda review and project status update."
+        assert [(section.tldr, section.transcript_text) for section in result.sections] == [
+            ("Intro recap.", "Intro review and project status update."),
+            ("Agenda recap.", "Agenda review and project status update."),
+        ]
         assert result.warnings == []
         assert progress_updates == [1, 1]
 
@@ -486,7 +488,7 @@ class TestInstructorLlmProcessor:
         )
         report = ReportDocument(title="Demo", source_file="demo.wav", media_type=MediaType.AUDIO)
 
-        processor.polish_report_metadata(report, section_transcripts={})
+        processor.polish_report_metadata(report)
 
         fake_client.create_with_completion.assert_called_once()
         call_kwargs = fake_client.create_with_completion.call_args.kwargs
@@ -529,7 +531,7 @@ class TestInstructorLlmProcessor:
 
         assert fake_client.create_with_completion.call_count == 1
         assert fake_client.attempts.call_count == 2
-        assert result.section_transcripts == {"section-1": "Agenda review."}
+        assert result.sections == [replace(report.sections[0], tldr="Agenda recap.")]
         assert result.warnings == []
 
     def test_does_not_retry_non_transient_provider_error(self, monkeypatch) -> None:
@@ -543,7 +545,7 @@ class TestInstructorLlmProcessor:
         with pytest.raises(
             LlmProcessingError, match="Report polishing failed: provider status 400"
         ):
-            processor.polish_report_metadata(report, section_transcripts={})
+            processor.polish_report_metadata(report)
 
         assert fake_client.attempts.call_count == 1
 
@@ -599,11 +601,10 @@ class TestInstructorLlmProcessor:
 
         assert completions == ["section-2", "section-1"]
         assert progress_updates == [1, 1]
-        assert list(result.section_transcripts) == ["section-1", "section-2"]
-        assert result.section_transcripts == {
-            "section-1": "section-1 transcript.",
-            "section-2": "section-2 transcript.",
-        }
+        assert [(section.id, section.transcript_text) for section in result.sections] == [
+            ("section-1", "section-1 transcript."),
+            ("section-2", "section-2 transcript."),
+        ]
 
     def test_section_prompt_instructs_model_not_to_reproduce_song_lyrics(self) -> None:
         fake_client = self.fake_client((
@@ -676,8 +677,7 @@ class TestInstructorProcessorFlow:
 
         result = processor.polish_report_sections(report)
 
-        assert result.section_transcripts == {}
-        assert result.section_tldrs == {}
+        assert result.sections == []
         assert result.warnings == []
 
     @pytest.mark.parametrize(
@@ -712,8 +712,7 @@ class TestInstructorProcessorFlow:
 
         result = processor.polish_report_sections(report, progress_callback=progress_updates.append)
 
-        assert result.section_transcripts == {"section-1": "Agenda review."}
-        assert result.section_tldrs == {"section-1": "Existing recap."}
+        assert result.sections == report.sections
         assert result.warnings == ["Section polishing failed for section-1: bad section"]
         assert progress_updates == [1]
 
@@ -738,8 +737,7 @@ class TestInstructorProcessorFlow:
 
         result = processor.polish_report_sections(report)
 
-        assert result.section_transcripts == {"section-1": "Agenda review."}
-        assert result.section_tldrs == {"section-1": "Recap."}
+        assert result.sections == [replace(report.sections[0], tldr="Recap.")]
         assert result.warnings == [
             "Section polish response returned an empty transcript text for section-1; "
             "kept original text."

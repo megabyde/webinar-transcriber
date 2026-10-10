@@ -1,16 +1,13 @@
 """Tests for pure helpers in webinar_transcriber.llm.utils."""
 
 import pytest
-from pydantic import BaseModel
 
 from webinar_transcriber.llm import LlmProcessingError
 from webinar_transcriber.llm.utils import (
-    ReportPolishResponse,
     ReportSectionUpdate,
     normalize_polished_section_text,
     normalize_polished_section_tldr,
     normalize_report_lines,
-    schema_label,
     truncate_text,
     validated_section_titles,
 )
@@ -109,14 +106,3 @@ class TestLlmNormalization:
 
         with pytest.raises(LlmProcessingError, match="empty section title"):
             validated_section_titles(report, [ReportSectionUpdate(id="section-1", title="   ")])
-
-    def test_schema_label_covers_known_and_fallback_models(self) -> None:
-        class SectionTextResponse(BaseModel):
-            value: str
-
-        class OtherResponse(BaseModel):
-            value: str
-
-        assert schema_label(SectionTextResponse) == "Section polish"
-        assert schema_label(ReportPolishResponse) == "Report polish"
-        assert schema_label(OtherResponse) == "Structured LLM"

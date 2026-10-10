@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from unittest.mock import ANY, Mock, patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
@@ -71,9 +72,7 @@ def process_input(*args: Any, **kwargs: Any) -> ProcessArtifacts:
 
 def fake_llm_processor(
     *,
-    section_result: (
-        LlmSectionPolishResult | Callable[[ReportDocument], LlmSectionPolishResult] | None
-    ) = None,
+    section_result: Callable[[ReportDocument], LlmSectionPolishResult] | None = None,
     metadata_result: LlmReportMetadataResult | None = None,
     section_error: LlmProcessingError | None = None,
     metadata_error: LlmProcessingError | None = None,
@@ -85,14 +84,14 @@ def fake_llm_processor(
 
     def polish_sections(
         report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
-    ) -> LlmSectionPolishResult | None:
+    ) -> LlmSectionPolishResult:
         if section_error is not None:
             raise section_error
         if progress_callback is not None:
             for advance in section_progress or [len(report.sections)]:
                 progress_callback(advance)
-        if isinstance(section_result, LlmSectionPolishResult) or section_result is None:
-            return section_result
+        if section_result is None:
+            return LlmSectionPolishResult(sections=report.sections)
         return section_result(report)
 
     llm.polish_report_sections.side_effect = polish_sections
@@ -221,9 +220,7 @@ class TestProcessInput:
             keep_audio=True,
             diarizer=FakeDiarizer([SpeakerTurn(start_sec=0.0, end_sec=6.0, speaker="S1")]),
             diarization_speaker_count=2,
-            llm_processor=fake_llm_processor(
-                section_result=LlmSectionPolishResult(section_tldrs={}, section_transcripts={})
-            ),
+            llm_processor=fake_llm_processor(),
         )
 
         diagnostics_payload = read_json(artifacts.layout.diagnostics_path)
@@ -778,9 +775,14 @@ class TestProcessInputLlm:
         install_pipeline_runtime(monkeypatch, runtime=audio_runtime())
         reporter = RecordingStageReporter()
         llm = fake_llm_processor(
-            section_result=LlmSectionPolishResult(
-                section_tldrs={"section-1": "Updated section TL;DR."},
-                section_transcripts={"section-1": EXPECTED_LLM_SECTION_TEXT},
+            section_result=lambda report: LlmSectionPolishResult(
+                sections=[
+                    replace(
+                        report.sections[0],
+                        tldr="Updated section TL;DR.",
+                        transcript_text=EXPECTED_LLM_SECTION_TEXT,
+                    )
+                ],
                 response_metadata=[
                     {"stage": "section_polish", "section_id": "section-1", "status": "completed"}
                 ],
@@ -801,9 +803,8 @@ class TestProcessInputLlm:
             reporter=reporter,
         )
 
-        llm.polish_report_metadata.assert_called_once_with(
-            ANY, section_transcripts={"section-1": EXPECTED_LLM_SECTION_TEXT}
-        )
+        (metadata_input,) = llm.polish_report_metadata.call_args.args
+        assert metadata_input.sections[0].transcript_text == EXPECTED_LLM_SECTION_TEXT
         assert artifacts.report.summary == ["Refined summary point."]
         assert artifacts.report.action_items == ["Send the draft by Friday."]
         assert artifacts.report.sections[0].title == "Refined Section Title"
@@ -868,10 +869,9 @@ class TestProcessInputLlm:
 
         def section_polish(report: ReportDocument) -> LlmSectionPolishResult:
             return LlmSectionPolishResult(
-                section_tldrs={section.id: f"{section.title} recap" for section in report.sections},
-                section_transcripts={
-                    section.id: section.transcript_text for section in report.sections
-                },
+                sections=[
+                    replace(section, tldr=f"{section.title} recap") for section in report.sections
+                ]
             )
 
         artifacts = process_input(
@@ -940,22 +940,11 @@ class TestProcessInputLlm:
         install_pipeline_runtime(monkeypatch, runtime=audio_runtime())
         reporter = RecordingStageReporter()
 
-        def section_polish(report: ReportDocument) -> LlmSectionPolishResult:
-            return LlmSectionPolishResult(
-                section_tldrs={},
-                section_transcripts={
-                    section.id: section.transcript_text for section in report.sections
-                },
-            )
-
         artifacts = process_input(
             input_path,
             output_dir=tmp_path / "metadata-fallback-run",
             transcriber=FakeTranscriber(),
-            llm_processor=fake_llm_processor(
-                section_result=section_polish,
-                metadata_error=LlmProcessingError("metadata failed"),
-            ),
+            llm_processor=fake_llm_processor(metadata_error=LlmProcessingError("metadata failed")),
             reporter=reporter,
         )
 
