@@ -44,10 +44,8 @@ def sample_index_for_time(time_sec: float) -> int:
 def _mux_audio_frames(
     output_container: OutputContainer,
     output_stream: AudioStream,
-    audio_frames: Iterable[AudioFrame] | None,
+    audio_frames: Iterable[AudioFrame],
 ) -> None:
-    if audio_frames is None:
-        return
     for audio_frame in audio_frames:
         for packet in output_stream.encode(audio_frame):
             output_container.mux(packet)

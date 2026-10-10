@@ -17,22 +17,13 @@ def reconcile_decoded_windows(decoded_windows: list[DecodedWindow]) -> Transcrip
     Returns:
         TranscriptionResult: The reconciled transcript.
     """
-    ordered_windows = sorted(
-        decoded_windows,
-        key=lambda item: (
-            item.window.start_sec,
-            item.window.end_sec,
-            item.window.region_index,
-            item.window.id,
-        ),
-    )
     detected_language = next(
-        (window.detected_language for window in ordered_windows if window.detected_language), None
+        (window.detected_language for window in decoded_windows if window.detected_language), None
     )
 
     reconciled_segments: list[TranscriptSegment] = []
     covered_until_sec = 0.0
-    for decoded_window in ordered_windows:
+    for decoded_window in decoded_windows:
         for segment in decoded_window.segments:
             text = segment.text.strip()
             if not text:
