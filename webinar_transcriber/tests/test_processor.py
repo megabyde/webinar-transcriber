@@ -782,7 +782,7 @@ class TestProcessInputLlm:
                 section_tldrs={"section-1": "Updated section TL;DR."},
                 section_transcripts={"section-1": EXPECTED_LLM_SECTION_TEXT},
                 response_metadata=[
-                    {"stage": "section_polish", "section_id": "section-1", "finish_reason": "stop"}
+                    {"stage": "section_polish", "section_id": "section-1", "status": "completed"}
                 ],
                 warnings=[EXPECTED_LLM_WARNING],
             ),
@@ -816,7 +816,7 @@ class TestProcessInputLlm:
         assert artifacts.diagnostics.llm.model == "test-llm-model"
         assert artifacts.diagnostics.llm.report_status == "applied"
         assert artifacts.diagnostics.llm.response_metadata == [
-            {"stage": "section_polish", "section_id": "section-1", "finish_reason": "stop"}
+            {"stage": "section_polish", "section_id": "section-1", "status": "completed"}
         ]
         assert "llm_report_sections" in artifacts.diagnostics.stage_durations_sec
         assert "llm_report_metadata" in artifacts.diagnostics.stage_durations_sec
@@ -832,7 +832,7 @@ class TestProcessInputLlm:
         diagnostics_payload = read_json(artifacts.layout.diagnostics_path)
         assert diagnostics_payload["llm"]["provider"] == "openai"
         assert diagnostics_payload["llm"]["response_metadata"] == [
-            {"stage": "section_polish", "section_id": "section-1", "finish_reason": "stop"}
+            {"stage": "section_polish", "section_id": "section-1", "status": "completed"}
         ]
         assert diagnostics_payload["warnings"] == [EXPECTED_LLM_WARNING]
 

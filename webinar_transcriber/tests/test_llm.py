@@ -153,21 +153,11 @@ class TestBuildLlmProcessorFromEnv:
 
 class TestInstructorLlmProcessor:
     class FakeCompletion:
-        def __init__(
-            self,
-            *,
-            finish_reason: str | None = None,
-            refusal: str | None = None,
-            safety: dict[str, object] | None = None,
-        ) -> None:
-            if finish_reason is not None:
-                self.choices = [
-                    SimpleNamespace(
-                        finish_reason=finish_reason,
-                        message=SimpleNamespace(refusal=refusal),
-                        content_filter_results=safety,
-                    )
-                ]
+        """Raw OpenAI Responses completion carrying only the status fields read for diagnostics."""
+
+        def __init__(self, *, status: str | None = None) -> None:
+            self.status = status
+            self.incomplete_details = None
 
     @staticmethod
     def fake_client(*responses: object) -> Mock:
@@ -218,7 +208,7 @@ class TestInstructorLlmProcessor:
                     tldr="Short recap of the section.",
                     transcript_text="Agenda review and project status update.\n\nPlease listen.",
                 ),
-                self.FakeCompletion(finish_reason="stop"),
+                self.FakeCompletion(status="completed"),
             ),
             (
                 ReportPolishResponse(
@@ -265,7 +255,7 @@ class TestInstructorLlmProcessor:
             "section-1": "Agenda review and project status update.\n\nPlease listen."
         }
         assert section_result.response_metadata == [
-            {"stage": "section_polish", "section_id": "section-1", "finish_reason": "stop"}
+            {"stage": "section_polish", "section_id": "section-1", "status": "completed"}
         ]
         assert metadata_result.response_metadata == [{"stage": "report_polish"}]
         assert report.sections[0].transcript_text == "Agenda review and project status update."
@@ -313,42 +303,34 @@ class TestInstructorLlmProcessor:
         assert ("transcript_excerpt", "Overridden transcript text.") in first_section.items()
         assert report.sections[0].transcript_text == "Original transcript text."
 
-    def test_extract_response_metadata_returns_provider_finish_and_safety_fields(self) -> None:
-        class ModelDumpValue:
-            def model_dump(self) -> dict[str, object]:
-                return {"blocked": True}
-
-        class ToDictValue:
-            def to_dict(self) -> dict[str, object]:
-                return {"filtered": True}
-
-        completion = SimpleNamespace(
-            choices=[
+    @pytest.mark.parametrize(
+        ("completion", "expected"),
+        [
+            pytest.param(
                 SimpleNamespace(
-                    finish_reason="content_filter",
-                    message=SimpleNamespace(refusal="Refused."),
-                    content_filter_results={
-                        "sexual": ModelDumpValue(),
-                        "violence": ToDictValue(),
-                        "ignored": object(),
-                    },
-                )
-            ],
-            stop_reason="end_turn",
-            prompt_filter_results=[{"prompt_index": 0, "content_filter_results": {}}],
-        )
-
-        assert extract_response_metadata(completion) == {
-            "finish_reason": "content_filter",
-            "stop_reason": "end_turn",
-            "refusal": True,
-            "safety": {
-                "sexual": {"blocked": True},
-                "violence": {"filtered": True},
-                "ignored": None,
-            },
-            "prompt_filter_results": [{"prompt_index": 0, "content_filter_results": {}}],
-        }
+                    status="incomplete",
+                    incomplete_details=SimpleNamespace(reason="max_output_tokens"),
+                ),
+                {"status": "incomplete", "incomplete_reason": "max_output_tokens"},
+                id="openai-responses-truncated",
+            ),
+            pytest.param(
+                SimpleNamespace(status="completed", incomplete_details=None),
+                {"status": "completed"},
+                id="openai-responses-completed",
+            ),
+            pytest.param(
+                SimpleNamespace(stop_reason="max_tokens"),
+                {"stop_reason": "max_tokens"},
+                id="anthropic-messages",
+            ),
+            pytest.param(object(), {}, id="unknown-shape"),
+        ],
+    )
+    def test_extract_response_metadata_records_completion_status(
+        self, completion: object, expected: dict[str, object]
+    ) -> None:
+        assert extract_response_metadata(completion) == expected
 
     def test_rejects_unknown_report_section_id(self) -> None:
         fake_client = self.fake_client(
