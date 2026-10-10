@@ -232,3 +232,35 @@ class TestOpenVideoInputContainer:
 
         with pytest.raises(MediaProcessingError, match="No video stream found"):
             open_video_input_container(FIXTURE_DIR / "sample-audio.mp3").__enter__()
+
+    def test_skips_cover_art_before_the_moving_picture(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class FakeDisposition:
+            attached_pic = 1
+
+            def __init__(self, flags: int) -> None:
+                self.flags = flags
+
+            def __and__(self, other: int) -> int:
+                return self.flags & other
+
+        class FakeVideoStream:
+            type = "video"
+
+            def __init__(self, *, cover_art: bool) -> None:
+                self.disposition = FakeDisposition(1 if cover_art else 0)
+
+        cover_art = FakeVideoStream(cover_art=True)
+        moving_picture = FakeVideoStream(cover_art=False)
+
+        class FakeContainer(FakeContextContainer):
+            def __init__(self) -> None:
+                self.streams = [cover_art, moving_picture]
+
+        monkeypatch.setattr(
+            "webinar_transcriber.media.av.open", lambda *_args, **_kwargs: FakeContainer()
+        )
+
+        with open_video_input_container(FIXTURE_DIR / "sample-video.mp4") as (_, video_stream):
+            assert video_stream is moving_picture
