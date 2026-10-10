@@ -297,43 +297,16 @@ class TestAudioSectionHeuristics:
         assert [section.title for section in sections] == ["Section 1", "Section 2"]
 
     @pytest.mark.parametrize(
-        ("segments", "fallback", "expected"),
+        ("text", "expected"),
         [
-            ([], "Fallback Title", "Fallback Title"),
-            (
-                [TranscriptSegment(id="segment-1", text="   ", start_sec=0.0, end_sec=5.0)],
-                "Fallback Title",
-                "Fallback Title",
-            ),
-            (
-                [
-                    TranscriptSegment(
-                        id="segment-1", text="So, okay, well.", start_sec=0.0, end_sec=5.0
-                    )
-                ],
-                "Fallback Title",
-                "So, okay, well",
-            ),
-            (
-                [
-                    TranscriptSegment(
-                        id="segment-1",
-                        text="One two three four five six seven",
-                        start_sec=0.0,
-                        end_sec=5.0,
-                    )
-                ],
-                "Fallback Title",
-                "One two three four five six…",
-            ),
+            ("", ""),
+            ("   ", ""),
+            ("So, okay, well.", "So, okay, well"),
+            ("One two three four five six seven", "One two three four five six…"),
         ],
     )
-    def test_derive_title_from_transcript_text(
-        self, segments: list[TranscriptSegment], fallback: str, expected: str
-    ) -> None:
-        text = next((segment.text for segment in segments if segment.text.strip()), "")
-
-        assert derive_title(text, fallback=fallback, ellipsis=True) == expected
+    def test_derive_title_from_transcript_text(self, text: str, expected: str) -> None:
+        assert derive_title(text, ellipsis=True) == expected
 
     def test_title_from_path_formats_local_path_stem(self) -> None:
         assert title_from_path("/recordings/weekly-sync.mp4") == "Weekly Sync"

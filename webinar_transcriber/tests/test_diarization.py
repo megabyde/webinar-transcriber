@@ -222,8 +222,11 @@ class TestConfig:
 
         assert default_cache_dir() == tmp_path
 
-    def test_default_model_paths_use_configured_cache_dir(self, tmp_path: Path) -> None:
-        paths = default_model_paths(tmp_path)
+    def test_default_model_paths_use_configured_cache_dir(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setenv("WEBINAR_DIARIZATION_CACHE_DIR", str(tmp_path))
+        paths = default_model_paths()
 
         assert (
             paths.segmentation_model
@@ -458,13 +461,13 @@ class TestSherpaOnnxDiarizer:
         monkeypatch.setattr(
             sherpa_runtime,
             "ensure_default_models",
-            lambda _cache_dir: sherpa_runtime.DiarizationModelPaths(
+            lambda: sherpa_runtime.DiarizationModelPaths(
                 segmentation_model=tmp_path / "seg.onnx", embedding_model=tmp_path / "emb.onnx"
             ),
         )
         context = _FakeContext(queue, process)
         monkeypatch.setattr(sherpa_runtime.multiprocessing, "get_context", lambda _method: context)
-        diarizer = sherpa_runtime.SherpaOnnxDiarizer(cache_dir=tmp_path, threads=1)
+        diarizer = sherpa_runtime.SherpaOnnxDiarizer(threads=1)
         diarizer.prepare(speaker_count=speaker_count)
         return diarizer, context
 
@@ -618,7 +621,7 @@ class TestModelDownload:
             segmentation_model=tmp_path / "seg.onnx", embedding_model=tmp_path / "emb.onnx"
         )
         calls: list[Path] = []
-        monkeypatch.setattr(sherpa_runtime, "default_model_paths", lambda _cache_dir: paths)
+        monkeypatch.setattr(sherpa_runtime, "default_model_paths", lambda: paths)
         monkeypatch.setattr(
             sherpa_runtime, "_ensure_segmentation_model", lambda path: calls.append(Path(path))
         )
@@ -626,7 +629,7 @@ class TestModelDownload:
             sherpa_runtime, "_ensure_file", lambda path, **_kwargs: calls.append(Path(path))
         )
 
-        assert sherpa_runtime.ensure_default_models(tmp_path) == paths
+        assert sherpa_runtime.ensure_default_models() == paths
         assert calls == [paths.segmentation_model, paths.embedding_model]
 
     def test_ensure_file_downloads_and_verifies(

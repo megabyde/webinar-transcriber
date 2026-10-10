@@ -146,13 +146,12 @@ class WhisperCppTranscriber:
         *,
         threads: int,
         language: str | None = None,
-        log_path: Path | None = None,
     ) -> None:
         """Initialize the whisper.cpp transcriber wrapper."""
         self._model_name = model_name or WHISPER_CPP_MODEL_FILENAME
         self._threads = threads
         self._language = language.strip() if language else None
-        self._log_path = log_path
+        self._log_path: Path | None = None
         self._model: Model | None = None
 
     @property
