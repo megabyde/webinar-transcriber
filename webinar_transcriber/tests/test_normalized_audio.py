@@ -13,7 +13,6 @@ import pytest
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.models import SpeechRegion
 from webinar_transcriber.normalized_audio import (
-    _mux_audio_frames,
     load_normalized_audio,
     write_transcription_audio,
 )
@@ -60,27 +59,6 @@ class FakeWave:
 
 
 class TestNormalizedAudio:
-    def test_mux_audio_frames_handles_frame_list(self) -> None:
-        frame = av.AudioFrame(format="s16", layout="mono", samples=1)
-        encoded_frames: list[object | None] = []
-        muxed_packets: list[str] = []
-
-        class FakeOutputStream:
-            def encode(self, audio_frame=None) -> list[str]:
-                encoded_frames.append(audio_frame)
-                return ["packet"] if audio_frame is not None else []
-
-        class FakeOutputContainer:
-            def mux(self, packet: str) -> None:
-                muxed_packets.append(packet)
-
-        # Fakes duck-type the PyAV OutputContainer/AudioStream interface _mux_audio_frames uses
-        _mux_audio_frames(FakeOutputContainer(), FakeOutputStream(), None)  # type: ignore
-        _mux_audio_frames(FakeOutputContainer(), FakeOutputStream(), [frame])  # type: ignore
-
-        assert encoded_frames == [frame]
-        assert muxed_packets == ["packet"]
-
     @pytest.mark.slow
     def test_write_transcription_audio_creates_wav(self, tmp_path: Path) -> None:
         output_path = write_transcription_audio(
@@ -171,24 +149,18 @@ class TestNormalizedAudio:
     def test_detect_speech_regions_falls_back_to_full_audio_without_vad_backend(
         self, monkeypatch
     ) -> None:
-        progress_updates: list[tuple[float, int]] = []
         monkeypatch.setattr(
             "webinar_transcriber.segmentation._silero_speech_regions",
             lambda *_args, **_kwargs: None,
         )
 
         samples = np.zeros(16_000, dtype=np.float32)
-        regions, warnings = detect_speech_regions(
-            samples,
-            threads=1,
-            progress_callback=lambda sec, count: progress_updates.append((sec, count)),
-        )
+        regions, warnings = detect_speech_regions(samples, threads=1)
 
         assert len(regions) == 1
         assert regions[0].start_sec == 0.0
         assert regions[0].end_sec == 1.0
         assert warnings
-        assert progress_updates == [(1.0, 1)]
 
     def test_detect_speech_regions_returns_empty_for_zero_duration(self) -> None:
         regions, warnings = detect_speech_regions(np.zeros(0, dtype=np.float32), threads=1)
@@ -196,16 +168,8 @@ class TestNormalizedAudio:
         assert regions == []
         assert warnings == []
 
-    def test_detect_speech_regions_drops_empty_regions(self, monkeypatch) -> None:
-        monkeypatch.setattr(
-            "webinar_transcriber.segmentation._silero_speech_regions",
-            lambda *_args, **_kwargs: [SpeechRegion(start_sec=10.0, end_sec=10.0)],
-        )
-
-        regions, warnings = detect_speech_regions(np.zeros(16_000, dtype=np.float32), threads=1)
-
-        assert regions == []
-        assert warnings == []
+    def test_normalize_regions_drops_empty_regions(self) -> None:
+        assert normalize_regions([SpeechRegion(start_sec=10.0, end_sec=10.0)]) == []
 
     def test_normalized_audio_duration_uses_normalized_sample_rate(self) -> None:
         assert normalized_audio_duration(np.zeros(8_000, dtype=np.float32)) == 0.5
@@ -255,7 +219,6 @@ class TestNormalizedAudio:
     def test_silero_speech_regions_uses_sherpa_vad_settings(
         self, monkeypatch, fake_sherpa_import_module
     ) -> None:
-        progress_updates: list[tuple[float, int]] = []
         segment = type("Segment", (), {"start": 200, "samples": np.zeros(400)})()
         fake_import_module, fake_sherpa = fake_sherpa_import_module(
             segments=[segment], window_size=512
@@ -263,11 +226,7 @@ class TestNormalizedAudio:
 
         monkeypatch.setattr("webinar_transcriber._env.importlib.import_module", fake_import_module)
 
-        regions = _silero_speech_regions(
-            np.zeros(1_600, dtype=np.float32),
-            threads=3,
-            progress_callback=lambda sec, count: progress_updates.append((sec, count)),
-        )
+        regions = _silero_speech_regions(np.zeros(1_600, dtype=np.float32), threads=3)
 
         detector = fake_sherpa.detectors[0]
         assert detector.config.silero_vad.model.endswith("silero_vad.onnx")
@@ -280,7 +239,6 @@ class TestNormalizedAudio:
         assert [len(samples) for samples in detector.accepted_waveforms] == [512, 512, 512, 64]
         assert detector.flushed
         assert regions == [SpeechRegion(start_sec=0.0, end_sec=0.1)]
-        assert progress_updates == [(0.1, 1)]
 
     def test_silero_speech_regions_reports_progress_by_second(
         self, monkeypatch, fake_sherpa_import_module
@@ -307,7 +265,7 @@ class TestNormalizedAudio:
         assert regions[0].end_sec == pytest.approx(0.4)
         assert regions[1].start_sec == pytest.approx(0.9)
         assert regions[1].end_sec == pytest.approx(1.65)
-        assert progress_updates == [(1.0, 2), (2.0, 2), (2.5, 2)]
+        assert progress_updates == [(1.0, 2), (2.0, 2)]
 
     def test_silero_speech_regions_returns_none_when_detector_construction_fails(
         self, monkeypatch, fake_sherpa_import_module

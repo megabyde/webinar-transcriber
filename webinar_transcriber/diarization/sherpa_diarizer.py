@@ -115,9 +115,8 @@ if TYPE_CHECKING:
 class SherpaOnnxDiarizer:
     """Local speaker diarizer backed by sherpa-onnx."""
 
-    def __init__(self, *, threads: int, cache_dir: Path | None = None) -> None:
+    def __init__(self, *, threads: int) -> None:
         """Initialize a lazy sherpa-onnx diarizer."""
-        self._cache_dir = cache_dir or default_cache_dir()
         self._threads = threads
         self._model_paths: DiarizationModelPaths | None = None
         self._speaker_count: int | None = None
@@ -142,7 +141,7 @@ class SherpaOnnxDiarizer:
             raise DiarizationConfigurationError(
                 "sherpa-onnx is unavailable for speaker diarization."
             )
-        self._model_paths = ensure_default_models(self._cache_dir)
+        self._model_paths = ensure_default_models()
         self._speaker_count = speaker_count
 
     def diarize(
@@ -184,9 +183,9 @@ class SherpaOnnxDiarizer:
         return normalize_speaker_labels(turns)
 
 
-def ensure_default_models(cache_dir: Path | None = None) -> DiarizationModelPaths:
+def ensure_default_models() -> DiarizationModelPaths:
     """Download and verify default diarization models when missing."""
-    paths = default_model_paths(cache_dir)
+    paths = default_model_paths()
     _ensure_segmentation_model(paths.segmentation_model)
     _ensure_file(
         paths.embedding_model, url=EMBEDDING_MODEL.url, expected_sha256=EMBEDDING_MODEL.sha256
@@ -199,9 +198,9 @@ def default_cache_dir() -> Path:
     return diarization_cache_dir() or Path.home() / ".cache" / "webinar-transcriber" / "diarization"
 
 
-def default_model_paths(cache_dir: Path | None = None) -> DiarizationModelPaths:
+def default_model_paths() -> DiarizationModelPaths:
     """Return expected local model paths under the configured cache directory."""
-    root = cache_dir or default_cache_dir()
+    root = default_cache_dir()
     return DiarizationModelPaths(
         segmentation_model=root / SEGMENTATION_MODEL.directory / SEGMENTATION_MODEL.file_name,
         embedding_model=root / EMBEDDING_MODEL.file_name,

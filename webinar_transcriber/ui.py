@@ -41,10 +41,10 @@ class StageHandle:
     key: str
     label: str
     started_at: float
+    _progress: Progress = field(repr=False)
+    _task_id: TaskID = field(repr=False)
     detail: str | None = None
     completed: float = 0.0
-    _progress: Progress | None = field(default=None, repr=False)
-    _task_id: TaskID | None = field(default=None, repr=False)
 
     def elapsed_sec(self) -> float:
         """Return seconds since the stage started."""
@@ -65,9 +65,8 @@ class StageHandle:
             self.completed += applied_advance
         if detail is not None:
             self.detail = detail
-        if self._progress is not None and self._task_id is not None:
-            description = f"{self.label} - {self.detail}" if self.detail else self.label
-            self._progress.update(self._task_id, advance=applied_advance, description=description)
+        description = f"{self.label} - {self.detail}" if self.detail else self.label
+        self._progress.update(self._task_id, advance=applied_advance, description=description)
 
 
 class StageReporter:

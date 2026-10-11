@@ -98,6 +98,22 @@ class RunContext:
             finally:
                 self.stage_timings[key] = handle.elapsed_sec()
 
+    @contextmanager
+    def failure_diagnostics(self, layout: RunLayout) -> Generator[None, None, None]:
+        """Write failed-run diagnostics when the wrapped block raises, then re-raise."""
+        try:
+            yield
+        except BaseException as ex:
+            # A diagnostics failure must not mask the original error
+            with suppress(Exception):
+                write_run_diagnostics(
+                    layout,
+                    self,
+                    status="failed",
+                    error="Interrupted by user." if isinstance(ex, KeyboardInterrupt) else str(ex),
+                )
+            raise
+
 
 def process_input(
     input_path: Path,
@@ -130,7 +146,7 @@ def process_input(
         layout = create_run_layout(input_path=input_path, output_dir=output_dir)
         active_transcriber.set_log_path(layout.run_dir / "whisper-cpp.log")
         ctx.reporter.begin_run(input_path)
-        try:
+        with ctx.failure_diagnostics(layout):
             with ctx.stage("probe_media", "Probing media") as st:
                 media_asset = probe_media(input_path)
                 write_json(layout.metadata_path, asdict(media_asset))
@@ -196,17 +212,6 @@ def process_input(
             )
             ctx.reporter.complete_run(artifacts)
             return artifacts
-        except BaseException as ex:
-            # A diagnostics failure must not mask the original error
-            with suppress(Exception):
-                write_run_diagnostics(
-                    layout,
-                    ctx,
-                    status="failed",
-                    failed_stage=ctx.failed_stage,
-                    error="Interrupted by user." if isinstance(ex, KeyboardInterrupt) else str(ex),
-                )
-            raise
 
 
 def _run_asr_pipeline(
@@ -317,8 +322,7 @@ def _run_asr_pipeline(
             model=DIARIZATION_MODEL,
             system_info=diarizer.system_info,
         )
-
-    write_json(layout.transcript_path, transcription.to_json())
+        write_json(layout.transcript_path, transcription.to_json())
 
     ctx.asr_pipeline = AsrPipelineDiagnostics(
         backend=ASR_BACKEND_NAME,
@@ -460,14 +464,13 @@ def polish_report(
         st.update(detail=format_count(section_count, "section"))
     for warning in section_result.warnings:
         ctx.record_warning(warning)
+    sectioned_report = replace(report, sections=section_result.sections)
 
     with ctx.stage(
         "llm_report_metadata", "Polishing report summary with LLM", detail=runtime_detail
     ) as st:
         try:
-            metadata_result = llm_processor.polish_report_metadata(
-                report, section_transcripts=section_result.section_transcripts
-            )
+            metadata_result = llm_processor.polish_report_metadata(sectioned_report)
         except LlmProcessingError as ex:
             return _record_llm_fallback(
                 report,
@@ -488,15 +491,8 @@ def polish_report(
         summary=metadata_result.summary,
         action_items=metadata_result.action_items,
         sections=[
-            replace(
-                section,
-                title=metadata_result.section_titles.get(section.id, section.title),
-                tldr=section_result.section_tldrs.get(section.id, section.tldr),
-                transcript_text=section_result.section_transcripts.get(
-                    section.id, section.transcript_text
-                ),
-            )
-            for section in report.sections
+            replace(section, title=metadata_result.section_titles.get(section.id, section.title))
+            for section in sectioned_report.sections
         ],
     )
     ctx.llm = LlmDiagnostics(

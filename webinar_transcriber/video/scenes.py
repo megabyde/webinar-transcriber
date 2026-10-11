@@ -50,9 +50,7 @@ def detect_scenes(
     Returns:
         list[Scene]: Detected scenes in timeline order.
     """
-    scene_starts = _detect_scene_starts(
-        video_path, duration_sec, progress_callback=progress_callback
-    )
+    scene_starts = _detect_scene_starts(video_path, progress_callback=progress_callback)
     scene_bounds = zip(scene_starts, [*scene_starts[1:], duration_sec], strict=False)
 
     scenes: list[Scene] = []
@@ -105,7 +103,6 @@ def save_scene_frames(
 
 def _detect_scene_starts(
     video_path: Path,
-    duration_sec: float,
     *,
     progress_callback: SceneProgressCallback | None = None,
 ) -> list[float]:
@@ -119,7 +116,6 @@ def _detect_scene_starts(
             scene_filter = _build_scene_filter_graph(video_stream)
             starts: list[float] = [0.0]
             processed_sample_count = 0
-            reported_scene_count = 0
 
             for decoded_frame in input_container.decode(video_stream):
                 scene_filter.vpush(decoded_frame)
@@ -133,17 +129,6 @@ def _detect_scene_starts(
                     if sample_count > processed_sample_count:
                         progress_callback(sample_count, len(starts))
                         processed_sample_count = sample_count
-                        reported_scene_count = len(starts)
-
-            if progress_callback is not None:
-                final_sample_count = max(
-                    processed_sample_count, estimated_scene_sample_count(duration_sec)
-                )
-                if (  # pragma: no cover - backend-dependent final progress reconciliation
-                    final_sample_count != processed_sample_count
-                    or reported_scene_count != len(starts)
-                ):
-                    progress_callback(final_sample_count, len(starts))
             return starts
     except (OSError, FFmpegError) as ex:  # pragma: no cover - defensive FFmpeg boundary
         raise MediaProcessingError(f"Could not detect scenes in {video_path}: {ex}") from ex

@@ -39,12 +39,10 @@ def detect_speech_regions(
 
     regions = _silero_speech_regions(samples, threads=threads, progress_callback=progress_callback)
     if regions is None:
-        if progress_callback is not None:
-            progress_callback(duration_sec, 1)
         warning = "Silero VAD is unavailable; falling back to one full-audio speech region."
         return [SpeechRegion(start_sec=0.0, end_sec=duration_sec)], [warning]
 
-    return normalize_regions(regions), []
+    return regions, []
 
 
 def normalized_audio_duration(samples: np.ndarray) -> float:
@@ -55,9 +53,6 @@ def normalized_audio_duration(samples: np.ndarray) -> float:
 def normalize_regions(regions: list[SpeechRegion]) -> list[SpeechRegion]:
     """Return ordered, merged speech regions with empty ranges removed."""
     ordered_regions = sorted(regions, key=lambda region: (region.start_sec, region.end_sec))
-    if not ordered_regions:
-        return []
-
     merged: list[SpeechRegion] = []
     for region in ordered_regions:
         if region.end_sec <= region.start_sec:
@@ -126,9 +121,7 @@ def _silero_speech_regions(
         completed_samples = min(len(samples), start_index + window_size)
         detector.accept_waveform(samples[start_index:completed_samples])
         collect_ready_segments()
-        if progress_callback is not None and (
-            completed_samples >= next_report_sample or completed_samples == len(samples)
-        ):
+        if progress_callback is not None and completed_samples >= next_report_sample:
             progress_callback(completed_samples / NORMALIZED_SAMPLE_RATE, len(regions))
             next_report_sample = (
                 completed_samples // NORMALIZED_SAMPLE_RATE + 1
