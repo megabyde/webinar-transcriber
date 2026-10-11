@@ -7,6 +7,10 @@ installs without the `llm` extra.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from webinar_transcriber.models import ReportSection
 
 
 class LlmConfigurationError(RuntimeError):
@@ -21,8 +25,7 @@ class LlmProcessingError(RuntimeError):
 class LlmSectionPolishResult:
     """Validated result from the section-text polishing phase."""
 
-    section_tldrs: dict[str, str]
-    section_transcripts: dict[str, str]
+    sections: list[ReportSection]
     response_metadata: list[dict[str, object]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 

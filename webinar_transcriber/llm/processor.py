@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Protocol
 
 import tenacity
@@ -12,7 +12,6 @@ import tenacity
 from webinar_transcriber.llm.prompts import (
     ACTION_ITEM_LIMIT,
     REPORT_POLISH_SYSTEM_PROMPT,
-    REPORT_POLISH_TOTAL_CHAR_BUDGET,
     SECTION_POLISH_SYSTEM_PROMPT,
     SUMMARY_ITEM_LIMIT,
 )
@@ -30,7 +29,6 @@ from webinar_transcriber.llm.utils import (
     normalize_polished_section_text,
     normalize_polished_section_tldr,
     normalize_report_lines,
-    schema_label,
     validated_section_titles,
 )
 
@@ -50,9 +48,7 @@ __all__ = ["InstructorLLMProcessor"]
 class SectionPolishResult:
     """Result from polishing one report section."""
 
-    section_id: str
-    transcript_text: str
-    tldr: str
+    section: ReportSection
     response_metadata: dict[str, object] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
@@ -108,21 +104,14 @@ class InstructorLLMProcessor:
         """Return polished section text with per-section progress updates."""
         results = self._polish_section_texts(report, progress_callback=progress_callback)
         return LlmSectionPolishResult(
-            section_tldrs={r.section_id: r.tldr for r in results if r.tldr},
-            section_transcripts={r.section_id: r.transcript_text for r in results},
+            sections=[r.section for r in results],
             response_metadata=[r.response_metadata for r in results],
             warnings=[warning for r in results for warning in r.warnings],
         )
 
-    def polish_report_metadata(
-        self, report: ReportDocument, *, section_transcripts: dict[str, str]
-    ) -> LlmReportMetadataResult:
+    def polish_report_metadata(self, report: ReportDocument) -> LlmReportMetadataResult:
         """Return polished summary, action items, and section titles."""
-        payload = build_report_polish_payload(
-            report,
-            total_char_budget=REPORT_POLISH_TOTAL_CHAR_BUDGET,
-            section_transcripts=section_transcripts,
-        )
+        payload = build_report_polish_payload(report)
         parsed, response_metadata = self._create_structured_response(
             system_prompt=REPORT_POLISH_SYSTEM_PROMPT,
             user_payload=payload,
@@ -174,9 +163,7 @@ class InstructorLLMProcessor:
             return self._polish_section_text(section)
         except LlmProcessingError as ex:
             return SectionPolishResult(
-                section_id=section.id,
-                transcript_text=section.transcript_text,
-                tldr=section.tldr or "",
+                section=section,
                 response_metadata={"stage": "section_polish", "section_id": section.id},
                 warnings=[str(ex)],
             )
@@ -208,9 +195,7 @@ class InstructorLLMProcessor:
             )
 
         return SectionPolishResult(
-            section_id=section.id,
-            transcript_text=transcript_text,
-            tldr=tldr,
+            section=replace(section, transcript_text=transcript_text, tldr=tldr or section.tldr),
             response_metadata={
                 "stage": "section_polish",
                 "section_id": section.id,
@@ -241,9 +226,7 @@ class InstructorLLMProcessor:
             raise LlmProcessingError(f"{error_prefix}: {ex}") from ex
 
         if not isinstance(parsed, response_model):
-            raise LlmProcessingError(
-                f"{schema_label(response_model)} response did not match the schema."
-            )
+            raise LlmProcessingError(f"{error_prefix}: response did not match the schema.")
         return parsed, extract_response_metadata(completion)
 
 

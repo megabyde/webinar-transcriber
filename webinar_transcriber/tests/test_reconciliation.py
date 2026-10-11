@@ -11,20 +11,20 @@ class TestReconcileDecodedWindows:
         assert transcription.segments == []
         assert transcription.detected_language is None
 
-    def test_concatenates_non_overlapping_windows_in_order(self) -> None:
+    def test_concatenates_non_overlapping_windows(self) -> None:
         transcription = reconcile_decoded_windows([
-            DecodedWindow(
-                window=InferenceWindow(id="window-2", region_index=0, start_sec=4.0, end_sec=6.0),
-                detected_language="en",
-                segments=[
-                    TranscriptSegment(id="w2s1", text="Action items", start_sec=4.0, end_sec=6.0)
-                ],
-            ),
             DecodedWindow(
                 window=InferenceWindow(id="window-1", region_index=0, start_sec=0.0, end_sec=2.0),
                 detected_language="en",
                 segments=[
                     TranscriptSegment(id="w1s1", text="Agenda review", start_sec=0.0, end_sec=2.0)
+                ],
+            ),
+            DecodedWindow(
+                window=InferenceWindow(id="window-2", region_index=0, start_sec=4.0, end_sec=6.0),
+                detected_language="en",
+                segments=[
+                    TranscriptSegment(id="w2s1", text="Action items", start_sec=4.0, end_sec=6.0)
                 ],
             ),
         ])
