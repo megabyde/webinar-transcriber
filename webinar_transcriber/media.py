@@ -16,7 +16,6 @@ if TYPE_CHECKING:
 
     from av.audio.stream import AudioStream
     from av.container import InputContainer, OutputContainer
-    from av.stream import Stream
     from av.video.stream import VideoStream
 
 
@@ -36,7 +35,15 @@ def _first_audio_stream(input_container: InputContainer) -> AudioStream | None:
 
 
 def _first_video_stream(input_container: InputContainer) -> VideoStream | None:
-    stream = next((stream for stream in input_container.streams if stream.type == "video"), None)
+    # Cover art is exposed as a video stream; only a moving-picture stream counts as video
+    stream = next(
+        (
+            stream
+            for stream in input_container.streams
+            if stream.type == "video" and not stream.disposition & stream.disposition.attached_pic
+        ),
+        None,
+    )
     # PyAV stubs expose .streams as base Stream; filtering on .type does not narrow it
     return cast("VideoStream | None", stream)
 
@@ -87,11 +94,6 @@ def open_output_media_container(path: Path) -> Generator[OutputContainer, None, 
         yield container
 
 
-def _pyav_stream_has_attached_picture(stream: Stream) -> bool:  # pragma: no cover
-    # PyAV stubs omit disposition.attached_pic
-    return bool(stream.disposition & stream.disposition.attached_pic)
-
-
 def _stream_duration_sec(stream: _HasDuration) -> float | None:
     if stream.duration is None or stream.time_base is None:
         return None
@@ -108,16 +110,8 @@ def probe_media(input_path: Path) -> MediaAsset:
         MediaProcessingError: If the input contains no usable audio stream.
     """
     with open_input_media_container(input_path) as input_container:
-        streams = list(input_container.streams)
         audio_stream = _first_audio_stream(input_container)
-        video_stream = next(
-            (
-                stream
-                for stream in streams
-                if stream.type == "video" and not _pyav_stream_has_attached_picture(stream)
-            ),
-            None,
-        )
+        video_stream = _first_video_stream(input_container)
 
         if audio_stream is None:
             raise MediaProcessingError(f"No audio stream found in {input_path}.")
@@ -148,8 +142,8 @@ def probe_media(input_path: Path) -> MediaAsset:
             )
 
         video_codec_context = video_stream.codec_context
-        width = video_codec_context.width  # type: ignore  # av stubs type codec_context as CodecContext; width/height live on VideoCodecContext
-        height = video_codec_context.height  # type: ignore  # same as above
+        width = video_codec_context.width
+        height = video_codec_context.height
         return VideoAsset(
             path=str(input_path),
             duration_sec=duration_sec,
