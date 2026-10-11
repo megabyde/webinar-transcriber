@@ -7,12 +7,15 @@ from typing import TYPE_CHECKING, TypeVar
 
 from pydantic import BaseModel, Field
 
-from webinar_transcriber.llm.prompts import REPORT_SECTION_EXCERPT_LIMIT
+from webinar_transcriber.llm.prompts import (
+    REPORT_POLISH_TOTAL_CHAR_BUDGET,
+    REPORT_SECTION_EXCERPT_LIMIT,
+)
 from webinar_transcriber.llm.types import LlmProcessingError
 from webinar_transcriber.text_utils import split_llm_paragraph_blocks
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Sequence
 
     from webinar_transcriber.models import ReportDocument
 
@@ -50,15 +53,8 @@ class ReportPolishResponse(BaseModel):
 # Utility helpers
 # ---------------------------------------------------------------------------
 
-_SCHEMA_LABELS = {"SectionTextResponse": "Section polish", "ReportPolishResponse": "Report polish"}
 
-
-def build_report_polish_payload(
-    report: ReportDocument,
-    *,
-    total_char_budget: int,
-    section_transcripts: Mapping[str, str] | None = None,
-) -> dict[str, object]:
+def build_report_polish_payload(report: ReportDocument) -> dict[str, object]:
     """Build the report-polish payload with a per-section excerpt budget.
 
     Returns:
@@ -66,7 +62,7 @@ def build_report_polish_payload(
     """
     section_count = max(len(report.sections), 1)
     per_section_budget = min(
-        REPORT_SECTION_EXCERPT_LIMIT, max(200, total_char_budget // section_count)
+        REPORT_SECTION_EXCERPT_LIMIT, max(200, REPORT_POLISH_TOTAL_CHAR_BUDGET // section_count)
     )
 
     return {
@@ -80,10 +76,7 @@ def build_report_polish_payload(
                 "title": section.title,
                 "start_sec": section.start_sec,
                 "end_sec": section.end_sec,
-                "transcript_excerpt": truncate_text(
-                    (section_transcripts or {}).get(section.id, section.transcript_text),
-                    per_section_budget,
-                ),
+                "transcript_excerpt": truncate_text(section.transcript_text, per_section_budget),
             }
             for section in report.sections
         ],
@@ -196,8 +189,3 @@ def extract_response_metadata(response: object) -> dict[str, object]:
 def _text_attr(value: object | None, name: str) -> str | None:
     text = getattr(value, name, None)
     return text if isinstance(text, str) and text else None
-
-
-def schema_label(response_model: type[object]) -> str:
-    """Return the human-facing label for one structured response schema."""
-    return _SCHEMA_LABELS.get(response_model.__name__, "Structured LLM")

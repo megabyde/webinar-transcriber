@@ -62,7 +62,7 @@ def build_video_sections(
         ]
         transcript_text = " ".join(segment.text for segment in scene_segments).strip()
         meaningful_segments = [segment for segment in scene_segments if segment.text.strip()]
-        title = derive_title(transcript_text, fallback="")
+        title = derive_title(transcript_text)
         if meaningful_segments:
             sections.append(
                 _draft_section(meaningful_segments, title=title, image_path=scene.image_path)
@@ -118,7 +118,7 @@ def should_start_new_audio_section(
 
 def _audio_draft_section(segments: list[TranscriptSegment]) -> ReportSection:
     text = next((segment.text for segment in segments if segment.text.strip()), "")
-    title = derive_title(text, fallback="", ellipsis=True)
+    title = derive_title(text, ellipsis=True)
     return _draft_section(segments, title=title)
 
 
@@ -152,13 +152,11 @@ def _number_sections(
     ]
 
 
-def derive_title(
-    text: str, *, fallback: str = "Transcription Report", ellipsis: bool = False
-) -> str:
-    """Return a bounded title from transcript text."""
+def derive_title(text: str, *, ellipsis: bool = False) -> str:
+    """Return a bounded title from transcript text, or an empty string when there is none."""
     cleaned = text.strip().rstrip(".")
     if not cleaned:
-        return fallback
+        return ""
 
     words = cleaned.split()
     title = " ".join(words[:TITLE_WORD_LIMIT])

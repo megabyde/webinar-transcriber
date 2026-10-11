@@ -18,7 +18,6 @@ def write_run_diagnostics(
     ctx: RunContext,
     *,
     status: Literal["succeeded", "failed"],
-    failed_stage: str | None = None,
     error: str | None = None,
 ) -> Diagnostics:
     """Write diagnostics recorded on the processor context.
@@ -28,7 +27,7 @@ def write_run_diagnostics(
     """
     diagnostics = Diagnostics(
         status=status,
-        failed_stage=failed_stage,
+        failed_stage=ctx.failed_stage,
         error=error,
         config=ctx.config,
         llm=ctx.llm,

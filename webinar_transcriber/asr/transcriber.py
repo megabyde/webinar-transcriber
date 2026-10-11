@@ -146,13 +146,12 @@ class WhisperCppTranscriber:
         *,
         threads: int,
         language: str | None = None,
-        log_path: Path | None = None,
     ) -> None:
         """Initialize the whisper.cpp transcriber wrapper."""
         self._model_name = model_name or WHISPER_CPP_MODEL_FILENAME
         self._threads = threads
         self._language = language.strip() if language else None
-        self._log_path = log_path
+        self._log_path: Path | None = None
         self._model: Model | None = None
 
     @property
@@ -235,9 +234,6 @@ class WhisperCppTranscriber:
             list[DecodedWindow]: The decoded windows in deterministic order.
         """
         model = self._ensure_model()
-        ordered_windows = sorted(
-            windows, key=lambda item: (item.start_sec, item.end_sec, item.region_index, item.id)
-        )
         forced_language = self._language
         language_hint: str | None = forced_language
         carryover_prompt = ""
@@ -246,7 +242,7 @@ class WhisperCppTranscriber:
         previous_region_index: int | None = None
         previous_window_end_sec = 0.0
 
-        for window_index, window in enumerate(ordered_windows, start=1):
+        for window_index, window in enumerate(windows, start=1):
             if previous_region_index != window.region_index:
                 if forced_language is None:
                     language_hint = None
