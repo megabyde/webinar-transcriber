@@ -291,16 +291,15 @@ def _run_asr_pipeline(
     write_json(layout.transcript_path, transcription.to_json())
 
     if diarizer is not None:
-        # Native model setup and segmentation block the display. Start with "analyzing audio" so a
-        # transient "preparing model" frame does not remain stuck on screen.
-        with ctx.stage(
-            "diarize", "Diarizing speakers", total=100.0, detail="analyzing audio"
-        ) as st:
+        # sherpa-onnx reports progress only while embedding speakers. Segmentation, about 40% of
+        # the run, reports nothing, so the stage shows elapsed time until the embedding count is
+        # known and then becomes a bar over it.
+        with ctx.stage("diarize", "Diarizing speakers", detail="preparing models") as st:
             diarizer.prepare(speaker_count=diarization_speaker_count)
+            st.update(detail="segmenting speech")
 
             def on_diarize_progress(processed: int, total: int) -> None:
-                embedding_progress = 60.0 * min(processed, total) / total
-                st.update(completed=35.0 + embedding_progress, detail="embedding speakers")
+                st.update(total=total, completed=processed, detail="embedding speakers")
 
             speaker_turns = diarizer.diarize(audio_path, progress_callback=on_diarize_progress)
             write_json(layout.diarization_path, [asdict(turn) for turn in speaker_turns])
@@ -309,12 +308,11 @@ def _run_asr_pipeline(
                 transcription, segments=assign_speakers(transcription.segments, speaker_turns)
             )
             st.update(
-                completed=100.0,
                 detail=join_detail(
                     format_count(speaker_count, "speaker"),
                     format_count(len(speaker_turns), "turn"),
                     format_rtf(audio_duration_sec, st.elapsed_sec()),
-                ),
+                )
             )
         ctx.diarization = DiarizationDiagnostics(
             speaker_count=speaker_count,
