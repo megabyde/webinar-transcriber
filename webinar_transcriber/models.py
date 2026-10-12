@@ -230,7 +230,7 @@ class ReportDocument:
 # Diagnostics
 # ---------------------------------------------------------------------------
 
-ReportStatus = Literal["applied", "fallback"]
+ReportStatus = Literal["applied", "partial", "fallback"]
 
 
 @dataclass(slots=True, frozen=True)

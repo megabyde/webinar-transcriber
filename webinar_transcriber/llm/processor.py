@@ -51,6 +51,7 @@ class SectionPolishResult:
     section: ReportSection
     response_metadata: dict[str, object] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    failed: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +108,7 @@ class InstructorLLMProcessor:
             sections=[r.section for r in results],
             response_metadata=[r.response_metadata for r in results],
             warnings=[warning for r in results for warning in r.warnings],
+            failed_count=sum(r.failed for r in results),
         )
 
     def polish_report_metadata(self, report: ReportDocument) -> LlmReportMetadataResult:
@@ -166,6 +168,7 @@ class InstructorLLMProcessor:
                 section=section,
                 response_metadata={"stage": "section_polish", "section_id": section.id},
                 warnings=[str(ex)],
+                failed=True,
             )
 
     def _polish_section_text(self, section: ReportSection) -> SectionPolishResult:

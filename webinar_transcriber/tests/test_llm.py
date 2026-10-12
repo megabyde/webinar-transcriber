@@ -713,6 +713,7 @@ class TestInstructorProcessorFlow:
         result = processor.polish_report_sections(report, progress_callback=progress_updates.append)
 
         assert result.sections == report.sections
+        assert result.failed_count == 1
         assert result.warnings == ["Section polishing failed for section-1: bad section"]
         assert progress_updates == [1]
 
@@ -738,6 +739,8 @@ class TestInstructorProcessorFlow:
         result = processor.polish_report_sections(report)
 
         assert result.sections == [replace(report.sections[0], tldr="Recap.")]
+        # Kept text after an empty response is a warning, not a failed section
+        assert result.failed_count == 0
         assert result.warnings == [
             "Section polish response returned an empty transcript text for section-1; "
             "kept original text."
