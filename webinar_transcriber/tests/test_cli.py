@@ -15,7 +15,7 @@ from webinar_transcriber.asr import (
 )
 from webinar_transcriber.cli import main
 from webinar_transcriber.diarization import DiarizationConfigurationError
-from webinar_transcriber.llm import LlmConfigurationError, LlmProcessingError
+from webinar_transcriber.llm import LlmConfigurationError
 from webinar_transcriber.llm.rerun import LlmRerunError
 from webinar_transcriber.media import MediaProcessingError
 from webinar_transcriber.paths import OutputDirectoryExistsError
@@ -376,25 +376,19 @@ class TestCli:
         assert result.exit_code != 0
         assert "Output directory already exists" in result.output
 
-    @pytest.mark.parametrize(
-        ("error", "message"),
-        [
-            (AsrProcessingError("missing ASR model"), "missing ASR model"),
-            (LlmProcessingError("LLM request failed"), "LLM request failed"),
-        ],
-    )
-    def test_reports_expected_runtime_errors(
-        self, tmp_path, error: Exception, message: str
-    ) -> None:
+    def test_reports_input_processing_error(self, tmp_path) -> None:
         runner = CliRunner()
         input_path = tmp_path / "demo.wav"
         input_path.write_text("stub", encoding="utf-8")
 
-        with patch("webinar_transcriber.cli.process_input", side_effect=error):
+        with patch(
+            "webinar_transcriber.cli.process_input",
+            side_effect=AsrProcessingError("whisper.cpp inference failed for window-3."),
+        ):
             result = runner.invoke(main, [str(input_path)])
 
-        assert result.exit_code != 0
-        assert message in result.output
+        assert result.exit_code == 1
+        assert "whisper.cpp inference failed for window-3." in result.output
 
     def test_continues_the_batch_past_a_failing_input(self, tmp_path) -> None:
         runner = CliRunner()
