@@ -221,12 +221,15 @@ LLM_PROVIDER=anthropic \
 ```
 
 The LLM step is complete when `report.local.json`, `report.md`, `report.docx`, and `report.json`
-exist in the run directory. `report.local.json` preserves the deterministic input to the LLM. If
-refinement falls back to local content, `diagnostics.json` records the warning. Each provider
-request also records its completion status under `llm.response_metadata`: `status` and
-`incomplete_reason` for OpenAI, `stop_reason` for Anthropic. An OpenAI response cut off by the
-output-token limit still parses rather than falling back, so check for
-`incomplete_reason: max_output_tokens` when a polished section ends early.
+exist in the run directory. `report.local.json` preserves the deterministic input to the LLM. A
+failed request falls back only for its own part: a section keeps its local text, and a failed
+summary keeps the local summary and section titles alongside the polished sections. Each failure is
+a warning in `diagnostics.json`, and `llm.report_status` is `applied` when all LLM output was used,
+`partial` when some was, and `fallback` when none was. Each provider request also records its
+completion status under `llm.response_metadata`: `status` and `incomplete_reason` for OpenAI,
+`stop_reason` for Anthropic. An OpenAI response cut off by the output-token limit still parses
+rather than falling back, so check for `incomplete_reason: max_output_tokens` when a polished
+section ends early.
 
 For missing environment variables, missing extras, or unsupported provider names, see
 [Troubleshooting](https://github.com/megabyde/webinar-transcriber/blob/main/docs/troubleshooting.md).

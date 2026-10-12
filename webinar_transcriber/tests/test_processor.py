@@ -23,7 +23,9 @@ from webinar_transcriber.llm import (
 )
 from webinar_transcriber.models import (
     InferenceWindow,
+    MediaType,
     ReportDocument,
+    ReportSection,
     RunConfig,
     Scene,
     SpeakerTurn,
@@ -31,7 +33,7 @@ from webinar_transcriber.models import (
     TranscriptSegment,
 )
 from webinar_transcriber.paths import RunLayout
-from webinar_transcriber.processor import ProcessArtifacts, RunContext
+from webinar_transcriber.processor import ProcessArtifacts, RunContext, polish_report
 from webinar_transcriber.processor import process_input as _process_input
 from webinar_transcriber.tests.conftest import (
     FakeTranscriber,
@@ -74,7 +76,6 @@ def fake_llm_processor(
     *,
     section_result: Callable[[ReportDocument], LlmSectionPolishResult] | None = None,
     metadata_result: LlmReportMetadataResult | None = None,
-    section_error: LlmProcessingError | None = None,
     metadata_error: LlmProcessingError | None = None,
     section_progress: list[int] | None = None,
     worker_count: int = 1,
@@ -85,8 +86,6 @@ def fake_llm_processor(
     def polish_sections(
         report: ReportDocument, *, progress_callback: Callable[[int], None] | None = None
     ) -> LlmSectionPolishResult:
-        if section_error is not None:
-            raise section_error
         if progress_callback is not None:
             for advance in section_progress or [len(report.sections)]:
                 progress_callback(advance)
@@ -909,46 +908,103 @@ class TestProcessInputLlm:
             ("advance", "llm_report_sections", 1.0, None),
         ]
 
-    def test_falls_back_when_section_polish_fails(
+    def test_summary_failure_keeps_polished_sections(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        input_path = FIXTURE_DIR / "sample-audio.mp3"
         install_pipeline_runtime(monkeypatch, runtime=audio_runtime())
         reporter = RecordingStageReporter()
 
         artifacts = process_input(
-            input_path,
-            output_dir=tmp_path / "section-fallback-run",
+            FIXTURE_DIR / "sample-audio.mp3",
+            output_dir=tmp_path / "summary-fallback-run",
             transcriber=FakeTranscriber(),
             llm_processor=fake_llm_processor(
-                section_error=LlmProcessingError("section polish failed")
+                section_result=lambda report: LlmSectionPolishResult(
+                    sections=[
+                        replace(section, transcript_text=EXPECTED_LLM_SECTION_TEXT)
+                        for section in report.sections
+                    ],
+                    response_metadata=[{"stage": "section_polish", "status": "completed"}],
+                ),
+                metadata_error=LlmProcessingError("summary failed"),
             ),
             reporter=reporter,
         )
 
-        assert reporter.warnings == ["section polish failed"]
+        report_payload = read_json(artifacts.layout.json_report_path)
+        local_payload = read_json(artifacts.layout.local_json_report_path)
+        assert [section["transcript_text"] for section in report_payload["sections"]] == [
+            EXPECTED_LLM_SECTION_TEXT
+        ]
+        assert report_payload["summary"] == []
+        assert report_payload["sections"][0]["title"] == local_payload["sections"][0]["title"]
+        assert reporter.warnings == ["summary failed"]
         assert artifacts.diagnostics.llm is not None
-        assert artifacts.diagnostics.llm.report_status == "fallback"
-        assert artifacts.report.summary == []
-        assert artifacts.report.action_items == []
-
-    def test_metadata_polish_failure_keeps_section_timing_and_falls_back(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        input_path = FIXTURE_DIR / "sample-audio.mp3"
-        install_pipeline_runtime(monkeypatch, runtime=audio_runtime())
-        reporter = RecordingStageReporter()
-
-        artifacts = process_input(
-            input_path,
-            output_dir=tmp_path / "metadata-fallback-run",
-            transcriber=FakeTranscriber(),
-            llm_processor=fake_llm_processor(metadata_error=LlmProcessingError("metadata failed")),
-            reporter=reporter,
-        )
-
-        assert reporter.warnings == ["metadata failed"]
-        assert artifacts.diagnostics.llm is not None
-        assert artifacts.diagnostics.llm.report_status == "fallback"
+        assert artifacts.diagnostics.llm.report_status == "partial"
+        assert artifacts.diagnostics.llm.response_metadata == [
+            {"stage": "section_polish", "status": "completed"}
+        ]
         assert "llm_report_sections" in artifacts.diagnostics.stage_durations_sec
         assert "llm_report_metadata" in artifacts.diagnostics.stage_durations_sec
+
+    @pytest.mark.parametrize(
+        ("failed_sections", "summary_fails", "expected_status"),
+        [
+            (0, False, "applied"),
+            (1, False, "partial"),
+            (0, True, "partial"),
+            (1, True, "partial"),
+            (2, True, "fallback"),
+        ],
+    )
+    def test_report_status_reflects_which_llm_output_was_applied(
+        self, failed_sections: int, summary_fails: bool, expected_status: str
+    ) -> None:
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id=f"section-{index}",
+                    title=f"Section {index}",
+                    start_sec=float(index),
+                    end_sec=float(index + 1),
+                    transcript_text=f"Local {index}.",
+                )
+                for index in (1, 2)
+            ],
+        )
+
+        def section_polish(report: ReportDocument) -> LlmSectionPolishResult:
+            # The first failed_sections sections keep their local text, as a failed polish does
+            return LlmSectionPolishResult(
+                sections=[
+                    section
+                    if position < failed_sections
+                    else replace(section, transcript_text=f"Polished {section.id}.")
+                    for position, section in enumerate(report.sections)
+                ],
+                failed_count=failed_sections,
+            )
+
+        ctx = RunContext(reporter=RecordingStageReporter(), config=RunConfig(llm=True))
+        polished = polish_report(
+            report,
+            llm_processor=fake_llm_processor(
+                section_result=section_polish,
+                metadata_result=LlmReportMetadataResult(
+                    summary=["Point."], action_items=[], section_titles={}
+                ),
+                metadata_error=LlmProcessingError("summary failed") if summary_fails else None,
+            ),
+            ctx=ctx,
+        )
+
+        assert ctx.llm is not None
+        assert ctx.llm.report_status == expected_status
+        assert [section.transcript_text for section in polished.sections] == [
+            "Local 1." if failed_sections >= 1 else "Polished section-1.",
+            "Local 2." if failed_sections >= 2 else "Polished section-2.",
+        ]
+        assert polished.summary == ([] if summary_fails else ["Point."])

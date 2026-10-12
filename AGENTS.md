@@ -93,6 +93,10 @@ maintaining a copy here, and avoid adding deep nesting.
   variants are rejected because they have no trustworthy deterministic input. Variant diagnostics
   record the source-run path, source-report path and hash, and source version under `llm_rerun`,
   independently of provider progress.
+- A failed LLM request falls back only for its own part: a section keeps its local text, and a
+  failed summary keeps the polished sections. Section polishing turns per-section failures into
+  warnings rather than raising, so `llm.report_status` (`applied`, `partial`, `fallback`) is derived
+  from which output was used, not from which stage raised.
 - `transcript.json` is written after reconciliation and rewritten after diarization. Diarization can
   run for minutes, so finished transcription work must be persisted before it starts.
 - Temporary WAV audio extracted for transcription should stay outside the run directory;

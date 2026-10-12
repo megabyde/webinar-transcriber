@@ -78,8 +78,10 @@ with an LLM. For installation and typical usage, see [README.md](../README.md).
      processing.
    - The LLM can polish section transcript text and refine summary bullets, action items, section
      titles, and section TL;DRs.
-   - If an LLM step fails, diagnostics and warnings record the fallback and the local report content
-     remains available.
+   - A failed LLM request falls back only for its own part. A failed section keeps its local text; a
+     failed summary leaves the local summary and titles but keeps the polished sections, since they
+     do not depend on it. Warnings and `llm.report_status` record what fell back, and
+     `report.local.json` keeps the complete local report.
 1. Write final artifacts and diagnostics.
    - `report.md`, `report.docx`, `report.json`, `transcript.json`, and `diagnostics.json` are
      written at the end of a successful run.

@@ -28,6 +28,7 @@ class LlmSectionPolishResult:
     sections: list[ReportSection]
     response_metadata: list[dict[str, object]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    failed_count: int = 0
 
 
 @dataclass(frozen=True)
