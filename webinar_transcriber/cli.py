@@ -21,7 +21,6 @@ from webinar_transcriber.diarization import (
 )
 from webinar_transcriber.llm import (
     LlmConfigurationError,
-    LlmProcessingError,
     build_llm_processor_from_env,
 )
 from webinar_transcriber.llm.rerun import (
@@ -46,12 +45,12 @@ SETUP_ERRORS = (
     DiarizationConfigurationError,
     LlmConfigurationError,
 )
-# Failures that belong to one input. A batch reports them and moves on to the next file. These are
-# the base classes of the setup errors above, so the handlers must stay in this order.
+# Failures that belong to one input. A batch reports them and moves on to the next file. The ASR
+# and diarization errors are base classes of the setup errors above, so the handlers must stay in
+# this order. LLM failures never reach here: polish_report falls back to the local report.
 INPUT_ERRORS = (
     AsrProcessingError,
     DiarizationProcessingError,
-    LlmProcessingError,
     MediaProcessingError,
     OutputDirectoryExistsError,
 )
