@@ -30,6 +30,9 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
 
+    from rich.console import RenderableType
+    from rich.progress import Task
+
     from webinar_transcriber.llm.rerun import LlmRerunArtifacts
     from webinar_transcriber.processor import ProcessArtifacts
 
@@ -56,8 +59,9 @@ class StageHandle:
         advance: float | None = None,
         completed: float | None = None,
         detail: str | None = None,
+        total: float | None = None,
     ) -> None:
-        """Advance the stage and/or update its detail string."""
+        """Advance the stage, update its detail string, and/or set its total once it is known."""
         if completed is not None:
             advance = max(0.0, completed - self.completed)
         applied_advance = advance if advance is not None and advance > 0 else 0.0
@@ -66,7 +70,9 @@ class StageHandle:
         if detail is not None:
             self.detail = detail
         description = f"{self.label} - {self.detail}" if self.detail else self.label
-        self._progress.update(self._task_id, advance=applied_advance, description=description)
+        self._progress.update(
+            self._task_id, advance=applied_advance, description=description, total=total
+        )
 
 
 class StageReporter:
@@ -92,7 +98,11 @@ class StageReporter:
     ) -> Generator[StageHandle, None, None]:
         """Open a stage display and yield a handle for progress updates."""
         progress = Progress(
-            *self._columns(determinate=total is not None), console=self._console, transient=True
+            SpinnerColumn(),
+            TextColumn("{task.description}"),
+            _StatusColumn(),
+            console=self._console,
+            transient=True,
         )
         description = f"{label} - {detail}" if detail else label
         progress.start()
@@ -193,19 +203,31 @@ class StageReporter:
     def _clear_active(self) -> None:
         self._active_handle = None
 
-    @staticmethod
-    def _columns(*, determinate: bool) -> tuple[ProgressColumn, ...]:
-        middle: tuple[ProgressColumn, ...] = (
-            (
-                BarColumn(),
-                TaskProgressColumn(),
-                TextColumn("ETA"),
-                TimeRemainingColumn(compact=True),
-            )
-            if determinate
-            else ()
+
+class _StatusColumn(ProgressColumn):
+    """Elapsed time, preceded by bar, percentage, and ETA once the task has a total.
+
+    A stage can start before its amount of work is known and set the total later; until then it
+    shows only the elapsed time.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._elapsed = TimeElapsedColumn()
+        self._determinate = (
+            BarColumn(),
+            TaskProgressColumn(),
+            TextColumn("ETA"),
+            TimeRemainingColumn(compact=True),
         )
-        return (SpinnerColumn(), TextColumn("{task.description}"), *middle, TimeElapsedColumn())
+
+    def render(self, task: Task) -> RenderableType:
+        columns = (
+            (*self._determinate, self._elapsed) if task.total is not None else (self._elapsed,)
+        )
+        row = Table.grid(padding=(0, 1))
+        row.add_row(*(column(task) for column in columns))
+        return row
 
 
 def _processing_detail(artifacts: ProcessArtifacts) -> str:

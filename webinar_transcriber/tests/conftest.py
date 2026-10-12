@@ -69,7 +69,11 @@ class _RecordingHandle:
         advance: float | None = None,
         completed: float | None = None,
         detail: str | None = None,
+        total: float | None = None,
     ) -> None:
+        if total is not None and total != self.total:
+            self.total = total
+            self.progress_log.append(("total", self.key, total, detail))
         if completed is not None:
             advance = max(0.0, completed - self.completed)
         applied_advance = advance if advance is not None and advance > 0 else 0.0

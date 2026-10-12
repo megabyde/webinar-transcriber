@@ -5,8 +5,9 @@ from types import SimpleNamespace
 
 import pytest
 from rich.console import Console
+from rich.progress import Progress
 
-from webinar_transcriber.ui import StageReporter
+from webinar_transcriber.ui import StageReporter, _StatusColumn
 
 
 class TestStageReporter:
@@ -174,3 +175,21 @@ class TestStageReporter:
         reporter = StageReporter(console=Console(quiet=True))
 
         reporter.reset_active_display()  # no active display; should not error
+
+
+class TestStatusColumn:
+    def test_shows_bar_and_eta_only_once_the_total_is_known(self) -> None:
+        progress = Progress()
+        task_id = progress.add_task("Diarizing speakers", total=None)
+        column = _StatusColumn()
+
+        def rendered() -> str:
+            console = Console(width=120, record=True, color_system=None)
+            console.print(column(progress.tasks[0]))
+            return console.export_text().strip()
+
+        assert rendered() == "0:00:00"
+
+        progress.update(task_id, total=4, completed=1)
+
+        assert rendered().endswith("25% ETA --:-- 0:00:00")
