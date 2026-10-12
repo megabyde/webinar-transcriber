@@ -301,19 +301,12 @@ class TestProcessInput:
         assert artifacts.diagnostics.diarization is not None
         assert artifacts.diagnostics.diarization.speaker_count == 2
         assert artifacts.diagnostics.diarization.turn_count == 2
-        # Stage opens already labeled "analyzing audio" (covering prep + segmentation); the bar
-        # then jumps into the embedding range on the first callback (35 + 60*1/2 = 65%)
-        assert ("start", "diarize", 100.0, "analyzing audio") in reporter.progress
-        assert ("advance", "diarize", 65.0, "embedding speakers") in reporter.progress
-        diarize_progress = [
-            detail
-            for action, stage_key, _, detail in reporter.progress
-            if action == "advance" and stage_key == "diarize"
+        # No bar until sherpa-onnx reports the embedding count; then one step per embedding
+        assert [event for event in reporter.progress if event[1] == "diarize"][:3] == [
+            ("total", "diarize", 2, "embedding speakers"),
+            ("advance", "diarize", 1.0, "embedding speakers"),
+            ("advance", "diarize", 1.0, "embedding speakers"),
         ]
-        assert any(
-            detail and detail.startswith("2 speakers | 2 turns | RTF ")
-            for detail in diarize_progress
-        )
         diarize_finished = [
             detail for stage_key, detail in reporter.finished if stage_key == "diarize"
         ]
