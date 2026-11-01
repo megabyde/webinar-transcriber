@@ -138,7 +138,7 @@ def _decode_frame_at(
     input_container: InputContainer, video_stream: VideoStream, target_sec: float
 ) -> SavableImage:
     """Seek to ``target_sec`` and return the first decoded frame at or after it."""
-    if video_stream.time_base is not None:
+    if video_stream.time_base:
         input_container.seek(int(target_sec / video_stream.time_base), stream=video_stream)
     fallback_image: SavableImage | None = None
     for frame in input_container.decode(video_stream):
@@ -198,7 +198,7 @@ def _frame_time_sec(frame: VideoFrame) -> float | None:
     if frame.time is None:  # pragma: no cover - fallback for frames without direct time
         pts = frame.pts
         time_base = frame.time_base
-        if pts is None or time_base is None:
+        if pts is None or not time_base:
             return None
         return float(pts * time_base)
     return float(frame.time)

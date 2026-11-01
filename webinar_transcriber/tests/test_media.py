@@ -4,6 +4,7 @@ from fractions import Fraction
 from pathlib import Path
 from unittest.mock import Mock
 
+import av
 import pytest
 
 from webinar_transcriber.media import (
@@ -64,8 +65,9 @@ class TestProbeMedia:
         assert asset.sample_rate == 44_100
         assert asset.channels == 2
 
+    @pytest.mark.parametrize("frame_rate", [None, av.AVRational(0, 1), Fraction(25, 1)])
     def test_uses_video_stream_duration_when_container_and_audio_duration_are_absent(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, monkeypatch: pytest.MonkeyPatch, frame_rate
     ) -> None:
         class FakeDisposition:
             attached_pic = 1
@@ -81,8 +83,8 @@ class TestProbeMedia:
             type = "video"
             duration = 125
             time_base = Fraction(1, 25)
+            average_rate = frame_rate
             disposition = FakeDisposition()
-            average_rate = Fraction(25, 1)
             codec_context = FakeCodecContext()
 
         class FakeAudioCodecContext:
@@ -108,6 +110,7 @@ class TestProbeMedia:
 
         assert isinstance(asset, VideoAsset)
         assert asset.duration_sec == 5.0
+        assert asset.fps == (25.0 if frame_rate else None)
         assert asset.sample_rate == 44_100
         assert asset.channels == 2
 
@@ -202,8 +205,12 @@ class TestProbeMedia:
 
 
 class TestStreamDurationSec:
-    def test_returns_none_without_duration_or_time_base(self) -> None:
-        stream = type("Stream", (), {"duration": None, "time_base": None})()
+    @pytest.mark.parametrize(
+        ("duration", "time_base"),
+        [(None, Fraction(1, 25)), (125, None), (125, av.AVRational(0, 1))],
+    )
+    def test_returns_none_without_duration_or_time_base(self, duration, time_base) -> None:
+        stream = Mock(duration=duration, time_base=time_base)
 
         assert _stream_duration_sec(stream) is None
 

@@ -2,6 +2,7 @@
 
 from fractions import Fraction
 from pathlib import Path
+from unittest.mock import Mock
 
 import av
 import numpy as np
@@ -10,6 +11,7 @@ from PIL import Image
 
 from webinar_transcriber.models import Scene
 from webinar_transcriber.video import detect_scenes, estimated_scene_sample_count, save_scene_frames
+from webinar_transcriber.video.scenes import _decode_frame_at, _frame_time_sec
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 SAMPLE_VIDEO_PATH = FIXTURE_DIR / "sample-video.mp4"
@@ -205,3 +207,26 @@ class TestEstimatedSceneSampleCount:
 
     def test_estimated_scene_sample_count_keeps_zero_duration_visible(self) -> None:
         assert estimated_scene_sample_count(0.0) == 1
+
+
+class TestMissingTimeBase:
+    @pytest.mark.parametrize("time_base", [None, av.AVRational(0, 1)])
+    def test_decodes_without_seeking_when_stream_time_base_is_absent(self, time_base) -> None:
+        image = Image.new("RGB", (8, 8), color="white")
+        frame = Mock(time=1.0)
+        frame.to_image.return_value = image
+        container = Mock()
+        container.decode.return_value = [frame]
+        stream = Mock(time_base=time_base)
+
+        decoded = _decode_frame_at(container, stream, 1.0)
+
+        assert isinstance(decoded, Image.Image)
+        assert decoded.tobytes() == image.tobytes()
+        container.seek.assert_not_called()
+
+    @pytest.mark.parametrize("time_base", [None, av.AVRational(0, 1)])
+    def test_frame_time_is_unknown_without_time_base(self, time_base) -> None:
+        frame = Mock(time=None, pts=25, time_base=time_base)
+
+        assert _frame_time_sec(frame) is None
