@@ -34,10 +34,10 @@ dependencies = [
     "pywhispercpp>=1.5.1,<2.0.0",
     "python-docx>=1.2.0,<2.0.0",
     "rich>=14.3.4,<16.0.0",
-    "av>=18.1.0,<19.0.0",
+    "av>=18.1.0,<20.0.0",
     # These exact pins must move together; the wheel's registry metadata omits its core ABI.
     "sherpa-onnx==1.13.8",
-    "sherpa-onnx-core==1.13.8",
+    "sherpa-onnx-core==2.0.1",
 ]
 
 [project.urls]
