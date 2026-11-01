@@ -95,7 +95,7 @@ def open_output_media_container(path: Path) -> Generator[OutputContainer, None, 
 
 
 def _stream_duration_sec(stream: _HasDuration) -> float | None:
-    if stream.duration is None or stream.time_base is None:
+    if stream.duration is None or not stream.time_base:
         return None
     return float(stream.duration * stream.time_base)
 
@@ -149,7 +149,7 @@ def probe_media(input_path: Path) -> MediaAsset:
             duration_sec=duration_sec,
             sample_rate=parsed_sample_rate,
             channels=parsed_channels,
-            fps=float(video_stream.average_rate) if video_stream.average_rate is not None else None,
+            fps=float(video_stream.average_rate) if video_stream.average_rate else None,
             width=int(width) if width is not None else None,
             height=int(height) if height is not None else None,
         )

@@ -37,7 +37,7 @@ dependencies = [
     "av>=18.1.0,<20.0.0",
     # These exact pins must move together; the wheel's registry metadata omits its core ABI.
     "sherpa-onnx==1.13.8",
-    "sherpa-onnx-core==2.0.1",
+    "sherpa-onnx-core==1.13.8",
 ]
 
 [project.urls]
