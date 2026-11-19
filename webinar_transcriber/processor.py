@@ -3,30 +3,27 @@
 from __future__ import annotations
 
 import tempfile
-from contextlib import contextmanager, suppress
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from webinar_transcriber.asr import ASR_BACKEND_NAME, WhisperCppTranscriber, plan_inference_windows
-from webinar_transcriber.diagnostics import write_run_diagnostics
+from webinar_transcriber.diagnostics import RunContext, write_run_diagnostics
 from webinar_transcriber.diarization import DIARIZATION_MODEL, assign_speakers
-from webinar_transcriber.export import write_docx_report, write_json_report, write_markdown_report
+from webinar_transcriber.export import write_json_report
 from webinar_transcriber.export.formatting import format_count, format_rtf, join_detail
 from webinar_transcriber.io import write_json
-from webinar_transcriber.llm import LlmProcessingError
 from webinar_transcriber.media import probe_media
 from webinar_transcriber.models import (
     AsrPipelineDiagnostics,
     DiarizationDiagnostics,
-    LlmDiagnostics,
-    LlmRerunDiagnostics,
     RunConfig,
     VideoAsset,
     average_duration_sec,
 )
 from webinar_transcriber.normalized_audio import load_normalized_audio, write_transcription_audio
 from webinar_transcriber.paths import create_run_layout
+from webinar_transcriber.reporting import export_report, polish_report
 from webinar_transcriber.segmentation import detect_speech_regions, normalized_audio_duration
 from webinar_transcriber.structure import build_report
 from webinar_transcriber.transcript.coalesce import coalesce_transcript
@@ -38,21 +35,17 @@ from webinar_transcriber.video import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
-
     from webinar_transcriber.diarization import SherpaOnnxDiarizer
-    from webinar_transcriber.llm import LlmReportMetadataResult
     from webinar_transcriber.llm.processor import InstructorLLMProcessor
     from webinar_transcriber.models import (
         Diagnostics,
         MediaAsset,
         ReportDocument,
-        ReportStatus,
         Scene,
         TranscriptionResult,
     )
     from webinar_transcriber.paths import RunLayout
-    from webinar_transcriber.ui import StageHandle, StageReporter
+    from webinar_transcriber.ui import StageReporter
 
 
 @dataclass(frozen=True)
@@ -63,57 +56,6 @@ class ProcessArtifacts:
     media_asset: MediaAsset
     report: ReportDocument
     diagnostics: Diagnostics
-
-
-@dataclass
-class RunContext:
-    """Mutable state and recorded diagnostics for one processing run."""
-
-    reporter: StageReporter
-    config: RunConfig | None
-    stage_timings: dict[str, float] = field(default_factory=dict)
-    warnings: list[str] = field(default_factory=list)
-    failed_stage: str | None = None
-    item_counts: dict[str, int] = field(default_factory=dict)
-    asr_pipeline: AsrPipelineDiagnostics | None = None
-    diarization: DiarizationDiagnostics | None = None
-    llm: LlmDiagnostics | None = None
-    llm_rerun: LlmRerunDiagnostics | None = None
-
-    def record_warning(self, message: str) -> None:
-        """Record and report one run warning."""
-        self.warnings.append(message)
-        self.reporter.warn(message)
-
-    @contextmanager
-    def stage(
-        self, key: str, label: str, *, total: float | None = None, detail: str | None = None
-    ) -> Generator[StageHandle, None, None]:
-        """Track timing for one stage and surface it through the reporter."""
-        with self.reporter.track(key, label, total=total, detail=detail) as handle:
-            try:
-                yield handle
-            except BaseException:
-                self.failed_stage = key
-                raise
-            finally:
-                self.stage_timings[key] = handle.elapsed_sec()
-
-    @contextmanager
-    def failure_diagnostics(self, layout: RunLayout) -> Generator[None, None, None]:
-        """Write failed-run diagnostics when the wrapped block raises, then re-raise."""
-        try:
-            yield
-        except BaseException as ex:
-            # A diagnostics failure must not mask the original error
-            with suppress(Exception):
-                write_run_diagnostics(
-                    layout,
-                    self,
-                    status="failed",
-                    error="Interrupted by user." if isinstance(ex, KeyboardInterrupt) else str(ex),
-                )
-            raise
 
 
 def process_input(
@@ -412,109 +354,6 @@ def _detect_video_scenes(
 
     write_json(layout.scenes_path, [asdict(scene) for scene in scenes])
     return scenes
-
-
-def export_report(report: ReportDocument, *, layout: RunLayout, ctx: RunContext) -> None:
-    """Write the Markdown, DOCX, and JSON artifacts for the report."""
-    with ctx.stage("export", "Writing artifacts") as st:
-        write_markdown_report(report, layout.markdown_report_path)
-        write_docx_report(report, layout.docx_report_path)
-        write_json_report(report, layout.json_report_path)
-        st.update(detail="report.md | report.docx | report.json")
-
-
-def polish_report(
-    report: ReportDocument,
-    *,
-    llm_processor: InstructorLLMProcessor,
-    ctx: RunContext,
-) -> ReportDocument:
-    provider_name = llm_processor.provider_name
-    model_name = llm_processor.model_name
-    section_count = len(report.sections)
-    worker_count = llm_processor.polish_worker_count(section_count)
-    runtime_detail = join_detail(provider_name, model_name)
-
-    with ctx.stage(
-        "llm_report_sections",
-        "Polishing sections with LLM",
-        total=section_count,
-        detail=join_detail(runtime_detail, format_count(worker_count, "worker")),
-    ) as st:
-
-        def on_section_progress(advance: int) -> None:
-            st.update(advance=advance)
-
-        section_result = llm_processor.polish_report_sections(
-            report, progress_callback=on_section_progress
-        )
-        section_elapsed_sec = st.elapsed_sec()
-        st.update(detail=format_count(section_count, "section"))
-    for warning in section_result.warnings:
-        ctx.record_warning(warning)
-    polished_report = replace(report, sections=section_result.sections)
-    response_metadata = list(section_result.response_metadata)
-
-    with ctx.stage(
-        "llm_report_metadata", "Polishing report summary with LLM", detail=runtime_detail
-    ) as st:
-        try:
-            metadata_result = llm_processor.polish_report_metadata(polished_report)
-        except LlmProcessingError as ex:
-            # The polished sections do not depend on the summary, so they are kept
-            ctx.record_warning(str(ex))
-            st.update(detail=join_detail(runtime_detail, "summary fallback"))
-            metadata_result = None
-        else:
-            response_metadata.extend(metadata_result.response_metadata)
-            st.update(detail=_metadata_detail(metadata_result))
-        metadata_elapsed_sec = st.elapsed_sec()
-
-    if metadata_result is not None:
-        polished_report = replace(
-            polished_report,
-            summary=metadata_result.summary,
-            action_items=metadata_result.action_items,
-            sections=[
-                replace(
-                    section, title=metadata_result.section_titles.get(section.id, section.title)
-                )
-                for section in polished_report.sections
-            ],
-        )
-    ctx.llm = LlmDiagnostics(
-        provider=provider_name,
-        model=model_name,
-        report_status=_report_status(
-            section_count=section_count,
-            failed_section_count=section_result.failed_count,
-            summary_applied=metadata_result is not None,
-        ),
-        report_latency_sec=section_elapsed_sec + metadata_elapsed_sec,
-        response_metadata=response_metadata,
-    )
-    return polished_report
-
-
-def _report_status(
-    *, section_count: int, failed_section_count: int, summary_applied: bool
-) -> ReportStatus:
-    if summary_applied and failed_section_count == 0:
-        return "applied"
-    if not summary_applied and failed_section_count == section_count:
-        return "fallback"
-    return "partial"
-
-
-def _metadata_detail(metadata_result: LlmReportMetadataResult) -> str:
-    parts = []
-    if metadata_result.summary:
-        parts.append(format_count(len(metadata_result.summary), "summary bullet"))
-    if metadata_result.action_items:
-        parts.append(format_count(len(metadata_result.action_items), "action item"))
-    if metadata_result.section_titles:
-        parts.append(f"{format_count(len(metadata_result.section_titles), 'title')} updated")
-    return join_detail(*parts)
 
 
 __all__ = [

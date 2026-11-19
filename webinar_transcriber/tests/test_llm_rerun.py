@@ -174,7 +174,7 @@ class TestRerunLlmReport:
 
         with (
             patch(
-                "webinar_transcriber.processor.write_docx_report", side_effect=RuntimeError("boom")
+                "webinar_transcriber.reporting.write_docx_report", side_effect=RuntimeError("boom")
             ),
             pytest.raises(RuntimeError, match="boom"),
         ):
