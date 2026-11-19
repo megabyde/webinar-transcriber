@@ -12,7 +12,6 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from webinar_transcriber.diagnostics import write_run_diagnostics
-from webinar_transcriber.llm.providers import require_llm_module
 from webinar_transcriber.models import Diagnostics, LlmRerunDiagnostics, ReportDocument
 from webinar_transcriber.paths import RunLayout
 from webinar_transcriber.processor import RunContext, export_report, polish_report
@@ -153,6 +152,8 @@ def _create_rerun_layout(source_run_dir: Path) -> RunLayout:
 
 def _load_report(content: bytes, *, artifact: str, run_dir: Path) -> ReportDocument:
     # Pydantic belongs to the optional llm extra, so keep base CLI imports dependency-free
+    from webinar_transcriber.llm.providers import require_llm_module  # noqa: PLC0415
+
     require_llm_module("pydantic", provider_label="LLM rerun")
     from pydantic import TypeAdapter, ValidationError  # noqa: PLC0415
 
