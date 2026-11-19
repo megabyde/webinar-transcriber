@@ -73,6 +73,7 @@ maintaining a copy here, and avoid adding deep nesting.
 
 - Every accepted input contains a decodable audio stream. A usable video stream is optional and adds
   scene detection and representative frames.
+- Audio and video timestamps share the container playback origin, including delayed audio starts.
 - Successful default CLI runs write the report artifact set described in `README.md`.
 - One failing input does not abort a batch. Per-input errors are reported and the run continues,
   with a tally and exit code `1` at the end. Configuration errors that would fail every input, and

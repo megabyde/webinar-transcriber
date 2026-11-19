@@ -74,10 +74,16 @@ def write_transcription_audio(
         )  # av stubs type add_stream() as base Stream regardless of codec argument
         output_stream.layout = "mono"
         resampler = av.AudioResampler(
-            format=resample_format, layout="mono", rate=NORMALIZED_SAMPLE_RATE
+            format=resample_format,
+            layout="mono",
+            rate=NORMALIZED_SAMPLE_RATE,
+            options={"first_pts": "0", "async": "1"},
         )
 
+        origin_sec = (input_container.start_time or 0) / av.time_base
         for decoded_frame in input_container.decode(input_stream):
+            if decoded_frame.pts is not None and decoded_frame.time_base:
+                decoded_frame.pts -= round(origin_sec / decoded_frame.time_base)
             if progress_callback is not None and decoded_frame.time is not None:
                 progress_callback(float(decoded_frame.time))
             _mux_audio_frames(output_container, output_stream, resampler.resample(decoded_frame))
