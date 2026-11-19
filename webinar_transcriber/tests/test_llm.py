@@ -336,6 +336,35 @@ class TestInstructorLlmProcessor:
     ) -> None:
         assert extract_response_metadata(completion) == expected
 
+    @pytest.mark.parametrize(
+        "completion",
+        [
+            SimpleNamespace(
+                status="incomplete", incomplete_details=SimpleNamespace(reason="max_output_tokens")
+            ),
+            SimpleNamespace(stop_reason="max_tokens"),
+        ],
+    )
+    def test_truncated_section_keeps_full_transcript(self, completion):
+        client = self.fake_client((SectionTextResponse(transcript_text="Opening."), completion))
+        processor = InstructorLLMProcessor(
+            client=client, provider_name="test", model_name="test", threads=1
+        )
+        section = ReportSection(
+            id="s1",
+            title="Talk",
+            start_sec=0,
+            end_sec=5,
+            transcript_text="Opening. Important conclusion.",
+        )
+        report = ReportDocument(
+            title="Talk", source_file="talk.wav", media_type=MediaType.AUDIO, sections=[section]
+        )
+        result = processor.polish_report_sections(report)
+        assert result.sections == [section]
+        assert result.failed_count == 1
+        assert "max_tokens" in result.warnings[0] or "max_output_tokens" in result.warnings[0]
+
     def test_rejects_unknown_report_section_id(self) -> None:
         fake_client = self.fake_client(
             (
