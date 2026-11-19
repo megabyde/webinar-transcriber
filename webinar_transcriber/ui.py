@@ -164,6 +164,7 @@ class StageReporter:
         table.add_column()
         warning_count = len(artifacts.diagnostics.warnings)
         warning_text = Text(str(warning_count), style="yellow" if warning_count else "green")
+        table.add_row("Report", Text(str(artifacts.layout.markdown_report_path), style="cyan"))
         table.add_row("Run directory", Text(str(artifacts.layout.run_dir), style="cyan"))
         table.add_row("Diagnostics", Text(str(artifacts.layout.diagnostics_path), style="cyan"))
         table.add_row("Language", Text(artifacts.report.detected_language or "unknown"))
@@ -182,6 +183,9 @@ class StageReporter:
         table.add_column()
         warning_count = len(artifacts.diagnostics.warnings)
         warning_text = Text(str(warning_count), style="yellow" if warning_count else "green")
+        table.add_row(
+            "Report", Text(os.path.relpath(artifacts.layout.markdown_report_path), style="cyan")
+        )
         table.add_row(
             "Output directory", Text(os.path.relpath(artifacts.layout.run_dir), style="cyan")
         )

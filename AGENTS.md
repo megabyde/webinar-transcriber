@@ -28,6 +28,8 @@ Repository-visible assets stay under `docs/assets/`. The README preview uses one
 with absolute raw GitHub URLs, so GitHub selects the appropriate theme and PyPI renders the default
 image. Keep `social-preview-dark.png` suitable for the repository social-preview setting.
 
+Keep the example report under `docs/assets/` representative of the exported DOCX.
+
 ## Tooling
 
 Keep setup docs and Makefile targets in sync. Installation is documented in the README as direct uv
