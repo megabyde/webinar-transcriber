@@ -77,6 +77,8 @@ def write_transcription_audio(
             format=resample_format,
             layout="mono",
             rate=NORMALIZED_SAMPLE_RATE,
+            # A nonzero frame size forces the timestamp filter even for matching PCM input
+            frame_size=1024,
             options={"first_pts": "0", "async": "1"},
         )
 

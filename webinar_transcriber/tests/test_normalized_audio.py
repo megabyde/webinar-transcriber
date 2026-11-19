@@ -2,8 +2,10 @@
 
 import tracemalloc
 import wave
+from contextlib import nullcontext
 from fractions import Fraction
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Self
 from unittest.mock import Mock, patch
 
@@ -116,6 +118,24 @@ class TestNormalizedAudio:
 
         with pytest.raises(MediaProcessingError, match="No audio stream found"):
             write_transcription_audio(FIXTURE_DIR / "sample-video.mp4", tmp_path / "audio.wav")
+
+    def test_exact_mono_layout_still_applies_timestamp_padding(self, tmp_path, monkeypatch):
+        frame = av.AudioFrame.from_ndarray(
+            np.full((1, 16000), 1000, dtype=np.int16), format="s16", layout="mono"
+        )
+        frame.sample_rate = 16000
+        frame.time_base = Fraction(1, 16000)
+        frame.pts = 64000
+        container = SimpleNamespace(start_time=0, decode=lambda _stream: [frame])
+        monkeypatch.setattr(
+            "webinar_transcriber.normalized_audio.open_audio_input_container",
+            lambda _path: nullcontext((container, object())),
+        )
+        path = write_transcription_audio(tmp_path / "source", tmp_path / "out.wav")
+        samples = load_normalized_audio(path)
+        assert len(samples) == 80000
+        assert not samples[:64000].any()
+        assert samples[64000:].min() > 0
 
     def test_delayed_audio_preserves_leading_silence(self, tmp_path: Path) -> None:
         path = tmp_path / "delayed.mkv"
