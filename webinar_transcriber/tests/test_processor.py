@@ -14,7 +14,7 @@ from rich.console import Console
 
 from webinar_transcriber import __version__
 from webinar_transcriber.asr import WhisperCppTranscriber, plan_inference_windows
-from webinar_transcriber.diagnostics import write_run_diagnostics
+from webinar_transcriber.diagnostics import RunContext, write_run_diagnostics
 from webinar_transcriber.diarization import DiarizationProcessingError
 from webinar_transcriber.llm import (
     LlmProcessingError,
@@ -33,8 +33,9 @@ from webinar_transcriber.models import (
     TranscriptSegment,
 )
 from webinar_transcriber.paths import RunLayout
-from webinar_transcriber.processor import ProcessArtifacts, RunContext, polish_report
+from webinar_transcriber.processor import ProcessArtifacts
 from webinar_transcriber.processor import process_input as _process_input
+from webinar_transcriber.reporting import polish_report
 from webinar_transcriber.tests.conftest import (
     FakeTranscriber,
     RecordingStageReporter,
