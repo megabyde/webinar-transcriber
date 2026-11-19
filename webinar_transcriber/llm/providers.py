@@ -50,13 +50,13 @@ def required_provider_env(provider_name: str) -> tuple[str, str]:
     return model_name, api_key
 
 
-def _required_llm_module(module_name: str, *, provider_label: str) -> object:
+def require_llm_module(module_name: str, *, provider_label: str) -> object:
     try:
         return importlib.import_module(module_name)
     except ImportError as ex:
         raise LlmConfigurationError(
             f"The {provider_label} provider requires the 'llm' extra. Install it with: "
-            'uv tool install --reinstall ".[llm]"'
+            'uv tool install --reinstall "webinar-transcriber[llm]"'
         ) from ex
 
 
@@ -69,10 +69,6 @@ def build_llm_processor_from_env(*, threads: int) -> InstructorLLMProcessor:
     Raises:
         LlmConfigurationError: If the provider selection or required environment is invalid.
     """
-    # The CLI imports this package on base installs. Defer processor.py so its llm-extra-only
-    # dependencies are loaded only when the user enables LLM processing.
-    from webinar_transcriber.llm.processor import InstructorLLMProcessor  # noqa: PLC0415
-
     provider_name = llm_provider_name()
     spec = PROVIDERS.get(provider_name)
     if spec is None:
@@ -80,10 +76,14 @@ def build_llm_processor_from_env(*, threads: int) -> InstructorLLMProcessor:
             "Unsupported LLM provider. Set LLM_PROVIDER to 'openai' or 'anthropic'."
         )
 
-    instructor: Any = _required_llm_module("instructor", provider_label=spec.label)
-    _required_llm_module(provider_name, provider_label=spec.label)
+    instructor: Any = require_llm_module("instructor", provider_label=spec.label)
+    require_llm_module(provider_name, provider_label=spec.label)
     model_name, api_key = required_provider_env(provider_name)
     mode = instructor.Mode.RESPONSES_TOOLS if provider_name == "openai" else instructor.Mode.TOOLS
+
+    # The CLI imports this package on base installs. Defer processor.py so its llm-extra-only
+    # dependencies are loaded only when the user enables LLM processing.
+    from webinar_transcriber.llm.processor import InstructorLLMProcessor  # noqa: PLC0415
 
     return InstructorLLMProcessor(
         client=instructor.from_provider(
