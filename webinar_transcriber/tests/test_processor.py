@@ -303,9 +303,9 @@ class TestProcessInput:
         assert artifacts.diagnostics.diarization.turn_count == 2
         # No bar until sherpa-onnx reports the embedding count; then one step per embedding
         assert [event for event in reporter.progress if event[1] == "diarize"][:3] == [
-            ("total", "diarize", 2, "embedding speakers"),
-            ("advance", "diarize", 1.0, "embedding speakers"),
-            ("advance", "diarize", 1.0, "embedding speakers"),
+            ("total", "diarize", 2, "embeddings 1/2"),
+            ("advance", "diarize", 1.0, "embeddings 1/2"),
+            ("indeterminate", "diarize", 1.0, "finalizing speaker labels"),
         ]
         diarize_finished = [
             detail for stage_key, detail in reporter.finished if stage_key == "diarize"

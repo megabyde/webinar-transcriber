@@ -60,6 +60,7 @@ class StageHandle:
         completed: float | None = None,
         detail: str | None = None,
         total: float | None = None,
+        indeterminate: bool = False,
     ) -> None:
         """Advance the stage, update its detail string, and/or set its total once it is known."""
         if completed is not None:
@@ -71,7 +72,11 @@ class StageHandle:
             self.detail = detail
         description = f"{self.label} - {self.detail}" if self.detail else self.label
         self._progress.update(
-            self._task_id, advance=applied_advance, description=description, total=total
+            self._task_id,
+            advance=applied_advance,
+            description=description,
+            total=total,
+            indeterminate=indeterminate,
         )
 
 
@@ -223,7 +228,9 @@ class _StatusColumn(ProgressColumn):
 
     def render(self, task: Task) -> RenderableType:
         columns = (
-            (*self._determinate, self._elapsed) if task.total is not None else (self._elapsed,)
+            (*self._determinate, self._elapsed)
+            if task.total is not None and not task.fields.get("indeterminate")
+            else (self._elapsed,)
         )
         row = Table.grid(padding=(0, 1))
         row.add_row(*(column(task) for column in columns))

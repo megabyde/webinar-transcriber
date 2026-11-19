@@ -276,6 +276,9 @@ turn rather than total speaking time, so a participant who speaks once but says 
 kept; a contribution shorter than two seconds, such as a one-word interjection, is merged into the
 surrounding speaker.
 
+The progress bar counts speaker embeddings. Segmentation and finalizing speaker labels show elapsed
+time while the native backend works.
+
 Diarization runs locally through `sherpa-onnx` and does not use an API key. The first diarized run
 downloads the segmentation and speaker-embedding models into
 `~/.cache/webinar-transcriber/diarization`. Set `WEBINAR_DIARIZATION_CACHE_DIR` to override that
