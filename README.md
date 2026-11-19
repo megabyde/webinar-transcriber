@@ -323,6 +323,8 @@ automatically selected thread count.
 - `--language CODE`: force a Whisper language code such as `en` or `ru`.
 - `--threads N`: set the CPU worker count passed to `whisper.cpp`.
 
+English-only Whisper models use English directly and reject conflicting language overrides.
+
 GPU-enabled builds can offload supported model work to the GPU, but `whisper.cpp` still uses CPU
 threads for scheduling, language detection, and non-offloaded work. The same `--threads` value is
 also used by local VAD, local diarization, and concurrent LLM section polishing. By default, the CLI
