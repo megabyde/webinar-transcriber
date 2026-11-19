@@ -74,9 +74,9 @@ maintaining a copy here, and avoid adding deep nesting.
 - Every accepted input contains a decodable audio stream. A usable video stream is optional and adds
   scene detection and representative frames.
 - Successful default CLI runs write the report artifact set described in `README.md`.
-- One failing input does not abort a batch. Per-input errors are reported and the run continues,
-  with a tally and exit code `1` at the end. Configuration errors that would fail every input, and
-  Ctrl-C, still stop immediately.
+- Missing paths and failing inputs do not abort a batch. Per-input errors are reported and the run
+  continues, with a tally and exit code `1` at the end. Configuration errors that would fail every
+  input, and Ctrl-C, still stop immediately.
 - `--diarize` runs locally and adds `diarization.json` plus speaker fields on transcript segments.
   Clustering always runs at `CLUSTER_THRESHOLD`; a requested speaker count never reaches
   sherpa-onnx, which would ignore that threshold. Speakers whose longest turn stays under

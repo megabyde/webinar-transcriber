@@ -390,6 +390,15 @@ class TestCli:
         assert result.exit_code == 1
         assert "whisper.cpp inference failed for window-3." in result.output
 
+    def test_missing_file_does_not_discard_valid_input(self, tmp_path) -> None:
+        valid = tmp_path / "valid.wav"
+        valid.touch()
+        with patch("webinar_transcriber.cli.process_input") as process:
+            result = CliRunner().invoke(main, [str(tmp_path / "missing.wav"), str(valid)])
+        assert process.call_args.kwargs["input_path"] == valid
+        assert result.exit_code == 1
+        assert "1 succeeded, 1 failed" in result.output
+
     def test_continues_the_batch_past_a_failing_input(self, tmp_path) -> None:
         runner = CliRunner()
         paths = []

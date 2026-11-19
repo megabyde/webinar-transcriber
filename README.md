@@ -160,10 +160,10 @@ To process a batch, pass all inputs to one command. Inputs run sequentially:
 webinar-transcriber INPUT1 INPUT2 INPUT3
 ```
 
-A failing input does not stop the batch: the CLI reports it, moves on to the next file, prints a
-`N succeeded, M failed` tally at the end, and exits `1` if anything failed. Ctrl-C still abandons
-the remaining inputs. A provider misconfiguration under `--llm` is reported before any input runs,
-since it would fail every one of them.
+A missing or unreadable input does not stop the batch: the CLI reports it, moves on to the next
+file, prints a `N succeeded, M failed` tally at the end, and exits `1` if anything failed. Ctrl-C
+still abandons the remaining inputs. A provider misconfiguration under `--llm` is reported before
+any input runs, since it would fail every one of them.
 
 The CLI accepts any container PyAV can decode when it contains an audio stream, including `.mp4`,
 `.mkv`, `.mov`, `.webm`, `.mp3`, `.wav`, and `.m4a`. A video stream is optional; when present, it
