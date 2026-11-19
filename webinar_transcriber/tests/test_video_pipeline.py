@@ -216,7 +216,8 @@ class TestMissingTimeBase:
         frame = Mock(time=1.0)
         frame.to_image.return_value = image
         container = Mock()
-        container.decode.return_value = [frame]
+        earlier_frame = Mock(time=0.5)
+        container.decode.return_value = [earlier_frame, frame]
         stream = Mock(time_base=time_base)
 
         decoded = _decode_frame_at(container, stream, 1.0)
@@ -224,6 +225,7 @@ class TestMissingTimeBase:
         assert isinstance(decoded, Image.Image)
         assert decoded.tobytes() == image.tobytes()
         container.seek.assert_not_called()
+        earlier_frame.to_image.assert_not_called()
 
     @pytest.mark.parametrize("time_base", [None, av.AVRational(0, 1)])
     def test_frame_time_is_unknown_without_time_base(self, time_base) -> None:
