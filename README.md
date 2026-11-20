@@ -291,6 +291,8 @@ in `transcript.json` include `speaker` fields.
 
 ## Advanced Usage
 
+Audio and video timestamps share the container playback origin, including delayed audio starts.
+
 ### ASR model
 
 `webinar-transcriber` uses `pywhispercpp` to resolve whisper.cpp models. By default it uses

@@ -215,7 +215,7 @@ class TestMissingTimeBase:
         image = Image.new("RGB", (8, 8), color="white")
         frame = Mock(time=1.0)
         frame.to_image.return_value = image
-        container = Mock()
+        container = Mock(start_time=0)
         container.decode.return_value = [frame]
         stream = Mock(time_base=time_base)
 

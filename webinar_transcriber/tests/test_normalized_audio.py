@@ -2,7 +2,10 @@
 
 import tracemalloc
 import wave
+from contextlib import nullcontext
+from fractions import Fraction
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Self
 from unittest.mock import Mock, patch
 
@@ -115,6 +118,46 @@ class TestNormalizedAudio:
 
         with pytest.raises(MediaProcessingError, match="No audio stream found"):
             write_transcription_audio(FIXTURE_DIR / "sample-video.mp4", tmp_path / "audio.wav")
+
+    def test_exact_mono_layout_still_applies_timestamp_padding(self, tmp_path, monkeypatch):
+        frame = av.AudioFrame.from_ndarray(
+            np.full((1, 16000), 1000, dtype=np.int16), format="s16", layout="mono"
+        )
+        frame.sample_rate = 16000
+        frame.time_base = Fraction(1, 16000)
+        frame.pts = 64000
+        container = SimpleNamespace(start_time=0, decode=lambda _stream: [frame])
+        monkeypatch.setattr(
+            "webinar_transcriber.normalized_audio.open_audio_input_container",
+            lambda _path: nullcontext((container, object())),
+        )
+        path = write_transcription_audio(tmp_path / "source", tmp_path / "out.wav")
+        samples = load_normalized_audio(path)
+        assert len(samples) == 80000
+        assert not samples[:64000].any()
+        assert samples[64000:].min() > 0
+
+    def test_delayed_audio_preserves_leading_silence(self, tmp_path: Path) -> None:
+        path = tmp_path / "delayed.mkv"
+        with av.open(str(path), "w") as container:
+            video = container.add_stream("mpeg4", rate=1)
+            audio = container.add_stream("pcm_s16le", rate=16_000)
+            audio.layout = "mono"
+            picture = av.VideoFrame(video.width, video.height, "yuv420p")
+            picture.pts = 0
+            for packet in [*video.encode(picture), *video.encode(None)]:
+                container.mux(packet)
+            samples = np.full((1, 16000), 1000, dtype=np.int16)
+            frame = av.AudioFrame.from_ndarray(samples, format="s16", layout="mono")
+            frame.sample_rate = 16000
+            frame.time_base = Fraction(1, 16000)
+            frame.pts = 64000
+            for packet in [*audio.encode(frame), *audio.encode(None)]:
+                container.mux(packet)
+        result = load_normalized_audio(write_transcription_audio(path, tmp_path / "out.wav"))
+        assert len(result) == 80000
+        assert not result[:64000].any()
+        assert result[64000:].min() > 0
 
     def test_load_normalized_audio_returns_mono_float32_samples(self, tmp_path: Path) -> None:
         audio_path = write_transcription_audio(
