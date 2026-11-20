@@ -84,6 +84,7 @@ maintaining a copy here, and avoid adding deep nesting.
   `MIN_SPEAKER_TURN_SEC` are folded into the nearest remaining speaker, and `--diarize-speakers`
   then folds the shortest-speaking surplus, so both the labels and the reported speaker count can be
   lower than raw clustering produced.
+- The diarization percentage and ETA apply only to embedding extraction.
 - Successful runs write `diagnostics.json`; failed runs also write it once the run directory exists,
   though early failures can still leave only partial intermediate artifacts and no final report
   outputs. It carries the tool version and the run options that shaped the output, so a run

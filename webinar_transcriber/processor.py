@@ -300,7 +300,12 @@ def _run_asr_pipeline(
             st.update(detail="segmenting speech")
 
             def on_diarize_progress(processed: int, total: int) -> None:
-                st.update(total=total, completed=processed, detail="embedding speakers")
+                if processed >= total:
+                    st.update(detail="finalizing speaker labels", indeterminate=True)
+                else:
+                    st.update(
+                        total=total, completed=processed, detail=f"embeddings {processed}/{total}"
+                    )
 
             speaker_turns = diarizer.diarize(audio_path, progress_callback=on_diarize_progress)
             write_json(layout.diarization_path, [asdict(turn) for turn in speaker_turns])
@@ -309,11 +314,12 @@ def _run_asr_pipeline(
                 transcription, segments=assign_speakers(transcription.segments, speaker_turns)
             )
             st.update(
+                indeterminate=True,
                 detail=join_detail(
                     format_count(speaker_count, "speaker"),
                     format_count(len(speaker_turns), "turn"),
                     format_rtf(audio_duration_sec, st.elapsed_sec()),
-                )
+                ),
             )
         ctx.diarization = DiarizationDiagnostics(
             speaker_count=speaker_count,

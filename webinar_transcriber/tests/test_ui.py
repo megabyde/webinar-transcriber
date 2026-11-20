@@ -193,3 +193,5 @@ class TestStatusColumn:
         progress.update(task_id, total=4, completed=1)
 
         assert rendered().endswith("25% ETA --:-- 0:00:00")
+        progress.update(task_id, indeterminate=True)
+        assert rendered() == "0:00:00"

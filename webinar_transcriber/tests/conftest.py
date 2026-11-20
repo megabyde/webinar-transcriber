@@ -70,7 +70,11 @@ class _RecordingHandle:
         completed: float | None = None,
         detail: str | None = None,
         total: float | None = None,
+        indeterminate: bool = False,
     ) -> None:
+        if indeterminate:
+            self.progress_log.append(("indeterminate", self.key, self.completed, detail))
+            self.total = None
         if total is not None and total != self.total:
             self.total = total
             self.progress_log.append(("total", self.key, total, detail))
