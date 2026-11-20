@@ -133,6 +133,8 @@ maintaining a copy here, and avoid adding deep nesting.
 - For predicate-style tests, prefer `assert expr` / `assert not expr`. Reserve `is True` /
   `is False` for cases where exact boolean identity matters.
 
+English-only Whisper models use English directly and reject conflicting language overrides.
+
 ## Implementation Notes
 
 - When an earlier pipeline stage already guarantees an invariant, prefer enforcing that invariant

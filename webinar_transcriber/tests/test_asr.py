@@ -90,6 +90,21 @@ def fake_model(monkeypatch: pytest.MonkeyPatch) -> FakeModel:
 
 
 class TestWhisperCppTranscriber:
+    @pytest.mark.parametrize("language", [None, "en", "ru"])
+    def test_english_only_model_uses_its_native_language(self, fake_model, monkeypatch, language):
+        monkeypatch.setattr(fake_model, "_ctx", object(), raising=False)
+        monkeypatch.setattr("_pywhispercpp.whisper_is_multilingual", lambda _context: False)
+        transcriber = WhisperCppTranscriber(threads=1, language=language)
+        samples = np.zeros(16000, dtype=np.float32)
+        windows = [InferenceWindow(id="w1", region_index=0, start_sec=0, end_sec=1)]
+        if language == "ru":
+            with pytest.raises(AsrProcessingError, match="English-only"):
+                transcriber.transcribe_inference_windows(samples, windows)
+        else:
+            result = transcriber.transcribe_inference_windows(samples, windows)
+            assert result[0].detected_language == "en"
+        assert not fake_model.auto_detect_calls
+
     def test_default_model_uses_builtin_identifier(self) -> None:
         transcriber = WhisperCppTranscriber(threads=4)
 
