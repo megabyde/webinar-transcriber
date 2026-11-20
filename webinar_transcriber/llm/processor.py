@@ -230,7 +230,15 @@ class InstructorLLMProcessor:
 
         if not isinstance(parsed, response_model):
             raise LlmProcessingError(f"{error_prefix}: response did not match the schema.")
-        return parsed, extract_response_metadata(completion)
+        metadata = extract_response_metadata(completion)
+        if metadata.get("status") == "incomplete" or metadata.get("stop_reason") == "max_tokens":
+            reason = (
+                metadata.get("incomplete_reason") or metadata.get("stop_reason") or "incomplete"
+            )
+            raise LlmProcessingError(
+                f"{error_prefix}: provider returned incomplete output ({reason})."
+            )
+        return parsed, metadata
 
 
 def _structured_response_retries() -> object:  # pragma: no cover - optional llm extra only

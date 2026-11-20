@@ -73,10 +73,11 @@ maintaining a copy here, and avoid adding deep nesting.
 
 - Every accepted input contains a decodable audio stream. A usable video stream is optional and adds
   scene detection and representative frames.
+- Audio and video timestamps share the container playback origin, including delayed audio starts.
 - Successful default CLI runs write the report artifact set described in `README.md`.
-- One failing input does not abort a batch. Per-input errors are reported and the run continues,
-  with a tally and exit code `1` at the end. Configuration errors that would fail every input, and
-  Ctrl-C, still stop immediately.
+- Missing paths and failing inputs do not abort a batch. Per-input errors are reported and the run
+  continues, with a tally and exit code `1` at the end. Configuration errors that would fail every
+  input, and Ctrl-C, still stop immediately.
 - `--diarize` runs locally and adds `diarization.json` plus speaker fields on transcript segments.
   Clustering always runs at `CLUSTER_THRESHOLD`; a requested speaker count never reaches
   sherpa-onnx, which would ignore that threshold. Speakers whose longest turn stays under
@@ -98,6 +99,7 @@ maintaining a copy here, and avoid adding deep nesting.
   failed summary keeps the polished sections. Section polishing turns per-section failures into
   warnings rather than raising, so `llm.report_status` (`applied`, `partial`, `fallback`) is derived
   from which output was used, not from which stage raised.
+- Treat a parsed but explicitly truncated provider response as a failed request.
 - `transcript.json` is written after reconciliation and rewritten after diarization. Diarization can
   run for minutes, so finished transcription work must be persisted before it starts.
 - Temporary WAV audio extracted for transcription should stay outside the run directory;

@@ -215,7 +215,7 @@ class TestMissingTimeBase:
         image = Image.new("RGB", (8, 8), color="white")
         frame = Mock(time=1.0)
         frame.to_image.return_value = image
-        container = Mock()
+        container = Mock(start_time=0)
         container.decode.return_value = [frame]
         stream = Mock(time_base=time_base)
 
@@ -230,3 +230,15 @@ class TestMissingTimeBase:
         frame = Mock(time=None, pts=25, time_base=time_base)
 
         assert _frame_time_sec(frame) is None
+
+
+def test_seek_converts_only_the_selected_frame() -> None:
+    earlier = Mock(time=0.0)
+    selected = Mock(time=1.0)
+    container = Mock(start_time=0)
+    container.decode.return_value = [earlier, selected]
+
+    _decode_frame_at(container, Mock(time_base=Fraction(1, 30)), 1.0)
+
+    earlier.to_image.assert_not_called()
+    selected.to_image.assert_called_once_with()

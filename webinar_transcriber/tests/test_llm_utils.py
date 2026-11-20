@@ -5,6 +5,7 @@ import pytest
 from webinar_transcriber.llm import LlmProcessingError
 from webinar_transcriber.llm.utils import (
     ReportSectionUpdate,
+    build_report_polish_payload,
     normalize_polished_section_text,
     normalize_polished_section_tldr,
     normalize_report_lines,
@@ -69,6 +70,25 @@ class TestLlmNormalization:
         )
 
         assert normalized == ["First item", "Second item"]
+
+    def test_summary_excerpts_stay_within_the_total_budget(self):
+        sections = [
+            ReportSection(
+                id=str(i),
+                title="Topic",
+                start_sec=i,
+                end_sec=i + 1,
+                transcript_text="Long sentence. " * 100,
+            )
+            for i in range(121)
+        ]
+        report = ReportDocument(
+            title="Talk", source_file="talk.wav", media_type=MediaType.AUDIO, sections=sections
+        )
+        payload = build_report_polish_payload(report)
+        assert isinstance(payload["sections"], list)
+        assert sum(len(s["transcript_excerpt"]) for s in payload["sections"]) <= 16000
+        assert truncate_text("content", 0) == ""
 
     def test_truncate_text_preserves_short_text_and_trims_long_text(self) -> None:
         assert truncate_text("Short text", 20) == "Short text"

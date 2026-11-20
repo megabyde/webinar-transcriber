@@ -62,7 +62,7 @@ def build_report_polish_payload(report: ReportDocument) -> dict[str, object]:
     """
     section_count = max(len(report.sections), 1)
     per_section_budget = min(
-        REPORT_SECTION_EXCERPT_LIMIT, max(200, REPORT_POLISH_TOTAL_CHAR_BUDGET // section_count)
+        REPORT_SECTION_EXCERPT_LIMIT, REPORT_POLISH_TOTAL_CHAR_BUDGET // section_count
     )
 
     return {
@@ -113,6 +113,8 @@ def truncate_text(text: str, max_chars: int) -> str:
     Returns:
         str: The truncated text.
     """
+    if max_chars <= 0:
+        return ""
     cleaned = text.strip()
     if len(cleaned) <= max_chars:
         return cleaned

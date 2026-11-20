@@ -62,7 +62,7 @@ INPUT_ERRORS = (
     "input_paths",
     nargs=-1,
     required=False,
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    type=Path,
     help="Media files to transcribe.",
 )
 @click.option(
@@ -156,6 +156,10 @@ def main(
     failed_paths: list[Path] = []
     try:
         for input_path in input_paths:
+            if not input_path.is_file():
+                failed_paths.append(input_path)
+                reporter.failed_run(input_path, "Input is missing or is not a regular file.")
+                continue
             diarizer = SherpaOnnxDiarizer(threads=threads) if diarize else None
             transcriber = WhisperCppTranscriber(
                 model_name=asr_model, threads=threads, language=language

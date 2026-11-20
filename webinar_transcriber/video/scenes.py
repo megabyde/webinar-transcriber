@@ -6,6 +6,7 @@ import math
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from av import time_base as av_time_base
 from av.error import BlockingIOError as AvBlockingIOError
 from av.error import FFmpegError
 from av.filter import Graph
@@ -117,7 +118,10 @@ def _detect_scene_starts(
             starts: list[float] = [0.0]
             processed_sample_count = 0
 
+            origin_sec = (input_container.start_time or 0) / av_time_base
             for decoded_frame in input_container.decode(video_stream):
+                if decoded_frame.pts is not None and decoded_frame.time_base:
+                    decoded_frame.pts -= round(origin_sec / decoded_frame.time_base)
                 scene_filter.vpush(decoded_frame)
                 for current_time, _filtered_frame in _filtered_scene_frames(scene_filter):
                     if (current_time - starts[-1]) >= MIN_SCENE_LENGTH_SEC:
@@ -138,18 +142,18 @@ def _decode_frame_at(
     input_container: InputContainer, video_stream: VideoStream, target_sec: float
 ) -> SavableImage:
     """Seek to ``target_sec`` and return the first decoded frame at or after it."""
+    target_sec += (input_container.start_time or 0) / av_time_base
     if video_stream.time_base:
         input_container.seek(int(target_sec / video_stream.time_base), stream=video_stream)
-    fallback_image: SavableImage | None = None
+    selected_frame: VideoFrame | None = None
     for frame in input_container.decode(video_stream):
-        image = _frame_to_image(frame)
+        selected_frame = frame
         frame_time = _frame_time_sec(frame)
         if frame_time is None or frame_time >= target_sec:
-            return image
-        fallback_image = image
-    if fallback_image is None:  # pragma: no cover - a seekable stream yields at least one frame
+            break
+    if selected_frame is None:  # pragma: no cover - a seekable stream yields at least one frame
         raise MediaProcessingError(f"No frame decoded near {target_sec:.2f}s.")
-    return fallback_image
+    return _frame_to_image(selected_frame)
 
 
 def _filtered_scene_frames(scene_filter: Graph) -> Iterator[tuple[float, VideoFrame]]:

@@ -36,6 +36,21 @@ jobs:
       - name: Build distributions
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: uv build
+      - name: Exercise the installed base wheel
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          uv venv "$RUNNER_TEMP/base"
+          uv pip install --python "$RUNNER_TEMP/base/bin/python" dist/*.whl
+          cd "$RUNNER_TEMP"
+          base/bin/webinar-transcriber --help
+          touch sample.wav
+          mkdir run
+          echo '{"status":"succeeded","version":"1","config":{"llm":false}}' > run/diagnostics.json
+          echo '{}' > run/report.json
+          for args in "sample.wav --llm" "--rerun-llm run"; do
+            if base/bin/webinar-transcriber $args >output 2>&1; then exit 1; fi
+            grep -F 'uv tool install --reinstall "webinar-transcriber[llm]"' output
+          done
       - name: Smoke optional LLM extra
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: |
