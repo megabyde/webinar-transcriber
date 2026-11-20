@@ -13,6 +13,16 @@
   <img alt="Webinar Transcriber preview" src="https://raw.githubusercontent.com/megabyde/webinar-transcriber/main/docs/assets/social-preview.png">
 </picture>
 
+Install the CLI and transcribe a recording with a decodable audio stream:
+
+```bash
+uv tool install webinar-transcriber
+webinar-transcriber recording.mp4
+```
+
+Open the printed `report.md` path. Reports with multiple sections include timestamped contents. The
+first run downloads the Whisper model. Cloud refinement is optional.
+
 ## Contents
 
 - [Overview](#overview)

@@ -65,7 +65,7 @@ class TestDocxReport:
         paragraph_texts = [paragraph.text for paragraph in document.paragraphs]
 
         assert "Section 1 (00:00\N{EN DASH}00:05)" in paragraph_texts
-        assert "TL;DR / Cheat Sheet" in paragraph_texts
+        assert "AI-generated notes" in paragraph_texts
         assert "Transcript" in paragraph_texts
         assert "Краткое резюме раздела." in paragraph_texts
         assert "Первый абзац." in paragraph_texts
@@ -274,12 +274,17 @@ class TestMarkdownReport:
             "- Summary point.\n\n"
             "## Action Items\n\n"
             "- Follow up.\n\n"
+            "## Contents\n\n"
+            "- [00:00](#section-1) Section 1\n"
+            "- [00:05](#section-2) Section 2\n\n"
             "## Sections\n\n"
+            '<a name="section-1"></a>\n\n'
             "### Section 1 (00:00\N{EN DASH}00:05)\n\n"
-            "**TL;DR / Cheat Sheet**\n\n"
+            "**AI-generated notes**\n\n"
             "Section recap.\n\n"
             "**Transcript**\n\n"
             "Paragraph one.\n\n"
+            '<a name="section-2"></a>\n\n'
             "### Section 2 (00:05\N{EN DASH}00:10)\n\n"
             "![Section 2](frames/scene-2.png)\n\n"
             "Paragraph two.\n"

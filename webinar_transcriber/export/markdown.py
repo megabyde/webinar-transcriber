@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from urllib.parse import quote
 
-from webinar_transcriber.export.formatting import section_timecode
+from webinar_transcriber.export.formatting import format_timecode, section_timecode
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -34,11 +34,19 @@ def write_markdown_report(report: ReportDocument, output_path: Path) -> Path:
         lines.extend([f"- {item}" for item in report.action_items])
         lines.append("")
 
+    if len(report.sections) > 1:
+        lines.extend(["## Contents", ""])
+        for index, section in enumerate(report.sections, start=1):
+            timestamp = format_timecode(section.start_sec)
+            lines.append(f"- [{timestamp}](#section-{index}) {section.title}")
+        lines.append("")
     lines.extend(["## Sections", ""])
 
-    for section in report.sections:
+    for index, section in enumerate(report.sections, start=1):
         title = section.title
         timecode = section_timecode(section.start_sec, section.end_sec)
+        if len(report.sections) > 1:
+            lines.extend([f'<a name="section-{index}"></a>', ""])
         lines.extend([f"### {title} ({timecode})", ""])
         if section.image_path:
             lines.extend([
@@ -46,7 +54,7 @@ def write_markdown_report(report: ReportDocument, output_path: Path) -> Path:
                 "",
             ])
         if section.tldr and (tldr := section.tldr.strip()):
-            lines.extend(["**TL;DR / Cheat Sheet**", "", tldr, "", "**Transcript**", ""])
+            lines.extend(["**AI-generated notes**", "", tldr, "", "**Transcript**", ""])
         lines.extend([section.transcript_text, ""])
 
     output_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")

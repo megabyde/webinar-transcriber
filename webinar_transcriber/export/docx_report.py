@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from docx import Document
 from docx.shared import Inches
 
-from webinar_transcriber.export.formatting import section_timecode
+from webinar_transcriber.export.formatting import format_timecode, section_timecode
 from webinar_transcriber.text_utils import split_paragraph_blocks
 
 if TYPE_CHECKING:
@@ -48,6 +48,10 @@ def write_docx_report(report: ReportDocument, output_path: Path) -> Path:
         for item in report.action_items:
             document.add_paragraph(item, style="List Bullet")
 
+    if len(report.sections) > 1:
+        document.add_heading("Contents", level=1)
+        for section in report.sections:
+            document.add_paragraph(f"{format_timecode(section.start_sec)}   {section.title}")
     document.add_heading("Sections", level=1)
     for section in report.sections:
         _add_section(document, section, image_base_dir=output_path.parent)
@@ -95,7 +99,7 @@ def _add_section_tldr(document: DocxDocument, tldr: str | None) -> None:
         return
 
     tldr_label = document.add_paragraph()
-    tldr_label.add_run("TL;DR / Cheat Sheet").bold = True
+    tldr_label.add_run("AI-generated notes").bold = True
     _add_text_blocks(document, text)
     transcript_label = document.add_paragraph()
     transcript_label.add_run("Transcript").bold = True

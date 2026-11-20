@@ -32,7 +32,9 @@ class TestStageReporter:
         reporter = StageReporter(console=console)
         artifacts = SimpleNamespace(
             layout=SimpleNamespace(
-                run_dir="runs/example", diagnostics_path="runs/example/diagnostics.json"
+                markdown_report_path="runs/example/report.md",
+                run_dir="runs/example",
+                diagnostics_path="runs/example/diagnostics.json",
             ),
             report=SimpleNamespace(detected_language="ru", sections=[object(), object()]),
             diagnostics=SimpleNamespace(
@@ -66,7 +68,10 @@ class TestStageReporter:
         console = Console(record=True, width=100)
         reporter = StageReporter(console=console)
         artifacts = SimpleNamespace(
-            layout=SimpleNamespace(run_dir=tmp_path / "runs/example/llm/variant"),
+            layout=SimpleNamespace(
+                run_dir=tmp_path / "runs/example/llm/variant",
+                markdown_report_path=tmp_path / "runs/example/llm/variant/report.md",
+            ),
             source_report_path=tmp_path / "runs/example/report.local.json",
             report=SimpleNamespace(sections=[object(), object()]),
             diagnostics=SimpleNamespace(warnings=[]),
