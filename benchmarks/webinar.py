@@ -3,6 +3,7 @@
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import wave
 from difflib import SequenceMatcher
@@ -29,7 +30,11 @@ def ffmpeg(*args: str, cwd: Path | None = None) -> None:
     subprocess.run(["ffmpeg", "-nostdin", "-v", "error", *args], check=True, cwd=cwd)  # noqa: S603,S607
 
 
-def generate(directory: Path) -> int:
+def generate(directory: Path, font_file: Path | None = None) -> int:
+    font_option = ""
+    if font_file is not None:
+        shutil.copyfile(font_file, directory / "slide-font.ttf")
+        font_option = "fontfile=slide-font.ttf:"
     for name, voice, script in [("opening", "slt", OPENING), ("closing", "rms", CLOSING)]:
         text = directory / f"{name}.txt"
         text.write_text(script, encoding="utf-8")
@@ -59,14 +64,14 @@ def generate(directory: Path) -> int:
             "-f",
             "lavfi",
             "-i",
-            f"color=c={color}:s=640x360:r=5:d={duration},drawtext=text='{label}':fontsize=36:fontcolor={ink}:x=35:y=150",
+            f"color=c={color}:s=640x360:r=5:d={duration},drawtext={font_option}text='{label}':fontsize=36:fontcolor={ink}:x=35:y=150",
         ])
     ffmpeg(
         *slides,
         "-i",
-        str(directory / "opening.wav"),
+        "opening.wav",
         "-i",
-        str(directory / "closing.wav"),
+        "closing.wav",
         "-filter_complex",
         "[0:v][1:v]concat=n=2:v=1:a=0[v];[2:a]adelay=2000[a];"
         f"[3:a]adelay={change * 1000}[b];[a][b]amix=inputs=2:normalize=0[audio]",
@@ -78,7 +83,8 @@ def generate(directory: Path) -> int:
         "libx264",
         "-c:a",
         "aac",
-        str(directory / "webinar.mp4"),
+        "webinar.mp4",
+        cwd=directory,
     )
     return change
 
@@ -88,10 +94,11 @@ def main() -> None:
     parser.add_argument("directory", type=Path, help="New benchmark directory")
     parser.add_argument("--model", required=True)
     parser.add_argument("--cli", default="webinar-transcriber")
+    parser.add_argument("--font-file", type=Path, help="TrueType font for slide titles")
     args = parser.parse_args()
     directory = args.directory.resolve()
     directory.mkdir(parents=True)
-    change = generate(directory)
+    change = generate(directory, args.font_file)
     run = directory / "run"
     subprocess.run(  # noqa: S603 - run the selected local CLI
         [

@@ -105,3 +105,11 @@ Use a new directory for each run. The benchmark synthesizes two voices and a kno
 saves the media, normal report artifacts, and scores for comparing models or code revisions. The
 word counts use sequence alignment. Extra or missing words may reflect substitutions, and speaker
 count alone does not measure attribution accuracy.
+
+Use `--font-file PATH` to choose the font used for slide titles.
+
+On GitHub, open **Actions → Webinar benchmark → Run workflow** once the workflow is on `main`. It
+runs the installed wheel on Ubuntu 24.04 with Python 3.12, DejaVu Sans, and checksum-verified
+models. It checks for a nonempty transcript and readable report files, then uploads `scores.json`
+and `diagnostics.json` as the `webinar-benchmark` artifact. The quality scores and timings are for
+comparison across runs.

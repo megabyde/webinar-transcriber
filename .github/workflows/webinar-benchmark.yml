@@ -1,0 +1,77 @@
+name: Webinar benchmark
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      WHISPER_MODEL_SHA256: 921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v10.3.3
+
+      - name: Install FFmpeg and slide font
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core
+          /usr/bin/ffmpeg -version
+
+      - name: Cache model files
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ runner.temp }}/ggml-tiny.en.bin
+            ~/.cache/webinar-transcriber/diarization
+          key: webinar-models-${{ env.WHISPER_MODEL_SHA256 }}-${{ hashFiles('webinar_transcriber/diarization/sherpa_diarizer.py') }}
+
+      - name: Verify Whisper model
+        run: |
+          model="$RUNNER_TEMP/ggml-tiny.en.bin"
+          if [[ ! -f "$model" ]]; then
+            curl --fail --location --retry 3 --output "$model" \
+              https://huggingface.co/ggerganov/whisper.cpp/resolve/80da2d8bfee42b0e836fc3a9890373e5defc00a6/ggml-tiny.en.bin
+          fi
+          printf '%s  %s\n' "$WHISPER_MODEL_SHA256" "$model" | sha256sum --check
+
+      - name: Build and install the wheel
+        run: |
+          export UV_PROJECT_ENVIRONMENT="$RUNNER_TEMP/benchmark-venv"
+          uv sync --locked --no-dev --no-install-project
+          uv build --wheel
+          uv pip install --python "$UV_PROJECT_ENVIRONMENT/bin/python" --no-deps dist/*.whl
+
+      - name: Run the webinar benchmark
+        run: |
+          cd "$RUNNER_TEMP"
+          PATH="/usr/bin:$PATH" benchmark-venv/bin/python "$GITHUB_WORKSPACE/benchmarks/webinar.py" \
+            webinar-benchmark --cli "$RUNNER_TEMP/benchmark-venv/bin/webinar-transcriber" \
+            --model "$RUNNER_TEMP/ggml-tiny.en.bin" \
+            --font-file /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+
+      - name: Check report artifacts
+        run: |
+          cd "$RUNNER_TEMP/webinar-benchmark/run"
+          jq -e 'any(.segments[].text; test("\\S"))' transcript.json >/dev/null
+          jq -e 'type == "object"' report.json >/dev/null
+          test -s report.md
+          unzip -tq report.docx
+
+      - name: Upload benchmark output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: webinar-benchmark
+          path: |
+            ${{ runner.temp }}/webinar-benchmark/scores.json
+            ${{ runner.temp }}/webinar-benchmark/run/diagnostics.json
