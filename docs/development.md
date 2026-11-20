@@ -92,3 +92,24 @@ each target's exact recipe.
 
 Run `make help` for the full list of targets (including `clean` and `distclean`) with one-line
 descriptions. The CLI install commands are documented in the [README](../README.md#install).
+
+## Measure report quality
+
+With the CLI installed and FFmpeg built with flite, drawtext, and libx264, run:
+
+```bash
+python benchmarks/webinar.py /tmp/webinar-benchmark --model tiny.en
+```
+
+Use a new directory for each run. The benchmark synthesizes two voices and a known slide change. It
+saves the media, normal report artifacts, and scores for comparing models or code revisions. The
+word counts use sequence alignment. Extra or missing words may reflect substitutions, and speaker
+count alone does not measure attribution accuracy.
+
+Use `--font-file PATH` to choose the font used for slide titles.
+
+On GitHub, open **Actions → Webinar benchmark → Run workflow** once the workflow is on `main`. It
+runs the installed wheel on Ubuntu 24.04 with Python 3.12, DejaVu Sans, and checksum-verified
+models. It checks for a nonempty transcript and readable report files, then uploads `scores.json`
+and `diagnostics.json` as the `webinar-benchmark` artifact. The quality scores and timings are for
+comparison across runs.
