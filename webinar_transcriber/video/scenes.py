@@ -145,16 +145,15 @@ def _decode_frame_at(
     target_sec += (input_container.start_time or 0) / av_time_base
     if video_stream.time_base:
         input_container.seek(int(target_sec / video_stream.time_base), stream=video_stream)
-    fallback_image: SavableImage | None = None
+    selected_frame: VideoFrame | None = None
     for frame in input_container.decode(video_stream):
-        image = _frame_to_image(frame)
+        selected_frame = frame
         frame_time = _frame_time_sec(frame)
         if frame_time is None or frame_time >= target_sec:
-            return image
-        fallback_image = image
-    if fallback_image is None:  # pragma: no cover - a seekable stream yields at least one frame
+            break
+    if selected_frame is None:  # pragma: no cover - a seekable stream yields at least one frame
         raise MediaProcessingError(f"No frame decoded near {target_sec:.2f}s.")
-    return fallback_image
+    return _frame_to_image(selected_frame)
 
 
 def _filtered_scene_frames(scene_filter: Graph) -> Iterator[tuple[float, VideoFrame]]:
