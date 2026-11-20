@@ -11,10 +11,10 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.diagnostics import write_run_diagnostics
+from webinar_transcriber.diagnostics import RunContext, write_run_diagnostics
 from webinar_transcriber.models import Diagnostics, LlmRerunDiagnostics, ReportDocument
 from webinar_transcriber.paths import RunLayout
-from webinar_transcriber.processor import RunContext, export_report, polish_report
+from webinar_transcriber.reporting import export_report, polish_report
 
 if TYPE_CHECKING:
     from webinar_transcriber.llm.processor import InstructorLLMProcessor
