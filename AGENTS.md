@@ -97,6 +97,7 @@ maintaining a copy here, and avoid adding deep nesting.
   failed summary keeps the polished sections. Section polishing turns per-section failures into
   warnings rather than raising, so `llm.report_status` (`applied`, `partial`, `fallback`) is derived
   from which output was used, not from which stage raised.
+- Treat a parsed but explicitly truncated provider response as a failed request.
 - `transcript.json` is written after reconciliation and rewritten after diarization. Diarization can
   run for minutes, so finished transcription work must be persisted before it starts.
 - Temporary WAV audio extracted for transcription should stay outside the run directory;
