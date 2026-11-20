@@ -237,14 +237,14 @@ class WhisperCppTranscriber:
         forced_language = self._language
         # pywhispercpp exposes model capabilities through its native context
         context = getattr(model, "_ctx", None)
-        if context is not None and not importlib.import_module(
-            "_pywhispercpp"
-        ).whisper_is_multilingual(context):
-            if forced_language not in (None, "en"):
-                raise AsrConfigurationError(
-                    f"The selected English-only model cannot decode {forced_language!r}."
-                )
-            forced_language = "en"
+        if context is not None:
+            native = importlib.import_module("_pywhispercpp")
+            if not native.whisper_is_multilingual(context):
+                if forced_language not in (None, "en"):
+                    raise AsrConfigurationError(
+                        f"The selected English-only model cannot decode {forced_language!r}."
+                    )
+                forced_language = "en"
         language_hint: str | None = forced_language
         carryover_prompt = ""
         decoded_windows: list[DecodedWindow] = []
