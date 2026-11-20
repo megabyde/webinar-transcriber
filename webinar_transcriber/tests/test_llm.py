@@ -29,7 +29,7 @@ from webinar_transcriber.llm.utils import (
 from webinar_transcriber.models import MediaType, ReportDocument, ReportSection
 from webinar_transcriber.tests.conftest import fake_import_module
 
-LLM_EXTRA_INSTALL_RE = r'uv tool install --reinstall "\.\[llm\]"'
+LLM_EXTRA_INSTALL_RE = r'uv tool install --reinstall "webinar-transcriber\[llm\]"'
 
 
 class FakeInstructorModule:
