@@ -110,10 +110,13 @@ class TestRerunLlmReport:
 
         assert artifacts.layout.run_dir.parent == run_dir / "llm"
         assert artifacts.layout.markdown_report_path.exists()
+        assert artifacts.layout.html_report_path.exists()
         assert artifacts.layout.docx_report_path.exists()
         assert artifacts.layout.json_report_path.exists()
         assert artifacts.report.summary == ["Polished summary."]
         assert artifacts.report.sections[0].image_path == "../../frames/section-1.png"
+        html = artifacts.layout.html_report_path.read_text(encoding="utf-8")
+        assert 'src="data:image/webp;base64,' in html
         output_payload = json.loads(artifacts.layout.json_report_path.read_text(encoding="utf-8"))
         assert output_payload["sections"][0]["image_path"] == "../../frames/section-1.png"
         assert artifacts.diagnostics.version == __version__

@@ -83,8 +83,8 @@ with an LLM. For installation and typical usage, see [README.md](../README.md).
      do not depend on it. Warnings and `llm.report_status` record what fell back, and
      `report.local.json` keeps the complete local report.
 1. Write final artifacts and diagnostics.
-   - `report.md`, `report.docx`, `report.json`, `transcript.json`, and `diagnostics.json` are
-     written at the end of a successful run.
+   - `report.html`, `report.md`, `report.docx`, `report.json`, `transcript.json`, and
+     `diagnostics.json` are written at the end of a successful run.
    - `diagnostics.json` records the tool version and the run options that shaped the output, so a
      run directory can be interpreted and compared long after the run.
    - Failed runs still try to write `diagnostics.json` once the run directory exists, including the

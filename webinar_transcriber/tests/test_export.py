@@ -1,6 +1,7 @@
 """Tests for report exporters."""
 
 import json
+from html.parser import HTMLParser
 from pathlib import Path
 
 from docx import Document
@@ -14,6 +15,7 @@ from webinar_transcriber.export.formatting import (
     format_timecode,
     join_detail,
 )
+from webinar_transcriber.export.html_report import write_html_report
 from webinar_transcriber.export.json_report import write_json_report
 from webinar_transcriber.export.markdown import write_markdown_report
 from webinar_transcriber.models import MediaType, ReportDocument, ReportSection
@@ -233,6 +235,122 @@ class TestDocxReport:
         ]
         assert [paragraph.runs[0].bold for paragraph in speaker_paragraphs] == [True, True]
         assert "S1: Summary paragraph." in [paragraph.text for paragraph in document.paragraphs]
+
+
+class TestHtmlReport:
+    class _TagChecker(HTMLParser):
+        VOID_TAGS = frozenset({"br", "img", "meta"})
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.stack: list[str] = []
+            self.ids: list[str] = []
+            self.urls: list[str] = []
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            for name, value in attrs:
+                if name == "id" and value:
+                    self.ids.append(value)
+                if name in {"src", "href"} and value:
+                    self.urls.append(value)
+            if tag not in self.VOID_TAGS:
+                self.stack.append(tag)
+
+        def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            # Self-closing SVG shapes open and close in one tag
+            self.handle_starttag(tag, attrs)
+            self.handle_endtag(tag)
+
+        def handle_endtag(self, tag: str) -> None:
+            assert self.stack.pop() == tag
+
+    def _parse(self, html: str) -> _TagChecker:
+        checker = self._TagChecker()
+        checker.feed(html)
+        checker.close()
+        assert checker.stack == []
+        return checker
+
+    def test_writes_self_contained_report_with_contents(self, tmp_path: Path) -> None:
+        Image.new("RGB", (2400, 1200), color="white").save(tmp_path / "scene-1.png")
+        report = ReportDocument(
+            title="Q&A <Live>",
+            source_file="/recordings/demo.mp4",
+            media_type=MediaType.VIDEO,
+            detected_language="en",
+            summary=["Point with **emphasis**."],
+            action_items=["Follow up."],
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Opening",
+                    start_sec=0.0,
+                    end_sec=65.0,
+                    tldr="- First note\n- Second note\n\n1. Step one\n2. Step two",
+                    transcript_text="**S1:** Hello there.\n\n**S10:** Hi back.\n\nPlain {{title}}",
+                    image_path="scene-1.png",
+                ),
+                ReportSection(
+                    id="section-2",
+                    title="Closing",
+                    start_sec=65.0,
+                    end_sec=3700.0,
+                    transcript_text="Goodbye.",
+                    image_path="frames/missing.png",
+                ),
+            ],
+        )
+
+        output_path = tmp_path / "report.html"
+        write_html_report(report, output_path)
+
+        html = output_path.read_text(encoding="utf-8")
+        checker = self._parse(html)
+        assert checker.urls
+        assert not [url for url in checker.urls if "://" in url]
+        assert {"section-1", "section-2", "summary", "action-items"} <= set(checker.ids)
+        assert '<html lang="en">' in html
+        assert "<title>Q&amp;A &lt;Live&gt;</title>" in html
+        assert "<li>Point with <strong>emphasis</strong>.</li>" in html
+        assert (
+            "<li>1h 01m 40s</li><li>2 sections</li><li>Language: en</li><li>demo.mp4</li>" in html
+        )
+        assert '<span class="toc-time">01:05</span><span class="toc-title">Closing</span>' in html
+        assert "<ul><li>First note</li><li>Second note</li></ul>" in html
+        assert "<ol><li>Step one</li><li>Step two</li></ol>" in html
+        assert '<span class="speaker spk-1">S1</span> Hello there.' in html
+        assert '<span class="speaker spk-2">S10</span> Hi back.' in html
+        assert "<p>Plain {{title}}</p>" in html
+        assert html.count('src="data:image/webp;base64,') == 1
+        assert 'width="1920" height="960"' in html
+
+    def test_single_section_report_has_no_contents(self, tmp_path: Path) -> None:
+        report = ReportDocument(
+            title="Demo",
+            source_file="demo.wav",
+            media_type=MediaType.AUDIO,
+            sections=[
+                ReportSection(
+                    id="section-1",
+                    title="Only",
+                    start_sec=0.0,
+                    end_sec=5.0,
+                    transcript_text="Line one\nline two.",
+                )
+            ],
+        )
+
+        output_path = tmp_path / "report.html"
+        write_html_report(report, output_path)
+
+        html = output_path.read_text(encoding="utf-8")
+        self._parse(html)
+        assert '<html lang="und">' in html
+        assert 'class="layout no-toc"' in html
+        assert 'class="toc"' not in html
+        assert 'class="overview"' not in html
+        assert 'class="notes"' not in html
+        assert "<p>Line one<br>line two.</p>" in html
 
 
 class TestMarkdownReport:

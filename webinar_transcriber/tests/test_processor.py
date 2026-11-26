@@ -163,6 +163,7 @@ class TestProcessInput:
         assert artifacts.layout.metadata_path.exists()
         assert artifacts.layout.transcript_path.exists()
         assert artifacts.layout.markdown_report_path.exists()
+        assert artifacts.layout.html_report_path.exists()
         assert artifacts.layout.docx_report_path.stat().st_size > 0
         assert artifacts.layout.json_report_path.exists()
         assert not artifacts.layout.local_json_report_path.exists()
@@ -536,6 +537,7 @@ class TestProcessInput:
         assert artifacts.layout.scenes_path.exists()
         assert artifacts.layout.frames_dir.exists()
         assert artifacts.layout.markdown_report_path.exists()
+        assert artifacts.layout.html_report_path.exists()
         assert artifacts.layout.docx_report_path.stat().st_size > 0
         assert artifacts.layout.json_report_path.exists()
         assert artifacts.diagnostics.item_counts["scenes"] >= 1

@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from webinar_transcriber.export import write_docx_report, write_json_report, write_markdown_report
+from webinar_transcriber.export import (
+    write_docx_report,
+    write_html_report,
+    write_json_report,
+    write_markdown_report,
+)
 from webinar_transcriber.export.formatting import format_count, join_detail
 from webinar_transcriber.llm import LlmProcessingError
 from webinar_transcriber.models import (
@@ -24,12 +29,13 @@ if TYPE_CHECKING:
 
 
 def export_report(report: ReportDocument, *, layout: RunLayout, ctx: RunContext) -> None:
-    """Write the Markdown, DOCX, and JSON artifacts for the report."""
+    """Write the HTML, Markdown, DOCX, and JSON artifacts for the report."""
     with ctx.stage("export", "Writing artifacts") as st:
+        write_html_report(report, layout.html_report_path)
         write_markdown_report(report, layout.markdown_report_path)
         write_docx_report(report, layout.docx_report_path)
         write_json_report(report, layout.json_report_path)
-        st.update(detail="report.md | report.docx | report.json")
+        st.update(detail="report.html | report.md | report.docx | report.json")
 
 
 def polish_report(

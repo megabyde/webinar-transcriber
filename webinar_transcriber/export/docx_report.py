@@ -2,28 +2,25 @@
 
 from __future__ import annotations
 
-import re
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from docx import Document
 from docx.shared import Inches
 
-from webinar_transcriber.export.formatting import format_timecode, section_timecode
+from webinar_transcriber.export.formatting import (
+    FORMATTED_PARAGRAPH_RE,
+    format_timecode,
+    resolve_section_image,
+    section_timecode,
+)
 from webinar_transcriber.text_utils import split_paragraph_blocks
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from docx.document import Document as DocxDocument
 
     from webinar_transcriber.models import ReportDocument, ReportSection
-
-_FORMATTED_PARAGRAPH_RE = re.compile(
-    r"^(?:"
-    r"\*\*(?P<speaker>S\d+):\*\*\s*(?P<speaker_body>.*)"
-    r"|[-*]\s+(?P<bullet>.+)"
-    r"|\d+[.)]\s+(?P<number>.+)"
-    r")$"
-)
 
 
 def write_docx_report(report: ReportDocument, output_path: Path) -> Path:
@@ -69,29 +66,13 @@ def _add_section(
     title = section.title
     timecode = section_timecode(section.start_sec, section.end_sec)
     document.add_heading(f"{title} ({timecode})", level=2)
-    _add_section_image(document, section.image_path, image_base_dir=image_base_dir)
+    if image_path := resolve_section_image(section.image_path, image_base_dir):
+        document.add_picture(str(image_path), width=Inches(6))
     _add_section_tldr(document, section.tldr)
     paragraphs = split_paragraph_blocks(section.transcript_text) or [section.transcript_text]
     for paragraph_text in paragraphs:
         if not _add_formatted_paragraph(document, paragraph_text):
             document.add_paragraph(paragraph_text)
-
-
-def _add_section_image(
-    document: DocxDocument,
-    image_path: str | None,
-    *,
-    image_base_dir: Path,
-) -> None:
-    if not image_path:
-        return
-
-    resolved_path = Path(image_path)
-    if not resolved_path.is_absolute():
-        resolved_path = image_base_dir / resolved_path
-    # A missing section image does not invalidate the DOCX; omit it and continue the export
-    if resolved_path.exists():
-        document.add_picture(str(resolved_path), width=Inches(6))
 
 
 def _add_section_tldr(document: DocxDocument, tldr: str | None) -> None:
@@ -116,7 +97,7 @@ def _add_text_blocks(document: DocxDocument, text: str) -> None:
 
 
 def _add_formatted_paragraph(document: DocxDocument, text: str) -> bool:
-    match = _FORMATTED_PARAGRAPH_RE.match(text)
+    match = FORMATTED_PARAGRAPH_RE.match(text)
     if match is None:
         return False
 

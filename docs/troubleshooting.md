@@ -7,8 +7,9 @@ directory.
 
 Find the heading that matches the error, apply its fix, then run the corrected
 `webinar-transcriber INPUT ...` command. Recovery is complete when the command reaches report export
-and writes `report.md`, `report.docx`, and `report.json`. If it fails again after creating a run
-directory, inspect `diagnostics.json` first and `whisper-cpp.log` for transcription failures.
+and writes `report.html`, `report.md`, `report.docx`, and `report.json`. If it fails again after
+creating a run directory, inspect `diagnostics.json` first and `whisper-cpp.log` for transcription
+failures.
 
 ## `Could not open … with PyAV` / `No audio stream found`
 

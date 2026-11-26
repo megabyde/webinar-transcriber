@@ -62,6 +62,10 @@ class RunLayout:
         return self.run_dir / "report.md"
 
     @property
+    def html_report_path(self) -> Path:
+        return self.run_dir / "report.html"
+
+    @property
     def docx_report_path(self) -> Path:
         return self.run_dir / "report.docx"
 

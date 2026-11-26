@@ -77,6 +77,9 @@ maintaining a copy here, and avoid adding deep nesting.
   scene detection and representative frames.
 - Audio and video timestamps share the container playback origin, including delayed audio starts.
 - Successful default CLI runs write the report artifact set described in `README.md`.
+- `report.html` stays a single self-contained file: styles, script, and section frames are inline,
+  and opening it makes no network requests. Its slides are built in the browser from the reading
+  markup, so frames are embedded once.
 - Missing paths and failing inputs do not abort a batch. Per-input errors are reported and the run
   continues, with a tally and exit code `1` at the end. Configuration errors that would fail every
   input, and Ctrl-C, still stop immediately.
