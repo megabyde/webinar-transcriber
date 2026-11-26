@@ -32,7 +32,7 @@ class TestStageReporter:
         reporter = StageReporter(console=console)
         artifacts = SimpleNamespace(
             layout=SimpleNamespace(
-                markdown_report_path="runs/example/report.md",
+                html_report_path="runs/example/report.html",
                 run_dir="runs/example",
                 diagnostics_path="runs/example/diagnostics.json",
             ),
@@ -48,6 +48,7 @@ class TestStageReporter:
 
         output = console.export_text()
         assert "Completed" in output
+        assert "runs/example/report.html" in output
         assert "Run directory" in output
         assert "runs/example" in output
         assert "Diagnostics" in output
@@ -70,7 +71,7 @@ class TestStageReporter:
         artifacts = SimpleNamespace(
             layout=SimpleNamespace(
                 run_dir=tmp_path / "runs/example/llm/variant",
-                markdown_report_path=tmp_path / "runs/example/llm/variant/report.md",
+                html_report_path=tmp_path / "runs/example/llm/variant/report.html",
             ),
             source_report_path=tmp_path / "runs/example/report.local.json",
             report=SimpleNamespace(sections=[object(), object()]),
@@ -83,7 +84,7 @@ class TestStageReporter:
         output = console.export_text()
         assert "Completed" in output
         assert "Output directory" in output
-        assert "runs/example/llm/variant" in output
+        assert "runs/example/llm/variant/report.html" in output
         assert "Source report" in output
         assert "runs/example/report.local.json" in output
         assert "Sections" in output

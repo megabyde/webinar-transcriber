@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from webinar_transcriber.export.docx_report import write_docx_report
+from webinar_transcriber.export.html_report import write_html_report
 from webinar_transcriber.export.json_report import write_json_report
 from webinar_transcriber.export.markdown import write_markdown_report
 
-__all__ = ["write_docx_report", "write_json_report", "write_markdown_report"]
+__all__ = [
+    "write_docx_report",
+    "write_html_report",
+    "write_json_report",
+    "write_markdown_report",
+]

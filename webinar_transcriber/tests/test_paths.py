@@ -22,6 +22,7 @@ class TestRunLayout:
         assert layout.run_dir.name == "20260318-203045-000000_weekly-webinar"
         assert layout.run_dir.exists()
         assert layout.markdown_report_path.name == "report.md"
+        assert layout.html_report_path.name == "report.html"
         assert layout.asr_dir.name == "asr"
         assert layout.speech_regions_path.name == "speech_regions.json"
         assert layout.decoded_windows_path.name == "decoded_windows.json"

@@ -20,8 +20,9 @@ uv tool install webinar-transcriber
 webinar-transcriber recording.mp4
 ```
 
-Open the printed `report.md` path. Reports with multiple sections include timestamped contents. The
-first run downloads the Whisper model. Cloud refinement is optional.
+Open the printed `report.html` path in a browser. Reports with multiple sections include timestamped
+contents, and the **Present** button shows the report as slides. The first run downloads the Whisper
+model. Cloud refinement is optional.
 
 ## Contents
 
@@ -160,9 +161,9 @@ webinar-transcriber INPUT
 ```
 
 Replace `INPUT` with the media path. On the first transcription run, `pywhispercpp` downloads the
-default `large-v3-turbo` model. A successful run prints its output path and writes `report.md`,
-`report.docx`, `report.json`, `transcript.json`, and `diagnostics.json` in a fresh directory under
-`runs/`.
+default `large-v3-turbo` model. A successful run prints its report path and writes `report.html`,
+`report.md`, `report.docx`, `report.json`, `transcript.json`, and `diagnostics.json` in a fresh
+directory under `runs/`.
 
 To process a batch, pass all inputs to one command. Inputs run sequentially:
 
@@ -230,15 +231,15 @@ LLM_PROVIDER=anthropic \
     webinar-transcriber INPUT --llm
 ```
 
-The LLM step is complete when `report.local.json`, `report.md`, `report.docx`, and `report.json`
-exist in the run directory. `report.local.json` preserves the deterministic input to the LLM. A
-failed request falls back only for its own part: a section keeps its local text, and a failed
-summary keeps the local summary and section titles alongside the polished sections. Each failure is
-a warning in `diagnostics.json`, and `llm.report_status` is `applied` when all LLM output was used,
-`partial` when some was, and `fallback` when none was. Successful provider requests also record
-their completion status under `llm.response_metadata`: `status` and `incomplete_reason` for OpenAI,
-`stop_reason` for Anthropic. A provider-reported truncation triggers the same local fallback even
-when the response parses successfully.
+The LLM step is complete when `report.local.json`, `report.html`, `report.md`, `report.docx`, and
+`report.json` exist in the run directory. `report.local.json` preserves the deterministic input to
+the LLM. A failed request falls back only for its own part: a section keeps its local text, and a
+failed summary keeps the local summary and section titles alongside the polished sections. Each
+failure is a warning in `diagnostics.json`, and `llm.report_status` is `applied` when all LLM output
+was used, `partial` when some was, and `fallback` when none was. Successful provider requests also
+record their completion status under `llm.response_metadata`: `status` and `incomplete_reason` for
+OpenAI, `stop_reason` for Anthropic. A provider-reported truncation triggers the same local fallback
+even when the response parses successfully.
 
 For missing environment variables, missing extras, or unsupported provider names, see
 [Troubleshooting](https://github.com/megabyde/webinar-transcriber/blob/main/docs/troubleshooting.md).
@@ -256,9 +257,9 @@ OPENAI_API_KEY=... \
 
 The command reads `report.local.json`, runs only LLM refinement and report export, and writes a new
 variant under `RUN_DIR/llm/<timestamp>/`. It never overwrites the source run. Each variant contains
-`report.md`, `report.docx`, `report.json`, and `diagnostics.json`; `llm_rerun` diagnostics record
-the source report hash and version, while `llm` records the current provider and model when
-available.
+`report.html`, `report.md`, `report.docx`, `report.json`, and `diagnostics.json`; `llm_rerun`
+diagnostics record the source report hash and version, while `llm` records the current provider and
+model when available.
 
 Earlier runs created without `--llm` can use their final `report.json` as the deterministic source.
 Older runs already polished by an LLM cannot be rerun safely because they have no
@@ -359,6 +360,7 @@ Successful runs can write:
 runs/<timestamp>_<basename>/
 ├─ metadata.json             # probed media type, duration, streams
 ├─ transcript.json           # reconciled transcript with timestamps and optional speakers
+├─ report.html               # self-contained report with slides mode
 ├─ report.md
 ├─ report.docx
 ├─ report.json               # final report in markdown, docx, and json
@@ -372,6 +374,7 @@ runs/<timestamp>_<basename>/
 ├─ scenes.json               # scene boundaries; video only
 ├─ frames/                   # representative frames; video only
 ├─ llm/<timestamp>/          # --rerun-llm variants
+│  ├─ report.html
 │  ├─ report.md
 │  ├─ report.docx
 │  ├─ report.json
@@ -381,6 +384,25 @@ runs/<timestamp>_<basename>/
 
 Failed runs still write `diagnostics.json` with the failed stage and any partial intermediate
 artifacts already produced, as long as the run directory exists.
+
+### HTML report
+
+`report.html` is one self-contained file. Styles, script, and section frames are inline, and opening
+it makes no network requests, so it can be sent or archived on its own. Frames are re-encoded as
+WebP at up to 1920 px on the longest edge.
+
+The reading view follows the system light or dark theme; the theme button overrides it. Select
+**Present**, press `P`, or open the file with `#slides` appended to the URL to show slides: a title
+slide, the summary and action items, then one slide per section with its frame and AI-generated
+notes, or a transcript excerpt when a section has no notes.
+
+| Key                                | Action in slides       |
+| ---------------------------------- | ---------------------- |
+| `→`, `Space`, `Page Down`, `Enter` | Next slide             |
+| `←`, `Page Up`, `Backspace`        | Previous slide         |
+| `Home`, `End`                      | First or last slide    |
+| `F`                                | Toggle fullscreen      |
+| `Esc`                              | Return to reading view |
 
 ## Development
 

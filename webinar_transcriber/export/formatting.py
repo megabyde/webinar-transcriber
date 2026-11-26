@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
+import re
 from math import floor
+from pathlib import Path
+
+FORMATTED_PARAGRAPH_RE = re.compile(
+    r"^(?:"
+    r"\*\*(?P<speaker>S\d+):\*\*\s*(?P<speaker_body>.*)"
+    r"|[-*]\s+(?P<bullet>.+)"
+    r"|\d+[.)]\s+(?P<number>.+)"
+    r")$"
+)
 
 
 def format_timecode(total_sec: float) -> str:
@@ -54,3 +64,18 @@ def section_timecode(start_sec: float, end_sec: float) -> str:
         str: The formatted section range.
     """
     return f"{format_timecode(start_sec)}\N{EN DASH}{format_timecode(end_sec)}"
+
+
+def resolve_section_image(image_path: str | None, base_dir: Path) -> Path | None:
+    """Resolve a report image path against the exported artifact's directory.
+
+    Returns:
+        Path | None: The existing image file, or ``None`` when the section has no usable image.
+    """
+    if not image_path:
+        return None
+    resolved_path = Path(image_path)
+    if not resolved_path.is_absolute():
+        resolved_path = base_dir / resolved_path
+    # A missing section image does not invalidate the report; exporters omit it and continue
+    return resolved_path if resolved_path.exists() else None
